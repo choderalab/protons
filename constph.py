@@ -142,7 +142,7 @@ class MonteCarloTitration(object):
 
         # Store list of exceptions that may need to be modified.        
         self.atomExceptions = [ list() for index in range(prmtop._prmtop.getNumAtoms()) ]
-        for (atom1, atom2, chargeProd, rMin, epsilon) in prmtop._prmtop.get14Interactions():
+        for (atom1, atom2, chargeProd, rMin, epsilon, iScee, iScnb) in prmtop._prmtop.get14Interactions():
             self.atomExceptions[atom1].append(atom2)
             self.atomExceptions[atom2].append(atom1)                                        
 
