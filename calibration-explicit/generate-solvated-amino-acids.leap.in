@@ -1,0 +1,27 @@
+# Generate terminally-block titratable amino acids using LEaP.
+
+# Load ff99sb forcefield and constant pH libraries.
+source leaprc.constph
+
+# Create blocked amino acid systems.
+system = sequence { ACE AS4 NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system asp.prmtop asp.inpcrd
+
+system = sequence { ACE GL4 NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system glu.prmtop glu.inpcrd
+
+system = sequence { ACE HIP NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system his.prmtop his.inpcrd
+
+system = sequence { ACE LYS NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system lys.prmtop lys.inpcrd
+
+system = sequence { ACE TYR NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system tyr.prmtop tyr.inpcrd
+
+quit
