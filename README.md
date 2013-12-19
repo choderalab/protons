@@ -13,3 +13,10 @@ calibration-explicit/ - terminally-blocked amino acids parameterized for explici
 references/           - some relevant literature references
 ```
 
+## Contributors / coauthors ##
+
+* John D. Chodera <choderaj@mskcc.org>
+* Patrick Grinaway <grinawap@mskcc.org>
+* Jason Swails <jason.swails@gmail.com>
+* Jason Wagoner <jawagoner@gmail.com>
+
