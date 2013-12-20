@@ -50,6 +50,7 @@ COPYRIGHT AND LICENSE
 
 import re
 import os
+import sys
 import math
 import random
 import copy
@@ -259,6 +260,16 @@ class MonteCarloTitration(object):
             if (particle1 in particle_indices) or (particle2 in particle_indices):
                 if (particle2 in self.atomExceptions[particle1]) or (particle1 in self.atomExceptions[particle2]):
                     exception_indices.append(exception_index)
+                    # BEGIN UGLY HACK
+                    # chargeprod and sigma cannot be identically zero or else we risk the error:
+                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                    # TODO: Once OpenMM interface permits this, omit this code.
+                    [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                    force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
+                    # END UGLY HACK
+
         return exception_indices
 
     def resetStatistics(self):
@@ -572,6 +583,13 @@ class MonteCarloTitration(object):
                     [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
                     #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
                     chargeProd = self.coulomb14scale * charge1 * charge2
+                    # BEGIN UGLY HACK
+                    # chargeprod and sigma cannot be identically zero or else we risk the error:
+                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                    # TODO: Once OpenMM interface permits this, omit this code.
+                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                    # END UGLY HACK
                     force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
 
             # Update parameters in Context, if specified.
@@ -736,9 +754,9 @@ if __name__ == "__main__":
     pH = 7.0
 
     # Filenames.
-    #prmtop_filename = 'amber-example/prmtop'
-    #inpcrd_filename = 'amber-example/min.x'
-    #cpin_filename = 'amber-example/cpin'
+    prmtop_filename = 'amber-example/prmtop'
+    inpcrd_filename = 'amber-example/min.x'
+    cpin_filename = 'amber-example/cpin'
     
     # Calibration on a terminally-blocked amino acid in implicit solvent
     #prmtop_filename = 'calibration-implicit/tyr.prmtop'
@@ -751,10 +769,10 @@ if __name__ == "__main__":
     #cpin_filename =   'calibration-explicit/his.cpin'
     #pH = 6.5
 
-    prmtop_filename = 'calibration-implicit/his.prmtop'
-    inpcrd_filename = 'calibration-implicit/his.inpcrd'
-    cpin_filename =   'calibration-implicit/his.cpin'
-    pH = 6.5
+    #prmtop_filename = 'calibration-implicit/his.prmtop'
+    #inpcrd_filename = 'calibration-implicit/his.inpcrd'
+    #cpin_filename =   'calibration-implicit/his.cpin'
+    #pH = 6.5
     
     # Load the AMBER system.
     import simtk.openmm.app as app
@@ -768,7 +786,7 @@ if __name__ == "__main__":
     mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
 
     # Create integrator and context.
-    platform_name = 'CPU'
+    platform_name = 'CUDA'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
