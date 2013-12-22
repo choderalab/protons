@@ -19,4 +19,7 @@ saveamberparm system lys.prmtop lys.inpcrd
 system = sequence { ACE TYR NME }
 saveamberparm system tyr.prmtop tyr.inpcrd
 
+system = sequence { ACE CYS NME }
+saveamberparm system cys.prmtop cys.inpcrd
+
 quit

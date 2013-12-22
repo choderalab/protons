@@ -24,4 +24,44 @@ system = sequence { ACE TYR NME }
 solvatebox system TIP3PBOX 12 0.75
 saveamberparm system tyr.prmtop tyr.inpcrd
 
+system = sequence { ACE CYS NME }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system cys.prmtop cys.inpcrd
+
+# Comment out this if you want to create the blocked nucleic acids
+quit
+
+# Create blocked nucleic acids (TIP3P or TIP4Pew?)
+system = sequence { MOC DAP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system da.prmtop da.inpcrd
+
+system = sequence { MOC DCP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system dc.prmtop dc.inpcrd
+
+system = sequence { MOC DG CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system dg.prmtop dg.inpcrd
+
+system = sequence { MOC DT CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system dt.prmtop dt.inpcrd
+
+system = sequence { MOC AP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system a.prmtop da.inpcrd
+
+system = sequence { MOC CP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system c.prmtop dc.inpcrd
+
+system = sequence { MOC G CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system g.prmtop dg.inpcrd
+
+system = sequence { MOC U CH3 }
+solvatebox system TIP3PBOX 12 0.75
+saveamberparm system u.prmtop u.inpcrd
+
 quit
