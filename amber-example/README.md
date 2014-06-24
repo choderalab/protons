@@ -1,4 +1,4 @@
-Constant-pH test from amber11.
+Constant-pH test from amber11 (hen egg white lysozyme)
 
 cpin file was generated via:
 ```
@@ -10,3 +10,7 @@ Note that the Python `cpinutil` tools written by Jason Swails are preferred beca
 ```
 amber12/AmberTools/src/etc/cpinutil/
 ```
+
+## Manifest
+
+* `example.pdb` - PDB version
