@@ -60,6 +60,8 @@ import time
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
+import numpy
+
 
 from db import * 
 
@@ -675,7 +677,20 @@ class MonteCarloTitration(object):
         return
 
 
-#jn routines: setPartialTitrationState and update_ncmc +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# jn routines: setPartialTitrationState and update_ncmc + + + + + + + + + + + + + + + + + + + + + +
+    def local_verlet(state,m,v,q,dt):
+		#velocity half-step update
+		f = state.getForces( asNumpy=True )        
+		v += f/m * (0.5*dt)
+		#position full step update
+		q += v*dt
+		#velocity half step (with updated positions)
+		context.setPositions(q)
+		f = state.getForces( asNumpy=True ) 
+		v += f/m * (0.5*dt)
+      #not working yet!
+
+
     def setPartialTitrationState(self, titration_group_index, titration_state_index_initial, titration_state_index_final, lambda_t, context=None, debug=False):
         """
         Change the titration state of the designated group for the provided state.
@@ -762,8 +777,9 @@ class MonteCarloTitration(object):
                     force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
 
             # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'): 
-                force.updateParametersInContext(context)                
+            if context and hasattr(force, 'updateParametersInContext'):
+                force.updateParametersInContext(context) 
+                             
 
         # Update titration state records.
         # jn note: this sets the titration state to the 'initial state', so that titratStates doesn't know about lambda or the final state.  
@@ -779,7 +795,7 @@ class MonteCarloTitration(object):
         return
 #====================================================================================================================
 
-    def update_ncmc(self, context,temperature,collision_rate,n_work_steps,n_prop_steps):
+    def update_ncmc(self, context,m,temperature,n_work_steps,n_prop_steps,timestep):
         """
         Perform a Monte Carlo update of the titration state.
         JN: making a copy of update and working from that
@@ -788,11 +804,11 @@ class MonteCarloTitration(object):
 
         context (simtk.openmm.Context) - the context to update
         temperature    - the temperature in kelvin (required for MB distribution of velocities and Langevin reinitialization)
-        collision_rate - required for Langevin reinitialization
+        m              - masses numpy array
         n_work_steps   - number of work steps ( lambda(t) = t / n_work_steps )   
         n_prop_steps   - number of simulation steps at fixed lambda
 
-
+n
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
         """
@@ -800,67 +816,53 @@ class MonteCarloTitration(object):
 #jndb pre-trial momentum bookkeepping---------------------------------
 # jn:  don't forget to add a 'momentum reversal branch' (you can do that inside update_ncmc)
 
-        print(" = = jn in new update routine = = ")
-        print(" = = jn testing velocity restore = = ")
 
-	state_test=context.getState(getVelocities=True,getPositions=True)
-	velocities_restore=state_test.getVelocities()
-        positions_restore=state_test.getPositions()
+# getting state:
+	state=context.getState(getVelocities=True,getPositions=True)
+	velocities_restore=state.getVelocities()
+        positions_restore=state.getPositions()
 	print ("velocities to restore")
         print(velocities_restore[0]) 
 	print("positions to restore")
 	print(positions_restore[0])
 
-
-# JN: modifying integrator to a Verlet (we need to figure out how to access the noise history for the other integrators)
-      
-# drawing velocities from Maxwell-Boltzmann distribution
-         # Maxwell Boltzmann distribution of velocities
-        integrator = openmm.VerletIntegrator(timestep)
-	positions  = context.getState(getPositions=True).getPositions()
-        context    = openmm.Context(system, integrator, platform)
-#this section will be different if we use the 'flipping' approach:
-	context.setPositions(positions)
+        # Maxwell Boltzmann distribution of velocities (for now)
         context.setVelocitiesToTemperature(temperature)        
         print("jn after first velocity initialization (in update_ncmc):")
-	state_test=context.getState(getVelocities=True)
-        velocity_test=state_test.getVelocities()
-        print(velocity_test[0]) 
-#--------------------------------------------------------------------------
-        #jn: we need to either:
-        #jn:            a) have a way of updating the context (like the parameters) efficiently, or r
-        #jn:            b) compute noise history and keep the native integrator
-        #jn: I don't think the choice of ncmc integrator will affect performance, but I am not sure.
+	state=context.getState(getVelocities=True,getPositions=True,getForces=True,getEnergy=True)
+	# printing velocites to test randomization step 
+        velocity_test=state.getVelocities()
+        print(velocity_test[0])
 
 
-
-#	code.interact(local=locals())
-#       sys.exit() 
-          
+        q = state.getPositions(  asNumpy=True )
+        v = state.getVelocities( asNumpy=True )
+        print "jn before titration site loop"
+        print"q: "+str(q[0,:])
+        print"v: "+str(v[0,:])
 
         # Perform a number of protonation state update trials.
+
         for attempt in range(self.nattempts_per_update):
             # Choose how many titratable groups to simultaneously attempt to update.
             ndraw = 1
             if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
                 ndraw = 2
-
                 
             # Choose groups to update.
             # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
             
-            #maybe create an array of energies to bias selection to low energy states?
- 
-
+            #maybe create an array of energies to bias selection to low energy states? (This will take a bit of doing, btw)
             titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
             
             # Compute initial probability of this protonation state.
             log_P_initial = self._compute_log_probability(context)
 
             if self.debug:
-                state = context.getState(getEnergy=True)
+                state = context.getState(getVelocities=True,getPositions=True,getForces=True,getEnergy=True)
                 initial_potential = state.getPotentialEnergy()
-                print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
+                print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)               
+                print "U_init(kJ/mol)=", str(initial_potential)
 
             # Perform update attempt.
             initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
@@ -875,22 +877,103 @@ class MonteCarloTitration(object):
                 titration_state_index_final = random.choice(titration_state_list)
 
                 print"jn check titration states for self transitions (maybe an Exceptions should go here?)" 
-              #  code.interact(local=locals())
+
 #jn: adding the lambda loop: 
-#jn: adding the first propagation step to symmetrize the ncmc trial:
-            integrator.step(n_prop_steps)
-	    print("jn before lambda loop")
+ 
+	    print("jn before first propagation and lambda loop")
 #jndb	    code.interact(local=locals())
-	    for i_t in range(1,n_work_steps+1):
-		#range needs to be 1:n_w for lambda calc
-		lambda_t = float(i_t)/n_work_steps  #don't overwrite lambda functions!
-#jn adding a new partial titration state routine
-                #perturbation step:
+	    print"q: "+str(q[0,:])
+	    print"v: "+str(v[0,:])
+
+#jn: adding the first propagation step to symmetrize the ncmc trial:
+            state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+	    f  = state.getForces( asNumpy=True )    
+            for j_i in range(n_prop_steps):
+                v=state.getVelocities(asNumpy=True)
+                q=state.getPositions(asNumpy=True)
+
+		v += f/m * (0.5*timestep)
+		#position full step update
+		q += v*timestep
+		#velocity half step (with updated positions)
+		context.setPositions(q)
+                state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+		f = state.getForces( asNumpy=True ) 
+		v += f/m * (0.5*timestep)
+                #update state for next round
+
+                context.setVelocities(v) #for debugs only
+                 
+                state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+ 
+                if (self.debug==True):
+                        U=state.getPotentialEnergy()
+                        K=state.getKineticEnergy()
+
+			H=U.value_in_unit(U.unit)  #units=kJ/mol
+    #                   jn fun fact:  (nm^2 dalton) / ps^2 (KE units)  = 1 kJ/mol (U units)  
+			H+=0.5*(m*v**2).in_units_of(U.unit).sum()
+		#	print "j) "+ str(j_i) + "H: "+str(H) +" "+ str(U.unit) + " U: "+ str(U.value_in_unit(U.unit)) + " K: " + str( 0.5*(m*v**2).sum() )
+          #              print "    f: "+str(f[0,0]) + "   q: "+str(q[0,0]) + "   v: "+ str(v[0,0])
+
+                        log_P_test=self._compute_log_probability(context)
+
+                        #code.interact(local=locals())
+                        print " H(org): " + str(H) + "  H(alt): " + str(U+K) + " H(from routine): " + str(log_P_test)
+                      
+
+	    print("jn 03jul2014: line 925 after first propagation and before lambda loop")
+#jndb	    code.interact(local=locals())
+	    print"q: "+str(q[0,:])
+	    print"v: "+str(v[0,:])
+            print "\n"; code.interact(local=locals())
+            import sys; sys.exit()
+
+
+	    for i_t in range(1,n_work_steps+1): # range needs to be 1:n_w for lambda calc
+		lambda_t = float(i_t)/n_work_steps 
+                # perturbation step with partial titration
 		self.setPartialTitrationState(titration_group_index, titration_state_index_initial,titration_state_index_final, lambda_t, context,debug=False)
 # original function 
 # 		self.setTitrationState(titration_group_index, titration_state_index, context)
-                #propagation step
-                integrator.step(n_prop_steps)
+                print "jn: positions and velocities: lambda_t="+str(lambda_t)
+                print q[0,:] 
+                print v[0,:]
+
+                if (self.debug==True):
+                        U=state.getPotentialEnergy()
+			H=U.value_in_unit(U.unit)  #units=kJ/mol
+    #                   jn fun fact:  (nm^2 dalton) / ps^2 (KE units)  = 1 kJ/mol (U units)  
+			H+=0.5*(m*v**2).sum()
+			print "i) "+ str(i_t) + "H: "+str(H) +" "+ str(U.unit) + " U: "+ str(U.value_in_unit(U.unit)) + " K: " + str( 0.5*(m*v**2).sum() )
+
+
+
+
+
+
+                for j_i in range(n_prop_steps):
+             #       print"jndb getting forces\n"
+                #    code.interact(local=locals())
+                    #velocity half-step update
+		    f = state.getForces( asNumpy=True )        
+		    v += f/m * (0.5*timestep)
+                    #position full step update
+                    q += v*timestep
+                    #velocity half step (with updated positions)
+                    context.setPositions(q)
+                    f = state.getForces( asNumpy=True ) 
+	            v += f/m * (0.5*timestep)
+
+    
+		    if (self.debug==True):
+			H=state.getPotentialEnergy().value_in_unit(U.unit)  #units=kJ/mol
+    #                   jn fun fact:  (nm^2 dalton) / ps^2 (KE units)  = 1 kJ/mol (U units)  
+			H+=0.5*(m*v**2).sum()
+			print "(i,j)= ("+ str(i_t) + ","+ str(j_i) +")  H: "+str(H) +" "+ str(U.unit) + " U: "+ str(U.value_in_unit(U.unit)) + " K: "+ str( 0.5*(m*v**2).sum() )   
+
+                print "\n"; code.interact(local=locals())
+                import sys; sys.exit()
 
 #jn: I am not sure that we need this final_titration_state assignment currently:
 	    final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
@@ -990,11 +1073,11 @@ class MonteCarloTitration(object):
             pKref = titration_state['pKref']
             proton_count = titration_state['proton_count']
             relative_energy = titration_state['relative_energy']
-            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
+            #print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
             log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy 
             
         # Return the log probability.
-        return log_P
+        return total_energy #log_P
     
     def getNumAttemptsPerUpdate(self):
         """
@@ -1042,9 +1125,11 @@ if __name__ == "__main__":
     collision_rate = 9.1 / units.picoseconds
     pH = 7.0
 
+    timestep_ncmc=0.5*timestep #size of nMD timestep in ncmc trials (VV with no shake)
+
 #   jn: NCMC variables added
     n_work_steps=10 # number of slices for lamba...T in paper: (l(t)=t/T)
-    n_prop_steps=1   # number of md steps per l(t) may need to be adjusted
+    n_prop_steps=150   # number of md steps per l(t) may need to be adjusted
                      # for optimal performance when considering latency 
                      # in context updating
 
@@ -1099,7 +1184,15 @@ if __name__ == "__main__":
     context = openmm.Context(system, integrator, platform)
     context.setPositions(inpcrd.getPositions())
 
-
+#jn: generating a mass array 
+    print "Creating masses array..."
+    nparticles = system.getNumParticles()   
+    masses = units.Quantity(numpy.zeros([nparticles,3], numpy.float64), units.amu)
+    for particle_index in range(nparticles):
+        masses[particle_index,:] = system.getParticleMass(particle_index)
+#question: does this numpy array get passed as a pointer to update_ncmc?
+   
+ 
 
     # Initialize PDB output.
     # jn adding new name
@@ -1135,13 +1228,11 @@ if __name__ == "__main__":
         initial_time = time.time()
 #        mc_titration.update(context)   
 
-
-
 #=======jn: new ncmc routine and wrappers===============
  
-        context=mc_titration.update_ncmc(context,temperature,collision_rate,n_work_steps,n_prop_steps)
-        #jn: need to reassign integrator
-	integrator=context.getIntegrator()
+        context=mc_titration.update_ncmc(context,masses,temperature,n_work_steps,n_prop_steps,timestep_ncmc)
+        print"jn: do we need to pass context back?"
+#	integrator=context.getIntegrator()
 
         state_test=context.getState(getVelocities=True, getPositions=True)
         position_test=state_test.getPositions()
