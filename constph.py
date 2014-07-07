@@ -828,7 +828,7 @@ class MonteCarloTitration(object):
             ndraw = 1
             if self.debug:
                 print  "-------------------------------------------------------------"
-                print "attempt # ", str(attempt), "---------------------------------"
+                print "attempt # ", str(attempt), + "ndraw: " + str(ndraw) +"------------"
                 print "jndb: don't forget to add ndraw>1"
 
             #if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
@@ -864,8 +864,11 @@ class MonteCarloTitration(object):
                 print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
 
             # Perform update attempt.
+            drawcount=0
             initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy of initial state
             for titration_group_index in titration_group_indices:
+                drawcount+=1
+                if self.debug: print "draw #:", str(drawcount)
                 # new setPartialTitrationState needs initial and final states
                 titration_state_index_initial  = self.titrationStates[titration_group_index]
 
@@ -949,7 +952,7 @@ class MonteCarloTitration(object):
                     context.setVelocities(-velocities_last_step)
                       
                     if self.debug:
-                        print"jndb what gives with velocities"
+                        print"jndb kinetic energy conservation upon v reversal?"
                         state = context.getState(getVelocities=True, getPositions=True,getEnergy=True)
                         velocities_test=state.getVelocities()
                         U_rev=state.getPotentialEnergy()
@@ -1106,15 +1109,15 @@ if __name__ == "__main__":
     
     # Parameters.
     niterations    = 500 # number of dynamics/titration cycles to run
-    nsteps         = 10 #500 # number of timesteps of dynamics per iteration
+    nsteps         = 500 #500 # number of timesteps of dynamics per iteration
     temperature    = 300.0 * units.kelvin
     timestep       = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
     pH = 7.0
 
 #   jn: NCMC variables added
-    n_work_steps=5  # number of slices for lamba...T in paper: (l(t)=t/T)
-    n_prop_steps=5   # number of md steps per l(t) may need to be adjusted
+    n_work_steps=10  # number of slices for lamba...T in paper: (l(t)=t/T)
+    n_prop_steps=50   # number of md steps per l(t) may need to be adjusted
                      # for optimal performance when considering latency 
                      # in context updating
     timestep_ncmc = 0.5* units.femtoseconds
@@ -1154,7 +1157,7 @@ if __name__ == "__main__":
         
     # Initialize Monte Carlo titration.
     print "Initializing Monte Carlo titration..."
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=False)
 
    
 #jndb    print("\n ==jn: printing xml here and quitting==\n")
