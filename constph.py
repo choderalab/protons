@@ -681,7 +681,7 @@ class MonteCarloTitration(object):
 #
 
 #jn routines: setPartialTitrationState and update_ncmc +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    def setPartialTitrationState(self, titration_group_index, titration_state_index_initial, titration_state_index_final, lambda_t, context=None, debug=False):
+    def setPartialTitrationState(self, titration_group_indices, titration_state_index_initial, titration_state_index_final, lambda_t, context=None, debug=False):
         """
         Change the titration state of the designated group for the provided state.
 
@@ -697,86 +697,94 @@ class MonteCarloTitration(object):
         debug (boolean) - if True, will print debug information
 
         """
-
         # Check parameters for validity.
-        if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
-        if titration_state_index_final not in range(self.getNumTitrationStates(titration_group_index)):
-            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
+        drawcount=0
+        for titration_group_index in titration_group_indices:
+            if titration_group_index not in range(self.getNumTitratableGroups()):
+                raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            if titration_state_index_final[drawcount] not in range(self.getNumTitrationStates(titration_group_index)):
+                raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
+            drawcount+=1
 
-        # The MonteCarloTitration object stores the initial charge state until lambda=1
-        charges_initial= self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_initial]['charges']
+        #begin looping through titration group indices:
+        drawcount=0
+        for titration_group_index in titration_group_indices: 
+            # The MonteCarloTitration object stores the initial charge state until lambda=1
+            charges_initial= self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_initial[drawcount]]['charges']
 
-        # Get (final) titration group and state using the index of the final state.  
-        titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_final]
-        
-        # Modify charges and exceptions.
-        # Update charges.
-        charges = titration_state['charges']  #jn NOTE: this refers to the 'final' charge state!
-        atom_indices = titration_group['atom_indices']
+            # Get (final) titration group and state using the index of the final state.  
+            titration_group = self.titrationGroups[titration_group_index]
+            titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_final[drawcount]]
+            
+            # Modify charges and exceptions.
+            # Update charges.
+            charges = titration_state['charges']  #jn NOTE: this refers to the 'final' charge state!
+            atom_indices = titration_group['atom_indices']
 
-        for (charge_index, atom_index) in enumerate(atom_indices):
-	    # getting initial, final charges charge and mixing charges for fractional states: 
-            charge_initial = charges_initial[ charge_index ] 
-            charge_final   = charges[        charge_index ]  #note how charge_final is assigned
-            charge_mixture=(1-lambda_t)*charge_initial + lambda_t*charge_final
-	    
-            for force in self.forces_to_update:  #this loop should go inside 
-                # Get name of force class.
-                force_classname = force.__class__.__name__
-                # Get atom indices and charges.
+            for (charge_index, atom_index) in enumerate(atom_indices):
+            # getting initial, final charges charge and mixing charges for fractional states: 
+                charge_initial = charges_initial[ charge_index ] 
+                charge_final   = charges[        charge_index ]  #note how charge_final is assigned
+                charge_mixture=(1-lambda_t)*charge_initial + lambda_t*charge_final
+            
+                for force in self.forces_to_update:  #this loop should go inside 
+                    # Get name of force class.
+                    force_classname = force.__class__.__name__
+                    # Get atom indices and charges.
+                    if force_classname == 'NonbondedForce':
+                        # get the parameters from NonbondedForce
+                        [charge_previous, sigma, epsilon] = force.getParticleParameters(atom_index)
+                        # debugs
+                        if debug: print " partially modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(sigma), str(epsilon), str(charge_mixture), str(sigma), str(epsilon))
+                        if debug: print "   lambda=(%s) , q(t->T)= (%s -> %s),  q(t-1)= %s, q(t)= %s " % (lambda_t,charge_initial,charge_final,charge_previous,charge_mixture)
+                      
+                        # update nonbonded force
+                        force.setParticleParameters(atom_index, charge_mixture, sigma, epsilon)
+
+                    elif force_classname == 'GBSAOBCForce':
+                        # get the parameters from GBSAOBCForce
+                        [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
+                        # print some debugs
+                        if debug: 
+                            print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(radius), scaleFactor, str(charge_mixture), str(radius), scaleFactor)
+                        #jn Question:  How are Born Radii computed here?
+                            print "do we know how Born Radii are computed/updated?"
+                        #update GBSAOBCForce
+                            force.setParticleParameters(atom_index, charge_mixture, radius, epsilon)
+
+                    else:
+                        raise Exception("Don't know how to update force type '%s'" % force_classname)
+                # Update exceptions
+                # TODO: Handle Custom forces.
                 if force_classname == 'NonbondedForce':
-                    # get the parameters from NonbondedForce
-                    [charge_previous, sigma, epsilon] = force.getParticleParameters(atom_index)
-                    # debugs
-                    if debug: print " partially modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(sigma), str(epsilon), str(charge_mixture), str(sigma), str(epsilon))
-                    if debug: print "   lambda=(%s) , q(t->T)= (%s -> %s),  q(t-1)= %s, q(t)= %s " % (lambda_t,charge_initial,charge_final,charge_previous,charge_mixture)
-                  
-                    # update nonbonded force
-                    force.setParticleParameters(atom_index, charge_mixture, sigma, epsilon)
+                    for exception_index in titration_group['exception_indices']:
+                        [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                        [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
+                        [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
+                        # print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
+                        chargeProd = self.coulomb14scale * charge1 * charge2
+                        # BEGIN UGLY HACK
+                        # chargeprod and sigma cannot be identically zero or else we risk the error:
+                        # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                        # TODO: Once OpenMM interface permits this, omit this code.
+                        if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                        if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                        # END UGLY HACK
+                        force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
 
-                elif force_classname == 'GBSAOBCForce':
-                    # get the parameters from GBSAOBCForce
-                    [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
-                    # print some debugs
-                    if debug: 
-                        print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(radius), scaleFactor, str(charge_mixture), str(radius), scaleFactor)
-                    #jn Question:  How are Born Radii computed here?
-                        print "do we know how Born Radii are computed/updated?"
-                    #update GBSAOBCForce
-                        force.setParticleParameters(atom_index, charge_mixture, radius, epsilon)
+                # Update parameters in Context, if specified.
+                if context and hasattr(force, 'updateParametersInContext'): 
+                    force.updateParametersInContext(context)                
 
-                else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
-            # Update exceptions
-            # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                for exception_index in titration_group['exception_indices']:
-                    [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                    [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
-                    [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
-                    #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
-                    chargeProd = self.coulomb14scale * charge1 * charge2
-                    # BEGIN UGLY HACK
-                    # chargeprod and sigma cannot be identically zero or else we risk the error:
-                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
-                    # TODO: Once OpenMM interface permits this, omit this code.
-                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
-                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
-                    # END UGLY HACK
-                    force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
-
-            # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'): 
-                force.updateParametersInContext(context)                
-
-        # Update titration state records.
-        # note: titration state is set to initial state until last step (lambda==1).  
-        self.titrationStates[titration_group_index] = titration_state_index_initial
-        # jn note: adjusting titration state to final state if lambda_t=1
-        if (lambda_t==1.0):
-	    self.titrationStates[titration_group_index] = titration_state_index_final     
+            # Update titration state records.
+            # note: titration state is set to initial state until last step (lambda==1).  
+            self.titrationStates[titration_group_index] = titration_state_index_initial[drawcount]
+            # jn note: adjusting titration state to final state if lambda_t=1
+            if (lambda_t==1.0):
+                self.titrationStates[titration_group_index] = titration_state_index_final[drawcount]     
+        
+            drawcount+=1
+        #end looping throug titration group indices:
                
         if debug:        print("end partial titration state update")
 
@@ -826,14 +834,15 @@ class MonteCarloTitration(object):
         for attempt in range(self.nattempts_per_update):
             # Choose how many titratable groups to simultaneously attempt to update.
             ndraw = 1
+            if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
+                ndraw = 2
+            
+            
             if self.debug:
                 print  "-------------------------------------------------------------"
-                print "attempt # ", str(attempt), + "ndraw: " + str(ndraw) +"------------"
-                print "jndb: don't forget to add ndraw>1"
+                print "attempt # ", str(attempt),  "ndraw: "+ str(ndraw)+ "----------------------"
 
-            #if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
-            #    ndraw = 2
-                
+ 
             # Choose groups to update.
             # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
             # maybe create an array of energies to bias selection to low energy states?
@@ -864,26 +873,31 @@ class MonteCarloTitration(object):
                 print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
 
             # Perform update attempt.
-            drawcount=0
+            drawcount=-1
+            titration_state_index_initial=list()
+            titration_state_index_final=list()
             initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy of initial state
             for titration_group_index in titration_group_indices:
                 drawcount+=1
                 if self.debug: print "draw #:", str(drawcount)
                 # new setPartialTitrationState needs initial and final states
-                titration_state_index_initial  = self.titrationStates[titration_group_index]
-
+                
+                titration_state_index_initial.append( self.titrationStates[titration_group_index] )
                 # Choose a titration state with uniform probability (now excluding self transitions).
-                titration_state_list=range(self.getNumTitrationStates(titration_group_index))
-                index_to_remove=titration_state_list.index(titration_state_index_initial)
+                titration_state_list = range(self.getNumTitrationStates(titration_group_index))
+                index_to_remove = titration_state_list.index(titration_state_index_initial[drawcount])
                 del titration_state_list[index_to_remove]
-                titration_state_index_final = random.choice(titration_state_list)
+                titration_state_index_final.append( random.choice(titration_state_list) )
 
                 if self.debug:
                     state = context.getState(getEnergy=True)
                     initial_potential = state.getPotentialEnergy()
-                    print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
-
-
+                    # print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
+                    print " draw #: ", str(drawcount+1), ")"+ "residue # "+str(titration_group_index)\
+                          + ": state change: ( " + str(titration_state_index_initial[drawcount])+ "->"+ \
+                           str( titration_state_index_final[drawcount]  )  + " )"                
+                
+ 
             if self.debug:
                 H_init=log_P_initial #using a shorter name for dbugs
                 print "starting energy: "+ str(log_P_initial)
@@ -901,8 +915,7 @@ class MonteCarloTitration(object):
                 lambda_t = float(i_t+1)/n_work_steps
                 # perturbation step
                 # new partial titration state routine
-                self.setPartialTitrationState(titration_group_index, titration_state_index_initial,titration_state_index_final, lambda_t, context,debug=False)
-
+                self.setPartialTitrationState(titration_group_indices, titration_state_index_initial,titration_state_index_final, lambda_t, context,debug=False)
                 if self.debug: H0_db = self._compute_log_probability(context)  #computing initial energy for conservation
                 # propagation step
                 integrator.step(n_prop_steps)
@@ -952,7 +965,7 @@ class MonteCarloTitration(object):
                     context.setVelocities(-velocities_last_step)
                       
                     if self.debug:
-                        print"jndb kinetic energy conservation upon v reversal?"
+                        print"jndb kinetic energy conservation?"
                         state = context.getState(getVelocities=True, getPositions=True,getEnergy=True)
                         velocities_test=state.getVelocities()
                         U_rev=state.getPotentialEnergy()
@@ -970,9 +983,9 @@ class MonteCarloTitration(object):
                 acc=False
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
-                    self.setTitrationState(titration_group_index, titration_state_index_initial, context,debug=False)
+                    #self.setTitrationState(titration_group_index, titration_state_index_initial, context,debug=False)
                     # we could use the partial state function if needed, but it will be slightly slower
-                    # self.setPartialTitrationState(titration_group_index, titration_state_index_initial,titration_state_index_initial, 1.0, context,debug=False)
+                    self.setPartialTitrationState(titration_group_indices, titration_state_index_initial,titration_state_index_initial, 1.0, context,debug=False)
                     context.setPositions(positions_restore)
                     context.setVelocities(velocities_restore)
             # end accept/reject ====
@@ -1066,6 +1079,7 @@ class MonteCarloTitration(object):
             #print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
             log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy 
             
+            
         # Return the log probability.
         return (beta*total_energy) #log_P
     
@@ -1109,15 +1123,15 @@ if __name__ == "__main__":
     
     # Parameters.
     niterations    = 500 # number of dynamics/titration cycles to run
-    nsteps         = 500 #500 # number of timesteps of dynamics per iteration
+    nsteps         = 5 #500 # number of timesteps of dynamics per iteration
     temperature    = 300.0 * units.kelvin
     timestep       = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
     pH = 7.0
 
 #   jn: NCMC variables added
-    n_work_steps=10  # number of slices for lamba...T in paper: (l(t)=t/T)
-    n_prop_steps=50   # number of md steps per l(t) may need to be adjusted
+    n_work_steps=5 #10  # number of slices for lamba...T in paper: (l(t)=t/T)
+    n_prop_steps=5 #50   # number of md steps per l(t) may need to be adjusted
                      # for optimal performance when considering latency 
                      # in context updating
     timestep_ncmc = 0.5* units.femtoseconds
@@ -1157,7 +1171,7 @@ if __name__ == "__main__":
         
     # Initialize Monte Carlo titration.
     print "Initializing Monte Carlo titration..."
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=False)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
 
    
 #jndb    print("\n ==jn: printing xml here and quitting==\n")
