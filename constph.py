@@ -1122,7 +1122,7 @@ if __name__ == "__main__":
     #
     
     # Parameters.
-    niterations    = 500 # number of dynamics/titration cycles to run
+    niterations    = 10 #500 # number of dynamics/titration cycles to run
     nsteps         = 5 #500 # number of timesteps of dynamics per iteration
     temperature    = 300.0 * units.kelvin
     timestep       = 1.0 * units.femtoseconds
@@ -1163,7 +1163,7 @@ if __name__ == "__main__":
     print "Creating AMBER system..."
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
-    system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=NoCutoff, constraints=HBonds)
 
 #jndb    print("\n ==jn: generating system output before titration call==\n")
 #jndb    import code; code.interact(local=locals())
@@ -1171,7 +1171,7 @@ if __name__ == "__main__":
         
     # Initialize Monte Carlo titration.
     print "Initializing Monte Carlo titration..."
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=False)
 
    
 #jndb    print("\n ==jn: printing xml here and quitting==\n")
@@ -1191,7 +1191,9 @@ if __name__ == "__main__":
 
     # Initialize PDB output.
     # jn adding new name
-    pdboutfile = open('trajectory_jn.pdb', 'w')
+    filename='trajectory_jn_occtest'
+    pdboutfile = open(filename+'.pdb', 'w')
+    occupancyfile=open(filename+'.occ.txt','w')
    
 
 
@@ -1254,3 +1256,38 @@ if __name__ == "__main__":
         app.PDBFile.writeModel(prmtop.topology, positions, pdboutfile, modelIndex=iteration)
 
         # TODO: Write out protonation states to a file
+        # jn 08jul2014 trying a protonation state printout (must move to function soon!)===
+        # atom_number array generated only once:
+        if iteration==0: 
+            atom_number_array=list()
+
+        # occupancy array must be initialized each iteration
+        occupancy_array=list()
+        print "MODEL       %d"%( iteration )
+        occupancyfile.write("MODEL       %d\n"%( iteration ) )
+        total_atom_count=0 
+        for titration_group_index in range(len(mc_titration.titrationGroups)):
+            titration_group = mc_titration.titrationGroups[titration_group_index]
+            # getting titration state for residue (titration group)
+            titration_state = mc_titration.titrationStates[titration_group_index]
+            charges = mc_titration.titrationGroups[titration_group_index]['titration_states'][titration_state]['charges']._value
+            
+            for atom_count in range(len(charges)):
+                charge = charges[atom_count]
+                occ = 1
+                if charge==0.0: occ=0
+                occupancy_array.append(occ)
+                # only need to build this once per trajectory
+
+              #  import code; code.interact(local=locals())
+                if iteration==0:
+                    atom_number_array.append(titration_group['atom_indices'][atom_count]);
+                outstring="%d %d"%(atom_number_array[total_atom_count]+1, occupancy_array[total_atom_count])
+                #print outstring
+                occupancyfile.write(outstring+"\n")
+             #  import code; code.interact(local=locals())
+                total_atom_count+=1
+    occupancyfile.write("END")
+    occupancyfile.close() 
+        #    import code; code.interact(local=locals())
+        # end protonation state printout ===================================================                           
