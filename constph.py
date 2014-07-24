@@ -1,15 +1,16 @@
 #!/usr/local/bin/env python
 
-#=============================================================================================
+#======================================================================================
 # MODULE DOCSTRING
-#=============================================================================================
+#======================================================================================
 
 """
 Constant pH dynamics test.
 
 DESCRIPTION
+/
+This module tests the constant pH functionality in OpenMM
 
-This module tests the constant pH functionality in OpenMM.
 
 NOTES
 
@@ -59,6 +60,9 @@ import time
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
+import numpy
+#from db import * 
+
 
 #=============================================================================================
 # MODULE CONSTANTS
@@ -73,7 +77,7 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 class MonteCarloTitration(object):
     """
     Monte Carlo titration driver for constnat-pH dynamics.
-
+l
     This move type implements the constant-pH dynamics of Mongan and Case [1].
 
     REFERENCES
@@ -206,7 +210,7 @@ class MonteCarloTitration(object):
 
     def get14scaling(self, system):
         """
-        Determine Coulomb 14 scaling.
+		Determine Coulomb 14 scaling.
         
         ARGUMENTS
 
@@ -529,105 +533,336 @@ class MonteCarloTitration(object):
 
 
     def setTitrationState(self, titration_group_index, titration_state_index, context=None, debug=False):
+#        """
+#        Change the titration state of the designated group for the provided state.
+#
+#        ARGUMENTS
+#        
+#        titration_group_index (int) - the index of the titratable group whose titration state should be updated
+#        titration_state_index (int) - the titration state to set as active
+#        
+#        OPTIONAL ARGUMENTS
+#
+#        context (simtk.openmm.Context) - if provided, will update protonation state in the specified Context (default: None)
+#        debug (boolean) - if True, will print debug information
+#
+#        """
+#
+#        # Check parameters for validity.
+#        if titration_group_index not in range(self.getNumTitratableGroups()):
+#            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+#        if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
+#            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
+#
+#
+        # Get titration group and state.
+	 titration_group = self.titrationGroups[titration_group_index]
+	 titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
+        
+         # Modify charges and exceptions.
+         for force in self.forces_to_update:
+	     # Get name of force class.
+             force_classname = force.__class__.__name__
+             # Get atom indices and charges.
+             charges = titration_state['charges']
+             atom_indices = titration_group['atom_indices']
+             # Update charges.
+             # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
+             for (charge_index, atom_index) in enumerate(atom_indices):
+                 if force_classname == 'NonbondedForce':
+                     [charge, sigma, epsilon] = force.getParticleParameters(atom_index)
+                     if debug: print " modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon))
+                     force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
+                 elif force_classname == 'GBSAOBCForce':
+                     [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
+                     force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
+                     if debug: print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor)
+
+                 else:
+                     raise Exception("Don't know how to update force type '%s'" % force_classname)
+             # Update exceptions
+             # TODO: Handle Custom forces.
+             if force_classname == 'NonbondedForce':
+                 for exception_index in titration_group['exception_indices']:
+                     [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                     [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
+                     [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
+                     #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
+                     chargeProd = self.coulomb14scale * charge1 * charge2
+                     # BEGIN UGLY HACK
+                     # chargeprod and sigma cannot be identically zero or else we risk the error:
+                     # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                     # TODO: Once OpenMM interface permits this, omit this code.
+                     if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                     if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                     # END UGLY HACK
+                     force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
+ 
+             # Update parameters in Context, if specified.
+             if context and hasattr(force, 'updateParametersInContext'): 
+                 force.updateParametersInContext(context)                
+ 
+         # Update titration state records.
+         self.titrationStates[titration_group_index] = titration_state_index
+ 
+         return
+
+
+#jn routines: setPartialTitrationState and update_ncmc +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def inline_verlet(self,context,dt,integrator_option,m,nsteps,debug): #self is context
+      
+       
+       state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+       v=state.getVelocities(asNumpy=True)
+       q=state.getPositions(asNumpy=True)
+       f = state.getForces( asNumpy=True ) 
+
+       #need to add half kick to velocities for leapfrog
+       if integrator_option == 'inline-leapfrog':  v += f/m*dt/2.0 
+
+       H0 = self._compute_log_probability(context,integrator_option,m)
+       if(debug):   
+          H0 = self._compute_log_probability(context,integrator_option,m)
+          print " H(n=0): " + str(H0) 
+
+#
+       if integrator_option=='inline-leapfrog':
+          # assume that the inputs are aligned in time q=q(t); v=v(t).  
+          q += v*dt # running 1st full kick to initialize:
+          context.setPositions(q)
+          state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+          f = state.getForces( asNumpy=True ) 
+
+          for i_n in range(nsteps-1):  #first step already calc'd when staggering timesteps
+              v += f/m*dt 
+              q += v*dt
+              context.setPositions(q)
+              state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+              f = state.getForces( asNumpy=True ) 
+              if(debug):  
+                  #adding half kick for energy calc:
+                  context.setVelocities(v+f/m*dt/2.0 )  
+                  Ht = self._compute_log_probability(context,integrator_option,m)
+                  print " H( n = "+str(i_n+1)+" ): " + str(Ht)+ " delta: " + str(Ht-H0) 
+
+          # add half-step afterwards to synchronize with position
+          v += f/m*dt/2.0  #half kick to velocities (this is different than the api version)  
+          
+       if integrator_option=='inline-vv':
+           for i_n in range(nsteps):
+                v += f/m * (0.5*dt)
+                #position full step update
+                q += v*dt
+                #velocity half step (with updated positions)
+                context.setPositions(q)
+                state=context.getState(getForces=True,getEnergy=True,getVelocities=True,getPositions=True)
+                f = state.getForces( asNumpy=True ) 
+                v += f/m * (0.5*dt)
+                if(debug):  
+                    context.setVelocities(v)  
+                    Ht = self._compute_log_probability(context,integrator_option,m)
+                    print " H( n = "+str(i_n)+" ): " + str(Ht)+ " delta: " + str(Ht-H0) 
+
+       
+       context.setVelocities(v) 
+       #summary of stats (both branches)
+       if(debug):   
+          Ht = self._compute_log_probability(context,integrator_option,m)
+          print " H( n = "+str(n_prop_steps)+" final ): " + str(Ht)+ " delta: " + str(Ht-H0) 
+
+
+
+
+    def setPartialTitrationState(self, titration_group_indices, titration_state_index_initial, titration_state_index_final, lambda_t, context=None, debug=False):
         """
         Change the titration state of the designated group for the provided state.
 
         ARGUMENTS
         
         titration_group_index (int) - the index of the titratable group whose titration state should be updated
-        titration_state_index (int) - the titration state to set as active
-        
+        titration_state_index_initial (int) - the initial titration state 
+        titration_state_index_final (int)   - the final titration state 
+        lambda_t (float) - value used to assign superposition of charge states 
         OPTIONAL ARGUMENTS
 
         context (simtk.openmm.Context) - if provided, will update protonation state in the specified Context (default: None)
         debug (boolean) - if True, will print debug information
 
         """
-
         # Check parameters for validity.
-        if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
-        if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
-            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
+        drawcount=0
+        for titration_group_index in titration_group_indices:
+            if titration_group_index not in range(self.getNumTitratableGroups()):
+                raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            if titration_state_index_final[drawcount] not in range(self.getNumTitrationStates(titration_group_index)):
+                raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
+            drawcount+=1
 
-        # Get titration group and state.
-        titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
-        
-        # Modify charges and exceptions.
-        for force in self.forces_to_update:
-            # Get name of force class.
-            force_classname = force.__class__.__name__
-            # Get atom indices and charges.
-            charges = titration_state['charges']
-            atom_indices = titration_group['atom_indices']
+        #begin looping through titration group indices:
+        drawcount=0
+        for titration_group_index in titration_group_indices: 
+            # The MonteCarloTitration object stores the initial charge state until lambda=1
+            charges_initial= self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_initial[drawcount]]['charges']
+
+            # Get (final) titration group and state using the index of the final state.  
+            titration_group = self.titrationGroups[titration_group_index]
+            titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index_final[drawcount]]
+            
+            # Modify charges and exceptions.
             # Update charges.
-            # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
+            charges = titration_state['charges']  #jn NOTE: this refers to the 'final' charge state!
+            atom_indices = titration_group['atom_indices']
+
             for (charge_index, atom_index) in enumerate(atom_indices):
+            # getting initial, final charges charge and mixing charges for fractional states: 
+                charge_initial = charges_initial[ charge_index ] 
+                charge_final   = charges[        charge_index ]  #note how charge_final is assigned
+                charge_mixture=(1-lambda_t)*charge_initial + lambda_t*charge_final
+            
+                for force in self.forces_to_update:  #this loop should go inside 
+                    # Get name of force class.
+                    force_classname = force.__class__.__name__
+                    # Get atom indices and charges.
+                    if force_classname == 'NonbondedForce':
+                        # get the parameters from NonbondedForce
+                        [charge_previous, sigma, epsilon] = force.getParticleParameters(atom_index)
+                        # debugs
+                        if debug: print " partially modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(sigma), str(epsilon), str(charge_mixture), str(sigma), str(epsilon))
+                        if debug: print "   lambda=(%s) , q(t->T)= (%s -> %s),  q(t-1)= %s, q(t)= %s " % (lambda_t,charge_initial,charge_final,charge_previous,charge_mixture)
+                      
+                        # update nonbonded force
+                        force.setParticleParameters(atom_index, charge_mixture, sigma, epsilon)
+
+                    elif force_classname == 'GBSAOBCForce':
+                        # get the parameters from GBSAOBCForce
+                        [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
+                        # print some debugs
+                        if debug: 
+                            print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge_previous), str(radius), scaleFactor, str(charge_mixture), str(radius), scaleFactor)
+                        #jn Question:  How are Born Radii computed here?
+                            print "do we know how Born Radii are computed/updated?"
+                        #update GBSAOBCForce
+                            force.setParticleParameters(atom_index, charge_mixture, radius, epsilon)
+
+                    else:
+                        raise Exception("Don't know how to update force type '%s'" % force_classname)
+                # Update exceptions
+                # TODO: Handle Custom forces.
                 if force_classname == 'NonbondedForce':
-                    [charge, sigma, epsilon] = force.getParticleParameters(atom_index)
-                    if debug: print " modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon))
-                    force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
-                elif force_classname == 'GBSAOBCForce':
-                    if debug: print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor)
-                    [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
-                    force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
-                else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
-            # Update exceptions
-            # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                for exception_index in titration_group['exception_indices']:
-                    [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                    [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
-                    [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
-                    #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
-                    chargeProd = self.coulomb14scale * charge1 * charge2
-                    # BEGIN UGLY HACK
-                    # chargeprod and sigma cannot be identically zero or else we risk the error:
-                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
-                    # TODO: Once OpenMM interface permits this, omit this code.
-                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
-                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
-                    # END UGLY HACK
-                    force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
+                    for exception_index in titration_group['exception_indices']:
+                        [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
+                        [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
+                        [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
+                        # print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
+                        chargeProd = self.coulomb14scale * charge1 * charge2
+                        # BEGIN UGLY HACK
+                        # chargeprod and sigma cannot be identically zero or else we risk the error:
+                        # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                        # TODO: Once OpenMM interface permits this, omit this code.
+                        if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                        if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                        # END UGLY HACK
+                        force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
 
-            # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'): 
-                force.updateParametersInContext(context)                
+                # Update parameters in Context, if specified.
+                if context and hasattr(force, 'updateParametersInContext'): 
+                    force.updateParametersInContext(context)                
 
-        # Update titration state records.
-        self.titrationStates[titration_group_index] = titration_state_index
+            # Update titration state records.
+            # note: titration state is set to initial state until last step (lambda==1).  
+            self.titrationStates[titration_group_index] = titration_state_index_initial[drawcount]
+            # jn note: adjusting titration state to final state if lambda_t=1
+            if (lambda_t==1.0):
+                self.titrationStates[titration_group_index] = titration_state_index_final[drawcount]     
+        
+            drawcount+=1
+        #end looping throug titration group indices:
+               
+        if debug:        print("end partial titration state update")
 
         return
+#====================================================================================================================
+    def update_ncmc(self, context,**kwargs):
 
-    def update(self, context):
+#    def update_ncmc(self, context,m,temperature,timestep,n_work_steps,n_prop_steps):
         """
         Perform a Monte Carlo update of the titration state.
+        JN: making a copy of update and working from that
 
         ARGUMENTS
 
         context (simtk.openmm.Context) - the context to update
+        temperature    - the temperature in kelvin (required for MB distribution of velocities and Langevin reinitialization)
+        collision_rate - required for Langevin reinitialization
+        n_work_steps   - number of work steps ( lambda(t) = t / n_work_steps )   
+        n_prop_steps   - number of simulation steps at fixed lambda
 
-        NOTE
 
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
         """
 
-        # Perform a number of protonation state update trials.
+        # unpacking kwargs
+        n_work_steps      = kwargs['n_work_steps']
+        velocity_option   = kwargs['velocity_option']
+        timestep          = kwargs['timestep']
+        integrator_option = kwargs['integrator_option']
+        n_work_steps      = kwargs['n_work_steps']
+        n_prop_steps      = kwargs['n_prop_steps']
+        temperature       = kwargs['temperature']
+        collision_rate    = kwargs['collision_rate']
+        m                 = kwargs['m']
+
+        dt_context=0
+        if integrator_option=='api-leapfrog':
+            import time; t0=time.time()
+            velocities=context.getState(getVelocities=True).getVelocities()
+            integrator = openmm.VerletIntegrator(timestep)
+            positions  = context.getState(getPositions=True).getPositions()
+            # creating new context (the time intensive part)
+            context    = openmm.Context(system, integrator, platform)
+            context.setPositions(positions)
+            context.setVelocities(velocities)
+            dt_context=time.time()-t0
+
+       
+        # Perform a number of protonation state update 'attempts' .
+        acc=False #initializing acceptance flag
+       #	state=context.getState(getVelocities=True,getPositions=True,getEnergy=True)
         for attempt in range(self.nattempts_per_update):
             # Choose how many titratable groups to simultaneously attempt to update.
             ndraw = 1
             if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
-                ndraw = 2
-                
-            # Choose groups to update.
-            # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
-            titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
+                naw = 2
             
+            
+            if self.debug:
+                print  "-------------------------------------------------------------"
+                print "attempt # ", str(attempt),  "ndraw: "+ str(ndraw)+ "----------------------"
+
+ 
+            # hoose groups to update.
+            # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
+            # maybe create an array of energies to bias selection to low energy states?
+            # selection probability may end up being complex enough to warrant a function.
+
+            titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
+
+            state=context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+            velocities_restore=state.getVelocities()
+            positions_restore=state.getPositions()
+
+
+            if self.debug:
+                print "velocities to restore ( velocity option = " + velocity_option + " )"
+                print velocities_restore[0] 
+                print "positions to restore"
+                print positions_restore[0]
+                H_restore=self._compute_log_probability(context,integrator_option,m)
+                print "energies: " + str(H_restore)
+
             # Compute initial probability of this protonation state.
-            log_P_initial = self._compute_log_probability(context)
+            log_P_initial = self._compute_log_probability(context,integrator_option,m)
 
             if self.debug:
                 state = context.getState(getEnergy=True)
@@ -635,40 +870,181 @@ class MonteCarloTitration(object):
                 print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
 
             # Perform update attempt.
-            initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
+            drawcount=-1
+            titration_state_index_initial=list()
+            titration_state_index_final=list()
+            initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy of initial state
             for titration_group_index in titration_group_indices:
-                # Choose a titration state with uniform probability (even if it is the same as the current state).
-                titration_state_index = random.choice(range(self.getNumTitrationStates(titration_group_index)))
-                self.setTitrationState(titration_group_index, titration_state_index, context)
+                drawcount+=1
+                if self.debug: print "draw #:", str(drawcount)
+                titration_state_index_initial.append( self.titrationStates[titration_group_index] )
+                # Choose a titration state with uniform probability (now excluding self transitions).
+                titration_state_list = range(self.getNumTitrationStates(titration_group_index))
+                index_to_remove = titration_state_list.index(titration_state_index_initial[drawcount])
+                del titration_state_list[index_to_remove]
+                titration_state_index_final.append( random.choice(titration_state_list) )
+
+                if self.debug:
+                    state = context.getState(getEnergy=True)
+                    initial_potential = state.getPotentialEnergy()
+                    # print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
+                    print " draw #: ", str(drawcount+1), ")"+ "residue # "+str(titration_group_index)\
+                          + ": state change: ( " + str(titration_state_index_initial[drawcount])+ "->"+ \
+                           str( titration_state_index_final[drawcount]  )  + " )"                
+                
+            if self.debug:
+                H_init=log_P_initial #using a shorter name for dbugs
+                print "starting energy: "+ str(log_P_initial)
+           
+           # adding the first propagation step to symmetrize the ncmc trial:
+            if integrator_option == 'api-leapfrog': 
+                integrator.step(n_prop_steps)
+            elif 'inline' in integrator_option:  #(either inline-leapfrog or -vv)
+                self.inline_verlet(context,timestep,integrator_option,m,n_prop_steps,debug=False)
+                      
+            if self.debug:
+                print "conservation of energy after initial propagation step:"
+                H_t = self._compute_log_probability(context,integrator_option,m)
+                print "attempt: %i)  l(t=0) = 0 , step:, %i  b*H= %f b*H(t=0): %f delt: %f"%(attempt,n_prop_steps,H_t,H_init,H_t-H_init)
+  
+            # lambda loop:
+            if self.debug: 
+                import time; t0=time.time() 
+                print "energy conservation in lambda loop"
+            for i_t in range(n_work_steps):
+                lambda_t = float(i_t+1)/n_work_steps
+                # perturbation step
+                # new partial titration state routine
+                self.setPartialTitrationState(titration_group_indices, titration_state_index_initial,titration_state_index_final, lambda_t, context,debug=False)
+                if self.debug: H0_db = self._compute_log_probability(context,integrator_option,m)  #computing initial energy for conservation
+                
+                # propagation step
+                if integrator_option=='api-leapfrog':
+                    integrator.step(n_prop_steps)
+                elif 'inline' in integrator_option:  #(either inline-leapfrog or -vv)
+                    self.inline_verlet(context,timestep,integrator_option,m,n_prop_steps,debug=False)
+              
+                if self.debug:
+                    H_t = self._compute_log_probability(context,integrator_option,m)
+                    print "attempt: %i)  l(t) = %f , step:, %i  b*H= %f b*H(t=0): %f delt: %f"%(attempt,lambda_t,n_prop_steps,H_t,H0_db,H_t-H0_db)
+ 
+            # end lambda loop
+            if self.debug:
+                H_t = self._compute_log_probability(context,integrator_option,m)                                                                          
+                print "attempt: %i)  l(t) = %f , step:, %i  b*H= %f b*H(t=0): %f delt: %f"%(attempt,lambda_t,n_prop_steps,H_t,H0_db,H_t-H0_db)            
+                print "time elapsed for context creation:" + str(dt_context)
+                print "time elapsed for "+integrator_option + ": " + str(time.time()-t0)
+            
             final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
 
-            # TODO: Always accept self transitions, or avoid them altogether.
-            
             # Compute final probability of this protonation state.
-            log_P_final = self._compute_log_probability(context)
-            
+            log_P_final = self._compute_log_probability(context,integrator_option,m)
+
             # Compute work and store work history.
             work = - (log_P_final - log_P_initial)
             self.work_history.append( (initial_titration_states, final_titration_states, work) )
-
             # Accept or reject with Metropolis criteria.
             log_P_accept = -work
-            if self.debug:
-                print "   proposed log probability change: %f -> %f | work %f" % (log_P_initial, log_P_final, work)
-                print ""
             self.nattempted += 1
+
+
+            if self.debug:
+                #getting last velocity:
+                state = context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+                velocities_last_step=state.getVelocities()
+                print "velocity at end of ncmc trial:"
+                print (str(velocities_last_step[0]))
+                U_test=state.getPotentialEnergy()
+                K_test=state.getKineticEnergy()
+                H_test=U_test+K_test;
+                print"trial end energies: U= "+ str(U_test) +" K= "+ str(K_test) + "H= ",str(H_test)
+                print ""
+
+          #  log_P_accept=1000.0  toggles for branch testing
+
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
-                # Accept.
+            # Accept ==================
                 self.naccepted += 1
+                acc=True
+                # jn modify velocities upon acceptance:  also reverse!
+                if velocity_option=='randomize':
+                    context.setVelocitiesToTemperature(temperature)        
+                elif velocity_option=='reversal':
+                    velocities_last_step = context.getState(getVelocities=True).getVelocities(asNumpy=True)
+                    context.setVelocities(-velocities_last_step)
+                      
+                    if self.debug:
+                        print"jndb kinetic energy conservation?"
+                        state = context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+                        velocities_test=state.getVelocities()
+                        U_rev=state.getPotentialEnergy()
+                        K_rev=state.getKineticEnergy()
+                        H_rev=U_test+K_test;
+                        print "reversed velocities:"
+                        print velocities_test[0]
+                        print"trial end energies: U= "+ str(U_rev) +" K= "+ str(K_rev) + "H= ",str(H_rev)
+                        print "difference in KE (s/b 0):"+ str(K_rev-K_test)
+
             else:
-                # Reject.
+            # Reject  ================
+                acc=False
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
-                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-                # TODO: If using NCMC, restore coordinates.
-        
-        return
+                    #self.setTitrationState(titration_group_index, titration_state_index_initial, context,debug=False)
+                    # we could use the partial state function if needed, but it will be slightly slower
+                    self.setPartialTitrationState(titration_group_indices, titration_state_index_initial,titration_state_index_initial, 1.0, context,debug=False)
+                    context.setPositions(positions_restore)
+                    context.setVelocities(velocities_restore)
+            # end accept/reject ====
 
+
+            #updating state here (needed for accepted?)
+            state = context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+
+            if self.debug:
+                print "attempt:"+str(attempt)+") proposed log probability change: %f -> %f | work %f, acc= %s" % (log_P_initial, log_P_final, work,str(acc))
+                print ""
+                log_P_from_current = self._compute_log_probability(context,integrator_option,m)
+                if (velocity_option=='randomize'):
+                     print "current state has updated (random) velocities (different H)" 
+                print "energy of current state: %f "%(log_P_from_current)
+                if(acc): print "final energy(accepted): %f "%(log_P_final)
+                if(not acc): print "final energy(rejected): %f"%(log_P_initial) 
+            if self.debug:
+                state=context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+                initial_potential = state.getPotentialEnergy()
+                print "   final %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
+
+            if self.debug:
+                print "state space for next iteration:"     
+                state=context.getState(getVelocities=True, getPositions=True,getEnergy=True)
+                velocities_test=state.getVelocities()
+                positions_test=state.getPositions()
+                print ("velocities:")
+                print(velocities_test[0]) 
+                print("positions:")
+                print(positions_test[0])
+                U_restore=state.getPotentialEnergy()
+                K_restore=state.getKineticEnergy()
+                H_restore=U_restore+K_restore;
+                print"energies into next iteration: U= "+ str(U_restore) +" K= "+ str(K_restore) + "H= ",str(H_restore)
+#                import code; code.interact(local=locals())
+
+         # end attempt loop
+        #----------------------------------
+        if integrator_option=='api-integrator':
+        # restoring langevin integrator
+            integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
+            positions  = context.getState(getPositions=True).getPositions()
+            context    = openmm.Context(system, integrator, platform)
+            context.setPositions(positions)
+            context.setVelocitiesToTemperature(temperature)        
+
+        return context 
+
+#end jn routines:  #psetPartialTitrationState and update_ncmc +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        
     def getAcceptanceProbability(self): 
         """
         Return the fraction of accepted moves
@@ -680,7 +1056,7 @@ class MonteCarloTitration(object):
         """
         return float(self.naccepted) / float(self.nattempted)
 
-    def _compute_log_probability(self, context):
+    def _compute_log_probability(self, context,integrator_option,m):
         """
         Compute log probability of current configuration and protonation state.
         
@@ -690,8 +1066,17 @@ class MonteCarloTitration(object):
         beta = 1.0 / kT # inverse temperature
 
         # Add energetic contribution to log probability.
-        state = context.getState(getEnergy=True)
-        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
+        if integrator_option == 'api-leapfrog':
+            state = context.getState(getEnergy=True)
+            total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
+        
+        elif 'inline' in integrator_option:
+            state = context.getState(getEnergy=True,getVelocities=True)
+            U=state.getPotentialEnergy()
+            v=state.getVelocities(asNumpy=True)
+            K=( 0.5*(m*v**2).in_units_of(U.unit)*beta ).sum()/beta
+            total_energy=U+K
+
         log_P = - beta * total_energy
 
         # TODO: Add pressure contribution for periodic simulations.
@@ -702,16 +1087,17 @@ class MonteCarloTitration(object):
             pKref = titration_state['pKref']
             proton_count = titration_state['proton_count']
             relative_energy = titration_state['relative_energy']
-            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
+            #print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
             log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy 
             
+            
         # Return the log probability.
-        return log_P
+        return (beta*total_energy) #log_P
     
     def getNumAttemptsPerUpdate(self):
         """
         Get the number of Monte Carlo titration state change attempts per call to update().
-        
+	
         RETURNS
 
         nattempts_per_iteration (int) - the number of attempts to be made per iteration
@@ -732,10 +1118,11 @@ class MonteCarloTitration(object):
             # TODO: Perform enough titration attempts to ensure thorough mixing without taking too long per update.
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self.getNumTitratableGroups()
+
         
-#=============================================================================================
+#=================================================================================
 # MAIN AND TESTS
-#=============================================================================================
+#=================================================================================
 
 if __name__ == "__main__":
     import doctest
@@ -746,18 +1133,47 @@ if __name__ == "__main__":
     #
     
     # Parameters.
-    niterations = 500 # number of dynamics/titration cycles to run
-    nsteps = 500 # number of timesteps of dynamics per iteration
-    temperature = 300.0 * units.kelvin
-    timestep = 1.0 * units.femtoseconds
+    niterations    = 10 #500 # number of dynamics/titration cycles to run
+    nsteps         = 5 #500 # number of timesteps of dynamics per iteration
+    temperature    = 300.0 * units.kelvin
+    timestep       = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
     pH = 7.0
 
+    # NCMC variables added --------------------------------------------------
+    n_work_steps=5 # 10  # number of slices for lamba...T in paper: (l(t)=t/T)
+    n_prop_steps=20 # 5dd0  # number of md steps per l(t) may need to be adjusted
+                   # for optimal performance when considering latency 
+                   # in context updating
+    timestep_ncmc = 0.5* timestep
+
+    #velocity_option='randomize' # randomize at each accepted step
+    velocity_option='reversal'   # reversal: no randomization...reverse at each accepted step
+    # for both options, rejected steps restore to previous positions 
+
+    # integrator options:  both integraors use the leapfrog integrator
+    #integrator_option='inline-leapfrog'       # inline runs an integrator built in the routine
+    # integrator_option='inline-vv'              #inline velocity verlet
+    integrator_option='api-leapfrog'  # calls the leapfrog integrator in the api
+          
+    ncmc_args={}
+    ncmc_args['n_work_steps']=n_work_steps
+    ncmc_args['velocity_option']=velocity_option
+    ncmc_args['timestep']=timestep_ncmc
+    ncmc_args['integrator_option']=integrator_option
+    ncmc_args['n_work_steps']=n_work_steps
+    ncmc_args['n_prop_steps']=n_prop_steps
+    ncmc_args['temperature']=temperature
+    ncmc_args['collision_rate']=collision_rate
+    # end NCMC variables (except masses array...defined below)
+   
+    # -------------------------------------------------------------------------
+   
     # Filenames.
     prmtop_filename = 'amber-example/prmtop'
     inpcrd_filename = 'amber-example/min.x'
     cpin_filename = 'amber-example/cpin'
-    
+ 
     # Calibration on a terminally-blocked amino acid in implicit solvent
     #prmtop_filename = 'calibration-implicit/tyr.prmtop'
     #inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
@@ -779,39 +1195,74 @@ if __name__ == "__main__":
     print "Creating AMBER system..."
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
-    system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
 
+    # system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=NoCutoff, constraints=HBonds)
+
+    # creating system...need a branch until constraints are properly applied
+    if integrator_option == 'api-leapfrog': 
+        system = prmtop.createSystem(implicitSolvent=app.OBC2,nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    if integrator_option == 'inline-leapfrog' or integrator_option == 'inline-vv':
+        print 'using '+str(integrator_option)+'...shake constraints not applied (for now)'
+        system = prmtop.createSystem(implicitSolvent=app.OBC2,nonbondedMethod=app.NoCutoff, constraints=None)
+        
     # Initialize Monte Carlo titration.
     print "Initializing Monte Carlo titration..."
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    # main debug value set here... 
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=False)
+
+    print "Creating masses array..."
+    nparticles = system.getNumParticles() 
+    masses = units.Quantity(numpy.zeros([nparticles,3], numpy.float64), units.amu)
+    for particle_index in range(nparticles):
+        masses[particle_index,:] = system.getParticleMass(particle_index)
+
+    # adding masses to update_ncmc array                         
+    ncmc_args['m']=masses                     
 
     # Create integrator and context.
-    platform_name = 'CUDA'
+    platform_name = 'CUDA' # OpenCL, CPU
+
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(inpcrd.getPositions())
 
-    # Minimize energy.
+
+    # Initialize PDB output.
+    # jn adding new name
+    filename='trajectory_jn_occtest'
+    pdboutfile = open(filename+'.pdb', 'w')
+    occupancyfile=open(filename+'.occ.txt','w')
+ 
+    # Minimize energy
+    print("jn disabling minimizer for debugging")
     print "Minimizing energy..."
-    openmm.LocalEnergyMinimizer.minimize(context, 10.0)
-    
+#    openmm.LocalEnergyMinimizer.minimize(context, 10.0)
+
     # Run dynamics.
     state = context.getState(getEnergy=True)
+
     potential_energy = state.getPotentialEnergy()
     print "Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole)
+   
     for iteration in range(niterations):
         # Run some dynamics.
         initial_time = time.time()
         integrator.step(nsteps)
-        state = context.getState(getEnergy=True)
+        state = context.getState(getEnergy=True,getVelocities=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
         print "  %.3f s elapsed for %d steps of dynamics" % (elapsed_time, nsteps)
 
         # Attempt protonation state changes.
         initial_time = time.time()
-        mc_titration.update(context)    
+#        mc_titration.update(context)   
+
+#=======jn: new ncmc routine and wrappers===============
+        context = mc_titration.update_ncmc(context,**ncmc_args)
+#========================================================
+
+        integrator=context.getIntegrator()
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
@@ -820,5 +1271,47 @@ if __name__ == "__main__":
         # Show titration states.
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
+
         print "Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole, mc_titration.naccepted, mc_titration.nattempted)
 
+        # Write trajectory frame.
+        state = context.getState(getPositions=True)
+        positions = state.getPositions()
+        app.PDBFile.writeModel(prmtop.topology, positions, pdboutfile, modelIndex=iteration)
+
+        # TODO: Write out protonation states to a file
+        # jn 08jul2014 trying a protonation state printout (must move to function soon!)===
+        # atom_number array generated only once:
+        if iteration==0: 
+            atom_number_array=list()
+
+        # occupancy array must be initialized each iteration
+        occupancy_array=list()
+        print "MODEL       %d"%( iteration )
+        occupancyfile.write("MODEL       %d\n"%( iteration ) )
+        total_atom_count=0 
+        for titration_group_index in range(len(mc_titration.titrationGroups)):
+            titration_group = mc_titration.titrationGroups[titration_group_index]
+            # getting titration state for residue (titration group)
+            titration_state = mc_titration.titrationStates[titration_group_index]
+            charges = mc_titration.titrationGroups[titration_group_index]['titration_states'][titration_state]['charges']._value
+            
+            for atom_count in range(len(charges)):
+                charge = charges[atom_count]
+                occ = 1
+                if charge==0.0: occ=0
+                occupancy_array.append(occ)
+                # only need to build this once per trajectory
+
+              #  import code; code.interact(local=locals())
+                if iteration==0:
+                    atom_number_array.append(titration_group['atom_indices'][atom_count]);
+                outstring="%d %d"%(atom_number_array[total_atom_count]+1, occupancy_array[total_atom_count])
+                #print outstring
+                occupancyfile.write(outstring+"\n")
+             #  import code; code.interact(local=locals())
+                total_atom_count+=1
+    occupancyfile.write("END")
+    occupancyfile.close() 
+        #    import code; code.interact(local=locals())
+        # end protonation state printout ===================================================                           
