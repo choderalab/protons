@@ -756,45 +756,22 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-
     def update(self, context):
         super(CalibrationTitration, self).update(context)
         self.n_updates += 1
-
-
-    def _compute_log_probability(self, context):
-        """
-        Compute log probability of current configuration and protonation state.
-
-        """
         temperature = self.temperature
         kT = kB * temperature # thermal energy
         beta = 1.0 / kT # inverse temperature
+        titration_state = self.titrationGroups[0]['titration_states'][self.getTitrationState(0)]
+        state_0 = self.titrationGroups[0]['titration_states'][0]
+        inverse_t = 1.0 / max(self.n_updates, 1)
+        zeta_tmin = titration_state['relative_energy'] * beta + inverse_t * (1.0/titration_state['weight'])
+        zeta_0tmin = state_0['relative_energy'] * beta + inverse_t * (1.0/state_0['weight'])
+        zeta_t = zeta_tmin - zeta_0tmin
+        relative_energy = zeta_t / beta
+        self.titrationGroups[0]['titration_states'][self.getTitrationState(0)]['relative_energy'] = relative_energy
 
-        # Add energetic contribution to log probability.
-        state = context.getState(getEnergy=True)
-        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
-        log_P = - beta * total_energy
 
-        # TODO: Add pressure contribution for periodic simulations.
-
-        # Correct for reference states.
-        for (titration_group, titration_state_index) in zip(self.titrationGroups, self.titrationStates):
-            titration_state = titration_group['titration_states'][titration_state_index]
-            state_0 = titration_group['titration_states'][0]
-            pKref = titration_state['pKref']
-            proton_count = titration_state['proton_count']
-
-            zeta_tmin = numpy.exp(titration_state['relative_energy'] * beta) + 1.0 / max(self.n_updates,1) * (1.0/titration_state['weight'])
-            zeta_0tmin = numpy.exp(state_0['relative_energy'] * beta) + 1.0 / max(self.n_updates,1) * (1.0/state_0['weight'])
-            zeta_t = zeta_tmin - zeta_0tmin
-            titration_state['relative_energy'] = numpy.log(zeta_t) / beta
-            relative_energy = titration_state['relative_energy']
-            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
-            log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy
-
-        # Return the log probability.
-        return log_P
 
 
 #=============================================================================================
