@@ -55,7 +55,7 @@ import math
 import random
 import copy
 import time
-
+import numpy
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
@@ -732,7 +732,71 @@ class MonteCarloTitration(object):
             # TODO: Perform enough titration attempts to ensure thorough mixing without taking too long per update.
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self.getNumTitratableGroups()
-        
+
+
+class CalibrationTitration(MonteCarloTitration):
+    """Implementation of self-adjusted mixture sampling for calibrating titratable residues.
+
+
+
+    """
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, weights=None, debug=False):
+        """
+        weight (list) - None or nested list indexed[group][state] of relative weights (pi) for sams method
+        """
+
+        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False)
+
+        self.n_updates=0
+
+        for i,group in enumerate(self.titrationGroups):
+            for j, state in enumerate(self.titrationGroups[i]['titration_states']):
+                if weights is not None:
+                    self.titrationGroups[i]['titration_states'][j]['weight'] = weights[i][j]
+                else:
+                    self.titrationGroups[i]['titration_states'][j]['weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
+
+
+    def update(self, context):
+        super(CalibrationTitration, self).update(context)
+        self.n_updates += 1
+
+
+    def _compute_log_probability(self, context):
+        """
+        Compute log probability of current configuration and protonation state.
+
+        """
+        temperature = self.temperature
+        kT = kB * temperature # thermal energy
+        beta = 1.0 / kT # inverse temperature
+
+        # Add energetic contribution to log probability.
+        state = context.getState(getEnergy=True)
+        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
+        log_P = - beta * total_energy
+
+        # TODO: Add pressure contribution for periodic simulations.
+
+        # Correct for reference states.
+        for (titration_group, titration_state_index) in zip(self.titrationGroups, self.titrationStates):
+            titration_state = titration_group['titration_states'][titration_state_index]
+            state_0 = titration_group['titration_states'][0]
+            pKref = titration_state['pKref']
+            proton_count = titration_state['proton_count']
+
+            zeta_tmin = numpy.exp(titration_state['relative_energy'] * beta) + 1.0 / max(self.n_updates,1) * (1.0/titration_state['weight'])
+            zeta_0tmin = numpy.exp(state_0['relative_energy'] * beta) + 1.0 / max(self.n_updates,1) * (1.0/state_0['weight'])
+            zeta_t = zeta_tmin - zeta_0tmin
+            titration_state['relative_energy'] = numpy.log(zeta_t) / beta
+            relative_energy = titration_state['relative_energy']
+            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
+            log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy
+
+        # Return the log probability.
+        return log_P
+
+
 #=============================================================================================
 # MAIN AND TESTS
 #=============================================================================================
@@ -751,18 +815,19 @@ if __name__ == "__main__":
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
-    pH = 7.0
+
 
     # Filenames.
-    prmtop_filename = 'amber-example/prmtop'
-    inpcrd_filename = 'amber-example/min.x'
-    cpin_filename = 'amber-example/cpin'
-    
+    # prmtop_filename = 'amber-example/prmtop'
+    # inpcrd_filename = 'amber-example/min.x'
+    # cpin_filename = 'amber-example/cpin'
+    # pH = 7.0
+
     # Calibration on a terminally-blocked amino acid in implicit solvent
-    #prmtop_filename = 'calibration-implicit/tyr.prmtop'
-    #inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
-    #cpin_filename =   'calibration-implicit/tyr.cpin'
-    #pH = 9.6
+    prmtop_filename = 'calibration-implicit/tyr.prmtop'
+    inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
+    cpin_filename =   'calibration-implicit/tyr.cpin'
+    pH = 9.6
 
     #prmtop_filename = 'calibration-explicit/his.prmtop'
     #inpcrd_filename = 'calibration-explicit/his.inpcrd'
@@ -783,10 +848,12 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print "Initializing Monte Carlo titration..."
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    mc_titration = CalibrationTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    # mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+
 
     # Create integrator and context.
-    platform_name = 'CUDA'
+    platform_name = 'OpenCL'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
