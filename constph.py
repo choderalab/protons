@@ -65,6 +65,7 @@ import simtk.unit as units
 #=============================================================================================
 
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
+kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
 
 #=============================================================================================
 # Monte Carlo titration.
@@ -740,9 +741,9 @@ class CalibrationTitration(MonteCarloTitration):
 
 
     """
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, weights=None, debug=False):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, target_weights=None, debug=False):
         """
-        weight (list) - None or nested list indexed[group][state] of relative weights (pi) for sams method
+        target_weights (list) - None or nested list indexed[group][state] of relative weights (pi) for sams method
         """
 
         super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False)
@@ -751,27 +752,38 @@ class CalibrationTitration(MonteCarloTitration):
 
         for i,group in enumerate(self.titrationGroups):
             for j, state in enumerate(self.titrationGroups[i]['titration_states']):
-                if weights is not None:
-                    self.titrationGroups[i]['titration_states'][j]['weight'] = weights[i][j]
+                if target_weights is not None:
+                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
                 else:
-                    self.titrationGroups[i]['titration_states'][j]['weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
+                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
     def update(self, context):
         super(CalibrationTitration, self).update(context)
         self.n_updates += 1
         temperature = self.temperature
-        kT = kB * temperature # thermal energy
-        beta = 1.0 / kT # inverse temperature
-        titration_state = self.titrationGroups[0]['titration_states'][self.getTitrationState(0)]
-        state_0 = self.titrationGroups[0]['titration_states'][0]
-        inverse_t = 1.0 / max(self.n_updates, 1)
-        zeta_tmin = titration_state['relative_energy'] * beta + inverse_t * (1.0/titration_state['weight'])
-        zeta_0tmin = state_0['relative_energy'] * beta + inverse_t * (1.0/state_0['weight'])
-        zeta_t = zeta_tmin - zeta_0tmin
-        relative_energy = zeta_t / beta
-        self.titrationGroups[0]['titration_states'][self.getTitrationState(0)]['relative_energy'] = relative_energy
+        kT = kB * temperature  # thermal energy
+        beta = 1.0 / kT  # inverse temperature
+        zeta = numpy.asarray(map(lambda x: x['relative_energy'], self.titrationGroups[0]['titration_states'][:]))
+        zeta *= -beta  # zeta^{t-1}
 
+        # [1.pi_1...1/pi_i]
+        update = numpy.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
 
+        # delta(Lt)
+        delta = numpy.zeros_like(update)
+        delta[self.getTitrationState(0)] = 1
+
+        update *= delta
+        update /= self.n_updates  # t^{-1}
+
+        # zeta^{t-1/2}
+        zeta += update
+        # zeta^{t-1/2} - zeta_1^{t-1/2}
+        zeta_t = zeta - (numpy.ones_like(zeta) * zeta[0])
+
+        # Set reference energy based on new zeta
+        for i, state in enumerate(zeta_t):
+            self.titrationGroups[0]['titration_states'][i]['relative_energy'] = state / -beta
 
 
 #=============================================================================================
@@ -792,7 +804,7 @@ if __name__ == "__main__":
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
-
+    log = open("states.log", "w")
 
     # Filenames.
     # prmtop_filename = 'amber-example/prmtop'
@@ -865,4 +877,5 @@ if __name__ == "__main__":
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
         print "Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole, mc_titration.naccepted, mc_titration.nattempted)
+        log.write(str(mc_titration.getTitrationStates()[0]) + "\n")
 
