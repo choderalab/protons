@@ -767,7 +767,6 @@ class CalibrationTitration(MonteCarloTitration):
             beta = 1.0 / kT  # inverse temperature
             zeta = numpy.asarray(map(lambda x: x['relative_energy'], self.titrationGroups[0]['titration_states'][:]))
             zeta *= -beta  # zeta^{t-1}
-
             if scheme in ['theorem1', 'eq9']:
                 update = self._theorem1()
             elif scheme in ['theorem2', 'eq12']:
@@ -810,16 +809,19 @@ class CalibrationTitration(MonteCarloTitration):
             potential_energy = temp_state.getPotentialEnergy()
             ub_j[j] = beta * potential_energy
 
+        # Reset to current state
         self.setTitrationState(0, current_state, context)
 
+        # exp(-zeta)
+        ezeta = numpy.asarray([numpy.exp(-z) for z in zeta])  # ezeta = numpy.exp(-1 * zeta) doesnt work because voodoo
+        # exp(-u*beta)
+        q = numpy.exp(-1 * ub_j)
         # w_j(X;zeta)
-        w_j = numpy.empty_like(update)
-        for j in range(update.size):
-            w_j[j] = pi_j[j] * numpy.exp(-zeta[j] - ub_j[j])
+        w_j = pi_j * ezeta * q
         w_j /= numpy.sum(w_j)
-
         update *= w_j
         update /= self.n_updates  # t^{-1}
+
         return update
 
 
