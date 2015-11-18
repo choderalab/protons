@@ -761,26 +761,30 @@ class CalibrationTitration(MonteCarloTitration):
         super(CalibrationTitration, self).update(context)
         self.n_updates += 1
 
-        if scheme is not None:
-            temperature = self.temperature
-            kT = kB * temperature  # thermal energy
-            beta = 1.0 / kT  # inverse temperature
-            zeta = numpy.asarray(map(lambda x: x['relative_energy'], self.titrationGroups[0]['titration_states'][:]))
-            zeta *= -beta  # zeta^{t-1}
-            if scheme in ['theorem1', 'eq9']:
-                update = self._theorem1()
-            elif scheme in ['theorem2', 'eq12']:
-                update = self._theorem2(context, beta, zeta)
+    def adaptWeights(self, context, scheme):
 
-            # zeta^{t-1/2}
-            zeta += update
-            # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
-            zeta_t = zeta - (numpy.ones_like(zeta) * zeta[0])
+        temperature = self.temperature
+        kT = kB * temperature  # thermal energy
+        beta = 1.0 / kT  # inverse temperature
+        # zeta^{t-1}
+        zeta = numpy.asarray(
+            map(lambda x: x['relative_energy'] * -beta, self.titrationGroups[0]['titration_states'][:]))
 
-            # Set reference energy based on new zeta
-            for i, titr_state in enumerate(zeta_t):
-                self.titrationGroups[0]['titration_states'][i]['relative_energy'] = titr_state / -beta
+        if scheme in ['theorem1', 'eq9']:
+            update = self._theorem1()
+        elif scheme in ['theorem2', 'eq12']:
+            update = self._theorem2(context, beta, zeta)
+        else:
+            raise ValueError("Unknown adaptation scheme!")
 
+        # zeta^{t-1/2}
+        zeta += update
+        # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
+        zeta_t = zeta - zeta[0]
+
+        # Set reference energy based on new zeta
+        for i, titr_state in enumerate(zeta_t):
+            self.titrationGroups[0]['titration_states'][i]['relative_energy'] = titr_state / -beta
 
     def _theorem1(self):
         # [1/pi_1...1/pi_i]
@@ -906,7 +910,8 @@ if __name__ == "__main__":
 
         # Attempt protonation state changes.
         initial_time = time.time()
-        mc_titration.update(context, scheme='eq12')
+        mc_titration.update(context)
+        mc_titration.adaptWeights(context, scheme='eq12')
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
