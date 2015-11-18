@@ -748,7 +748,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False)
 
-        self.n_updates=0
+        self.n_adaptations=0
 
         for i,group in enumerate(self.titrationGroups):
             for j, state in enumerate(self.titrationGroups[i]['titration_states']):
@@ -759,10 +759,9 @@ class CalibrationTitration(MonteCarloTitration):
 
     def update(self, context,scheme=None):
         super(CalibrationTitration, self).update(context)
-        self.n_updates += 1
 
     def adaptWeights(self, context, scheme):
-
+        self.n_adaptations += 1
         temperature = self.temperature
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
@@ -793,7 +792,7 @@ class CalibrationTitration(MonteCarloTitration):
         delta = numpy.zeros_like(update)
         delta[self.getTitrationState(0)] = 1
         update *= delta
-        update /= self.n_updates  # t^{-1}
+        update /= self.n_adaptations  # t^{-1}
         return update
 
     def _theorem2(self, context, beta, zeta):
@@ -824,7 +823,7 @@ class CalibrationTitration(MonteCarloTitration):
         w_j = pi_j * ezeta * q
         w_j /= numpy.sum(w_j)
         update *= w_j
-        update /= self.n_updates  # t^{-1}
+        update /= self.n_adaptations  # t^{-1}
 
         return update
 
