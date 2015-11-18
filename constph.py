@@ -757,33 +757,70 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def update(self, context):
+    def update(self, context,scheme=None):
         super(CalibrationTitration, self).update(context)
         self.n_updates += 1
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        zeta = numpy.asarray(map(lambda x: x['relative_energy'], self.titrationGroups[0]['titration_states'][:]))
-        zeta *= -beta  # zeta^{t-1}
 
-        # [1.pi_1...1/pi_i]
+        if scheme is not None:
+            temperature = self.temperature
+            kT = kB * temperature  # thermal energy
+            beta = 1.0 / kT  # inverse temperature
+            zeta = numpy.asarray(map(lambda x: x['relative_energy'], self.titrationGroups[0]['titration_states'][:]))
+            zeta *= -beta  # zeta^{t-1}
+
+            if scheme in ['theorem1', 'eq9']:
+                update = self._theorem1()
+            elif scheme in ['theorem2', 'eq12']:
+                update = self._theorem2(context, beta, zeta)
+
+            # zeta^{t-1/2}
+            zeta += update
+            # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
+            zeta_t = zeta - (numpy.ones_like(zeta) * zeta[0])
+
+            # Set reference energy based on new zeta
+            for i, titr_state in enumerate(zeta_t):
+                self.titrationGroups[0]['titration_states'][i]['relative_energy'] = titr_state / -beta
+
+
+    def _theorem1(self):
+        # [1/pi_1...1/pi_i]
         update = numpy.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
-
         # delta(Lt)
         delta = numpy.zeros_like(update)
         delta[self.getTitrationState(0)] = 1
-
         update *= delta
         update /= self.n_updates  # t^{-1}
+        return update
 
-        # zeta^{t-1/2}
-        zeta += update
-        # zeta^{t-1/2} - zeta_1^{t-1/2}
-        zeta_t = zeta - (numpy.ones_like(zeta) * zeta[0])
+    def _theorem2(self, context, beta, zeta):
+        # target weights
+        pi_j = numpy.asarray(map(lambda x: x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
 
-        # Set reference energy based on new zeta
-        for i, state in enumerate(zeta_t):
-            self.titrationGroups[0]['titration_states'][i]['relative_energy'] = state / -beta
+        # [1/pi_1...1/pi_i]
+        update = numpy.apply_along_axis(lambda x: 1/x, 0, pi_j)
+        current_state = self.getTitrationState(0)
+
+        # beta * U(x)_j
+        ub_j = numpy.empty_like(update)
+
+        for j in range(update.size):
+            self.setTitrationState(0, j, context)
+            temp_state = context.getState(getEnergy=True)
+            potential_energy = temp_state.getPotentialEnergy()
+            ub_j[j] = beta * potential_energy
+
+        self.setTitrationState(0, current_state, context)
+
+        # w_j(X;zeta)
+        w_j = numpy.empty_like(update)
+        for j in range(update.size):
+            w_j[j] = pi_j[j] * numpy.exp(-zeta[j] - ub_j[j])
+        w_j /= numpy.sum(w_j)
+
+        update *= w_j
+        update /= self.n_updates  # t^{-1}
+        return update
 
 
 #=============================================================================================
@@ -799,7 +836,7 @@ if __name__ == "__main__":
     #
     
     # Parameters.
-    niterations = 500 # number of dynamics/titration cycles to run
+    niterations = 5000 # number of dynamics/titration cycles to run
     nsteps = 500 # number of timesteps of dynamics per iteration
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
@@ -867,7 +904,7 @@ if __name__ == "__main__":
 
         # Attempt protonation state changes.
         initial_time = time.time()
-        mc_titration.update(context)    
+        mc_titration.update(context, scheme='eq12')
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
@@ -878,4 +915,3 @@ if __name__ == "__main__":
         potential_energy = state.getPotentialEnergy()
         print "Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole, mc_titration.naccepted, mc_titration.nattempted)
         log.write(str(mc_titration.getTitrationStates()[0]) + "\n")
-
