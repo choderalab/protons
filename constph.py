@@ -805,7 +805,7 @@ class CalibrationTitration(MonteCarloTitration):
         pi_j = self._get_target_weights()
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1/x, 0, pi_j)
-        ub_j = self._get_potential_energies(beta, context, update)
+        ub_j = self._get_reduced_potentials(beta, context, update)
         # w_j(X;zeta)
         log_w_j = np.log(pi_j) - zeta -ub_j
         log_w_j -= logsumexp(log_w_j)
@@ -818,22 +818,38 @@ class CalibrationTitration(MonteCarloTitration):
     def _get_target_weights(self):
         return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
 
-    def _get_potential_energies(self, beta, context, update):
-        current_state = self.getTitrationState(0)
+    def _get_reduced_potentials(self, beta, context, update):
+        """Retrieve the reduced potential for all states of the system given a context.
+
+        Note: update is used to determine the shape of the array that is to be returned.
+
+        """
         # beta * U(x)_j
 
         ub_j = np.empty_like(update)
         for j in range(update.size):
-            proton_count = self.titrationGroups[0]['titration_states'][j]['proton_count']
-            pKref = self.titrationGroups[0]['titration_states'][j]['pKref']
-            self.setTitrationState(0, j, context)
-            temp_state = context.getState(getEnergy=True)
-            potential_energy = temp_state.getPotentialEnergy()
-            ub_j[j] = proton_count * (self.pH - pKref) * math.log(10) + beta * potential_energy
+            ub_j[j] = self._reduced_potential(beta, context, j)
 
         # Reset to current state
-        self.setTitrationState(0, current_state, context)
         return ub_j
+
+    def _reduced_potential(self, beta, context, state_index):
+        """Retrieve the reduced potential for a given state (specified by index) in the given context.
+        """
+        proton_count = self.titrationGroups[0]['titration_states'][state_index]['proton_count']
+        pKref = self.titrationGroups[0]['titration_states'][state_index]['pKref']
+        potential_energy = self._get_potential_energy(context, state_index)
+        return proton_count * (self.pH - pKref) * math.log(10) + beta * potential_energy
+
+    def _get_potential_energy(self, context, state_index):
+        """ Retrieve the potential energy for a given state (specified by index) in the given context.
+        """
+        current_state = self.getTitrationState(0)
+        self.setTitrationState(0, state_index, context)
+        temp_state = context.getState(getEnergy=True)
+        potential_energy = temp_state.getPotentialEnergy()
+        self.setTitrationState(0, current_state, context)
+        return potential_energy
 
 
 #=============================================================================================
