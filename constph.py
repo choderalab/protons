@@ -821,12 +821,15 @@ class CalibrationTitration(MonteCarloTitration):
     def _get_potential_energies(self, beta, context, update):
         current_state = self.getTitrationState(0)
         # beta * U(x)_j
+
         ub_j = np.empty_like(update)
         for j in range(update.size):
+            proton_count = self.titrationGroups[0]['titration_states'][j]['proton_count']
+            pKref = self.titrationGroups[0]['titration_states'][j]['pKref']
             self.setTitrationState(0, j, context)
             temp_state = context.getState(getEnergy=True)
             potential_energy = temp_state.getPotentialEnergy()
-            ub_j[j] = beta * potential_energy
+            ub_j[j] = proton_count * (self.pH - pKref) * math.log(10) + beta * potential_energy
 
         # Reset to current state
         self.setTitrationState(0, current_state, context)
