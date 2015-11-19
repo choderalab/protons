@@ -55,7 +55,8 @@ import math
 import random
 import copy
 import time
-import numpy
+import numpy as np
+from scipy.misc import logsumexp
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
@@ -646,14 +647,16 @@ class MonteCarloTitration(object):
             # TODO: Always accept self transitions, or avoid them altogether.
             
             # Compute final probability of this protonation state.
+
             log_P_final = self._compute_log_probability(context)
-            
+
             # Compute work and store work history.
             work = - (log_P_final - log_P_initial)
             self.work_history.append( (initial_titration_states, final_titration_states, work) )
 
             # Accept or reject with Metropolis criteria.
             log_P_accept = -work
+            print("LOGP" + str(log_P_accept))
             if self.debug:
                 print "   proposed log probability change: %f -> %f | work %f" % (log_P_initial, log_P_final, work)
                 print ""
@@ -704,7 +707,7 @@ class MonteCarloTitration(object):
             proton_count = titration_state['proton_count']
             relative_energy = titration_state['relative_energy']
             print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
-            log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy 
+            log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy
             
         # Return the log probability.
         return log_P
@@ -757,17 +760,14 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def update(self, context,scheme=None):
-        super(CalibrationTitration, self).update(context)
 
-    def adaptWeights(self, context, scheme):
+    def adapt_weights(self, context, scheme):
         self.n_adaptations += 1
         temperature = self.temperature
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
         # zeta^{t-1}
-        zeta = numpy.asarray(
-            map(lambda x: x['relative_energy'] * -beta, self.titrationGroups[0]['titration_states'][:]))
+        zeta = self._get_zeta(beta)
 
         if scheme in ['theorem1', 'eq9']:
             update = self._theorem1()
@@ -785,11 +785,16 @@ class CalibrationTitration(MonteCarloTitration):
         for i, titr_state in enumerate(zeta_t):
             self.titrationGroups[0]['titration_states'][i]['relative_energy'] = titr_state / -beta
 
+    def _get_zeta(self, beta):
+        zeta = np.asarray(
+            map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[0]['titration_states'][:]))
+        return zeta
+
     def _theorem1(self):
         # [1/pi_1...1/pi_i]
-        update = numpy.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
+        update = np.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
         # delta(Lt)
-        delta = numpy.zeros_like(update)
+        delta = np.zeros_like(update)
         delta[self.getTitrationState(0)] = 1
         update *= delta
         update /= self.n_adaptations  # t^{-1}
@@ -797,15 +802,26 @@ class CalibrationTitration(MonteCarloTitration):
 
     def _theorem2(self, context, beta, zeta):
         # target weights
-        pi_j = numpy.asarray(map(lambda x: x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
-
+        pi_j = self._get_target_weights()
         # [1/pi_1...1/pi_i]
-        update = numpy.apply_along_axis(lambda x: 1/x, 0, pi_j)
+        update = np.apply_along_axis(lambda x: 1/x, 0, pi_j)
+        ub_j = self._get_potential_energies(beta, context, update)
+        # w_j(X;zeta)
+        log_w_j = np.log(pi_j) - zeta -ub_j
+        log_w_j -= logsumexp(log_w_j)
+        w_j = np.exp(log_w_j)
+        update *= w_j
+        update /= self.n_adaptations  # t^{-1}
+
+        return update
+
+    def _get_target_weights(self):
+        return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
+
+    def _get_potential_energies(self, beta, context, update):
         current_state = self.getTitrationState(0)
-
         # beta * U(x)_j
-        ub_j = numpy.empty_like(update)
-
+        ub_j = np.empty_like(update)
         for j in range(update.size):
             self.setTitrationState(0, j, context)
             temp_state = context.getState(getEnergy=True)
@@ -814,18 +830,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         # Reset to current state
         self.setTitrationState(0, current_state, context)
-
-        # exp(-zeta)
-        ezeta = numpy.asarray([numpy.exp(-z) for z in zeta])  # ezeta = numpy.exp(-1 * zeta) doesnt work because voodoo
-        # exp(-u*beta)
-        q = numpy.exp(-1 * ub_j)
-        # w_j(X;zeta)
-        w_j = pi_j * ezeta * q
-        w_j /= numpy.sum(w_j)
-        update *= w_j
-        update /= self.n_adaptations  # t^{-1}
-
-        return update
+        return ub_j
 
 
 #=============================================================================================
@@ -910,7 +915,7 @@ if __name__ == "__main__":
         # Attempt protonation state changes.
         initial_time = time.time()
         mc_titration.update(context)
-        mc_titration.adaptWeights(context, scheme='eq12')
+        mc_titration.adapt_weights(context, scheme='eq12')
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
