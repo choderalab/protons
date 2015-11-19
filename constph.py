@@ -373,6 +373,16 @@ class MonteCarloTitration(object):
     # This functionality takes the place of a C++ MonteCarloTitration Force object.
     #=============================================================================================
 
+    def _get_proton_potential(self, titration_group_index, titration_state_index):
+        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
+        proton_count = titration_state['proton_count']
+        pKref = titration_state['pKref']
+
+        if self.debug:
+            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f " % (proton_count, self.pH, pKref, - proton_count * (self.pH - pKref) * math.log(10))
+
+        return proton_count * (self.pH - pKref) * math.log(10)
+
     def getNumTitratableGroups(self):
         """
         Return the number of titratable groups.
@@ -656,7 +666,7 @@ class MonteCarloTitration(object):
 
             # Accept or reject with Metropolis criteria.
             log_P_accept = -work
-            print("LOGP" + str(log_P_accept))
+            if self.debug: print("LOGP" + str(log_P_accept))
             if self.debug:
                 print "   proposed log probability change: %f -> %f | work %f" % (log_P_initial, log_P_final, work)
                 print ""
@@ -701,13 +711,11 @@ class MonteCarloTitration(object):
         # TODO: Add pressure contribution for periodic simulations.
 
         # Correct for reference states.
-        for (titration_group, titration_state_index) in zip(self.titrationGroups, self.titrationStates):
+        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
-            pKref = titration_state['pKref']
-            proton_count = titration_state['proton_count']
             relative_energy = titration_state['relative_energy']
-            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f | %.1f | beta*relative_energy = %.1f" % (proton_count, self.pH, pKref, -beta*total_energy , - proton_count * (self.pH - pKref) * math.log(10), +beta*relative_energy)
-            log_P += - proton_count * (self.pH - pKref) * math.log(10) + beta * relative_energy
+            if self.debug: print("beta * relative_energy: %.2f",  +beta * relative_energy)
+            log_P += - self._get_proton_potential(titration_group_index,titration_state_index) + beta * relative_energy
             
         # Return the log probability.
         return log_P
@@ -749,7 +757,7 @@ class CalibrationTitration(MonteCarloTitration):
         target_weights (list) - None or nested list indexed[group][state] of relative weights (pi) for sams method
         """
 
-        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False)
+        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update, simultaneous_proposal_probability, debug)
 
         self.n_adaptations=0
 
@@ -821,7 +829,7 @@ class CalibrationTitration(MonteCarloTitration):
     def _get_reduced_potentials(self, beta, context, update):
         """Retrieve the reduced potential for all states of the system given a context.
 
-        Note: update is used to determine the shape of the array that is to be returned.
+
 
         """
         # beta * U(x)_j
@@ -836,10 +844,8 @@ class CalibrationTitration(MonteCarloTitration):
     def _reduced_potential(self, beta, context, state_index):
         """Retrieve the reduced potential for a given state (specified by index) in the given context.
         """
-        proton_count = self.titrationGroups[0]['titration_states'][state_index]['proton_count']
-        pKref = self.titrationGroups[0]['titration_states'][state_index]['pKref']
         potential_energy = self._get_potential_energy(context, state_index)
-        return proton_count * (self.pH - pKref) * math.log(10) + beta * potential_energy
+        return self._get_proton_potential(0, state_index) + beta * potential_energy
 
     def _get_potential_energy(self, context, state_index):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.
