@@ -2,22 +2,23 @@ import numpy as np
 from scipy.misc import logsumexp
 import random
 
+
 class Oscillator(object):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues.
     """
 
     def __init__(self, x=0.0):
         self.states = np.asarray([0, 1])
-        self.target_weights = np.asarray([0.5, 0.5])
+        self.target_weights = np.asarray([1/2., 1/2.])
         self.x = x
         self.force_constant = 1
         self.j = random.choice(self.states)
-        self.zeta = [0, 0]
+        self.zeta = [0.0, 0.0]
         self.n_adaptations = 0
 
     def sample_configuration(self):
         sigma = 1.0 / np.sqrt(self.force_constant + self.j)
-        self.x = sigma * np.random.normal()
+        self.x = sigma * np.random.normal() / np.pi
 
     def sample_state(self):
         """
@@ -28,11 +29,10 @@ class Oscillator(object):
         x : float
             Fixed configuration
         """
-        logP_k = np.log(self.target_weights) -self.zeta - self._get_potential_energies(1, self.x)
+        logP_k = np.log(self.target_weights) - self.zeta - self._get_potential_energies(1, self.x)
         logP_k -= logsumexp(logP_k)
         P_k = np.exp(logP_k)
         self.j = np.random.choice(self.states, p=P_k)
-
 
     def adapt_weights(self, scheme):
         self.n_adaptations += 1
@@ -55,7 +55,6 @@ class Oscillator(object):
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(zeta_t):
             self.zeta = titr_state / -beta
-
 
     def _theorem1(self, target_weights):
         # [1/pi_1...1/pi_i]
