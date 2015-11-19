@@ -15,9 +15,10 @@ class Oscillator(object):
         self.j = random.choice(self.states)
         self.zeta = [0.0, 0.0]
         self.n_adaptations = 0
+        self.beta = 1
 
     def sample_configuration(self):
-        sigma = 1.0 / np.sqrt(self.force_constant + self.j)
+        sigma = 1.0 / np.sqrt((self.force_constant + self.j) * self.beta)
         self.x = sigma * np.random.normal() / np.pi
 
     def sample_state(self):
@@ -29,7 +30,7 @@ class Oscillator(object):
         x : float
             Fixed configuration
         """
-        logP_k = np.log(self.target_weights) - self.zeta - self._get_potential_energies(1, self.x)
+        logP_k = np.log(self.target_weights) - self.zeta - self._get_potential_energies(self.x)
         logP_k -= logsumexp(logP_k)
         P_k = np.exp(logP_k)
         self.j = np.random.choice(self.states, p=P_k)
@@ -41,9 +42,9 @@ class Oscillator(object):
         zeta = self.zeta
 
         if scheme in ['theorem1', 'eq9']:
-            update = self._theorem1(self.target_weights)
+            update = self._theorem1()
         elif scheme in ['theorem2', 'eq12']:
-            update = self._theorem2(self.target_weights, self.x, beta, zeta)
+            update = self._theorem2(self.x, zeta)
         else:
             raise ValueError("Unknown adaptation scheme!")
 
@@ -56,9 +57,9 @@ class Oscillator(object):
         for i, titr_state in enumerate(zeta_t):
             self.zeta = titr_state / -beta
 
-    def _theorem1(self, target_weights):
+    def _theorem1(self):
         # [1/pi_1...1/pi_i]
-        update = np.apply_along_axis(lambda x: 1/x, 0, target_weights)
+        update = np.apply_along_axis(lambda x: 1/x, 0, self.target_weights)
         # delta(Lt)
         delta = np.zeros_like(update)
         delta[self.j] = 1
@@ -66,12 +67,12 @@ class Oscillator(object):
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _theorem2(self, target_weights, x, beta, zeta):
+    def _theorem2(self, x, zeta):
         # target weights
         pi_j = self.target_weights
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda pi: 1/pi, 0, pi_j)
-        ub_j = self._get_potential_energies(beta, x)
+        ub_j = self._get_potential_energies(x)
         # w_j(X;zeta)
         log_w_j = np.log(pi_j) - zeta - ub_j
         log_w_j -= logsumexp(log_w_j)
@@ -80,11 +81,11 @@ class Oscillator(object):
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _get_potential_energies(self, beta, x):
+    def _get_potential_energies(self, x):
         # beta * U(x)_j
         ub_j = np.empty(self.states.size)
         for j in range(self.states.size):
-            ub_j[j] = beta * (j+self.force_constant) * x * x / 2
+            ub_j[j] = self.beta * (j+self.force_constant) * x * x / 2
 
         return ub_j
 
@@ -114,7 +115,7 @@ if __name__ == "__main__":
             system.sample_configuration()
 
         system.sample_state()
-        system.adapt_weights('eq12')
+        system.adapt_weights('eq9')
         sampled_states.append(system.j)
 
     for j in system.states:
