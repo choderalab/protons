@@ -1,4 +1,5 @@
 #!/usr/local/bin/env python
+# -*- coding: utf-8 -*-
 
 #=============================================================================================
 # MODULE DOCSTRING
@@ -374,6 +375,18 @@ class MonteCarloTitration(object):
     #=============================================================================================
 
     def _get_proton_potential(self, titration_group_index, titration_state_index):
+        """Calculate the chemical potential contribution of protons of individual titratable sites.
+
+        Parameters
+        ----------
+        titration_group_index : int
+            Index of the group
+        titration_state_index : int
+            Index of the state
+        Returns
+        -------
+        float
+        """
         titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
         proton_count = titration_state['proton_count']
         pKref = titration_state['pKref']
@@ -715,7 +728,7 @@ class MonteCarloTitration(object):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_energy = titration_state['relative_energy']
             if self.debug: print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_potential(titration_group_index,titration_state_index) + beta * relative_energy
+            log_P += - self._get_proton_potential(titration_group_index, titration_state_index) + beta * relative_energy
             
         # Return the log probability.
         return log_P
@@ -745,16 +758,112 @@ class MonteCarloTitration(object):
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self.getNumTitratableGroups()
 
+    def _get_reduced_potentials(self, context, beta, group_index=0):
+        """Retrieve the reduced potentials for all states of the system given a context.
+
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context to update
+        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+            inverse temperature
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        """
+        # beta * U(x)_j
+
+        ub_j = np.empty(len(self.titrationGroups[group_index]['titration_states']))
+        for j in range(ub_j.size):
+            ub_j[j] = self._reduced_potential(context, beta, j, group_index)
+
+        # Reset to current state
+        return ub_j
+
+    def _reduced_potential(self, context, beta, state_index, group_index=0):
+        """Retrieve the reduced potential for a given state (specified by index) in the given context.
+
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context to update
+        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+            inverse temperature
+        state_index : int
+            Index of the state for which the reduced potential needs to be calculated.
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        """
+        potential_energy = self._get_potential_energy(context, state_index)
+        return self._get_proton_potential(group_index, state_index) + beta * potential_energy
+
+    def _get_potential_energy(self, context, state_index, group_index=0):
+        """ Retrieve the potential energy for a given state (specified by index) in the given context.
+
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context to update
+        state_index : int
+            Index of the state for which the reduced potential needs to be calculated.
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        """
+        current_state = self.getTitrationState(group_index)
+        self.setTitrationState(group_index, state_index, context)
+        temp_state = context.getState(getEnergy=True)
+        potential_energy = temp_state.getPotentialEnergy()
+        self.setTitrationState(group_index, current_state, context)
+        return potential_energy
+
 
 class CalibrationTitration(MonteCarloTitration):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues.
 
+    Attributes
+    ----------
+    n_adaptations : int
+        Number of times the relative free energies have been adapted.
 
+    References
+    ----------
+    .. [1] Z. Tan, Optimally adjusted mixture sampling and locally weighted histogram analysis
+        DOI: 10.1080/10618600.2015.1113975
 
     """
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, target_weights=None, debug=False):
         """
-        target_weights (list) - None or nested list indexed[group][state] of relative weights (pi) for sams method
+        Initialize a Monte Carlo titration driver for constant pH simulation.
+
+        Parameters
+        ----------
+
+        system : simtk.openmm.System
+            system to be titrated, containing all possible protonation sites
+        temperature : simtk.unit.Quantity compatible with simtk.unit.kelvin
+            temperature to be simulated
+        pH : float
+            the pH to be simulated
+        prmtop : Prmtop
+            parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
+        cpin_filename : str
+            AMBER 'cpin' file defining protonation charge states and energies
+        nattempts_per_update : int, optional
+            number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float
+            probability of simultaneously proposing two updates
+        target_weights : list, optional
+            Nested list indexed [group][state] of relative weights (pi) for SAMS method
+            If unspecified, all target weights are set to equally sample all states.
+
+        Other Parameters
+        ----------------
+        debug : bool, optional
+            turn debug information on/off
+
         """
 
         super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update, simultaneous_proposal_probability, debug)
@@ -768,8 +877,19 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
+    def adapt_weights(self, context, scheme, group_index=0):
+        """
+        Update the relative free energy of titration states of the specified titratable group
+        Parameters
+        ----------
+        context :  (simtk.openmm.Context)
+            The context to update
+        scheme : str ('eq9' or 'eq12')
+            Scheme from .
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
 
-    def adapt_weights(self, context, scheme):
+        """
         self.n_adaptations += 1
         temperature = self.temperature
         kT = kB * temperature  # thermal energy
@@ -777,10 +897,10 @@ class CalibrationTitration(MonteCarloTitration):
         # zeta^{t-1}
         zeta = self._get_zeta(beta)
 
-        if scheme in ['theorem1', 'eq9']:
-            update = self._theorem1()
-        elif scheme in ['theorem2', 'eq12']:
-            update = self._theorem2(context, beta, zeta)
+        if scheme == 'eq9':
+            update = self._equation9(group_index)
+        elif scheme  == 'eq12':
+            update = self._equation12(context, beta, zeta, group_index)
         else:
             raise ValueError("Unknown adaptation scheme!")
 
@@ -791,31 +911,86 @@ class CalibrationTitration(MonteCarloTitration):
 
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(zeta_t):
-            self.titrationGroups[0]['titration_states'][i]['relative_energy'] = titr_state / -beta
+            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / -beta
 
-    def _get_zeta(self, beta):
+    def _get_zeta(self, beta, group_index=0):
+        """Retrieve relative free energies for specified titratable group.
+        Parameters
+        ----------
+        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+            inverse temperature
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.group_index
+
+        Returns
+        -------
+        np.ndarray - relative free energy of states
+        """
         zeta = np.asarray(
-            map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[0]['titration_states'][:]))
+            map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[group_index]['titration_states'][:]))
         return zeta
 
-    def _theorem1(self):
+    def _get_target_weights(self, group_index=0):
+        """Retrieve target weights for specified titratable group.
+        Parameters
+        ----------
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.group_index
+
+        Returns
+        -------
+        np.ndarray - relative free energy of states
+        """
+        return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:]))
+
+    def _equation9(self, group_index):
+        """
+        Equation 9 from DOI: 10.1080/10618600.2015.1113975
+
+        Parameters
+        ----------
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        Returns
+        -------
+        np.ndarray - free energy updates
+        """
         # [1/pi_1...1/pi_i]
-        update = np.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
+        update = np.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:]))
         # delta(Lt)
         delta = np.zeros_like(update)
-        delta[self.getTitrationState(0)] = 1
+        delta[self.getTitrationState(group_index)] = 1
         update *= delta
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _theorem2(self, context, beta, zeta):
+    def _equation12(self, context, beta, zeta, group_index=0):
+        """
+        Equation 12 from DOI: 10.1080/10618600.2015.1113975
+
+        Parameters
+        ----------
+        context :  (simtk.openmm.Context)
+            The context to update
+        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+            inverse temperature
+        zeta : np.ndarray
+            Current estimate of free energies ζ⁽ᵗ⁾
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        Returns
+        -------
+        np.ndarray - free energy updates
+        """
         # target weights
-        pi_j = self._get_target_weights()
+        pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1/x, 0, pi_j)
-        ub_j = self._get_reduced_potentials(beta, context, update)
-        # w_j(X;zeta)
-        log_w_j = np.log(pi_j) - zeta -ub_j
+        ub_j = self._get_reduced_potentials(context, beta,   group_index)
+        # w_j(X;ζ⁽ᵗ⁻¹⁾)
+        log_w_j = np.log(pi_j) - zeta - ub_j
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j
@@ -823,39 +998,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         return update
 
-    def _get_target_weights(self):
-        return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[0]['titration_states'][:]))
 
-    def _get_reduced_potentials(self, beta, context, update):
-        """Retrieve the reduced potential for all states of the system given a context.
-
-
-
-        """
-        # beta * U(x)_j
-
-        ub_j = np.empty_like(update)
-        for j in range(update.size):
-            ub_j[j] = self._reduced_potential(beta, context, j)
-
-        # Reset to current state
-        return ub_j
-
-    def _reduced_potential(self, beta, context, state_index):
-        """Retrieve the reduced potential for a given state (specified by index) in the given context.
-        """
-        potential_energy = self._get_potential_energy(context, state_index)
-        return self._get_proton_potential(0, state_index) + beta * potential_energy
-
-    def _get_potential_energy(self, context, state_index):
-        """ Retrieve the potential energy for a given state (specified by index) in the given context.
-        """
-        current_state = self.getTitrationState(0)
-        self.setTitrationState(0, state_index, context)
-        temp_state = context.getState(getEnergy=True)
-        potential_energy = temp_state.getPotentialEnergy()
-        self.setTitrationState(0, current_state, context)
-        return potential_energy
 
 
 #=============================================================================================
