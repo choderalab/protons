@@ -1,9 +1,6 @@
 #!/usr/local/bin/env python
 # -*- coding: utf-8 -*-
 
-#=============================================================================================
-# MODULE DOCSTRING
-#=============================================================================================
 
 """
 Constant pH dynamics test.
@@ -44,11 +41,7 @@ COPYRIGHT AND LICENSE
 @author John D. Chodera <jchodera@gmail.com>
 
 """
-
-#=============================================================================================
-# GLOBAL IMPORTS
-#=============================================================================================
-
+from __future__ import print_function
 import re
 import os
 import sys
@@ -61,17 +54,12 @@ from scipy.misc import logsumexp
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
-
-#=============================================================================================
+import pandas as pd
+import pymbar
 # MODULE CONSTANTS
-#=============================================================================================
-
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
 
-#=============================================================================================
-# Monte Carlo titration.
-#=============================================================================================
 
 class MonteCarloTitration(object):
     """
@@ -95,10 +83,6 @@ class MonteCarloTitration(object):
     * Add methods to keep track of history of protonation states.
 
     """
-
-    #=============================================================================================
-    # Initialization.
-    #=============================================================================================
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False):
         """
@@ -392,7 +376,8 @@ class MonteCarloTitration(object):
         pKref = titration_state['pKref']
 
         if self.debug:
-            print "proton_count = %d | pH = %.1f | pKref = %.1f | %.1f " % (proton_count, self.pH, pKref, - proton_count * (self.pH - pKref) * math.log(10))
+            print("proton_count = %d | pH = %.1f | pKref = %.1f | %.1f " % (
+            proton_count, self.pH, pKref, - proton_count * (self.pH - pKref) * math.log(10)))
 
         return proton_count * (self.pH - pKref) * math.log(10)
 
@@ -552,7 +537,6 @@ class MonteCarloTitration(object):
         charges = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['charges'][:]
         return simtk.unit.Quantity((charges / charges.unit).sum(), charges.unit)
 
-
     def setTitrationState(self, titration_group_index, titration_state_index, context=None, debug=False):
         """
         Change the titration state of the designated group for the provided state.
@@ -591,10 +575,12 @@ class MonteCarloTitration(object):
             for (charge_index, atom_index) in enumerate(atom_indices):
                 if force_classname == 'NonbondedForce':
                     [charge, sigma, epsilon] = force.getParticleParameters(atom_index)
-                    if debug: print " modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon))
+                    if debug: print (" modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (
+                    atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon)))
                     force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
                 elif force_classname == 'GBSAOBCForce':
-                    if debug: print " modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor)
+                    if debug: print (" modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (
+                    atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor))
                     [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
                     force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
                 else:
@@ -657,7 +643,7 @@ class MonteCarloTitration(object):
             if self.debug:
                 state = context.getState(getEnergy=True)
                 initial_potential = state.getPotentialEnergy()
-                print "   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole)
+                print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
 
             # Perform update attempt.
             initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
@@ -681,8 +667,7 @@ class MonteCarloTitration(object):
             log_P_accept = -work
             if self.debug: print("LOGP" + str(log_P_accept))
             if self.debug:
-                print "   proposed log probability change: %f -> %f | work %f" % (log_P_initial, log_P_final, work)
-                print ""
+                print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
             self.nattempted += 1
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
@@ -696,7 +681,7 @@ class MonteCarloTitration(object):
         
         return
 
-    def getAcceptanceProbability(self): 
+    def getAcceptanceProbability(self):
         """
         Return the fraction of accepted moves
         
@@ -765,7 +750,7 @@ class MonteCarloTitration(object):
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
             inverse temperature
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
@@ -787,7 +772,7 @@ class MonteCarloTitration(object):
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
             inverse temperature
         state_index : int
             Index of the state for which the reduced potential needs to be calculated.
@@ -877,7 +862,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, group_index=0):
+    def adapt_weights(self, context, scheme, group_index=0, debuglogger=True):
         """
         Update the relative free energy of titration states of the specified titratable group
         Parameters
@@ -896,11 +881,17 @@ class CalibrationTitration(MonteCarloTitration):
         beta = 1.0 / kT  # inverse temperature
         # zeta^{t-1}
         zeta = self._get_zeta(beta)
+        if debuglogger:
+            dlogger = dict()
+            dlogger['L'] = self.getTitrationState(group_index) + 1
+        else: dlogger = None
+
+
 
         if scheme == 'eq9':
-            update = self._equation9(group_index)
+            update = self._equation9(group_index, dlogger)
         elif scheme  == 'eq12':
-            update = self._equation12(context, beta, zeta, group_index)
+            update = self._equation12(context, beta, zeta, group_index, dlogger)
         else:
             raise ValueError("Unknown adaptation scheme!")
 
@@ -908,16 +899,20 @@ class CalibrationTitration(MonteCarloTitration):
         zeta += update
         # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
         zeta_t = zeta - zeta[0]
+        if debuglogger:
+            for j,z in enumerate(zeta_t):
+                dlogger['zeta_t %d'%(j+1)] = z
 
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(zeta_t):
             self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / -beta
+        return dlogger
 
     def _get_zeta(self, beta, group_index=0):
         """Retrieve relative free energies for specified titratable group.
         Parameters
         ----------
-        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
             inverse temperature
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.group_index
@@ -943,7 +938,7 @@ class CalibrationTitration(MonteCarloTitration):
         """
         return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:]))
 
-    def _equation9(self, group_index):
+    def _equation9(self, group_index,dlogger=None):
         """
         Equation 9 from DOI: 10.1080/10618600.2015.1113975
 
@@ -962,10 +957,13 @@ class CalibrationTitration(MonteCarloTitration):
         delta = np.zeros_like(update)
         delta[self.getTitrationState(group_index)] = 1
         update *= delta
+        if dlogger is not None:
+            for j in enumerate(delta):
+                dlogger['δ %d'%(j+1)] = delta[j]
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _equation12(self, context, beta, zeta, group_index=0):
+    def _equation12(self, context, beta, zeta, group_index=0, dlogger=None):
         """
         Equation 12 from DOI: 10.1080/10618600.2015.1113975
 
@@ -973,7 +971,7 @@ class CalibrationTitration(MonteCarloTitration):
         ----------
         context :  (simtk.openmm.Context)
             The context to update
-        beta : simtk.unit.Quanity compatible with simtk.unit.mole/simtk.unit.kcal
+        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
             inverse temperature
         zeta : np.ndarray
             Current estimate of free energies ζ⁽ᵗ⁾
@@ -988,16 +986,68 @@ class CalibrationTitration(MonteCarloTitration):
         pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1/x, 0, pi_j)
+
         ub_j = self._get_reduced_potentials(context, beta,   group_index)
+
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
+        if dlogger is not None:
+            for j,z in enumerate(log_w_j):
+                dlogger['-ln(π_{0}) - zeta_{0} - U_{0}(x)'.format(j+1)] = z
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j
         update /= self.n_adaptations  # t^{-1}
+        if dlogger is not None:
+            for j,w in enumerate(w_j):
+                dlogger['beta * U_%d(x)'%(j+1)] = ub_j[j]
+                dlogger['w_%d'% (j+1)] = w
 
         return update
 
+
+class MBarCalibrationTitration(MonteCarloTitration):
+
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, nattempts_per_update=None,
+                 simultaneous_proposal_probability=0.1, debug=False):
+        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update, simultaneous_proposal_probability, debug)
+
+        self.n_adaptations=0
+        temperature = self.temperature
+        kT = kB * temperature  # thermal energy
+        beta = 1.0 / kT  # inverse temperature
+        for i,group in enumerate(self.titrationGroups):
+            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
+
+    def adapt_weights(self, context, group_index=0):
+        """
+        Update the relative free energy of titration states of the specified titratable group
+        Parameters
+        ----------
+        context :  (simtk.openmm.Context)
+            The context to update
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        """
+        self.n_adaptations += 1
+        temperature = self.temperature
+        kT = kB * temperature  # thermal energy
+        beta = 1.0 / kT  # inverse temperature
+        # zeta^{t-1}
+
+        self.titrationGroups[group_index]['adaptation_tracker']['label'].append(self.getTitrationState(group_index))
+        self.titrationGroups[group_index]['adaptation_tracker']['red_potential'].append(self._get_reduced_potentials(context, beta, group_index))
+        states = range(len(self.titrationGroups[group_index]['titration_states']))
+        N_k = [self.titrationGroups[group_index]['adaptation_tracker']['label'].count(s) for s in states]
+        U_k = zip(*self.titrationGroups[group_index]['adaptation_tracker']['red_potential'])
+        mbar = pymbar.MBAR(U_k, N_k)
+        frenergy = mbar.getFreeEnergyDifferences()[0][0]
+
+        # Set reference energy based on new zeta
+        for i, titr_state in enumerate(frenergy):
+            print(titr_state)
+            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / beta
 
 
 
@@ -1015,7 +1065,7 @@ if __name__ == "__main__":
     
     # Parameters.
     niterations = 5000 # number of dynamics/titration cycles to run
-    nsteps = 500 # number of timesteps of dynamics per iteration
+    nsteps = 500  # number of timesteps of dynamics per iteration
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
@@ -1045,14 +1095,16 @@ if __name__ == "__main__":
     
     # Load the AMBER system.
     import simtk.openmm.app as app
-    print "Creating AMBER system..."
+
+    print("Creating AMBER system...")
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
     system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-
+    debuglogger = pd.DataFrame()
     # Initialize Monte Carlo titration.
-    print "Initializing Monte Carlo titration..."
-    mc_titration = CalibrationTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    print("Initializing Monte Carlo titration...")
+    # mc_titration = CalibrationTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+
     # mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
 
 
@@ -1062,15 +1114,16 @@ if __name__ == "__main__":
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(inpcrd.getPositions())
-
+    mc_titration = MBarCalibrationTitration(system, temperature, pH, prmtop, cpin_filename, context, debug=True)
     # Minimize energy.
-    print "Minimizing energy..."
+    print("Minimizing energy...")
     openmm.LocalEnergyMinimizer.minimize(context, 10.0)
     
     # Run dynamics.
     state = context.getState(getEnergy=True)
     potential_energy = state.getPotentialEnergy()
-    print "Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole)
+    print("Initial protonation states: %s   %12.3f kcal/mol" % (
+    str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole))
     for iteration in range(niterations):
         # Run some dynamics.
         initial_time = time.time()
@@ -1078,19 +1131,39 @@ if __name__ == "__main__":
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
-        print "  %.3f s elapsed for %d steps of dynamics" % (elapsed_time, nsteps)
+        print("  %.3f s elapsed for %d steps of dynamics" % (elapsed_time, nsteps))
 
         # Attempt protonation state changes.
         initial_time = time.time()
         mc_titration.update(context)
-        mc_titration.adapt_weights(context, scheme='eq12')
+        # debuglogger = debuglogger.append(mc_titration.adapt_weights(context, scheme='eq12', debuglogger=True), ignore_index=True)
+        mc_titration.adapt_weights(context)
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
-        print "  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration.getNumAttemptsPerUpdate())
+        print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration.getNumAttemptsPerUpdate()))
 
         # Show titration states.
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
-        print "Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy/units.kilocalories_per_mole, mc_titration.naccepted, mc_titration.nattempted)
+        print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
+        iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole,
+        mc_titration.naccepted, mc_titration.nattempted))
         log.write(str(mc_titration.getTitrationStates()[0]) + "\n")
+
+    # import matplotlib.pyplot as plt
+    # import seaborn as sns
+    # sns.set_style('ticks')
+    # cols = debuglogger.columns.values
+    # # Two subplots, the axes array is 1-d
+    # f, axarr = plt.subplots(len(cols), sharex=True)
+    #
+    # for c,col in enumerate(cols):
+    #     axarr[c].plot(debuglogger[col], ls='', marker='.')
+    #     axarr[c].set_ylabel(unicode(col, "utf-8"))
+    #     if c == len(cols) -1:
+    #         axarr[c].set_xlabel("Iteration")
+    #
+    # debuglogger.to_csv("Tyrosine.csv")
+    # plt.show()
+    #
