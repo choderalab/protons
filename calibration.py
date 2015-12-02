@@ -1,6 +1,6 @@
-import pandas as pd
 from constph import *
 import simtk.openmm.app as app
+import pandas as pd
 
 niterations = 5000 # number of dynamics/titration cycles to run
 nsteps = 500  # number of timesteps of dynamics per iteration

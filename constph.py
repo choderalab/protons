@@ -43,7 +43,6 @@ COPYRIGHT AND LICENSE
 """
 from __future__ import print_function
 import re
-import os
 import sys
 import math
 import random
@@ -54,8 +53,8 @@ from scipy.misc import logsumexp
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
-import pandas as pd
 import pymbar
+
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
@@ -1077,7 +1076,6 @@ if __name__ == "__main__":
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
-    log = open("states.log", "w")
 
     # Filenames.
     # prmtop_filename = 'amber-example/prmtop'
