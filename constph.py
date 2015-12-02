@@ -418,7 +418,7 @@ class MonteCarloTitration(object):
         group_index = len(self.titrationGroups) + 1
         group['index'] = group_index
         group['nstates'] = 0
-        group['exception_indices'] = self.get14exceptions(system, atom_indices) # NonbondedForce exceptions associated with this titration state
+        group['exception_indices'] = self.get14exceptions(self.system, atom_indices) # NonbondedForce exceptions associated with this titration state
 
         self.titrationGroups.append(group)
 
@@ -884,9 +884,8 @@ class CalibrationTitration(MonteCarloTitration):
         if debuglogger:
             dlogger = dict()
             dlogger['L'] = self.getTitrationState(group_index) + 1
-        else: dlogger = None
-
-
+        else:
+            dlogger = None
 
         if scheme == 'eq9':
             update = self._equation9(group_index, dlogger)
@@ -958,8 +957,8 @@ class CalibrationTitration(MonteCarloTitration):
         delta[self.getTitrationState(group_index)] = 1
         update *= delta
         if dlogger is not None:
-            for j in enumerate(delta):
-                dlogger['δ %d'%(j+1)] = delta[j]
+            for j,d in enumerate(delta):
+                dlogger['δ %d'%(j+1)] = d
         update /= self.n_adaptations  # t^{-1}
         return update
 
@@ -1019,7 +1018,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
         for i,group in enumerate(self.titrationGroups):
             self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
 
-    def adapt_weights(self, context, group_index=0):
+    def adapt_weights(self, context, group_index=0, debuglogger=True):
         """
         Update the relative free energy of titration states of the specified titratable group
         Parameters
@@ -1030,6 +1029,8 @@ class MBarCalibrationTitration(MonteCarloTitration):
             Index of the group that needs updating, defaults to 0.
 
         """
+
+        if debuglogger: dlogger = dict()
         self.n_adaptations += 1
         temperature = self.temperature
         kT = kB * temperature  # thermal energy
@@ -1044,10 +1045,17 @@ class MBarCalibrationTitration(MonteCarloTitration):
         mbar = pymbar.MBAR(U_k, N_k)
         frenergy = mbar.getFreeEnergyDifferences()[0][0]
 
+        if debuglogger:
+            dlogger['L'] = self.titrationGroups[group_index]['adaptation_tracker']['label'][-1] + 1
+            for j,z in enumerate(frenergy):
+                dlogger['beta * U_%d(x)' % (j+1)] = self.titrationGroups[group_index]['adaptation_tracker']['red_potential'][-1][j]
+                dlogger['zeta_t %d'%(j+1)] = z
+
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(frenergy):
-            print(titr_state)
             self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / beta
+
+        if debuglogger: return dlogger
 
 
 
@@ -1100,21 +1108,17 @@ if __name__ == "__main__":
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
     system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-    debuglogger = pd.DataFrame()
+
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    # mc_titration = CalibrationTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
-
-    # mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
-
-
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
     # Create integrator and context.
     platform_name = 'OpenCL'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(inpcrd.getPositions())
-    mc_titration = MBarCalibrationTitration(system, temperature, pH, prmtop, cpin_filename, context, debug=True)
+
     # Minimize energy.
     print("Minimizing energy...")
     openmm.LocalEnergyMinimizer.minimize(context, 10.0)
@@ -1122,8 +1126,7 @@ if __name__ == "__main__":
     # Run dynamics.
     state = context.getState(getEnergy=True)
     potential_energy = state.getPotentialEnergy()
-    print("Initial protonation states: %s   %12.3f kcal/mol" % (
-    str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole))
+    print("Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole))
     for iteration in range(niterations):
         # Run some dynamics.
         initial_time = time.time()
@@ -1136,34 +1139,14 @@ if __name__ == "__main__":
         # Attempt protonation state changes.
         initial_time = time.time()
         mc_titration.update(context)
-        # debuglogger = debuglogger.append(mc_titration.adapt_weights(context, scheme='eq12', debuglogger=True), ignore_index=True)
-        mc_titration.adapt_weights(context)
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
         print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration.getNumAttemptsPerUpdate()))
-
         # Show titration states.
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
         print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
         iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole,
         mc_titration.naccepted, mc_titration.nattempted))
-        log.write(str(mc_titration.getTitrationStates()[0]) + "\n")
 
-    # import matplotlib.pyplot as plt
-    # import seaborn as sns
-    # sns.set_style('ticks')
-    # cols = debuglogger.columns.values
-    # # Two subplots, the axes array is 1-d
-    # f, axarr = plt.subplots(len(cols), sharex=True)
-    #
-    # for c,col in enumerate(cols):
-    #     axarr[c].plot(debuglogger[col], ls='', marker='.')
-    #     axarr[c].set_ylabel(unicode(col, "utf-8"))
-    #     if c == len(cols) -1:
-    #         axarr[c].set_xlabel("Iteration")
-    #
-    # debuglogger.to_csv("Tyrosine.csv")
-    # plt.show()
-    #
