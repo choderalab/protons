@@ -9,6 +9,8 @@ Settings that are important to note:
 * 500 time steps of dynamics per iteration
     * 1.0 femtoseconds time step
 * The number of titration trials was determined by the total number of titratable groups in the protein.
+* I used `openmm-dev                7.0.0.dev0               py35_0` on linux 64
+* The data was collected on our local `src` dev box, using the CUDA platform on our GeForce GTX TITAN.
 
 For further details, see [`benchmarker.py`](benchmarker.py).
 
