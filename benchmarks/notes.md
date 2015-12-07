@@ -28,7 +28,8 @@ python -m pstats bench.prof
 
 Or a visualization tool of your choosing. I used [`pyprof2calltree`](https://pypi.python.org/pypi/pyprof2calltree), with this command:
 
-``` pyprof2calltree -i benchmark.prof -k
+```
+pyprof2calltree -i benchmark.prof -k
 ```
 
 Every directory has a `benchmark.png` file in it, with a call graph of the data in `benchmarks.prof`, and a callgraph.dot(.ps) file with the callgraph.
