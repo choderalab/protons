@@ -9,7 +9,7 @@ Settings that are important to note:
 * 500 time steps of dynamics per iteration
     * 1.0 femtoseconds time step
 * The number of titration trials was determined by the total number of titratable groups in the protein.
-  * DHFR: 30 
+  * DHFR: 30
   * Abl: 39
   * LDHA: 172
 * I used `openmm-dev                7.0.0.dev0               py35_0` on linux 64
@@ -33,3 +33,12 @@ pyprof2calltree -i benchmark.prof -k
 ```
 
 Every directory has a `benchmark.png` file in it, with a call graph of the data in `benchmarks.prof`, and a callgraph.dot(.ps) file with the callgraph.
+
+## Results
+
+dhfr-implicit : 19.25 ns per day
+dhfr-explicit : 11.48 ns per day
+abl-implicit: 11.45 ns per day
+abl-explicit : 8.66 ns per day
+ldha-implicit: roughly 0.625 ns per day
+ldha-explciit: roughly 1.3 ns per day
