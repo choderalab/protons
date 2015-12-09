@@ -55,9 +55,17 @@ import simtk.openmm as openmm
 import simtk.unit as units
 import pymbar
 
+def strip_unit(quant):
+    """Strips the unit from a simtk.units.Quantity object and returns it's value in OpenMM consistent units.
+        Returns quant if object is not a quantity."""
+    if units.is_quantity(quant):
+        return quant.in_unit_system(units.md_unit_system)._value
+    else:
+        return quant
+
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
-kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
+kB = strip_unit(kB)
 
 
 class MonteCarloTitration(object):
@@ -114,7 +122,7 @@ class MonteCarloTitration(object):
 
         # Store parameters.
         self.system = system
-        self.temperature = temperature
+        self.temperature = strip_unit(temperature)
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
@@ -698,8 +706,7 @@ class MonteCarloTitration(object):
         Compute log probability of current configuration and protonation state.
         
         """
-        temperature = self.temperature 
-        kT = kB * temperature # thermal energy
+        kT = kB * self.temperature # thermal energy
         beta = strip_unit(1.0 / kT) # inverse temperature
 
         # Add energetic contribution to log probability.
@@ -1059,13 +1066,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
         if debuglogger: return dlogger
 
 
-def strip_unit(quant):
-    """Strips the unit from a simtk.units.Quantity object and returns it's value in OpenMM consistent units.
-        Returns quant if object is not a quantity."""
-    if units.is_quantity(quant):
-        return quant.in_unit_system(units.md_unit_system)._value
-    else:
-        return quant
+
 
 
 
