@@ -169,10 +169,12 @@ class MonteCarloTitration(object):
                 # Define titration states.
                 for titration_state in range(num_states):
                     # Extract charges for this titration state.
+                    # is defined in elementary_charge units
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
-                    charges = units.Quantity(charges, units.elementary_charge)
                     # Extract relative energy for this titration state.
                     relative_energy = namelist['STATENE'][first_state+titration_state] * units.kilocalories_per_mole
+                    relative_energy = strip_unit(relative_energy)
+
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
                     # Get proton count.
@@ -208,10 +210,10 @@ class MonteCarloTitration(object):
         force = forces['NonbondedForce']         
         # Determine coulomb14scale from first exception with nonzero chargeprod.
         for index in range(force.getNumExceptions()):
-            [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
-            [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
-            [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
-            if (abs(charge1/units.elementary_charge) > 0) and (abs(charge2/units.elementary_charge)>0):
+            [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_unit, force.getExceptionParameters(index))
+            [charge1, sigma1, epsilon1] = map(strip_unit, force.getParticleParameters(particle1))
+            [charge2, sigma2, epsilon2] = map(strip_unit, force.getParticleParameters(particle2))
+            if (abs(charge1) > 0) and (abs(charge2)>0):
                 coulomb14scale = chargeProd / (charge1*charge2)
                 return coulomb14scale
         
@@ -698,11 +700,11 @@ class MonteCarloTitration(object):
         """
         temperature = self.temperature 
         kT = kB * temperature # thermal energy
-        beta = 1.0 / kT # inverse temperature
+        beta = strip_unit(1.0 / kT) # inverse temperature
 
         # Add energetic contribution to log probability.
         state = context.getState(getEnergy=True)
-        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
+        total_energy = strip_unit(state.getPotentialEnergy() + state.getKineticEnergy())
         log_P = - beta * total_energy
 
         # TODO: Add pressure contribution for periodic simulations.
@@ -1056,8 +1058,15 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
         if debuglogger: return dlogger
 
+
 def strip_unit(quant):
-    return quant.in_unit_system(units.md_unit_system)._value
+    """Strips the unit from a simtk.units.Quantity object and returns it's value in OpenMM consistent units.
+        Returns quant if object is not a quantity."""
+    if units.is_quantity(quant):
+        return quant.in_unit_system(units.md_unit_system)._value
+    else:
+        return quant
+
 
 
 # ==============
