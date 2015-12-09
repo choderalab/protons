@@ -1056,11 +1056,13 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
         if debuglogger: return dlogger
 
+def strip_unit(quant):
+    return quant.in_unit_system(units.md_unit_system)._value
 
 
-#=============================================================================================
+# ==============
 # MAIN AND TESTS
-#=============================================================================================
+# ==============
 
 if __name__ == "__main__":
     import doctest
