@@ -65,8 +65,7 @@ def strip_unit(quant):
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
-kB = strip_unit(kB)
-
+kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
 
 class MonteCarloTitration(object):
     """
@@ -122,7 +121,7 @@ class MonteCarloTitration(object):
 
         # Store parameters.
         self.system = system
-        self.temperature = strip_unit(temperature)
+        self.temperature = temperature
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
@@ -181,7 +180,7 @@ class MonteCarloTitration(object):
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
                     # Extract relative energy for this titration state.
                     relative_energy = namelist['STATENE'][first_state+titration_state] * units.kilocalories_per_mole
-                    relative_energy = strip_unit(relative_energy)
+                    relative_energy = relative_energy
 
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
@@ -218,10 +217,10 @@ class MonteCarloTitration(object):
         force = forces['NonbondedForce']         
         # Determine coulomb14scale from first exception with nonzero chargeprod.
         for index in range(force.getNumExceptions()):
-            [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_unit, force.getExceptionParameters(index))
-            [charge1, sigma1, epsilon1] = map(strip_unit, force.getParticleParameters(particle1))
-            [charge2, sigma2, epsilon2] = map(strip_unit, force.getParticleParameters(particle2))
-            if (abs(charge1) > 0) and (abs(charge2)>0):
+            [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+            [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
+            [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
+            if (abs(charge1/units.elementary_charge) > 0) and (abs(charge2/units.elementary_charge)>0):
                 coulomb14scale = chargeProd / (charge1*charge2)
                 return coulomb14scale
         
@@ -707,11 +706,11 @@ class MonteCarloTitration(object):
         
         """
         kT = kB * self.temperature # thermal energy
-        beta = strip_unit(1.0 / kT) # inverse temperature
+        beta = 1.0 / kT # inverse temperature
 
         # Add energetic contribution to log probability.
         state = context.getState(getEnergy=True)
-        total_energy = strip_unit(state.getPotentialEnergy() + state.getKineticEnergy())
+        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
         log_P = - beta * total_energy
 
         # TODO: Add pressure contribution for periodic simulations.
