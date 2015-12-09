@@ -56,13 +56,17 @@ import simtk.unit as units
 import pymbar
 
 
-def strip_in_md_units(quant, unit_system=units.md_unit_system, unit=None):
+def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
     """Strips the unit from a simtk.units.Quantity object and returns it's value in OpenMM consistent units.
-        Alternatively, if unit is supplied, attempt conversion to specified unit to decrease odds of removing wrong units.
-        Returns quant if object is not a quantity."""
+    quant (simtk.unit.Quantity) - object from which units are to be stripped
+    unit_system (simtk.unit.UnitSystem) - unit system to which the unit needs to be converted
+    compatible_with: simtk.unit.Unit - Supply to make sure that unit is compatible with an expected unit.
+
+    Returns quant if object is not a quantity.
+    """
     if units.is_quantity(quant):
-        if unit is not None:
-            quant = quant.in_units_of(unit)
+        if compatible_with is not None:
+            quant = quant.in_units_of(compatible_with)
         return quant.value_in_unit_system(unit_system)
 
     else:
@@ -587,14 +591,14 @@ class MonteCarloTitration(object):
             # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
             for (charge_index, atom_index) in enumerate(atom_indices):
                 if force_classname == 'NonbondedForce':
-                    [charge, sigma, epsilon] = map(strip_in_md_units, force.getParticleParameters(atom_index))
+                    [charge, sigma, epsilon] = map(strip_in_unit_system, force.getParticleParameters(atom_index))
                     if debug: print (" modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (
                     atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon)))
                     force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
                 elif force_classname == 'GBSAOBCForce':
                     if debug: print (" modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (
                     atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor))
-                    [charge, radius, scaleFactor] = map(strip_in_md_units, force.getParticleParameters(atom_index))
+                    [charge, radius, scaleFactor] = map(strip_in_unit_system, force.getParticleParameters(atom_index))
                     force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
                 else:
                     raise Exception("Don't know how to update force type '%s'" % force_classname)
@@ -602,9 +606,9 @@ class MonteCarloTitration(object):
             # TODO: Handle Custom forces.
             if force_classname == 'NonbondedForce':
                 for exception_index in titration_group['exception_indices']:
-                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_md_units, force.getExceptionParameters(exception_index))
-                    [charge1, sigma1, epsilon1] = map(strip_in_md_units, force.getParticleParameters(particle1))
-                    [charge2, sigma2, epsilon2] = map(strip_in_md_units, force.getParticleParameters(particle2))
+                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_unit_system, force.getExceptionParameters(exception_index))
+                    [charge1, sigma1, epsilon1] = map(strip_in_unit_system, force.getParticleParameters(particle1))
+                    [charge2, sigma2, epsilon2] = map(strip_in_unit_system, force.getParticleParameters(particle2))
                     #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
                     chargeProd = self.coulomb14scale * charge1 * charge2
                     # BEGIN UGLY HACK
