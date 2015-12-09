@@ -55,11 +55,16 @@ import simtk.openmm as openmm
 import simtk.unit as units
 import pymbar
 
-def strip_unit(quant):
+
+def strip_unit(quant, unit_system=units.md_unit_system, unit=None):
     """Strips the unit from a simtk.units.Quantity object and returns it's value in OpenMM consistent units.
+        Alternatively, if unit is supplied, return value in specified unit.
         Returns quant if object is not a quantity."""
     if units.is_quantity(quant):
-        return quant.in_unit_system(units.md_unit_system)._value
+        if unit is None:
+            return quant.value_in_unit_system(unit_system)
+        else:
+            return quant.value_in_unit(unit)
     else:
         return quant
 
