@@ -99,7 +99,7 @@ class MonteCarloTitration(object):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, precache_forces=True, debug=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -116,6 +116,7 @@ class MonteCarloTitration(object):
         nattempts_per_update (int) - number of protonation state change attempts per update call; 
                                    if None, set automatically based on number of titratible groups (default: None)
         simultaneous_proposal_probability (float) - probability of simultaneously proposing two updates
+        precache_forces (bool) - Cache all force parameters to improve efficiency of changing titration states.
         debug (boolean) - turn debug information on/off
 
         TODO
@@ -138,6 +139,9 @@ class MonteCarloTitration(object):
         # Initialize titration group records.
         self.titrationGroups = list()
         self.titrationStates = list()
+
+        # Keep track of forces and whether they're cached.
+        self.precached_forces = False
 
         # Determine 14 Coulomb and Lennard-Jones scaling from system.
         # TODO: Get this from prmtop file?
@@ -205,8 +209,25 @@ class MonteCarloTitration(object):
 
         # Reset statistics.
         self.resetStatistics()
-                
+
+        # Cache forces
+        if precache_forces:
+            self.cache_forces()
+            self.precached_forces = True
+
         return
+
+    def cache_forces(self):
+        """
+        Precalculate the forces and force exceptions for each titration state.
+
+        Returns
+        -------
+
+        """
+        for group_index in range(len(self.titrationGroups)):
+            for state_index in range(len(self.titrationGroups[group_index]['titration_states'])):
+                self._cache_force(group_index, state_index)
 
     def get14scaling(self, system):
         """
@@ -369,11 +390,6 @@ class MonteCarloTitration(object):
             namelist[name] = value
 
         return namelist
-
-
-    #=============================================================================================
-    # This functionality takes the place of a C++ MonteCarloTitration Force object.
-    #=============================================================================================
 
     def _get_proton_potential(self, titration_group_index, titration_state_index):
         """Calculate the chemical potential contribution of protons of individual titratable sites.
@@ -577,9 +593,20 @@ class MonteCarloTitration(object):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
         # Get titration group and state.
+        if self.precached_forces:
+            self._read_cached_force(context, titration_group_index, titration_state_index)
+        else:
+            self._force_updates(context, titration_group_index, titration_state_index)
+
+        self.titrationStates[titration_group_index] = titration_state_index
+
+        return
+
+    def _force_updates(self, context, titration_group_index, titration_state_index):
+
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
-        
+
         # Modify charges and exceptions.
         for force in self.forces_to_update:
             # Get name of force class.
@@ -592,12 +619,12 @@ class MonteCarloTitration(object):
             for (charge_index, atom_index) in enumerate(atom_indices):
                 if force_classname == 'NonbondedForce':
                     [charge, sigma, epsilon] = map(strip_in_unit_system, force.getParticleParameters(atom_index))
-                    if debug: print (" modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (
-                    atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon)))
+                    # if debug: print (" modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (
+                    # atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon)))
                     force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
                 elif force_classname == 'GBSAOBCForce':
-                    if debug: print (" modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (
-                    atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor))
+                    # if debug: print (" modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (
+                    # atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor))
                     [charge, radius, scaleFactor] = map(strip_in_unit_system, force.getParticleParameters(atom_index))
                     force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
                 else:
@@ -606,28 +633,116 @@ class MonteCarloTitration(object):
             # TODO: Handle Custom forces.
             if force_classname == 'NonbondedForce':
                 for exception_index in titration_group['exception_indices']:
-                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_unit_system, force.getExceptionParameters(exception_index))
+                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_unit_system,
+                                                                             force.getExceptionParameters(exception_index))
                     [charge1, sigma1, epsilon1] = map(strip_in_unit_system, force.getParticleParameters(particle1))
                     [charge2, sigma2, epsilon2] = map(strip_in_unit_system, force.getParticleParameters(particle2))
-                    #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
+                    # print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
                     chargeProd = self.coulomb14scale * charge1 * charge2
                     # BEGIN UGLY HACK
                     # chargeprod and sigma cannot be identically zero or else we risk the error:
                     # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
                     # TODO: Once OpenMM interface permits this, omit this code.
-                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
-                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
+                    if (2 * chargeProd == chargeProd): chargeProd = sys.float_info.epsilon
+                    if (2 * epsilon == epsilon): epsilon = sys.float_info.epsilon
                     # END UGLY HACK
                     force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
 
             # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'): 
-                force.updateParametersInContext(context)                
+            if context and hasattr(force, 'updateParametersInContext'):
+                force.updateParametersInContext(context)
 
-        # Update titration state records.
-        self.titrationStates[titration_group_index] = titration_state_index
+    def _read_cached_force(self, context, titration_group_index, titration_state_index):
 
-        return
+        cache = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces']
+
+        # Modify charges and exceptions.
+        for f_ix, force in enumerate(self.forces_to_update):
+            # Get name of force class.
+            force_classname = force.__class__.__name__
+            # Get atom indices and charges.
+
+            # Update charges.
+            for atom in cache[f_ix]['atoms']:
+                if force_classname == 'NonbondedForce':
+                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
+                elif force_classname == 'GBSAOBCForce':
+                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
+                else:
+                    raise Exception("Don't know how to update force type '%s'" % force_classname)
+            # Update exceptions
+            # TODO: Handle Custom forces.
+            if force_classname == 'NonbondedForce':
+                for exc in cache[f_ix]['exceptions']:
+                    force.setExceptionParameters(exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
+
+            # Update parameters in Context, if specified.
+            if context and hasattr(force, 'updateParametersInContext'):
+                force.updateParametersInContext(context)
+
+    def _cache_force(self, titration_group_index, titration_state_index):
+        # Modify charges and exceptions.
+
+        titration_group = self.titrationGroups[titration_group_index]
+        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
+
+        # Store the parameters per individual force
+        f_params = list()
+        for f_ix, force in enumerate(self.forces_to_update):
+            # Store parameters for this particular force
+            f_params.append(dict(atoms=list()))
+            # Get name of force class.
+            force_classname = force.__class__.__name__
+            # Get atom indices and charges.
+            charges = titration_state['charges']
+            atom_indices = titration_group['atom_indices']
+
+            charge_by_atom_index = dict(zip(atom_indices, charges))
+
+            # Update charges.
+            # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
+            for atom_index in atom_indices:
+                if force_classname == 'NonbondedForce':
+                    f_params[f_ix]['atoms'].append({key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
+                elif force_classname == 'GBSAOBCForce':
+                    f_params[f_ix]['atoms'].append({key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
+                else:
+                    raise Exception("Don't know how to update force type '%s'" % force_classname)
+                f_params[f_ix]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
+                f_params[f_ix]['atoms'][-1]['atom_index'] = atom_index
+
+            # Update exceptions
+            # TODO: Handle Custom forces.
+            if force_classname == 'NonbondedForce':
+                f_params[f_ix]['exceptions'] = list()
+                for e_ix, exception_index in enumerate(titration_group['exception_indices']):
+                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_unit_system,force.getExceptionParameters(exception_index))
+
+                    # Deal with exceptions between atoms outside of titratable residue
+                    try:
+                        charge_1 = charge_by_atom_index[particle1]
+                    except KeyError:
+                        charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
+                    try:
+                        charge_2 = charge_by_atom_index[particle2]
+                    except KeyError:
+                        charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
+
+                    chargeProd = self.coulomb14scale * charge_1 * charge_2
+
+                    # chargeprod and sigma cannot be identically zero or else we risk the error:
+                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
+                    # TODO: Once OpenMM interface permits this, omit this code.
+                    if (2 * chargeProd == chargeProd): chargeProd = sys.float_info.epsilon
+                    if (2 * epsilon == epsilon): epsilon = sys.float_info.epsilon
+
+                    # store specific local variables in dict by name
+                    exc_dict = dict()
+                    for i in ('exception_index', 'particle1', 'particle2', 'chargeProd', 'sigma', 'epsilon'):
+                        exc_dict[i] = locals()[i]
+                    f_params[f_ix]['exceptions'].append(exc_dict)
+
+        self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
     def update(self, context):
         """
