@@ -1,0 +1,25 @@
+# Load constant ph parameters
+source leaprc.constph
+loadAmberParams frcmod.ionsff99_tip3p 
+
+complex = loadPDB abl_ref.pdb
+
+addIons2 complex Cl- 0
+addIons2 complex Na+ 0
+
+solvatebox complex TIP3PBOX 15
+
+addIonsRand complex Na+ 35 Cl- 35 3
+
+charge complex
+
+check complex
+
+# Write parameters.
+saveAmberParm complex complex.prmtop complex.inpcrd
+
+# Write PDB files
+savepdb complex complex.pdb
+
+# Exit
+quit
