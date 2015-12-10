@@ -36,14 +36,14 @@ Every directory has a `benchmark.png` file in it, with a call graph of the data 
 
 ## Results
 
-dhfr-implicit : 19.25 ns per day
+[dhfr-implicit](dhfr-implicit/benchmark.png) : 19.25 ns per day
 
-dhfr-explicit : 11.48 ns per day
+[dhfr-explicit](dhfr-explicit/benchmark.png) : 11.48 ns per day
 
-abl-implicit: 11.45 ns per day
+[abl-implicit](abl-implicit/benchmark.png): 11.45 ns per day
 
-abl-explicit : 8.66 ns per day
+[abl-explicit](abl-explicit/benchmark.png) : 8.66 ns per day
 
-ldha-implicit: roughly 0.625 ns per day
+[ldha-implicit](ldha-implicit/benchmark.png): 0.65 ns per day
 
 ldha-explciit: roughly 1.3 ns per day
