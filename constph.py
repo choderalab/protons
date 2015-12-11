@@ -116,7 +116,6 @@ class MonteCarloTitration(object):
         nattempts_per_update (int) - number of protonation state change attempts per update call; 
                                    if None, set automatically based on number of titratible groups (default: None)
         simultaneous_proposal_probability (float) - probability of simultaneously proposing two updates
-        precache_forces (bool) - Cache all force parameters to improve efficiency of changing titration states.
         debug (boolean) - turn debug information on/off
 
         TODO
@@ -591,9 +590,12 @@ class MonteCarloTitration(object):
         Update the force parameters to a new titration state
         Parameters
         ----------
-        context
         titration_group_index (int) - index of the group that is changing state
         titration_state_index (int) - index of the state of the chosen residue
+
+        Optional parameters
+        ---------------
+        context (simtk.openmm.Context) - if provided, will update forces state in the specified Context (default: None)
 
         Returns
         -------
