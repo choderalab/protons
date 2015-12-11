@@ -63,7 +63,6 @@ if __name__ == "__main__":
     prmtop = app.AmberPrmtopFile(prmtop_filename)
     pdb = app.PDBFile(pdb_file)
 
-
     if getcwd().split(sep='-')[-1] == 'explicit':
         print("explicit system, using PME")
         system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=1 * units.nanometer,
@@ -72,13 +71,14 @@ if __name__ == "__main__":
         print("implicit system, using NoCutoff")
         system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, precache_forces=True, debug=False)
-    platform_name = 'OpenCL'
+    platform_name = 'CUDA'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(pdb.getPositions())
 
     print("Starting benchmark.")
-    run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark.prof')
-
-    np.savetxt("benchmark.txt", titration_benchmark, delimiter=",", header="Time per timestep (sec), Time per titration attempt (sec)")
+    run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark_cache.prof')
+    np.savetxt("states_cache.txt", mc_titration.states_per_update, delimiter=', ')
+    np.savetxt("benchmark_cache.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec)")
+    np.savetxt("pot_energies_cache.txt", mc_titration.pot_energies.value_in_unit(units.kilocalorie_per_mole), header="Potential energy (kcal/mole)")
