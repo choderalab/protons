@@ -82,7 +82,6 @@ def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_wit
         return quant
 
 
-
 class MonteCarloTitration(object):
     """
     Monte Carlo titration driver for constant-pH dynamics.
@@ -491,7 +490,8 @@ class MonteCarloTitration(object):
         """
         Add a titration state to a titratable group.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
         titration_group_index (int) - the index of the titration group to which a new titration state is to be added
         pKref (float) - the pKa for the reference compound used in calibration
@@ -499,7 +499,8 @@ class MonteCarloTitration(object):
         charges (list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge) - the atomic charges for this titration state
         proton_count (int) - number of protons in this titration state
 
-        NOTE
+        Notes
+        -----
 
         The relative free energy of a titration state is computed as
         
@@ -554,7 +555,7 @@ class MonteCarloTitration(object):
         Return the current titration states for all titratable groups.        
         
         Returns
-        -----
+        -------
 
         states (list of int) - the titration states for all titratable groups
 
