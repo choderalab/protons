@@ -60,26 +60,46 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole/units.kelvin)
 
 
+def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
+    """Strips the unit from a simtk.units.Quantity object and returns it's value conforming to a unit system
+
+    Parameters
+    ----------
+    quant (simtk.unit.Quantity) - object from which units are to be stripped
+    unit_system (simtk.unit.UnitSystem) - unit system to which the unit needs to be converted, default is the OpenMM unit system.
+    compatible_with: simtk.unit.Unit - Supply to make sure that unit is compatible with an expected unit.
+
+    Returns
+    -------
+    quant - object with no units attached
+    """
+    if units.is_quantity(quant):
+        if compatible_with is not None:
+            quant = quant.in_units_of(compatible_with)
+        return quant.value_in_unit_system(unit_system)
+
+    else:
+        return quant
+
+
 class MonteCarloTitration(object):
     """
-    Monte Carlo titration driver for constnat-pH dynamics.
+    Monte Carlo titration driver for constant-pH dynamics.
 
     This move type implements the constant-pH dynamics of Mongan and Case [1].
 
-    REFERENCES
+    References
+    ----------
 
-    [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
+    .. [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
     http://dx.doi.org/10.1002/jcc.20139
     
-    [2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
+    .. [2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
     http://link.aip.org/link/doi/10.1063/1.2731781
     
-    [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
+    .. [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
     http://dx.doi.org/10.1073/pnas.1106094108
 
-    TODO
-
-    * Add methods to keep track of history of protonation states.
 
     """
 
@@ -87,7 +107,8 @@ class MonteCarloTitration(object):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
         system (simtk.openmm.System) - system to be titrated, containing all possible protonation sites
         temperature (simtk.unit.Quantity compatible with simtk.unit.kelvin) - temperature to be simulated
@@ -95,14 +116,16 @@ class MonteCarloTitration(object):
         prmtop (Prmtop) - parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
         cpin_filename (string) - AMBER 'cpin' file defining protonation charge states and energies
 
-        OPTIONAL ARGUMENTS
+        Other Parameters
+        ----------------
         
         nattempts_per_update (int) - number of protonation state change attempts per update call; 
                                    if None, set automatically based on number of titratible groups (default: None)
         simultaneous_proposal_probability (float) - probability of simultaneously proposing two updates
         debug (boolean) - turn debug information on/off
 
-        TODO
+        Todo
+        ----
 
         * Allow constant-pH dynamics to be initialized in other ways than using the AMBER cpin file (e.g. from OpenMM app; automatically).
         * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?
@@ -122,6 +145,14 @@ class MonteCarloTitration(object):
         # Initialize titration group records.
         self.titrationGroups = list()
         self.titrationStates = list()
+
+        # Keep track of forces and whether they're cached.
+        self.precached_forces = False
+
+        # Track simulation state
+        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)  # Could be slow
+        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)  # Could be slow
+        self.states_per_update = list()
 
         # Determine 14 Coulomb and Lennard-Jones scaling from system.
         # TODO: Get this from prmtop file?
@@ -169,36 +200,41 @@ class MonteCarloTitration(object):
                 # Define titration states.
                 for titration_state in range(num_states):
                     # Extract charges for this titration state.
+                    # is defined in elementary_charge units
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
-                    charges = units.Quantity(charges, units.elementary_charge)
                     # Extract relative energy for this titration state.
                     relative_energy = namelist['STATENE'][first_state+titration_state] * units.kilocalories_per_mole
+                    relative_energy = relative_energy
+
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
                     # Get proton count.
                     proton_count = namelist['PROTCNT'][first_state+titration_state]
                     # Create titration state.
                     self.addTitrationState(group_index, pKref, relative_energy, charges, proton_count)
-
+                    self._cache_force(group_index, titration_state)
                 # Set default state for this group.
+
                 self.setTitrationState(group_index, namelist['RESSTATE'][group_index])
 
         self.setNumAttemptsPerUpdate(nattempts_per_update)
 
         # Reset statistics.
         self.resetStatistics()
-                
+
         return
 
     def get14scaling(self, system):
         """
         Determine Coulomb 14 scaling.
         
-        ARGUMENTS
+        Parameters
+        ----------
 
         system (simtk.openmm.System) - the system to examine
 
-        RETURNS
+        Returns
+        -------
 
         coulomb14scale (float) - degree to which 1,4 coulomb interactions are scaled
 
@@ -221,16 +257,19 @@ class MonteCarloTitration(object):
         """
         Return a list of all 1,4 exceptions involving the specified particles that are not exclusions.
         
-        ARGUMENTS
+        Parameters
+        ----------
         
         system (simtk.openmm.System) - the system to examine
         particle_indices (list of int) - only exceptions involving at least one of these particles are returned
         
-        RETURNS
+        Returns
+        -------
 
         exception_indices (list) - list of exception indices for NonbondedForce
 
-        TODO
+        Todo
+        ----
 
         * Deal with the case where there may be multiple NonbondedForce objects.
         * Deal with electrostatics implmented as CustomForce objects (by CustomNonbondedForce + CustomBondForce)
@@ -262,7 +301,8 @@ class MonteCarloTitration(object):
         """
         Reset statistics of titration state tracking.
 
-        TODO
+        Todo
+        ----
 
         * Keep track of more statistics regarding history of individual protonation states.
         * Keep track of work values for individual trials to use for calibration.
@@ -279,16 +319,19 @@ class MonteCarloTitration(object):
         """
         Parse a fortran namelist generated by AMBER 11 constant-pH python scripts.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
         filename (string) - the name of the file containing the fortran namelist
         namelist_name (string) - name of the namelist section to parse
 
-        RETURNS
+        Returns
+        -------
 
         namelist (dict) - namelist[key] indexes read values, converted to Python types
 
-        NOTES
+        Notes
+        -----
 
         This code is not fully general for all Fortran namelists---it is specialized to the cpin files.
 
@@ -352,11 +395,6 @@ class MonteCarloTitration(object):
 
         return namelist
 
-
-    #=============================================================================================
-    # This functionality takes the place of a C++ MonteCarloTitration Force object.
-    #=============================================================================================
-
     def _get_proton_potential(self, titration_group_index, titration_state_index):
         """Calculate the chemical potential contribution of protons of individual titratable sites.
 
@@ -366,6 +404,7 @@ class MonteCarloTitration(object):
             Index of the group
         titration_state_index : int
             Index of the state
+
         Returns
         -------
         float
@@ -384,7 +423,8 @@ class MonteCarloTitration(object):
         """
         Return the number of titratable groups.
 
-        RETURNS
+        Returns
+        -------
 
         ngroups (int) - the number of titratable groups that have been defined
 
@@ -396,11 +436,13 @@ class MonteCarloTitration(object):
         """
         Define a new titratable group.
         
-        ARGUMENTS
+        Parameters
+        ----------
 
         atom_indices (list of int) - the atom indices defining the titration group
 
-        NOTE
+        Notes
+        -----
 
         No two titration groups may share atoms.
 
@@ -448,7 +490,8 @@ class MonteCarloTitration(object):
         """
         Add a titration state to a titratable group.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
         titration_group_index (int) - the index of the titration group to which a new titration state is to be added
         pKref (float) - the pKa for the reference compound used in calibration
@@ -456,7 +499,8 @@ class MonteCarloTitration(object):
         charges (list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge) - the atomic charges for this titration state
         proton_count (int) - number of protons in this titration state
 
-        NOTE
+        Notes
+        -----
 
         The relative free energy of a titration state is computed as
         
@@ -490,11 +534,13 @@ class MonteCarloTitration(object):
         """
         Return the current titration state for the specified titratable group.
         
-        ARGUMENTS
+        Parameters
+        ----------
 
         titration_group_index (int) - the titration group to be queried
         
-        RETURNS
+        Returns
+        -------
 
         state (int) - the titration state for the specified titration group
 
@@ -508,7 +554,8 @@ class MonteCarloTitration(object):
         """
         Return the current titration states for all titratable groups.        
         
-        RETURNS
+        Returns
+        -------
 
         states (list of int) - the titration states for all titratable groups
 
@@ -519,11 +566,13 @@ class MonteCarloTitration(object):
         """
         Return the total charge for the specified titration state.
         
-        ARGUMENTS
+        Parameters
+        ----------
 
         titration_group_index (int) - the titration group to be queried
 
-        RETURNS
+        Returns
+        -------
 
         charge (simtk.openmm.Quantity compatible with simtk.unit.elementary_charge) - total charge for the specified titration state
 
@@ -540,16 +589,17 @@ class MonteCarloTitration(object):
         """
         Change the titration state of the designated group for the provided state.
 
-        ARGUMENTS
+        Parameters
+        ----------
         
         titration_group_index (int) - the index of the titratable group whose titration state should be updated
         titration_state_index (int) - the titration state to set as active
         
-        OPTIONAL ARGUMENTS
+        Other Parameters
+        ----------------
 
         context (simtk.openmm.Context) - if provided, will update protonation state in the specified Context (default: None)
         debug (boolean) - if True, will print debug information
-
         """
 
         # Check parameters for validity.
@@ -558,58 +608,146 @@ class MonteCarloTitration(object):
         if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
-        # Get titration group and state.
-        titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
-        
+        self._update_forces(titration_group_index, titration_state_index, context)
+        self.titrationStates[titration_group_index] = titration_state_index
+
+        return
+
+    def _update_forces(self, titration_group_index, titration_state_index, context=None):
+        """
+        Update the force parameters to a new titration state by reading them from the cache
+
+        Parameters
+        ----------
+        titration_group_index (int) - index of the group that is changing state
+        titration_state_index (int) - index of the state of the chosen residue
+
+        Optional parameters
+        -------------------
+
+        context (simtk.openmm.Context) - if provided, will update forces state in the specified Context (default: None)
+
+        Notes
+        -----
+
+        Every titration state has a list called forces, which stores parameters for all forces that need updating.
+        Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
+        NonbondedForces also have an entry called `exceptions`, containing exception parameters.
+
+        Returns
+        -------
+
+        """
+
+
+        cache = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces']
+
         # Modify charges and exceptions.
-        for force in self.forces_to_update:
+        for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
             force_classname = force.__class__.__name__
             # Get atom indices and charges.
-            charges = titration_state['charges']
-            atom_indices = titration_group['atom_indices']
+
             # Update charges.
-            # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
-            for (charge_index, atom_index) in enumerate(atom_indices):
+            for atom in cache[force_index]['atoms']:
                 if force_classname == 'NonbondedForce':
-                    [charge, sigma, epsilon] = force.getParticleParameters(atom_index)
-                    if debug: print (" modifying NonbondedForce atom %d : (charge, sigma, epsilon) : (%s, %s, %s) -> (%s, %s, %s)" % (
-                    atom_index, str(charge), str(sigma), str(epsilon), str(charges[charge_index]), str(sigma), str(epsilon)))
-                    force.setParticleParameters(atom_index, charges[charge_index], sigma, epsilon)
+                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
                 elif force_classname == 'GBSAOBCForce':
-                    if debug: print (" modifying GBSAOBCForce atom %d : (charge, radius, scaleFactor) : (%s, %s, %s) -> (%s, %s, %s)" % (
-                    atom_index, str(charge), str(radius), scaleFactor, str(charges[charge_index]), str(radius), scaleFactor))
-                    [charge, radius, scaleFactor] = force.getParticleParameters(atom_index)
-                    force.setParticleParameters(atom_index, charges[charge_index], radius, scaleFactor)
+                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
                 else:
                     raise Exception("Don't know how to update force type '%s'" % force_classname)
             # Update exceptions
             # TODO: Handle Custom forces.
             if force_classname == 'NonbondedForce':
-                for exception_index in titration_group['exception_indices']:
-                    [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                    [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
-                    [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
-                    #print "chargeProd: old %s new %s" % (str(chargeProd), str(self.coulomb14scale * charge1 * charge2))
-                    chargeProd = self.coulomb14scale * charge1 * charge2
-                    # BEGIN UGLY HACK
+                for exc in cache[force_index]['exceptions']:
+                    force.setExceptionParameters(exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
+
+            # Update parameters in Context, if specified.
+            if context and hasattr(force, 'updateParametersInContext'):
+                force.updateParametersInContext(context)
+
+    def _cache_force(self, titration_group_index, titration_state_index):
+        """
+        Cache the force parameters for a single titration state.
+
+        Parameters
+        ----------
+        titration_group_index (int) - Index of the group
+        titration_state_index (int) - Index of the titration state of the group
+
+        Notes
+        -----
+
+        Call this function to set up the 'forces' information for a single titration state.
+        Every titration state has a list called forces, which stores parameters for all forces that need updating.
+        Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
+        NonbondedForces also have an entry called `exceptions`, containing exception parameters.
+
+        Returns
+        -------
+
+        """
+
+        titration_group = self.titrationGroups[titration_group_index]
+        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
+
+        # Store the parameters per individual force
+        f_params = list()
+        for force_index, force in enumerate(self.forces_to_update):
+            # Store parameters for this particular force
+            f_params.append(dict(atoms=list()))
+            # Get name of force class.
+            force_classname = force.__class__.__name__
+            # Get atom indices and charges.
+            charges = titration_state['charges']
+            atom_indices = titration_group['atom_indices']
+
+            charge_by_atom_index = dict(zip(atom_indices, charges))
+
+            # Update charges.
+            # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
+            for atom_index in atom_indices:
+                if force_classname == 'NonbondedForce':
+                    f_params[force_index]['atoms'].append({key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
+                elif force_classname == 'GBSAOBCForce':
+                    f_params[force_index]['atoms'].append({key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
+                else:
+                    raise Exception("Don't know how to update force type '%s'" % force_classname)
+                f_params[force_index]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
+                f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
+
+            # Update exceptions
+            # TODO: Handle Custom forces.
+            if force_classname == 'NonbondedForce':
+                f_params[force_index]['exceptions'] = list()
+                for e_ix, exception_index in enumerate(titration_group['exception_indices']):
+                    [particle1, particle2, chargeProd, sigma, epsilon] = map(strip_in_unit_system,force.getExceptionParameters(exception_index))
+
+                    # Deal with exceptions between atoms outside of titratable residue
+                    try:
+                        charge_1 = charge_by_atom_index[particle1]
+                    except KeyError:
+                        charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
+                    try:
+                        charge_2 = charge_by_atom_index[particle2]
+                    except KeyError:
+                        charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
+
+                    chargeProd = self.coulomb14scale * charge_1 * charge_2
+
                     # chargeprod and sigma cannot be identically zero or else we risk the error:
                     # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
                     # TODO: Once OpenMM interface permits this, omit this code.
-                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
-                    if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
-                    # END UGLY HACK
-                    force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
+                    if (2 * chargeProd == chargeProd): chargeProd = sys.float_info.epsilon
+                    if (2 * epsilon == epsilon): epsilon = sys.float_info.epsilon
 
-            # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'): 
-                force.updateParametersInContext(context)                
+                    # store specific local variables in dict by name
+                    exc_dict = dict()
+                    for i in ('exception_index', 'particle1', 'particle2', 'chargeProd', 'sigma', 'epsilon'):
+                        exc_dict[i] = locals()[i]
+                    f_params[force_index]['exceptions'].append(exc_dict)
 
-        # Update titration state records.
-        self.titrationStates[titration_group_index] = titration_state_index
-
-        return
+        self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
     def update(self, context):
         """
@@ -637,7 +775,7 @@ class MonteCarloTitration(object):
             titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
             
             # Compute initial probability of this protonation state.
-            log_P_initial = self._compute_log_probability(context)
+            log_P_initial, pot1, kin1 = self._compute_log_probability(context)
 
             if self.debug:
                 state = context.getState(getEnergy=True)
@@ -656,7 +794,7 @@ class MonteCarloTitration(object):
             
             # Compute final probability of this protonation state.
 
-            log_P_final = self._compute_log_probability(context)
+            log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
             # Compute work and store work history.
             work = - (log_P_final - log_P_initial)
@@ -671,12 +809,17 @@ class MonteCarloTitration(object):
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
                 self.naccepted += 1
+                self.pot_energies.append(pot2)
+                self.kin_energies.append(kin2)
             else:
                 # Reject.
                 # Restore titration states.
+                self.pot_energies.append(pot1)
+                self.kin_energies.append(kin1)
                 for titration_group_index in titration_group_indices:
                     self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
                 # TODO: If using NCMC, restore coordinates.
+            self.states_per_update.append(self.getTitrationStates())
         
         return
 
@@ -694,15 +837,17 @@ class MonteCarloTitration(object):
     def _compute_log_probability(self, context):
         """
         Compute log probability of current configuration and protonation state.
-        
+
         """
-        temperature = self.temperature 
+        temperature = self.temperature
         kT = kB * temperature # thermal energy
         beta = 1.0 / kT # inverse temperature
 
         # Add energetic contribution to log probability.
         state = context.getState(getEnergy=True)
-        total_energy = state.getPotentialEnergy() + state.getKineticEnergy()
+        pot_energy = state.getPotentialEnergy()
+        kin_energy = state.getKineticEnergy()
+        total_energy = pot_energy + kin_energy
         log_P = - beta * total_energy
 
         # TODO: Add pressure contribution for periodic simulations.
@@ -713,9 +858,9 @@ class MonteCarloTitration(object):
             relative_energy = titration_state['relative_energy']
             if self.debug: print("beta * relative_energy: %.2f",  +beta * relative_energy)
             log_P += - self._get_proton_potential(titration_group_index, titration_state_index) + beta * relative_energy
-            
+
         # Return the log probability.
-        return log_P
+        return log_P, pot_energy, kin_energy
     
     def getNumAttemptsPerUpdate(self):
         """
@@ -1058,9 +1203,12 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
 
 
-#=============================================================================================
+
+
+
+# ==============
 # MAIN AND TESTS
-#=============================================================================================
+# ==============
 
 if __name__ == "__main__":
     import doctest

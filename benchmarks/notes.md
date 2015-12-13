@@ -46,4 +46,4 @@ Every directory has a `benchmark.png` file in it, with a call graph of the data 
 
 [ldha-implicit](ldha-implicit/benchmark.png): 0.65 ns per day
 
-ldha-explciit: roughly 1.3 ns per day
+[ldha-explicit](ldhda-explicit/benchmark.png): 1.32 ns per day
