@@ -705,39 +705,44 @@ class MonteCarloTitration(object):
         if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
-        self._update_forces(titration_group_index, titration_state_index, context)
+        self._update_forces(titration_group_index, titration_state_index, context=context)
         self.titrationStates[titration_group_index] = titration_state_index
 
         return
 
-    def _update_forces(self, titration_group_index, titration_state_index, context=None):
+    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0, context=None):
         """
         Update the force parameters to a new titration state by reading them from the cache
 
         Parameters
         ----------
-        titration_group_index (int) - index of the group that is changing state
-        titration_state_index (int) - index of the state of the chosen residue
-
-        Optional parameters
-        -------------------
-
-        context (simtk.openmm.Context) - if provided, will update forces state in the specified Context (default: None)
+        titration_group_index : int
+            Index of the group that is changing state
+        titration_state_index : int
+            Index of the state of the chosen residue
+        initial_titration_state_index : int, optional, default=None
+            If blending two titration states, the initial titration state to blend.
+            If `None`, set to `titration_state_index`
+        fractional_titration_state : float, optional, default=1.0
+            Fraction of `titration_state_index` to be blended with `initial_titration_state_index`.
+            If 0.0, `initial_titration_state_index` is fully active; if 1.0, `titration_state_index` is fully active.
+        context : simtk.openmm.Context, optional, default=None
+            If provided, will update forces state in the specified Context
 
         Notes
         -----
-
-        Every titration state has a list called forces, which stores parameters for all forces that need updating.
-        Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
-        NonbondedForces also have an entry called `exceptions`, containing exception parameters.
-
-        Returns
-        -------
+        * Every titration state has a list called forces, which stores parameters for all forces that need updating.
+        * Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
+        * NonbondedForces also have an entry called `exceptions`, containing exception parameters.
 
         """
+        # `initial_titration_state_index` should have no effect if not specified, so set it identical to `final_titration_state_index` in that case
+        if initial_titration_state_index is None:
+            initial_titration_state_index = final_titration_state_index
 
-
-        cache = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces']
+        # Retrieve cached force parameters fro this titration state.
+        cache_initial = self.titrationGroups[titration_group_index]['titration_states'][initial_titration_state_index]['forces']
+        cache_final   = self.titrationGroups[titration_group_index]['titration_states'][final_titration_state_index]['forces']
 
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
@@ -745,18 +750,27 @@ class MonteCarloTitration(object):
             force_classname = force.__class__.__name__
             # Get atom indices and charges.
 
-            # Update charges.
-            for atom in cache[force_index]['atoms']:
+            # Update forces using appropriately blended parameters
+            for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
+                atom = { key : atom_initial[key] for key in ['atom_index'] }
                 if force_classname == 'NonbondedForce':
+                    for parameter_name in ['charge', 'sigma', 'epsilon']:
+                        atom[parameter_name] = (1.0-fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
                     force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
                 elif force_classname == 'GBSAOBCForce':
+                    for parameter_name in ['charge', 'radius', 'scaleFactor']:
+                        atom[parameter_name] = (1.0-fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
                     force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
                 else:
                     raise Exception("Don't know how to update force type '%s'" % force_classname)
+
             # Update exceptions
             # TODO: Handle Custom forces.
             if force_classname == 'NonbondedForce':
-                for exc in cache[force_index]['exceptions']:
+                for (exc_initial, exc_final) in zip(cache_initial[force_index]['exceptions'], cache_final[force_index]['exceptions']):
+                    exc = { key : exc_initial[key] for key in ['exception_index', 'particle1', 'particle2'] }
+                    for parameter_name in ['chargeProd', 'sigma', 'epsilon']:
+                        exc[parameter_name] = (1.0-fractional_titration_state) * exc_initial[parameter_name] + fractional_titration_state * exc_final[parameter_name]
                     force.setExceptionParameters(exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
 
             # Update parameters in Context, if specified.
@@ -961,7 +975,7 @@ class MonteCarloTitration(object):
         """
 
         temperature = self.temperature
-        pressure = self.temperature
+        pressure = self.pressure
         kT = kB * temperature # thermal energy
         beta = 1.0 / kT # inverse temperature
 
@@ -974,7 +988,8 @@ class MonteCarloTitration(object):
 
         # Add pressure contribution for periodic simulations.
         volume = context.getState().getPeriodicBoxVolume()
-        log_P += -beta * pressure * volume
+        print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+        log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Correct for reference states.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
@@ -1393,6 +1408,7 @@ if __name__ == "__main__":
         system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     elif solvent == 'explicit':
         system = prmtop.createSystem(implicitSolvent=None, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
+        system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
