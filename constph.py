@@ -492,7 +492,7 @@ class MonteCarloTitration(object):
 
         return namelist
 
-    def _get_proton_potential(self, titration_group_index, titration_state_index):
+    def _get_proton_chemical_potential(self, titration_group_index, titration_state_index):
         """Calculate the chemical potential contribution of protons of individual titratable sites.
 
         Parameters
@@ -991,12 +991,12 @@ class MonteCarloTitration(object):
         print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
         log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
-        # Correct for reference states.
+        # Include reference energy and pH-dependent contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_energy = titration_state['relative_energy']
             if self.debug: print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_potential(titration_group_index, titration_state_index) + beta * relative_energy
+            log_P += - self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -1064,7 +1064,7 @@ class MonteCarloTitration(object):
 
         """
         potential_energy = self._get_potential_energy(context, state_index)
-        return self._get_proton_potential(group_index, state_index) + beta * potential_energy
+        return self._get_proton_chemical_potential(group_index, state_index) + beta * potential_energy
 
     def _get_potential_energy(self, context, state_index, group_index=0):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.
