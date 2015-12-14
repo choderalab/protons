@@ -93,40 +93,51 @@ class MonteCarloTitration(object):
 
     .. [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
     http://dx.doi.org/10.1002/jcc.20139
-    
+
     .. [2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
     http://link.aip.org/link/doi/10.1063/1.2731781
-    
+
     .. [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
     http://dx.doi.org/10.1073/pnas.1106094108
 
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
+        nsteps_per_trial=0, maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-'):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
         Parameters
         ----------
-
-        system (simtk.openmm.System) - system to be titrated, containing all possible protonation sites
-        temperature (simtk.unit.Quantity compatible with simtk.unit.kelvin) - temperature to be simulated
-        pH (float) - the pH to be simulated 
-        prmtop (Prmtop) - parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
-        cpin_filename (string) - AMBER 'cpin' file defining protonation charge states and energies
-
-        Other Parameters
-        ----------------
-        
-        nattempts_per_update (int) - number of protonation state change attempts per update call; 
-                                   if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability (float) - probability of simultaneously proposing two updates
-        debug (boolean) - turn debug information on/off
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        temperature : simtk.unit.Quantity compatible kelvin
+            Temperature to be simulated.
+        pH : float
+            The pH to be simulated.
+        prmtop : simtk.openmm.app.Prmtop
+            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
+        cpin_filename : string
+            AMBER 'cpin' file defining protonation charge states and energies
+        nattempts_per_update : int, optional, default=None
+            Number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float, optional, default=0.1
+            Probability of simultaneously proposing two updates
+        debug : bool, optional, default=False
+            Turn debug information on/off.
+        nsteps_per_trial : int, optional, default=0
+            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        maintainChargeNeutrality : bool, optional, default=True
+            If True, waters will be converted to monovalent counterions and vice-versa.
+        cationName : str, optional, default='Na+'
+            Name of cation residue from which parameters are to be taken.
+        anionName : str, optional, default='Cl-'
+            Name of anion residue from which parameters are to be taken.
 
         Todo
         ----
-
         * Allow constant-pH dynamics to be initialized in other ways than using the AMBER cpin file (e.g. from OpenMM app; automatically).
         * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?
 
@@ -141,6 +152,15 @@ class MonteCarloTitration(object):
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
+        self.nsteps_per_trial = nsteps_per_trial
+
+        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
+        self.maintainChargeNeutrality = maintainChargeNeutrality
+        self.water_residues = self.identifyWaterResidues(prmtop.topology) # water molecules that can be converted to ions
+        self.anion_parameters = self.retrieveIonParameters(prmtop.topology, system, anionName) # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
+        self.cation_parameters = self.retrieveIonParameters(prmtop.topology, system, cationName) # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
+        self.anion_residues = list() # water molecules that have been converted to anions
+        self.cation_residues = list() # water molecules that have been converted to cations
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -158,11 +178,11 @@ class MonteCarloTitration(object):
         # TODO: Get this from prmtop file?
         self.coulomb14scale = self.get14scaling(system)
 
-        # Store list of exceptions that may need to be modified.        
+        # Store list of exceptions that may need to be modified.
         self.atomExceptions = [ list() for index in range(prmtop._prmtop.getNumAtoms()) ]
         for (atom1, atom2, chargeProd, rMin, epsilon, iScee, iScnb) in prmtop._prmtop.get14Interactions():
             self.atomExceptions[atom1].append(atom2)
-            self.atomExceptions[atom2].append(atom1)                                        
+            self.atomExceptions[atom2].append(atom1)
 
         # Store force object pointers.
         # TODO: Add Custom forces.
@@ -171,7 +191,7 @@ class MonteCarloTitration(object):
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
             if force.__class__.__name__ in force_classes_to_update:
-                self.forces_to_update.append(force)            
+                self.forces_to_update.append(force)
 
         if cpin_filename:
             # Load AMBER cpin file defining protonation states.
@@ -179,7 +199,7 @@ class MonteCarloTitration(object):
 
             # Make sure RESSTATE is a list.
             if type(namelist['RESSTATE'])==int:
-                namelist['RESSTATE'] = [namelist['RESSTATE']]    
+                namelist['RESSTATE'] = [namelist['RESSTATE']]
 
             # Extract number of titratable groups.
             self.ngroups = len(namelist['RESSTATE'])
@@ -192,11 +212,11 @@ class MonteCarloTitration(object):
                 first_state = namelist['STATEINF(%d)%%FIRST_STATE' % group_index]
                 num_atoms = namelist['STATEINF(%d)%%NUM_ATOMS' % group_index]
                 num_states = namelist['STATEINF(%d)%%NUM_STATES' % group_index]
-                
+
                 # Define titratable group.
                 atom_indices = range(first_atom, first_atom+num_atoms)
                 self.addTitratableGroup(atom_indices)
-                
+
                 # Define titration states.
                 for titration_state in range(num_states):
                     # Extract charges for this titration state.
@@ -224,10 +244,78 @@ class MonteCarloTitration(object):
 
         return
 
+    def retrieveIonParameters(self, topology, system, resname):
+        """
+        Retrieve parameters from specified monovalent atomic ion.
+
+        Parameters
+        ----------
+        topology : simtk.openmm.app.topology
+            The topology from which water residues are to be identified.
+        system : simtk.openmm.System
+            The System object from which parameters are to be extracted.
+        resname : str
+            The residue name of the monovalent atomic anion or cation from which parameters are to be retrieved.
+
+        Returns
+        -------
+        parameters : dict of str:float
+            NonbondedForce parameter dict ('charge', 'sigma', 'epsilon') for ion parameters.
+
+        Warnings
+        --------
+        * Only `NonbondedForce` parameters are returned
+        * If the system contains more than one `NonbondedForce`, behavior is undefined
+
+        """
+        # Find the NonbondedForce in the system
+        forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+        nonbonded_force = forces['NonbondedForce']
+
+        # Return the first occurrence of NonbondedForce particle parameters matching `resname`
+        for residue in topology.residues():
+            if residue.name == resname:
+                atoms = [ atom for atom in residue.atoms() ]
+                [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(atoms[0].index)
+                parameters = { 'charge' : charge, 'sigma' : sigma, 'epsilon' : epsilon }
+                print('retrieveIonParameters: %s : %s' % (resname, str(parameters)))
+                return parameters
+
+        raise Exception("resname '%s' not found in topology" % resname)
+
+    def identifyWaterResidues(self, topology, water_residue_names=('WAT', 'HOH', 'TP4', 'TP5', 'T4E')):
+        """
+        Compile a list of water residues that could be converted to/from monovalent ions.
+
+        Parameters
+        ----------
+        topology : simtk.openmm.app.topology
+            The topology from which water residues are to be identified.
+        water_residue_names : list of str
+            Residues identified as water molecules.
+
+        Returns
+        -------
+        water_residues : list of simtk.openmm.app.Residue
+            Water residues.
+
+        TODO
+        ----
+        * Can this feature be added to simt.openmm.app.Topology?
+
+        """
+        water_residues = list()
+        for residue in topology.residues():
+            if residue.name in water_residue_names:
+                water_residues.append(residue)
+
+        print('identifyWaterResidues: %d water molecules identified.' % len(water_residues))
+        return water_residues
+
     def get14scaling(self, system):
         """
         Determine Coulomb 14 scaling.
-        
+
         Parameters
         ----------
 
@@ -241,7 +329,7 @@ class MonteCarloTitration(object):
         """
         # Look for a NonbondedForce.
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-        force = forces['NonbondedForce']         
+        force = forces['NonbondedForce']
         # Determine coulomb14scale from first exception with nonzero chargeprod.
         for index in range(force.getNumExceptions()):
             [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
@@ -250,19 +338,19 @@ class MonteCarloTitration(object):
             if (abs(charge1/units.elementary_charge) > 0) and (abs(charge2/units.elementary_charge)>0):
                 coulomb14scale = chargeProd / (charge1*charge2)
                 return coulomb14scale
-        
+
         return None
 
     def get14exceptions(self, system, particle_indices):
         """
         Return a list of all 1,4 exceptions involving the specified particles that are not exclusions.
-        
+
         Parameters
         ----------
-        
+
         system (simtk.openmm.System) - the system to examine
         particle_indices (list of int) - only exceptions involving at least one of these particles are returned
-        
+
         Returns
         -------
 
@@ -273,11 +361,11 @@ class MonteCarloTitration(object):
 
         * Deal with the case where there may be multiple NonbondedForce objects.
         * Deal with electrostatics implmented as CustomForce objects (by CustomNonbondedForce + CustomBondForce)
-        
+
         """
         # Locate NonbondedForce object.
         forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
-        force = forces['NonbondedForce']         
+        force = forces['NonbondedForce']
         # Build a list of exception indices involving any of the specified particles.
         exception_indices = list()
         for exception_index in range(force.getNumExceptions()):
@@ -290,7 +378,7 @@ class MonteCarloTitration(object):
                     # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
                     # TODO: Once OpenMM interface permits this, omit this code.
                     [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon                        
+                    if (2*chargeProd == chargeProd): chargeProd = sys.float_info.epsilon
                     if (2*epsilon == epsilon): epsilon = sys.float_info.epsilon
                     force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
                     # END UGLY HACK
@@ -306,13 +394,13 @@ class MonteCarloTitration(object):
 
         * Keep track of more statistics regarding history of individual protonation states.
         * Keep track of work values for individual trials to use for calibration.
-        
+
         """
-                
+
         self.nattempted = 0
-        self.naccepted = 0 
+        self.naccepted = 0
         self.work_history = list()
-        
+
         return
 
     def _parse_fortran_namelist(self, filename, namelist_name):
@@ -340,7 +428,7 @@ class MonteCarloTitration(object):
         infile = open(filename, 'r')
         lines = infile.readlines()
         infile.close()
-        
+
         # Concatenate all text.
         contents = ''
         for line in lines:
@@ -377,7 +465,7 @@ class MonteCarloTitration(object):
                 contents = ''
 
             # Split value on commas.
-            elements = value.split(',')            
+            elements = value.split(',')
             value = list()
             for element in elements:
                 if valueReal.match(element):
@@ -385,7 +473,7 @@ class MonteCarloTitration(object):
                 elif valueInt.match(element):
                     element = int(element)
                 elif valueString.match(element):
-                    element = element[1:-1] 
+                    element = element[1:-1]
                 if element != '':
                     value.append(element)
             if len(value) == 1:
@@ -435,7 +523,7 @@ class MonteCarloTitration(object):
     def addTitratableGroup(self, atom_indices):
         """
         Define a new titratable group.
-        
+
         Parameters
         ----------
 
@@ -451,7 +539,7 @@ class MonteCarloTitration(object):
         for group in self.titrationGroups:
             if set(group['atom_indices']).intersection(atom_indices):
                 raise Exception("Titration groups cannot share atoms.  The requested atoms of new titration group (%s) share atoms with another group (%s)." % (str(atom_indices), str(group['atom_indices'])))
-        
+
         # Define the new group.
         group = dict()
         group['atom_indices'] = list(atom_indices) # deep copy
@@ -479,10 +567,10 @@ class MonteCarloTitration(object):
         RETURNS
 
         nstates (int) - the number of titration states defined for the specified titration group
-        
+
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))
 
         return len(self.titrationGroups[titration_group_index]['titration_states'])
 
@@ -503,24 +591,24 @@ class MonteCarloTitration(object):
         -----
 
         The relative free energy of a titration state is computed as
-        
+
         relative_energy + kT * proton_count * ln (10^(pH - pKa))
         = relative_energy + kT * proton_count * (pH - pKa) * ln 10
-        
+
         The number of charges specified must match the number (and order) of atoms in the defined titration group.
 
         """
 
         # Check input arguments.
         if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))
         if len(charges) != len(self.titrationGroups[titration_group_index]['atom_indices']):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
-        
+
         state = dict()
         state['pKref'] = pKref
         state['relative_energy'] = relative_energy
-        state['charges'] = copy.deepcopy(charges) 
+        state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
 
@@ -530,15 +618,15 @@ class MonteCarloTitration(object):
 
         return
 
-    def getTitrationState(self, titration_group_index):        
+    def getTitrationState(self, titration_group_index):
         """
         Return the current titration state for the specified titratable group.
-        
+
         Parameters
         ----------
 
         titration_group_index (int) - the titration group to be queried
-        
+
         Returns
         -------
 
@@ -546,14 +634,14 @@ class MonteCarloTitration(object):
 
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))
 
         return self.titrationStates[titration_group_index]
 
-    def getTitrationStates(self):        
+    def getTitrationStates(self):
         """
-        Return the current titration states for all titratable groups.        
-        
+        Return the current titration states for all titratable groups.
+
         Returns
         -------
 
@@ -565,7 +653,7 @@ class MonteCarloTitration(object):
     def getTitrationStateTotalCharge(self, titration_group_index):
         """
         Return the total charge for the specified titration state.
-        
+
         Parameters
         ----------
 
@@ -578,7 +666,7 @@ class MonteCarloTitration(object):
 
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))
         if titration_state_index not in range(self.getNumTitrationStates(titratable_group_index)):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
@@ -591,10 +679,10 @@ class MonteCarloTitration(object):
 
         Parameters
         ----------
-        
+
         titration_group_index (int) - the index of the titratable group whose titration state should be updated
         titration_state_index (int) - the titration state to set as active
-        
+
         Other Parameters
         ----------------
 
@@ -604,7 +692,7 @@ class MonteCarloTitration(object):
 
         # Check parameters for validity.
         if titration_group_index not in range(self.getNumTitratableGroups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))        
+            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." % (titration_group_index, self.getNumTitratableGroups()))
         if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." % (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
@@ -769,11 +857,11 @@ class MonteCarloTitration(object):
             ndraw = 1
             if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
                 ndraw = 2
-                
+
             # Choose groups to update.
             # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
             titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
-            
+
             # Compute initial probability of this protonation state.
             log_P_initial, pot1, kin1 = self._compute_log_probability(context)
 
@@ -791,7 +879,7 @@ class MonteCarloTitration(object):
             final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
 
             # TODO: Always accept self transitions, or avoid them altogether.
-            
+
             # Compute final probability of this protonation state.
 
             log_P_final, pot2, kin2 = self._compute_log_probability(context)
@@ -820,15 +908,15 @@ class MonteCarloTitration(object):
                     self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
                 # TODO: If using NCMC, restore coordinates.
             self.states_per_update.append(self.getTitrationStates())
-        
+
         return
 
     def getAcceptanceProbability(self):
         """
         Return the fraction of accepted moves
-        
+
         RETURNS
-        
+
         fraction (float) - the fraction of accepted moves
 
         """
@@ -861,23 +949,23 @@ class MonteCarloTitration(object):
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
-    
+
     def getNumAttemptsPerUpdate(self):
         """
         Get the number of Monte Carlo titration state change attempts per call to update().
-        
+
         RETURNS
 
         nattempts_per_iteration (int) - the number of attempts to be made per iteration
-        
+
         """
         return self.nattempts_per_update
 
     def setNumAttemptsPerUpdate(self, nattempts=None):
         """
         Set the number of Monte Carlo titration state change attempts per call to update().
-        
-        ARGUMENTS 
+
+        ARGUMENTS
           nattempts (int) - the number to attempts to make per iteration;
                             if None, this value is computed automatically based on the number of titratable groups (default None)
         """
@@ -1213,11 +1301,11 @@ class MBarCalibrationTitration(MonteCarloTitration):
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
-    
+
     #
     # Test with an example from the Amber 11 distribution.
     #
-    
+
     # Parameters.
     niterations = 5000 # number of dynamics/titration cycles to run
     nsteps = 500  # number of timesteps of dynamics per iteration
@@ -1232,9 +1320,9 @@ if __name__ == "__main__":
     # pH = 7.0
 
     # Calibration on a terminally-blocked amino acid in implicit solvent
-    prmtop_filename = 'calibration-implicit/tyr.prmtop'
-    inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
-    cpin_filename =   'calibration-implicit/tyr.cpin'
+    prmtop_filename = 'calibration-explicit-with-counterions/tyr.prmtop'
+    inpcrd_filename = 'calibration-explicit-with-counterions/tyr.inpcrd'
+    cpin_filename =   'calibration-explicit-with-counterions/tyr.cpin'
     pH = 9.6
 
     #prmtop_filename = 'calibration-explicit/his.prmtop'
@@ -1246,7 +1334,7 @@ if __name__ == "__main__":
     #inpcrd_filename = 'calibration-implicit/his.inpcrd'
     #cpin_filename =   'calibration-implicit/his.cpin'
     #pH = 6.5
-    
+
     # Load the AMBER system.
     import simtk.openmm.app as app
 
@@ -1259,7 +1347,7 @@ if __name__ == "__main__":
     print("Initializing Monte Carlo titration...")
     mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
     # Create integrator and context.
-    platform_name = 'OpenCL'
+    platform_name = 'CPU'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
@@ -1268,7 +1356,7 @@ if __name__ == "__main__":
     # Minimize energy.
     print("Minimizing energy...")
     openmm.LocalEnergyMinimizer.minimize(context, 10.0)
-    
+
     # Run dynamics.
     state = context.getState(getEnergy=True)
     potential_energy = state.getPotentialEnergy()
@@ -1295,4 +1383,3 @@ if __name__ == "__main__":
         print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
         iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole,
         mc_titration.naccepted, mc_titration.nattempted))
-
