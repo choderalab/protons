@@ -65,13 +65,16 @@ def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_wit
 
     Parameters
     ----------
-    quant (simtk.unit.Quantity) - object from which units are to be stripped
-    unit_system (simtk.unit.UnitSystem) - unit system to which the unit needs to be converted, default is the OpenMM unit system.
-    compatible_with: simtk.unit.Unit - Supply to make sure that unit is compatible with an expected unit.
+    quant : simtk.unit.Quantity
+        object from which units are to be stripped
+    unit_system : simtk.unit.UnitSystem:
+        unit system to which the unit needs to be converted, default is the OpenMM unit system (md_unit_system)
+    compatible_with : simtk.unit.Unit
+        Supply to make sure that the unit is compatible with an expected unit
 
     Returns
     -------
-    quant - object with no units attached
+    quant : object with no units attached
     """
     if units.is_quantity(quant):
         if compatible_with is not None:
@@ -110,19 +113,27 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        system (simtk.openmm.System) - system to be titrated, containing all possible protonation sites
-        temperature (simtk.unit.Quantity compatible with simtk.unit.kelvin) - temperature to be simulated
-        pH (float) - the pH to be simulated 
-        prmtop (Prmtop) - parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
-        cpin_filename (string) - AMBER 'cpin' file defining protonation charge states and energies
+        system : simtk.openmm.System
+            system to be titrated, containing all possible protonation sites
+        temperature : simtk.unit.Quantity compatible with simtk.unit.kelvin
+            temperature to be simulated
+        pH : float
+            the pH to be simulated
+        prmtop : Prmtop
+            parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
+        cpin_filename : string
+            AMBER 'cpin' file defining protonation charge states and energies
 
         Other Parameters
         ----------------
         
-        nattempts_per_update (int) - number of protonation state change attempts per update call; 
-                                   if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability (float) - probability of simultaneously proposing two updates
-        debug (boolean) - turn debug information on/off
+        nattempts_per_update : int
+            number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float
+            probability of simultaneously proposing two updates
+        debug : bool
+            turn debug information on/off
 
         Todo
         ----
@@ -231,7 +242,8 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        system (simtk.openmm.System) - the system to examine
+        system : simtk.openmm.System
+            the system to examine
 
         Returns
         -------
@@ -260,13 +272,16 @@ class MonteCarloTitration(object):
         Parameters
         ----------
         
-        system (simtk.openmm.System) - the system to examine
-        particle_indices (list of int) - only exceptions involving at least one of these particles are returned
+        system : simtk.openmm.System
+            the system to examine
+        particle_indices :list of int
+            only exceptions involving at least one of these particles are returned
         
         Returns
         -------
 
-        exception_indices (list) - list of exception indices for NonbondedForce
+        exception_indices : list
+            list of exception indices for NonbondedForce
 
         Todo
         ----
@@ -322,13 +337,16 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        filename (string) - the name of the file containing the fortran namelist
-        namelist_name (string) - name of the namelist section to parse
+        filename : string
+            the name of the file containing the fortran namelist
+        namelist_name : string
+            name of the namelist section to parse
 
         Returns
         -------
 
-        namelist (dict) - namelist[key] indexes read values, converted to Python types
+        namelist : dict
+            namelist[key] indexes read values, converted to Python types
 
         Notes
         -----
@@ -426,7 +444,8 @@ class MonteCarloTitration(object):
         Returns
         -------
 
-        ngroups (int) - the number of titratable groups that have been defined
+        ngroups : int
+            the number of titratable groups that have been defined
 
         """
 
@@ -439,7 +458,8 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        atom_indices (list of int) - the atom indices defining the titration group
+        atom_indices : list of int
+            the atom indices defining the titration group
 
         Notes
         -----
@@ -472,13 +492,17 @@ class MonteCarloTitration(object):
         """
         Return the number of titration states defined for the specified titratable group.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
-        titration_group_index (int) - the titration group to be queried
+        titration_group_index : int
+            the titration group to be queried
 
-        RETURNS
+        Returns
+        -------
 
-        nstates (int) - the number of titration states defined for the specified titration group
+        nstates : int
+            the number of titration states defined for the specified titration group
         
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
@@ -493,11 +517,16 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        titration_group_index (int) - the index of the titration group to which a new titration state is to be added
-        pKref (float) - the pKa for the reference compound used in calibration
-        relative_energy (simtk.unit.Quantity with units compatible with simtk.unit.kilojoules_per_mole) - the relative energy of this protonation state
-        charges (list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge) - the atomic charges for this titration state
-        proton_count (int) - number of protons in this titration state
+        titration_group_index : int
+            the index of the titration group to which a new titration state is to be added
+        pKref : float
+            the pKa for the reference compound used in calibration
+        relative_energy : simtk.unit.Quantity with units compatible with simtk.unit.kilojoules_per_mole
+            the relative energy of this protonation state
+        charges : list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge
+            the atomic charges for this titration state
+        proton_count : int
+            number of protons in this titration state
 
         Notes
         -----
@@ -537,12 +566,14 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        titration_group_index (int) - the titration group to be queried
+        titration_group_index int
+            the titration group to be queried
         
         Returns
         -------
 
-        state (int) - the titration state for the specified titration group
+        state int
+            the titration state for the specified titration group
 
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
@@ -557,7 +588,8 @@ class MonteCarloTitration(object):
         Returns
         -------
 
-        states (list of int) - the titration states for all titratable groups
+        states : list of int
+            the titration states for all titratable groups
 
         """
         return list(self.titrationStates) # deep copy
@@ -569,12 +601,14 @@ class MonteCarloTitration(object):
         Parameters
         ----------
 
-        titration_group_index (int) - the titration group to be queried
+        titration_group_index : int
+            the titration group to be queried
 
         Returns
         -------
 
-        charge (simtk.openmm.Quantity compatible with simtk.unit.elementary_charge) - total charge for the specified titration state
+        charge : simtk.openmm.Quantity compatible with simtk.unit.elementary_charge
+            total charge for the specified titration state
 
         """
         if titration_group_index not in range(self.getNumTitratableGroups()):
@@ -592,14 +626,18 @@ class MonteCarloTitration(object):
         Parameters
         ----------
         
-        titration_group_index (int) - the index of the titratable group whose titration state should be updated
-        titration_state_index (int) - the titration state to set as active
+        titration_group_index : int
+            the index of the titratable group whose titration state should be updated
+        titration_state_index : int
+            the titration state to set as active
         
         Other Parameters
         ----------------
 
-        context (simtk.openmm.Context) - if provided, will update protonation state in the specified Context (default: None)
-        debug (boolean) - if True, will print debug information
+        context : simtk.openmm.Context
+            if provided, will update protonation state in the specified Context (default: None)
+        debug : bool
+            if True, will print debug information
         """
 
         # Check parameters for validity.
@@ -619,13 +657,16 @@ class MonteCarloTitration(object):
 
         Parameters
         ----------
-        titration_group_index (int) - index of the group that is changing state
-        titration_state_index (int) - index of the state of the chosen residue
+        titration_group_index : int
+            index of the group that is changing state
+        titration_state_index : int
+            index of the state of the chosen residue
 
         Optional parameters
         -------------------
 
-        context (simtk.openmm.Context) - if provided, will update forces state in the specified Context (default: None)
+        context : simtk.openmm.Context
+            if provided, will update forces state in the specified Context (default: None)
 
         Notes
         -----
@@ -672,8 +713,10 @@ class MonteCarloTitration(object):
 
         Parameters
         ----------
-        titration_group_index (int) - Index of the group
-        titration_state_index (int) - Index of the titration state of the group
+        titration_group_index : int
+            Index of the group
+        titration_state_index : int
+            Index of the titration state of the group
 
         Notes
         -----
@@ -753,11 +796,14 @@ class MonteCarloTitration(object):
         """
         Perform a Monte Carlo update of the titration state.
 
-        ARGUMENTS
+        Parameters
+        ----------
 
-        context (simtk.openmm.Context) - the context to update
+        context : simtk.openmm.Context
+            the context to update
 
-        NOTE
+        Notes
+        -----
 
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
@@ -827,9 +873,11 @@ class MonteCarloTitration(object):
         """
         Return the fraction of accepted moves
         
-        RETURNS
+        Returns
+        -------
         
-        fraction (float) - the fraction of accepted moves
+        fraction : float
+            the fraction of accepted moves
 
         """
         return float(self.naccepted) / float(self.nattempted)
@@ -837,6 +885,21 @@ class MonteCarloTitration(object):
     def _compute_log_probability(self, context):
         """
         Compute log probability of current configuration and protonation state.
+
+        Parameters
+        ----------
+
+        context : simtk.openmm.Context
+            the context
+
+        Returns
+        -------
+        log_P : float
+            log probability of the current context
+        pot_energy : float
+            potential energy of the current context
+        kin_energy : float
+            kinetic energy of the current context
 
         """
         temperature = self.temperature
@@ -866,9 +929,11 @@ class MonteCarloTitration(object):
         """
         Get the number of Monte Carlo titration state change attempts per call to update().
         
-        RETURNS
+        Returns
+        -------
 
-        nattempts_per_iteration (int) - the number of attempts to be made per iteration
+        nattempts_per_iteration : int
+            the number of attempts to be made per iteration
         
         """
         return self.nattempts_per_update
@@ -877,9 +942,13 @@ class MonteCarloTitration(object):
         """
         Set the number of Monte Carlo titration state change attempts per call to update().
         
-        ARGUMENTS 
-          nattempts (int) - the number to attempts to make per iteration;
-                            if None, this value is computed automatically based on the number of titratable groups (default None)
+        Parameters
+        ----------
+
+        nattempts : int
+            the number to attempts to make per iteration;
+            if None, this value is computed automatically based on the number of titratable groups (default None)
+
         """
         self.nattempts_per_update = nattempts
         if nattempts is None:
