@@ -837,77 +837,95 @@ class MonteCarloTitration(object):
 
         self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
+    def attempt_protonation_state_change(self, context):
+        """
+        Attempt a single Monte Carlo protonation state change.
+
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context to update
+
+        Notes
+        -----
+        The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
+
+        """
+        # Choose how many titratable groups to simultaneously attempt to update.
+        # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
+        ndraw = 1
+        if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
+            ndraw = 2
+
+        # Choose groups to update.
+        # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
+        titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
+
+        # Compute initial probability of this protonation state.
+        log_P_initial, pot1, kin1 = self._compute_log_probability(context)
+
+        if self.debug:
+            state = context.getState(getEnergy=True)
+            initial_potential = state.getPotentialEnergy()
+            print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
+
+        # Perform update attempt.
+        initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
+        for titration_group_index in titration_group_indices:
+            # Choose a titration state with uniform probability (even if it is the same as the current state).
+            titration_state_index = random.choice(range(self.getNumTitrationStates(titration_group_index)))
+            self.setTitrationState(titration_group_index, titration_state_index, context)
+        final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
+
+        # TODO: Always accept self transitions, or avoid them altogether.
+
+        # Compute final probability of this protonation state.
+
+        log_P_final, pot2, kin2 = self._compute_log_probability(context)
+
+        # Compute work and store work history.
+        work = - (log_P_final - log_P_initial)
+        self.work_history.append( (initial_titration_states, final_titration_states, work) )
+
+        # Accept or reject with Metropolis criteria.
+        log_P_accept = -work
+        if self.debug: print("LOGP" + str(log_P_accept))
+        if self.debug:
+            print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+        self.nattempted += 1
+        if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
+            # Accept.
+            self.naccepted += 1
+            self.pot_energies.append(pot2)
+            self.kin_energies.append(kin2)
+        else:
+            # Reject.
+            # Restore titration states.
+            self.pot_energies.append(pot1)
+            self.kin_energies.append(kin1)
+            for titration_group_index in titration_group_indices:
+                self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
+            # TODO: If using NCMC, restore coordinates.
+        self.states_per_update.append(self.getTitrationStates())
+
     def update(self, context):
         """
-        Perform a Monte Carlo update of the titration state.
+        Perform a number of Monte Carlo update trails for the titration state.
 
-        ARGUMENTS
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context to update
 
-        context (simtk.openmm.Context) - the context to update
-
-        NOTE
-
+        Notes
+        -----
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
         """
 
         # Perform a number of protonation state update trials.
         for attempt in range(self.nattempts_per_update):
-            # Choose how many titratable groups to simultaneously attempt to update.
-            ndraw = 1
-            if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
-                ndraw = 2
-
-            # Choose groups to update.
-            # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
-            titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
-
-            # Compute initial probability of this protonation state.
-            log_P_initial, pot1, kin1 = self._compute_log_probability(context)
-
-            if self.debug:
-                state = context.getState(getEnergy=True)
-                initial_potential = state.getPotentialEnergy()
-                print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
-
-            # Perform update attempt.
-            initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
-            for titration_group_index in titration_group_indices:
-                # Choose a titration state with uniform probability (even if it is the same as the current state).
-                titration_state_index = random.choice(range(self.getNumTitrationStates(titration_group_index)))
-                self.setTitrationState(titration_group_index, titration_state_index, context)
-            final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
-
-            # TODO: Always accept self transitions, or avoid them altogether.
-
-            # Compute final probability of this protonation state.
-
-            log_P_final, pot2, kin2 = self._compute_log_probability(context)
-
-            # Compute work and store work history.
-            work = - (log_P_final - log_P_initial)
-            self.work_history.append( (initial_titration_states, final_titration_states, work) )
-
-            # Accept or reject with Metropolis criteria.
-            log_P_accept = -work
-            if self.debug: print("LOGP" + str(log_P_accept))
-            if self.debug:
-                print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-            self.nattempted += 1
-            if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
-                # Accept.
-                self.naccepted += 1
-                self.pot_energies.append(pot2)
-                self.kin_energies.append(kin2)
-            else:
-                # Reject.
-                # Restore titration states.
-                self.pot_energies.append(pot1)
-                self.kin_energies.append(kin1)
-                for titration_group_index in titration_group_indices:
-                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-                # TODO: If using NCMC, restore coordinates.
-            self.states_per_update.append(self.getTitrationStates())
+            self.attempt_protonation_state_change(context)
 
         return
 
