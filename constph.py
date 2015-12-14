@@ -1319,11 +1319,22 @@ if __name__ == "__main__":
     # cpin_filename = 'amber-example/cpin'
     # pH = 7.0
 
-    # Calibration on a terminally-blocked amino acid in implicit solvent
-    prmtop_filename = 'calibration-explicit-with-counterions/tyr.prmtop'
-    inpcrd_filename = 'calibration-explicit-with-counterions/tyr.inpcrd'
-    cpin_filename =   'calibration-explicit-with-counterions/tyr.cpin'
-    pH = 9.6
+    solvent = 'explicit'
+
+    if solvent == 'implicit':
+        # Calibration on a terminally-blocked amino acid in implicit solvent
+        prmtop_filename = 'calibration-implicit/tyr.prmtop'
+        inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
+        cpin_filename =   'calibration-implicit/tyr.cpin'
+        pH = 9.6
+    elif solvent == 'explicit':
+        # Calibration on a terminally-blocked amino acid in implicit solvent
+        prmtop_filename = 'calibration-explicit/tyr.prmtop'
+        inpcrd_filename = 'calibration-explicit/tyr.inpcrd'
+        cpin_filename =   'calibration-explicit/tyr.cpin'
+        pH = 9.6
+    else:
+        raise Exception("unknown solvent type '%s' (must be 'explicit' or 'implicit')" % solvent)
 
     #prmtop_filename = 'calibration-explicit/his.prmtop'
     #inpcrd_filename = 'calibration-explicit/his.inpcrd'
@@ -1341,7 +1352,10 @@ if __name__ == "__main__":
     print("Creating AMBER system...")
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
-    system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    if solvent == 'implicit':
+        system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    elif solvent == 'explicit':
+        system = prmtop.createSystem(implicitSolvent=None, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
@@ -1355,7 +1369,9 @@ if __name__ == "__main__":
 
     # Minimize energy.
     print("Minimizing energy...")
-    openmm.LocalEnergyMinimizer.minimize(context, 10.0)
+    print("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+    openmm.LocalEnergyMinimizer.minimize(context, 10.0, 10)
+    print("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
 
     # Run dynamics.
     state = context.getState(getEnergy=True)
