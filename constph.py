@@ -103,7 +103,7 @@ class MonteCarloTitration(object):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
         nsteps_per_trial=0, maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-'):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
@@ -112,7 +112,7 @@ class MonteCarloTitration(object):
         ----------
         system : simtk.openmm.System
             System to be titrated, containing all possible protonation sites.
-        temperature : simtk.unit.Quantity compatible kelvin
+        temperature : simtk.unit.Quantity compatible with kelvin
             Temperature to be simulated.
         pH : float
             The pH to be simulated.
@@ -120,6 +120,8 @@ class MonteCarloTitration(object):
             Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
         cpin_filename : string
             AMBER 'cpin' file defining protonation charge states and energies
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
+            For explicit solvent simulations, the pressure.
         nattempts_per_update : int, optional, default=None
             Number of protonation state change attempts per update call;
             if None, set automatically based on number of titratible groups (default: None)
@@ -149,10 +151,17 @@ class MonteCarloTitration(object):
         # Store parameters.
         self.system = system
         self.temperature = temperature
+        self.pressure = pressure
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
         self.nsteps_per_trial = nsteps_per_trial
+
+        # Check that system has MonteCarloBarostat if pressure is specified.
+        if pressure is not None:
+            forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+            if 'MonteCarloBarostat' not in forces:
+                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
 
         # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
         self.maintainChargeNeutrality = maintainChargeNeutrality
@@ -870,6 +879,7 @@ class MonteCarloTitration(object):
             print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
 
         # Perform update attempt.
+        # TODO: This must be modified for NCMC switching.
         initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
@@ -944,8 +954,14 @@ class MonteCarloTitration(object):
         """
         Compute log probability of current configuration and protonation state.
 
+        TODO
+        ----
+        * Generalize this to use ThermodynamicState concept of reduced potential (from repex)
+
         """
+
         temperature = self.temperature
+        pressure = self.temperature
         kT = kB * temperature # thermal energy
         beta = 1.0 / kT # inverse temperature
 
@@ -956,7 +972,9 @@ class MonteCarloTitration(object):
         total_energy = pot_energy + kin_energy
         log_P = - beta * total_energy
 
-        # TODO: Add pressure contribution for periodic simulations.
+        # Add pressure contribution for periodic simulations.
+        volume = context.getState().getPeriodicBoxVolume()
+        log_P += -beta * pressure * volume
 
         # Correct for reference states.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
@@ -1328,6 +1346,7 @@ if __name__ == "__main__":
     niterations = 5000 # number of dynamics/titration cycles to run
     nsteps = 500  # number of timesteps of dynamics per iteration
     temperature = 300.0 * units.kelvin
+    pressure = 1.0 * units.atmospheres
     timestep = 1.0 * units.femtoseconds
     collision_rate = 9.1 / units.picoseconds
 
@@ -1377,7 +1396,7 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True, pressure=pressure)
     # Create integrator and context.
     platform_name = 'CPU'
     platform = openmm.Platform.getPlatformByName(platform_name)
