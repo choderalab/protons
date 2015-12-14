@@ -1,0 +1,98 @@
+# Generate terminally-block titratable amino acids using LEaP.
+
+# Load ff99sb forcefield and constant pH libraries.
+source leaprc.constph
+
+# Load new ion parameters
+loadamberparams frcmod.ionsjc_tip3p
+
+# Create blocked amino acid systems.
+system = sequence { ACE AS4 NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system asp.prmtop asp.inpcrd
+savepdb system asp.pdb
+
+system = sequence { ACE GL4 NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system glu.prmtop glu.inpcrd
+savepdb system glu.pdb
+
+system = sequence { ACE HIP NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system his.prmtop his.inpcrd
+savepdb system his.pdb
+
+system = sequence { ACE LYS NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system lys.prmtop lys.inpcrd
+savepdb system lys.pdb
+
+system = sequence { ACE TYR NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system tyr.prmtop tyr.inpcrd
+savepdb system tyr.pdb
+
+system = sequence { ACE CYS NME }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system cys.prmtop cys.inpcrd
+savepdb system cys.pdb
+
+# Comment out this if you want to create the blocked nucleic acids
+quit
+
+# Create blocked nucleic acids (TIP3P or TIP4Pew?)
+system = sequence { MOC DAP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system da.prmtop da.inpcrd
+savepdb system da.pdb
+
+system = sequence { MOC DCP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system dc.prmtop dc.inpcrd
+savepdb system dc.pdb
+
+system = sequence { MOC DG CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system dg.prmtop dg.inpcrd
+savepdb system dg.pdb
+
+system = sequence { MOC DT CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system dt.prmtop dt.inpcrd
+savepdb system dt.pdb
+
+system = sequence { MOC AP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system a.prmtop da.inpcrd
+savepdb system a.pdb
+
+system = sequence { MOC CP CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system c.prmtop dc.inpcrd
+savepdb system c.pdb
+
+system = sequence { MOC G CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system g.prmtop dg.inpcrd
+savepdb system g.pdb
+
+system = sequence { MOC U CH3 }
+solvatebox system TIP3PBOX 12 0.75
+addions system Na+ 1 Cl- 1
+saveamberparm system u.prmtop u.inpcrd
+savepdb system u.pdb
+
+quit

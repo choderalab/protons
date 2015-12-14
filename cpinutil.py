@@ -1,13 +1,13 @@
 #! PYTHONEXE
 from argparse import ArgumentParser
-from chemistry.amber.readparm import AmberParm
+from parmed.amber.readparm import AmberParm
 from cpinutils import __version__
 from cpinutils import residues
 from cpinutils.exceptions import *
 from cpinutils.residues import TitratableResidueList
 from cpinutils.utilities import process_arglist
 import os
-from ParmedTools.ParmedActions import changeradii, change
+from parmed.tools import change, changeRadii
 import sys
 
 parser = ArgumentParser(epilog='''This program will read a topology file and
@@ -228,7 +228,7 @@ def main(opt):
             print >> sys.stderr, "solvent simulations require a modified"
             print >> sys.stderr, "topology file! Use the -op flag to print one."
       else:
-         changeradii(parm, 'mbondi2').execute()
+         changeRadii(parm, 'mbondi2').execute()
          change(parm, 'RADII', ':AS4,GL4@OD=,OE=', 1.3).execute()
          parm.overwrite = True
          parm.writeParm(opt.outparm)
