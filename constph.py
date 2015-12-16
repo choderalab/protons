@@ -103,8 +103,9 @@ class MonteCarloTitration(object):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
-        nsteps_per_trial=0, maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-'):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
+        nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds,
+        maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-'):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -120,6 +121,8 @@ class MonteCarloTitration(object):
             Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
         cpin_filename : string
             AMBER 'cpin' file defining protonation charge states and energies
+        integrator : simtk.openmm.integrator
+            The integrator used for dynamics
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
             For explicit solvent simulations, the pressure.
         nattempts_per_update : int, optional, default=None
@@ -131,6 +134,8 @@ class MonteCarloTitration(object):
             Turn debug information on/off.
         nsteps_per_trial : int, optional, default=0
             Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
+            Timestep to use for NCMC switching
         maintainChargeNeutrality : bool, optional, default=True
             If True, waters will be converted to monovalent counterions and vice-versa.
         cationName : str, optional, default='Na+'
@@ -156,6 +161,13 @@ class MonteCarloTitration(object):
         self.cpin_filename = cpin_filename
         self.debug = debug
         self.nsteps_per_trial = nsteps_per_trial
+
+        # Create a Verlet integrator to handle NCMC integration
+        self.compound_integrator = openmm.CompoundIntegrator()
+        self.compound_integrator.addIntegrator(integrator)
+        self.verlet_integrator = openmm.VerletIntegrator(ncmc_timestep)
+        self.compound_integrator.addIntegrator(self.verlet_integrator)
+        self.compound_integrator.setCurrentIntegrator(0) # make user integrator active
 
         # Check that system has MonteCarloBarostat if pressure is specified.
         if pressure is not None:
@@ -874,6 +886,10 @@ class MonteCarloTitration(object):
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
         """
+
+        # Activate Verlet integrator
+        self.compound_integrator.setCurrentIntegrator(1)
+
         # Choose how many titratable groups to simultaneously attempt to update.
         # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
         ndraw = 1
@@ -931,6 +947,11 @@ class MonteCarloTitration(object):
                 self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
             # TODO: If using NCMC, restore coordinates.
         self.states_per_update.append(self.getTitrationStates())
+
+        # Restore user integrator
+        self.compound_integrator.setCurrentIntegrator(0)
+
+        return
 
     def update(self, context):
         """
@@ -1101,7 +1122,7 @@ class CalibrationTitration(MonteCarloTitration):
         DOI: 10.1080/10618600.2015.1113975
 
     """
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, nattempts_per_update=None, simultaneous_proposal_probability=0.1, target_weights=None, debug=False):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, nattempts_per_update=None, simultaneous_proposal_probability=0.1, target_weights=None, debug=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -1134,7 +1155,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         """
 
-        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update, simultaneous_proposal_probability, debug)
+        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator, nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug)
 
         self.n_adaptations=0
 
@@ -1290,9 +1311,9 @@ class CalibrationTitration(MonteCarloTitration):
 
 class MBarCalibrationTitration(MonteCarloTitration):
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, nattempts_per_update=None,
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, integrator, nattempts_per_update=None,
                  simultaneous_proposal_probability=0.1, debug=False):
-        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nattempts_per_update, simultaneous_proposal_probability, debug)
+        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nintegrator, nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug)
 
         self.n_adaptations=0
         temperature = self.temperature
@@ -1410,15 +1431,16 @@ if __name__ == "__main__":
         system = prmtop.createSystem(implicitSolvent=None, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
         system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
 
-    # Initialize Monte Carlo titration.
-    print("Initializing Monte Carlo titration...")
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True, pressure=pressure)
     # Create integrator and context.
     platform_name = 'CPU'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(inpcrd.getPositions())
+
+    # Initialize Monte Carlo titration.
+    print("Initializing Monte Carlo titration...")
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure)
 
     # Minimize energy.
     print("Minimizing energy...")
