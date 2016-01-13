@@ -9,9 +9,9 @@ Constant pH dynamics benchmark.
 import sys
 import time
 import progressbar
-import simtk.unit as units
 sys.path.append('../../') # only works if run from one of the benchmark system directories
 from constph import *
+
 
 def main(niterations,nsteps,integrator,mc_titration,titration_benchmark):
     # Runs dynamics.
@@ -39,7 +39,7 @@ def main(niterations,nsteps,integrator,mc_titration,titration_benchmark):
 
 if __name__ == "__main__":
     import doctest
-
+    import simtk.unit as units
     from cProfile import run
     doctest.testmod()
     from os import getcwd
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     else:
         print("implicit system, using NoCutoff")
         system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, precache_forces=True, debug=False)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=False)
     platform_name = 'CUDA'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
@@ -79,6 +79,6 @@ if __name__ == "__main__":
 
     print("Starting benchmark.")
     run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark_cache.prof')
-    np.savetxt("states_cache.txt", mc_titration.states_per_update, delimiter=', ')
+    np.savetxt("states_cache.txt", mc_titration.states_per_update, delimiter=', ', header=', '.join([x['name'] for x in mc_titration.titrationGroups]))
     np.savetxt("benchmark_cache.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec)")
     np.savetxt("pot_energies_cache.txt", mc_titration.pot_energies.value_in_unit(units.kilocalorie_per_mole), header="Potential energy (kcal/mole)")
