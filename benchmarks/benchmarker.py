@@ -43,7 +43,7 @@ if __name__ == "__main__":
     from cProfile import run
     doctest.testmod()
     from os import getcwd
-    niterations = 5000 # number of dynamics/titration cycles to run
+    niterations = 1000 # number of dynamics/titration cycles to run
     nsteps = 500  # number of timesteps of dynamics per iteration
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     context.setPositions(pdb.getPositions())
 
     print("Starting benchmark.")
-    run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark_cache.prof')
-    np.savetxt("states_cache.txt", mc_titration.states_per_update, delimiter=', ', header=', '.join([x['name'] for x in mc_titration.titrationGroups]))
-    np.savetxt("benchmark_cache.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec)")
-    np.savetxt("pot_energies_cache.txt", mc_titration.pot_energies.value_in_unit(units.kilocalorie_per_mole), header="Potential energy (kcal/mole)")
+    run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark.prof')
+    np.savetxt("states.txt", mc_titration.states_per_update, delimiter=', ', header=', '.join([x['name'] for x in mc_titration.titrationGroups]))
+    np.savetxt("benchmark.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec)")
+    np.savetxt("pot_energies.txt", mc_titration.pot_energies.value_in_unit(units.kilocalorie_per_mole), header="Potential energy (kcal/mole)")
