@@ -1,0 +1,17 @@
+# Load constant ph parameters
+source leaprc.constph
+
+complex = loadPDB abl_ref.pdb
+
+charge complex
+
+check complex
+
+# Write parameters.
+saveAmberParm complex complex.prmtop complex.inpcrd
+
+# Write PDB files
+savepdb complex complex.pdb
+
+# Exit
+quit
