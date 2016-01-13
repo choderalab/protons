@@ -190,7 +190,11 @@ class MonteCarloTitration(object):
 
             # Make sure RESSTATE is a list.
             if type(namelist['RESSTATE'])==int:
-                namelist['RESSTATE'] = [namelist['RESSTATE']]    
+                namelist['RESSTATE'] = [namelist['RESSTATE']]
+
+            # Make sure RESNAME is a list.
+            if type(namelist['RESNAME'])==str:
+                namelist['RESNAME'] = [namelist['RESNAME']]
 
             # Extract number of titratable groups.
             self.ngroups = len(namelist['RESSTATE'])
@@ -198,6 +202,7 @@ class MonteCarloTitration(object):
             # Define titratable groups and titration states.
             for group_index in range(self.ngroups):
                 # Extract information about this titration group.
+                name = namelist['RESNAME'][group_index+1]
                 first_atom = namelist['STATEINF(%d)%%FIRST_ATOM' % group_index] - 1
                 first_charge = namelist['STATEINF(%d)%%FIRST_CHARGE' % group_index]
                 first_state = namelist['STATEINF(%d)%%FIRST_STATE' % group_index]
@@ -206,7 +211,7 @@ class MonteCarloTitration(object):
                 
                 # Define titratable group.
                 atom_indices = range(first_atom, first_atom+num_atoms)
-                self.addTitratableGroup(atom_indices)
+                self.addTitratableGroup(atom_indices, name=name)
                 
                 # Define titration states.
                 for titration_state in range(num_states):
@@ -451,7 +456,7 @@ class MonteCarloTitration(object):
 
         return len(self.titrationGroups)
 
-    def addTitratableGroup(self, atom_indices):
+    def addTitratableGroup(self, atom_indices, name=''):
         """
         Define a new titratable group.
         
@@ -460,6 +465,11 @@ class MonteCarloTitration(object):
 
         atom_indices : list of int
             the atom indices defining the titration group
+
+        Other Parameters
+        ----------------
+        name : str
+            name of the group, e.g. Residue: LYS 13.
 
         Notes
         -----
@@ -478,6 +488,7 @@ class MonteCarloTitration(object):
         group['titration_states'] = list()
         group_index = len(self.titrationGroups) + 1
         group['index'] = group_index
+        group['name'] = name
         group['nstates'] = 0
         group['exception_indices'] = self.get14exceptions(self.system, atom_indices) # NonbondedForce exceptions associated with this titration state
 
@@ -679,7 +690,6 @@ class MonteCarloTitration(object):
         -------
 
         """
-
 
         cache = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces']
 
@@ -1364,4 +1374,5 @@ if __name__ == "__main__":
         print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
         iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole,
         mc_titration.naccepted, mc_titration.nattempted))
+
 
