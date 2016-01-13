@@ -786,7 +786,7 @@ if __name__ == "__main__":
     mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, debug=True)
 
     # Create integrator and context.
-    platform_name = 'CUDA'
+    platform_name = 'OpenCL'
     platform = openmm.Platform.getPlatformByName(platform_name)
     integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
     context = openmm.Context(system, integrator, platform)
