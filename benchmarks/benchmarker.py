@@ -78,7 +78,7 @@ if __name__ == "__main__":
     context.setPositions(pdb.getPositions())
 
     print("Starting benchmark.")
-    run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark.prof')
+    run('main(niterations,nsteps,integrator,mc_titration,context,titration_benchmark)', filename='benchmark.prof')
     np.savetxt("states.txt", mc_titration.states_per_update, delimiter=', ', header=', '.join([x['name'] for x in mc_titration.titrationGroups]))
     np.savetxt("benchmark.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec), Potential energy (kcal/mole)")
 
