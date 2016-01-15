@@ -13,7 +13,7 @@ sys.path.append('../../') # only works if run from one of the benchmark system d
 from constph import *
 
 
-def main(niterations,nsteps,integrator,mc_titration,titration_benchmark):
+def main(niterations,nsteps,integrator,mc_titration,context,titration_benchmark):
     # Runs dynamics.
 
     with progressbar.ProgressBar(max_value=niterations,redirect_stdout=True) as bar:
@@ -24,7 +24,6 @@ def main(niterations,nsteps,integrator,mc_titration,titration_benchmark):
             final_time = time.time()
             elapsed_time = final_time - initial_time
             titration_benchmark[iteration][0] = elapsed_time / nsteps
-            # print("%.3f s elapsed for %d steps of dynamics (%s)" % (elapsed_time, nsteps, nsteps * timestep))
 
             # Attempt protonation state changes.
             initial_time = time.time()
@@ -33,8 +32,9 @@ def main(niterations,nsteps,integrator,mc_titration,titration_benchmark):
             elapsed_time = final_time - initial_time
             ntrials = mc_titration.getNumAttemptsPerUpdate()
             titration_benchmark[iteration][1] = elapsed_time / ntrials
+            state = context.getState(getEnergy=True)
+            titration_benchmark[iteration][2] = state.getPotentialEnergy().value_in_unit(units.kilocalorie_per_mole)
             bar.update(iteration)
-            # print("  %.3f s elapsed for %d titration trials" % (elapsed_time, ntrials))
 
 
 if __name__ == "__main__":
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     from cProfile import run
     doctest.testmod()
     from os import getcwd
-    niterations = 1000 # number of dynamics/titration cycles to run
+    niterations = 2000 # number of dynamics/titration cycles to run
     nsteps = 500  # number of timesteps of dynamics per iteration
     temperature = 300.0 * units.kelvin
     timestep = 1.0 * units.femtoseconds
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     inpcrd_filename = 'complex.inpcrd'
     cpin_filename = 'complex.cpin'
     pH = 7.0
-    titration_benchmark = np.empty([niterations, 2])
+    titration_benchmark = np.empty([niterations, 3])
 
     # Load the AMBER system.
     import simtk.openmm.app as app
@@ -80,5 +80,5 @@ if __name__ == "__main__":
     print("Starting benchmark.")
     run('main(niterations,nsteps,integrator,mc_titration,titration_benchmark)', filename='benchmark.prof')
     np.savetxt("states.txt", mc_titration.states_per_update, delimiter=', ', header=', '.join([x['name'] for x in mc_titration.titrationGroups]))
-    np.savetxt("benchmark.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec)")
-    np.savetxt("pot_energies.txt", mc_titration.pot_energies.value_in_unit(units.kilocalorie_per_mole), header="Potential energy (kcal/mole)")
+    np.savetxt("benchmark.txt", titration_benchmark, delimiter=", ", header="Time per timestep (sec), Time per titration attempt (sec), Potential energy (kcal/mole)")
+

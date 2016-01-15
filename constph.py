@@ -80,7 +80,6 @@ def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_wit
         if compatible_with is not None:
             quant = quant.in_units_of(compatible_with)
         return quant.value_in_unit_system(unit_system)
-
     else:
         return quant
 
@@ -849,7 +848,6 @@ class MonteCarloTitration(object):
             # TODO: Always accept self transitions, or avoid them altogether.
             
             # Compute final probability of this protonation state.
-
             log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
             # Compute work and store work history.
@@ -865,18 +863,13 @@ class MonteCarloTitration(object):
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
                 self.naccepted += 1
-                self.pot_energies.append(pot2)
-                self.kin_energies.append(kin2)
             else:
                 # Reject.
                 # Restore titration states.
-                self.pot_energies.append(pot1)
-                self.kin_energies.append(kin1)
                 for titration_group_index in titration_group_indices:
                     self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
                 # TODO: If using NCMC, restore coordinates.
-            self.states_per_update.append(self.getTitrationStates())
-        
+        self.states_per_update.append(self.getTitrationStates())
         return
 
     def getAcceptanceProbability(self):
