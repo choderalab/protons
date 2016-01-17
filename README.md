@@ -9,6 +9,7 @@ Testbed for constant-pH methodologies using OpenMM.
 constph.py            - Python module implementing constant-pH methodologies in Python
 cnstphgbforces.py     - CustomGBForces that exclude contributions from discharged protons
 cpinutil.py           - tool for identifying titratable groups in AMBER prmtop files
+explicit-solvent-example.py - explicit solvent NCMC example
 amber-example/        - example system set up with AmberTools constant-pH tools
 cpinutils/            - utilities for identifying titratable groups in AMBER prmtop files
 calibration-implicit/ - terminally-blocked amino acids parameterized for implicit solvent relative free energy calculations
@@ -22,4 +23,3 @@ references/           - some relevant literature references
 * Patrick Grinaway <grinawap@mskcc.org>
 * Jason Swails <jason.swails@gmail.com>
 * Jason Wagoner <jawagoner@gmail.com>
-

@@ -54,6 +54,7 @@ import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
 import pymbar
+from openmmtools.integrators import VelocityVerletIntegrator
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
@@ -165,9 +166,12 @@ class MonteCarloTitration(object):
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
-        self.verlet_integrator = openmm.VerletIntegrator(ncmc_timestep)
+        self.verlet_integrator = VelocityVerletIntegrator(ncmc_timestep)
         self.compound_integrator.addIntegrator(self.verlet_integrator)
         self.compound_integrator.setCurrentIntegrator(0) # make user integrator active
+
+        # Set constraint tolerance.
+        self.verlet_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
         # Check that system has MonteCarloBarostat if pressure is specified.
         if pressure is not None:
@@ -887,18 +891,12 @@ class MonteCarloTitration(object):
 
         """
 
-        # Activate Verlet integrator
+        # Activate velocity Verlet integrator
         self.compound_integrator.setCurrentIntegrator(1)
 
-        # Choose how many titratable groups to simultaneously attempt to update.
-        # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
-        ndraw = 1
-        if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
-            ndraw = 2
-
-        # Choose groups to update.
-        # TODO: Use Gibbs or Metropolized Gibbs sampling?  Or always accept proposals to same state?
-        titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
+        # If using NCMC, store initial positions.
+        if self.nsteps_per_trial > 0:
+            initial_positions = context.getState(getPositions=True).getPositions(asNumpy=True)
 
         # Compute initial probability of this protonation state.
         log_P_initial, pot1, kin1 = self._compute_log_probability(context)
@@ -908,19 +906,50 @@ class MonteCarloTitration(object):
             initial_potential = state.getPotentialEnergy()
             print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
 
-        # Perform update attempt.
-        # TODO: This must be modified for NCMC switching.
+        # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates) # deep copy
+
+        # Select new titration states.
+        final_titration_states   = copy.deepcopy(self.titrationStates) # deep copy
+        # Choose how many titratable groups to simultaneously attempt to update.
+        # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
+        ndraw = 1
+        if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
+            ndraw = 2
+        # Select which titratible residues to update.
+        titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
+        # Select new titration states.
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
             titration_state_index = random.choice(range(self.getNumTitrationStates(titration_group_index)))
-            self.setTitrationState(titration_group_index, titration_state_index, context)
-        final_titration_states = copy.deepcopy(self.titrationStates) # deep copy
-
+            final_titration_states[titration_group_index] = titration_state_index
         # TODO: Always accept self transitions, or avoid them altogether.
 
-        # Compute final probability of this protonation state.
+        if self.maintainChargeNeutrality:
+            # TODO: Designate waters/ions to switch to maintain charge neutrality
+            raise Exception('maintainChargeNeutrality feature not yet supported')
 
+        # Compute work for switching to new protonation states.
+        if self.nsteps_per_trial == 0:
+            # Use instantaneous switching.
+            for titration_group_index in titration_group_indices:
+                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+        else:
+            # Run NCMC integration.
+            for step in range(self.nsteps_per_trial):
+                # Take a Verlet integrator step.
+                self.verlet_integrator.step(1)
+                # Update the titration state.
+                titration_lambda = float(step+1) / float(self.nsteps_per_trial)
+                # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
+                # since parameter update would occur in the middle of a velocity Verlet step.
+                # TODO: This could be optimized by only calling context.updateParametersInContext once rather than after every titration state update.
+                for titration_group_index in titration_group_indices:
+                    self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[titration_group_index], fractional_titration_state=titration_lambda, context=context)
+                    # TODO: Optimize where integrator.step() is called
+                    self.verlet_integrator.step(1)
+
+        # Compute final probability of this protonation state.
         log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
         # Compute work and store work history.
@@ -938,14 +967,23 @@ class MonteCarloTitration(object):
             self.naccepted += 1
             self.pot_energies.append(pot2)
             self.kin_energies.append(kin2)
+            # Update titration states.
+            for titration_group_index in titration_group_indices:
+                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+            # If using NCMC, flip velocities to satisfy super-detailed balance.
+            if self.nsteps_per_trial > 0:
+                context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
         else:
             # Reject.
-            # Restore titration states.
             self.pot_energies.append(pot1)
             self.kin_energies.append(kin1)
+            # Restore titration states.
             for titration_group_index in titration_group_indices:
                 self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-            # TODO: If using NCMC, restore coordinates.
+            # If using NCMC, restore coordinates and flip velocities.
+            if self.nsteps_per_trial > 0:
+                context.setPositions(initial_positions)
+
         self.states_per_update.append(self.getTitrationStates())
 
         # Restore user integrator
@@ -1360,117 +1398,3 @@ class MBarCalibrationTitration(MonteCarloTitration):
             self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / beta
 
         if debuglogger: return dlogger
-
-
-
-
-
-
-# ==============
-# MAIN AND TESTS
-# ==============
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
-
-    #
-    # Test with an example from the Amber 11 distribution.
-    #
-
-    # Parameters.
-    niterations = 5000 # number of dynamics/titration cycles to run
-    nsteps = 500  # number of timesteps of dynamics per iteration
-    temperature = 300.0 * units.kelvin
-    pressure = 1.0 * units.atmospheres
-    timestep = 1.0 * units.femtoseconds
-    collision_rate = 9.1 / units.picoseconds
-
-    # Filenames.
-    # prmtop_filename = 'amber-example/prmtop'
-    # inpcrd_filename = 'amber-example/min.x'
-    # cpin_filename = 'amber-example/cpin'
-    # pH = 7.0
-
-    solvent = 'explicit'
-
-    if solvent == 'implicit':
-        # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'calibration-implicit/tyr.prmtop'
-        inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
-        cpin_filename =   'calibration-implicit/tyr.cpin'
-        pH = 9.6
-    elif solvent == 'explicit':
-        # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'calibration-explicit/tyr.prmtop'
-        inpcrd_filename = 'calibration-explicit/tyr.inpcrd'
-        cpin_filename =   'calibration-explicit/tyr.cpin'
-        pH = 9.6
-    else:
-        raise Exception("unknown solvent type '%s' (must be 'explicit' or 'implicit')" % solvent)
-
-    #prmtop_filename = 'calibration-explicit/his.prmtop'
-    #inpcrd_filename = 'calibration-explicit/his.inpcrd'
-    #cpin_filename =   'calibration-explicit/his.cpin'
-    #pH = 6.5
-
-    #prmtop_filename = 'calibration-implicit/his.prmtop'
-    #inpcrd_filename = 'calibration-implicit/his.inpcrd'
-    #cpin_filename =   'calibration-implicit/his.cpin'
-    #pH = 6.5
-
-    # Load the AMBER system.
-    import simtk.openmm.app as app
-
-    print("Creating AMBER system...")
-    inpcrd = app.AmberInpcrdFile(inpcrd_filename)
-    prmtop = app.AmberPrmtopFile(prmtop_filename)
-    if solvent == 'implicit':
-        system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-    elif solvent == 'explicit':
-        system = prmtop.createSystem(implicitSolvent=None, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
-        system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
-
-    # Create integrator and context.
-    platform_name = 'CPU'
-    platform = openmm.Platform.getPlatformByName(platform_name)
-    integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
-    context = openmm.Context(system, integrator, platform)
-    context.setPositions(inpcrd.getPositions())
-
-    # Initialize Monte Carlo titration.
-    print("Initializing Monte Carlo titration...")
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure)
-
-    # Minimize energy.
-    print("Minimizing energy...")
-    print("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
-    openmm.LocalEnergyMinimizer.minimize(context, 10.0, 10)
-    print("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
-
-    # Run dynamics.
-    state = context.getState(getEnergy=True)
-    potential_energy = state.getPotentialEnergy()
-    print("Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole))
-    for iteration in range(niterations):
-        # Run some dynamics.
-        initial_time = time.time()
-        integrator.step(nsteps)
-        state = context.getState(getEnergy=True)
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        print("  %.3f s elapsed for %d steps of dynamics" % (elapsed_time, nsteps))
-
-        # Attempt protonation state changes.
-        initial_time = time.time()
-        mc_titration.update(context)
-        state = context.getState(getEnergy=True)
-        final_time = time.time()
-        elapsed_time = final_time - initial_time
-        print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration.getNumAttemptsPerUpdate()))
-        # Show titration states.
-        state = context.getState(getEnergy=True)
-        potential_energy = state.getPotentialEnergy()
-        print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
-        iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / units.kilocalories_per_mole,
-        mc_titration.naccepted, mc_titration.nattempted))
