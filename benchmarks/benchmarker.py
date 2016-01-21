@@ -9,9 +9,8 @@ Constant pH dynamics benchmark.
 import sys
 import time
 import progressbar
-sys.path.append('../../') # only works if run from one of the benchmark system directories
+sys.path.append('../../../../../') # only works if run from one of the benchmarks/system-solvent/results/timestamp/settings_or_something_stupid
 from constph import *
-
 
 def main(niterations,nsteps,integrator,mc_titration,context,titration_benchmark):
     # Runs dynamics.

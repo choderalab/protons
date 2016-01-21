@@ -16,7 +16,7 @@ do
   for nattempts_p_update in 1 10
   do
     mkdir ${niterations}_${nsteps}_${nsteps_p_trial}_${nattempts_p_update} && cd $_
-    python ../benchmarker.py ${niterations} ${nsteps} ${nsteps_p_trial} ${nattempts_p_update}
+    python ../../../../benchmarker.py ${niterations} ${nsteps} ${nsteps_p_trial} ${nattempts_p_update}
     cd ..
   done
 done
