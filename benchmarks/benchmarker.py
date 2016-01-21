@@ -53,10 +53,10 @@ if __name__ == "__main__":
     solvent = getcwd().split(sep='-')[-1]
 
     # Filenames.
-    prmtop_filename = 'complex.prmtop'
-    pdb_file= 'min.pdb'
-    inpcrd_filename = 'complex.inpcrd'
-    cpin_filename = 'complex.cpin'
+    prmtop_filename = '../../../complex.prmtop'
+    pdb_file= '../../../min.pdb'
+    inpcrd_filename = '../../../complex.inpcrd'
+    cpin_filename = '../../../complex.cpin'
 
      # Integrator settings
     temperature = 300.0 * units.kelvin
