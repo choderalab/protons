@@ -50,7 +50,10 @@ if __name__ == "__main__":
     logging.info("Running benchmark in {}".format(getcwd()))
 
     # retrieve solvent from directory name
-    solvent = getcwd().split(sep='-')[-1]
+    if 'explicit' in getcwd():
+        solvent='explicit'
+    else:
+        solvent='implicit'
 
     # Filenames.
     prmtop_filename = '../../../complex.prmtop'
