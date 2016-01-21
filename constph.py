@@ -1026,7 +1026,6 @@ class MonteCarloTitration(object):
             if self.nsteps_per_trial > 0:
                 context.setPositions(initial_positions)
 
-        self.states_per_update.append(self.getTitrationStates())
 
         # Restore user integrator
         self.compound_integrator.setCurrentIntegrator(0)
@@ -1051,6 +1050,8 @@ class MonteCarloTitration(object):
         # Perform a number of protonation state update trials.
         for attempt in range(self.nattempts_per_update):
             self.attempt_protonation_state_change(context)
+
+        self.states_per_update.append(self.getTitrationStates())
 
         return
 
