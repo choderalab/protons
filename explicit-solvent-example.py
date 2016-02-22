@@ -64,6 +64,7 @@ if __name__ == "__main__":
     pressure = 1.0 * unit.atmospheres
     timestep = 1.0 * unit.femtoseconds
     collision_rate = 9.1 / unit.picoseconds
+    platform_name = 'CPU'
 
     # Filenames.
     # prmtop_filename = 'amber-example/prmtop'
@@ -71,7 +72,7 @@ if __name__ == "__main__":
     # cpin_filename = 'amber-example/cpin'
     # pH = 7.0
 
-    solvent = 'explicit'
+    solvent = 'implicit'
 
     if solvent == 'implicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
@@ -104,11 +105,27 @@ if __name__ == "__main__":
     print("Creating AMBER system...")
     inpcrd = app.AmberInpcrdFile(inpcrd_filename)
     prmtop = app.AmberPrmtopFile(prmtop_filename)
+    positions = inpcrd.getPositions()
     if solvent == 'implicit':
         system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+        pressure = None
+        running_implicit=True
     elif solvent == 'explicit':
         system = prmtop.createSystem(implicitSolvent=None, nonbondedMethod=app.CutoffPeriodic, constraints=app.HBonds)
         system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
+        running_implicit=False
+
+    # Minimize energy.
+    integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    context = openmm.Context(system, integrator, platform)
+    context.setPositions(positions)
+    print("Minimizing energy...")
+    print("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+    openmm.LocalEnergyMinimizer.minimize(context, 1.0, 1000)
+    print("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+    positions = context.getState(getPositions=True).getPositions(asNumpy=True)
+    del context, integrator
 
     # Create integrator.
     from openmmtools.integrators import VVVRIntegrator, GHMCIntegrator
@@ -122,18 +139,17 @@ if __name__ == "__main__":
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
     from constph import MonteCarloTitration
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, nsteps_per_trial=10)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, nsteps_per_trial=10, implicit=running_implicit)
 
     # Create Context (using compound integrator from MonteCarloTitration).
-    platform_name = 'CPU'
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
-    context.setPositions(inpcrd.getPositions())
+    context.setPositions(positions)
 
     # Minimize energy.
     print("Minimizing energy...")
     print("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
-    openmm.LocalEnergyMinimizer.minimize(context, 10.0, 10)
+    openmm.LocalEnergyMinimizer.minimize(context, 1.0, 1000)
     print("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
 
     # Run dynamics.

@@ -106,7 +106,7 @@ class MonteCarloTitration(object):
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
         nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds,
-        maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-'):
+        maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -143,6 +143,8 @@ class MonteCarloTitration(object):
             Name of cation residue from which parameters are to be taken.
         anionName : str, optional, default='Cl-'
             Name of anion residue from which parameters are to be taken.
+        implicit: bool, optional, default=False
+            Flag for implicit simulation. Skips ion parameter lookup.
 
         Todo
         ----
@@ -181,11 +183,17 @@ class MonteCarloTitration(object):
 
         # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
         self.maintainChargeNeutrality = maintainChargeNeutrality
-        self.water_residues = self.identifyWaterResidues(prmtop.topology) # water molecules that can be converted to ions
-        self.anion_parameters = self.retrieveIonParameters(prmtop.topology, system, anionName) # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
-        self.cation_parameters = self.retrieveIonParameters(prmtop.topology, system, cationName) # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
-        self.anion_residues = list() # water molecules that have been converted to anions
-        self.cation_residues = list() # water molecules that have been converted to cations
+        if not implicit:
+            self.water_residues = self.identifyWaterResidues(prmtop.topology) # water molecules that can be converted to ions
+            self.anion_parameters = self.retrieveIonParameters(prmtop.topology, system, anionName) # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
+            self.cation_parameters = self.retrieveIonParameters(prmtop.topology, system, cationName) # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
+            self.anion_residues = list() # water molecules that have been converted to anions
+            self.cation_residues = list() # water molecules that have been converted to cations
+
+        if implicit and maintainChargeNeutrality:
+            raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
+
+
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -195,8 +203,8 @@ class MonteCarloTitration(object):
         self.precached_forces = False
 
         # Track simulation state
-        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)  # Could be slow
-        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)  # Could be slow
+        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)
+        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
         self.states_per_update = list()
 
         # Determine 14 Coulomb and Lennard-Jones scaling from system.
@@ -1045,10 +1053,11 @@ class MonteCarloTitration(object):
         total_energy = pot_energy + kin_energy
         log_P = - beta * total_energy
 
-        # Add pressure contribution for periodic simulations.
-        volume = context.getState().getPeriodicBoxVolume()
-        print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-        log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
+        if pressure is not None:
+            # Add pressure contribution for periodic simulations.
+            volume = context.getState().getPeriodicBoxVolume()
+            print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+            log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Include reference energy and pH-dependent contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
