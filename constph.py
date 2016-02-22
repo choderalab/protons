@@ -1053,10 +1053,11 @@ class MonteCarloTitration(object):
         total_energy = pot_energy + kin_energy
         log_P = - beta * total_energy
 
-        # Add pressure contribution for periodic simulations.
-        volume = context.getState().getPeriodicBoxVolume()
-        print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-        log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
+        if pressure is not None:
+            # Add pressure contribution for periodic simulations.
+            volume = context.getState().getPeriodicBoxVolume()
+            print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+            log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Include reference energy and pH-dependent contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
