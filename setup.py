@@ -72,6 +72,7 @@ setup(name='constph',
       package_data={'constph' : find_package_data('examples', 'constph')},
       zip_safe=False,
       ext_modules=extensions,
+      test_suite='nose2.collector.collector',
       install_requires=[
         'openmm',
         'numpy',
