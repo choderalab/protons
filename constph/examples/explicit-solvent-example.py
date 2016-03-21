@@ -61,27 +61,27 @@ if __name__ == "__main__":
 
     if solvent == 'implicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'constph/calibration-implicit/tyr.prmtop'
-        inpcrd_filename = 'constph/calibration-implicit/tyr.inpcrd'
-        cpin_filename =   'constph/calibration-implicit/tyr.cpin'
+        prmtop_filename = 'calibration-implicit/tyr.prmtop'
+        inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
+        cpin_filename =   'calibration-implicit/tyr.cpin'
         pH = 9.6
     elif solvent == 'explicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'constph/calibration-explicit/tyr.prmtop'
-        inpcrd_filename = 'constph/calibration-explicit/tyr.inpcrd'
-        cpin_filename =   'constph/calibration-explicit/tyr.cpin'
+        prmtop_filename = 'calibration-explicit/tyr.prmtop'
+        inpcrd_filename = 'calibration-explicit/tyr.inpcrd'
+        cpin_filename =   'calibration-explicit/tyr.cpin'
         pH = 9.6
     else:
         raise Exception("unknown solvent type '%s' (must be 'explicit' or 'implicit')" % solvent)
 
-    #prmtop_filename = 'constph/calibration-explicit/his.prmtop'
-    #inpcrd_filename = 'constph/calibration-explicit/his.inpcrd'
-    #cpin_filename =   'constph/calibration-explicit/his.cpin'
+    #prmtop_filename = 'calibration-explicit/his.prmtop'
+    #inpcrd_filename = 'calibration-explicit/his.inpcrd'
+    #cpin_filename =   'calibration-explicit/his.cpin'
     #pH = 6.5
 
-    #prmtop_filename = 'constph/calibration-implicit/his.prmtop'
-    #inpcrd_filename = 'constph/calibration-implicit/his.inpcrd'
-    #cpin_filename =   'constph/calibration-implicit/his.cpin'
+    #prmtop_filename = 'calibration-implicit/his.prmtop'
+    #inpcrd_filename = 'calibration-implicit/his.inpcrd'
+    #cpin_filename =   'calibration-implicit/his.cpin'
     #pH = 6.5
 
     # Load the AMBER system.
