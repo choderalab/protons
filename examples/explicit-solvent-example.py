@@ -24,18 +24,6 @@ http://link.aip.org/link/doi/10.1063/1.2731781
 [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
 http://dx.doi.org/10.1073/pnas.1106094108
 
-EXAMPLES
-
-TODO
-
-* Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
-* Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-  - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-* Allow specification of probabilities for selecting N residues to change protonation state at once.
-* Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
-* Add automatic tuning of switching times for optimal acceptance.
-* Extend to handle systems set up via OpenMM app Forcefield class.
-
 COPYRIGHT AND LICENSE
 
 @author John D. Chodera <jchodera@gmail.com>
@@ -45,9 +33,6 @@ from __future__ import print_function
 from simtk import unit, openmm
 import time
 
-# ==============
-# MAIN AND TESTS
-# ==============
 
 if __name__ == "__main__":
     import doctest
@@ -76,27 +61,27 @@ if __name__ == "__main__":
 
     if solvent == 'implicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'calibration-implicit/tyr.prmtop'
-        inpcrd_filename = 'calibration-implicit/tyr.inpcrd'
-        cpin_filename =   'calibration-implicit/tyr.cpin'
+        prmtop_filename = 'constph/calibration-implicit/tyr.prmtop'
+        inpcrd_filename = 'constph/calibration-implicit/tyr.inpcrd'
+        cpin_filename =   'constph/calibration-implicit/tyr.cpin'
         pH = 9.6
     elif solvent == 'explicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
-        prmtop_filename = 'calibration-explicit/tyr.prmtop'
-        inpcrd_filename = 'calibration-explicit/tyr.inpcrd'
-        cpin_filename =   'calibration-explicit/tyr.cpin'
+        prmtop_filename = 'constph/calibration-explicit/tyr.prmtop'
+        inpcrd_filename = 'constph/calibration-explicit/tyr.inpcrd'
+        cpin_filename =   'constph/calibration-explicit/tyr.cpin'
         pH = 9.6
     else:
         raise Exception("unknown solvent type '%s' (must be 'explicit' or 'implicit')" % solvent)
 
-    #prmtop_filename = 'calibration-explicit/his.prmtop'
-    #inpcrd_filename = 'calibration-explicit/his.inpcrd'
-    #cpin_filename =   'calibration-explicit/his.cpin'
+    #prmtop_filename = 'constph/calibration-explicit/his.prmtop'
+    #inpcrd_filename = 'constph/calibration-explicit/his.inpcrd'
+    #cpin_filename =   'constph/calibration-explicit/his.cpin'
     #pH = 6.5
 
-    #prmtop_filename = 'calibration-implicit/his.prmtop'
-    #inpcrd_filename = 'calibration-implicit/his.inpcrd'
-    #cpin_filename =   'calibration-implicit/his.cpin'
+    #prmtop_filename = 'constph/calibration-implicit/his.prmtop'
+    #inpcrd_filename = 'constph/calibration-implicit/his.inpcrd'
+    #cpin_filename =   'constph/calibration-implicit/his.cpin'
     #pH = 6.5
 
     # Load the AMBER system.
@@ -138,7 +123,7 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    from constph import MonteCarloTitration
+    from constph.constph import MonteCarloTitration
     mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, nsteps_per_trial=10, implicit=running_implicit)
 
     # Create Context (using compound integrator from MonteCarloTitration).
