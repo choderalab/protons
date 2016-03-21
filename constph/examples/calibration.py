@@ -1,4 +1,4 @@
-from constph import *
+from constph.constph import *
 import simtk.openmm.app as app
 import pandas as pd
 
