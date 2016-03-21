@@ -1,0 +1,39 @@
+package:
+  name: openmm-constph
+  version: !!str 0.0.0
+
+source:
+  path: ../../
+
+build:
+  preserve_egg_dir: True
+  number: 0
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - openmm-dev
+    - numpy
+    - scipy
+    - openmoltools-dev
+    - openmmtools-dev
+    - pymbar
+
+  run:
+    - python
+    - openmm-dev
+    - numpy
+    - scipy
+    - openmoltools-dev
+    - openmmtools-dev
+    - pymbar
+
+test:
+  requires:
+    - nose
+  imports:
+    - constph
+
+about:
+  home: https://github.com/choderalab/openmm-constph
