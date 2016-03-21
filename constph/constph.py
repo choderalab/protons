@@ -3,12 +3,12 @@
 
 
 """
-Constant pH dynamics test.
+Constant pH dynamics in OpenMM.
 
 Description
 -----------
 
-This module tests the constant pH functionality in OpenMM.
+This module implements a pure python constant pH functionality in OpenMM.
 
 Notes
 -----
