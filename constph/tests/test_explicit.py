@@ -4,6 +4,7 @@ from simtk.openmm import app
 from constph.constph import *
 from .helper_func import *
 from unittest import TestCase, skip
+from . import get_data
 
 
 class TestExplicit(TestCase):
@@ -15,7 +16,7 @@ class TestExplicit(TestCase):
         self.collision_rate = 9.1 / unit.picoseconds
         self.pH = 9.6
         self.platform_name = 'CPU'
-        testsystems = 'constph/tests/testsystems/tyr_explicit'
+        testsystems = get_data('tyr_explicit', 'testsystems')
         self.positions = openmm.XmlSerializer.deserialize(open('{}/tyr.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
         self.system = openmm.XmlSerializer.deserialize(open('{}/tyr.sys.xml'.format(testsystems)).read())
         self.prmtop = app.AmberPrmtopFile('{}/tyr.prmtop'.format(testsystems))
