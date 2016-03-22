@@ -23,7 +23,7 @@ class TestExplicit(TestCase):
         
     def test_tyrosine_instantaneous(self):
         """
-        Perform a single timestep and single instantenous titration attempt.
+        Test tyrosine in explicit solvent with an instanteneous state switch.
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
@@ -36,7 +36,7 @@ class TestExplicit(TestCase):
 
     def test_tyrosine_ncmc(self):
         """
-        Perform a single timestep and single instantenous titration attempt.
+        Test tyrosine in explicit solvent with an ncmc state switch.
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
