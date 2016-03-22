@@ -29,12 +29,12 @@ script:
   # Install test dependencies in test environment.
   - conda install --yes --quiet pip
   - pip install --upgrade pip
-  - pip install nose
+  - pip install nose nose-timer
   # Fix openmm double dependencies
   - conda remove --yes openmm openmm-dev && conda install --yes openmm-dev
   # Run tests
   #- cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=3 --with-doctest --with-timer && cd ..
-  - nosetests ${PACKAGENAME} -v
+  - nosetests ${PACKAGENAME} -v --with-timer
   
 env:
   matrix:
