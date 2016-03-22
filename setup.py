@@ -73,12 +73,4 @@ setup(name='constph',
       zip_safe=False,
       ext_modules=extensions,
       test_suite='nose.collector',
-      install_requires=[
-        'openmm-dev',
-        'numpy',
-        'scipy',
-        'openmmtools-dev',
-        'pymbar',
-        'openmoltools-dev',
-        ],
       )
