@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+
+"""
+Must have the vollowing environment variables defined:
+* BUCKET_NAME : AWS bucket name
+* PREFIX : 'latest' or other version number
+
+"""
+
 import os
 import pip
 import tempfile
@@ -37,4 +46,3 @@ secret_key = {AWS_SECRET_ACCESS_KEY}
             config=f.name,
             bucket=BUCKET_NAME)
     return_val = subprocess.call(cmd.split())
-

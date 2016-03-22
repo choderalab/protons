@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # cpin_filename = 'amber-example/cpin'
     # pH = 7.0
 
-    solvent = 'implicit'
+    solvent = 'explicit'
 
     if solvent == 'implicit':
         # Calibration on a terminally-blocked amino acid in implicit solvent
