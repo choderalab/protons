@@ -4,37 +4,18 @@ addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
-    packages:
-      #- g++
-      #- gfortran
-      #- valgrind
-      #- csh
-      #- g++-multilib
-      #- gcc-multilib
-branches:
-  only:
-    - master
 
 install:
-  - source devtools/travis-ci/install.sh
+  - bash -x devtools/travis-ci/install.sh
   - export PYTHONUNBUFFERED=true
-#  - export CC=gcc
-#  - export CXX=g++
-
+  - export PATH=$HOME/miniconda/bin:$PATH
 
 script:
-  - conda config --add channels ${ORGNAME}
+  - conda config --add channels $ORGNAME
   - conda build devtools/conda-recipe
   - source activate _test
-  # Install test dependencies in test environment.
-  - conda install --yes --quiet pip
-  - pip install --upgrade pip
-  - pip install nose nose-timer
-  # Fix openmm double dependencies
-  - conda remove --yes openmm openmm-dev && conda install --yes openmm-dev
-  # Run tests
-  #- cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=3 --with-doctest --with-timer && cd ..
-  - nosetests ${PACKAGENAME} -v --with-timer
+  - conda install --yes --quiet nose nose-timer
+  - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
   
 env:
   matrix:
