@@ -1,8 +1,7 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import *
-from .helper_func import *
+from constph.constph import MonteCarloTitration
 from unittest import TestCase, skip
 from . import get_data
 
