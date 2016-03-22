@@ -17,6 +17,8 @@ requirements:
     - scipy
     - openmmtools-dev
     - pymbar
+    - openmoltools-dev
+    - ambermini
 
   run:
     - python
@@ -25,6 +27,8 @@ requirements:
     - scipy
     - openmmtools-dev
     - pymbar
+    - openmoltools-dev
+    - ambermini
 
 test:
   requires:
