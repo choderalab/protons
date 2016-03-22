@@ -1,6 +1,8 @@
 openmm-constph
 ==============
 
+[![Build Status](https://travis-ci.org/choderalab/openmm-constph.svg?branch=master)](https://travis-ci.org/choderalab/openmm-constph)
+
 Testbed for constant-pH methodologies using OpenMM.
 
 ## Manifest ##

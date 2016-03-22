@@ -14,6 +14,7 @@ import numpy as np
 from os.path import join as pjoin
 from os.path import relpath
 from setuptools import setup, Extension, find_packages
+
 try:
     sys.dont_write_bytecode = True
     sys.path.insert(0, '.')
@@ -68,17 +69,9 @@ setup(name='constph',
       url='https://github.com/choderalab/openmm-constph',
       platforms=['Linux', 'Mac OS-X', 'Unix'],
       classifiers=CLASSIFIERS.splitlines(),
-      packages=['constph'],
-      package_data={'constph' : find_package_data('examples', 'constph')},
+      packages=['constph', 'constph.tests'],
+      package_data={'constph' : find_package_data('constph/examples', 'constph') + find_package_data('constph/tests/testsystems', 'constph')}, 
       zip_safe=False,
       ext_modules=extensions,
       test_suite='nose.collector',
-      install_requires=[
-        'openmm-dev',
-        'numpy',
-        'scipy',
-        'openmmtools-dev',
-        'pymbar',
-        'openmoltools-dev',
-        ],
       )

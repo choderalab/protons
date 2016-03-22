@@ -12,11 +12,9 @@ build:
 requirements:
   build:
     - python
-    - setuptools
     - openmm-dev
     - numpy
     - scipy
-    - openmoltools-dev
     - openmmtools-dev
     - pymbar
 
@@ -25,7 +23,6 @@ requirements:
     - openmm-dev
     - numpy
     - scipy
-    - openmoltools-dev
     - openmmtools-dev
     - pymbar
 

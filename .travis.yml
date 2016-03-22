@@ -15,7 +15,7 @@ script:
   - conda build devtools/conda-recipe
   - source activate _test
   - conda install --yes --quiet nose nose-timer
-  - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
+  - cd devtools && nosetests ${NOSETESTS} --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
   
 env:
   matrix:
@@ -26,7 +26,7 @@ env:
     - python=3.5 CONDA_PY=35 NOSETESTS="constph.tests.test_implicit"
     - python=3.5 CONDA_PY=35 NOSETESTS="constph.tests.test_explicit"
  
-   global:
+  global:
     - ORGNAME="omnia"
     - PACKAGENAME="constph"
         

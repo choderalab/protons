@@ -1,9 +1,10 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import *
-from .helper_func import *
+from constph.constph import MonteCarloTitration
 from unittest import TestCase, skip
+from . import get_data
+
 
 class TestImplicit(TestCase):
     
@@ -15,7 +16,7 @@ class TestImplicit(TestCase):
         self.collision_rate = 9.1 / unit.picoseconds
         self.pH = 9.6
         self.platform_name = 'CPU'
-        testsystems = 'constph/tests/testsystems/tyr_implicit'
+        testsystems = get_data('tyr_implicit', 'testsystems')
         self.positions = openmm.XmlSerializer.deserialize(open('{}/tyr.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
         self.system = openmm.XmlSerializer.deserialize(open('{}/tyr.sys.xml'.format(testsystems)).read())
         self.prmtop = app.AmberPrmtopFile('{}/tyr.prmtop'.format(testsystems))
@@ -47,5 +48,3 @@ class TestImplicit(TestCase):
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
-
-        
