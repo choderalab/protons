@@ -327,7 +327,7 @@ class MonteCarloTitration(object):
                 atoms = [atom for atom in residue.atoms()]
                 [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(atoms[0].index)
                 parameters = {'charge': charge, 'sigma': sigma, 'epsilon': epsilon}
-                print('retrieveIonParameters: %s : %s' % (resname, str(parameters)))
+                if self.debug: print('retrieveIonParameters: %s : %s' % (resname, str(parameters)))
                 return parameters
 
         raise Exception("resname '%s' not found in topology" % resname)
@@ -358,7 +358,7 @@ class MonteCarloTitration(object):
             if residue.name in water_residue_names:
                 water_residues.append(residue)
 
-        print('identifyWaterResidues: %d water molecules identified.' % len(water_residues))
+        if self.debug: print('identifyWaterResidues: %d water molecules identified.' % len(water_residues))
         return water_residues
 
     def get14scaling(self, system):
@@ -1150,7 +1150,8 @@ class MonteCarloTitration(object):
         if pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
-            print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+            if self.debug:
+                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
             log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Include reference energy and pH-dependent contributions.
