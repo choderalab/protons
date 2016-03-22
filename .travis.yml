@@ -19,11 +19,11 @@ script:
   
 env:
   matrix:
-    - python=2.7 CONDA_PY=27 NOSETESTS="constph.tests.test_implicit"
+    - python=2.7 CONDA_PY=27 NOSETESTS="constph.tests.test_implicit constph.tests.test_ligand_setup"
     - python=2.7 CONDA_PY=27 NOSETESTS="constph.tests.test_explicit"
-    - python=3.4 CONDA_PY=34 NOSETESTS="constph.tests.test_implicit"
+    - python=3.4 CONDA_PY=34 NOSETESTS="constph.tests.test_implicit constph.tests.test_ligand_setup"
     - python=3.4 CONDA_PY=34 NOSETESTS="constph.tests.test_explicit"
-    - python=3.5 CONDA_PY=35 NOSETESTS="constph.tests.test_implicit"
+    - python=3.5 CONDA_PY=35 NOSETESTS="constph.tests.test_implicit constph.tests.test_ligand_setup"
     - python=3.5 CONDA_PY=35 NOSETESTS="constph.tests.test_explicit"
  
   global:
