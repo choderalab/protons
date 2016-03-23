@@ -20,6 +20,8 @@ requirements:
     - openmoltools-dev
     - ambermini
     - joblib
+    - lxml
+
   run:
     - python
     - openmm-dev
@@ -30,6 +32,8 @@ requirements:
     - openmoltools-dev
     - ambermini
     - joblib
+    - lxml
+
 test:
   requires:
     - nose
