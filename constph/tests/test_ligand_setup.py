@@ -9,22 +9,23 @@ try:
 except ValueError:
     found_gaff = False
 
-import unittest
+from unittest import skipIf, TestCase
 
 
-@unittest.skipIf(not is_schrodinger_suite_installed() or not found_gaff, "This test requires Schrodinger's suite and gaff")
-def test_ligand_cphxml():
-    """
-    Run epik on a ligand and parametrize its isomers.
-    """
-    parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml")
+class TestLigandXml(TestCase):
+    
+    @skipIf(not is_schrodinger_suite_installed() or not found_gaff, "This test requires Schrodinger's suite and gaff")
+    def test_ligand_cphxml(self):
+        """
+        Run epik on a ligand and parametrize its isomers.
+        """
+        parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml")
 
 
-def test_xml_compilation():
-    """
-    Compile an xml file for the isomers.
-    """
-    xmlfile = get_data("isomers.xml", "testsystems/ligand_xml")
-    m = MultiIsomerResidue(xmlfile)
-    m.write('/tmp/isomers.cph.xml')
-
+    def test_xml_compilation(self):
+        """
+        Compile an xml file for the isomers.
+        """
+        xmlfile = get_data("isomers.xml", "testsystems/ligand_xml")
+        m = MultiIsomerResidue(xmlfile)
+        m.write('/tmp/isomers.cph.xml')
