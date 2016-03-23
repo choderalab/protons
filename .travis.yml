@@ -15,7 +15,7 @@ script:
   - conda build devtools/conda-recipe
   - source activate _test
   - conda install --yes --quiet nose nose-timer
-  - cd devtools && nosetests ${PACKAGENAME} --nocapture --verbosity=2 --with-doctest --with-timer && cd ..
+  - cd devtools && nosetests ${PACKAGENAME} --nocapture --verbosity=2 --with-doctest --with-timer --with-coverage && cd ..
   
 env:
   matrix:
@@ -29,4 +29,6 @@ env:
         
 after_success:
   - echo "after_success"
+  - coveralls
+
   # - if [ "$TRAVIS_SECURE_ENV_VARS" == true ]; then source devtools/travis-ci/after_success.sh; fi
