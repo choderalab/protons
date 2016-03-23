@@ -16,7 +16,7 @@ Testbed for constant-pH methodologies using OpenMM.
    tests/                - Unit tests
 ```
 
-`examples/`
+`constph/examples/`
 
 ```
    explicit-solvent-example.py - explicit solvent NCMC example
