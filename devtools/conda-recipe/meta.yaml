@@ -37,6 +37,9 @@ requirements:
 test:
   requires:
     - nose
+    - coverage
+    - python-coveralls
+
   imports:
     - constph
 
