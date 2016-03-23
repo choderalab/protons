@@ -15,7 +15,7 @@ script:
   - conda build devtools/conda-recipe
   - source activate _test
   - conda install --yes --quiet nose nose-timer
-  - cd devtools && nosetests ${PACKAGENAME} --nocapture --verbosity=2 --with-doctest --with-timer --with-coverage && cd ..
+  - cd devtools && nosetests ${PACKAGENAME} --nocapture --verbosity=2 --with-doctest --with-timer --with-coverage  --cover-package=${PACKAGENAME} && cd ..
   
 env:
   matrix:
