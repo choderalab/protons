@@ -227,7 +227,7 @@ def _param_isomer(isomer, tmpdir):
     logging.info("Parametrized isomer{}".format(isomer))
 
 
-def parametrize_ligand(inputmol2, outputxml, max_antechambers=1, tmpdir=None, remove_temp_files=True):
+def parametrize_ligand(inputmol2, outputxml, max_antechambers=1, tmpdir=None, remove_temp_files=True, pH=7.4):
     """
     Parametrize a ligand for constant-pH simulation.
 
@@ -241,6 +241,8 @@ def parametrize_ligand(inputmol2, outputxml, max_antechambers=1, tmpdir=None, re
 
     Other Parameters
     ----------------
+    pH : float
+        The pH that Epik should use
     max_antechambers : int, optional (default : 1)
         Maximal number of concurrent antechamber processes.
     tmpdir : str, optional
@@ -273,7 +275,8 @@ def parametrize_ligand(inputmol2, outputxml, max_antechambers=1, tmpdir=None, re
         tmpdir = tempfile.mkdtemp()
     os.chdir(tmpdir)
 
-    omt.schrodinger.run_epik(inputmol2, "epik.mae", ph=4.5, min_probability=0.00001, ph_tolerance=5.0)
+    # Using very tolerant settings, since we can't predict probability from just ref states.
+    omt.schrodinger.run_epik(inputmol2, "epik.mae", ph=pH, min_probability=0.00001, ph_tolerance=5.0)
     omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
     omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
     logger.info("Done with Epik run!")
