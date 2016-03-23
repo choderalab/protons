@@ -19,7 +19,7 @@ requirements:
     - pymbar
     - openmoltools-dev
     - ambermini
-
+    - joblib
   run:
     - python
     - openmm-dev
@@ -29,7 +29,7 @@ requirements:
     - pymbar
     - openmoltools-dev
     - ambermini
-
+    - joblib
 test:
   requires:
     - nose
