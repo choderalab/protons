@@ -734,7 +734,7 @@ class MonteCarloTitration(object):
         """
         return list(self.titrationStates)  # deep copy
 
-    def getTitrationStateTotalCharge(self, titration_group_index):
+    def getTitrationStateTotalCharge(self, titration_group_index, titration_state_index):
         """
         Return the total charge for the specified titration state.
 
@@ -743,6 +743,9 @@ class MonteCarloTitration(object):
 
         titration_group_index : int
             the titration group to be queried
+
+        titration_state_index : int
+            the titration state to be queried
 
         Returns
         -------
@@ -754,7 +757,7 @@ class MonteCarloTitration(object):
         if titration_group_index not in range(self.getNumTitratableGroups()):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
                             (titration_group_index, self.getNumTitratableGroups()))
-        if titration_state_index not in range(self.getNumTitrationStates(titratable_group_index)):
+        if titration_state_index not in range(self.getNumTitrationStates(titration_group_index)):
             raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." %
                             (titration_state_index, self.getNumTitrationStates(titration_group_index)))
 
@@ -1272,28 +1275,48 @@ class CalibrationTitration(MonteCarloTitration):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, nattempts_per_update=None, simultaneous_proposal_probability=0.1, target_weights=None, debug=False):
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None,
+                 nattempts_per_update=None, simultaneous_proposal_probability=0.1,
+                 nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, target_weights=None, debug=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
         Parameters
         ----------
-
         system : simtk.openmm.System
-            system to be titrated, containing all possible protonation sites
-        temperature : simtk.unit.Quantity compatible with simtk.unit.kelvin
-            temperature to be simulated
+            System to be titrated, containing all possible protonation sites.
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature to be simulated.
         pH : float
-            the pH to be simulated
-        prmtop : Prmtop
-            parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
-        cpin_filename : str
+            The pH to be simulated.
+        prmtop : simtk.openmm.app.Prmtop
+            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
+        cpin_filename : string
             AMBER 'cpin' file defining protonation charge states and energies
-        nattempts_per_update : int, optional
-            number of protonation state change attempts per update call;
+        integrator : simtk.openmm.integrator
+            The integrator used for dynamics
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
+            For explicit solvent simulations, the pressure.
+        nattempts_per_update : int, optional, default=None
+            Number of protonation state change attempts per update call;
             if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float
-            probability of simultaneously proposing two updates
+        simultaneous_proposal_probability : float, optional, default=0.1
+            Probability of simultaneously proposing two updates
+        debug : bool, optional, default=False
+            Turn debug information on/off.
+        nsteps_per_trial : int, optional, default=0
+            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
+            Timestep to use for NCMC switching
+        maintainChargeNeutrality : bool, optional, default=True
+            If True, waters will be converted to monovalent counterions and vice-versa.
+        cationName : str, optional, default='Na+'
+            Name of cation residue from which parameters are to be taken.
+        anionName : str, optional, default='Cl-'
+            Name of anion residue from which parameters are to be taken.
+        implicit: bool, optional, default=False
+            Flag for implicit simulation. Skips ion parameter lookup.
         target_weights : list, optional
             Nested list indexed [group][state] of relative weights (pi) for SAMS method
             If unspecified, all target weights are set to equally sample all states.
@@ -1306,7 +1329,14 @@ class CalibrationTitration(MonteCarloTitration):
         """
 
         super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
-                                                   nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug)
+                                                   nattempts_per_update=nattempts_per_update,
+                                                   simultaneous_proposal_probability=simultaneous_proposal_probability,
+                                                   pressure=pressure,
+                                                   nsteps_per_trial=nsteps_per_trial, ncmc_timestep=ncmc_timestep,
+                                                   maintainChargeNeutrality=maintainChargeNeutrality,
+                                                   cationName=cationName, anionName=anionName,
+                                                   implicit=implicit,
+                                                   debug=debug)
 
         self.n_adaptations = 0
 
@@ -1317,7 +1347,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, group_index=0, debuglogger=True):
+    def adapt_weights(self, context, scheme, group_index=0, debuglogger=False):
         """
         Update the relative free energy of titration states of the specified titratable group
         Parameters
@@ -1325,7 +1355,7 @@ class CalibrationTitration(MonteCarloTitration):
         context :  (simtk.openmm.Context)
             The context to update
         scheme : str ('eq9' or 'eq12')
-            Scheme from .
+            Scheme from Tan paper.
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
 
@@ -1376,7 +1406,7 @@ class CalibrationTitration(MonteCarloTitration):
         np.ndarray - relative free energy of states
         """
         zeta = np.asarray(
-            map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[group_index]['titration_states'][:]))
+            list(map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[group_index]['titration_states'][:])))
         return zeta
 
     def _get_target_weights(self, group_index=0):
@@ -1390,7 +1420,7 @@ class CalibrationTitration(MonteCarloTitration):
         -------
         np.ndarray - relative free energy of states
         """
-        return np.asarray(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:]))
+        return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
 
     def _equation9(self, group_index, dlogger=None):
         """
@@ -1406,7 +1436,7 @@ class CalibrationTitration(MonteCarloTitration):
         np.ndarray - free energy updates
         """
         # [1/pi_1...1/pi_i]
-        update = np.asarray(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:]))
+        update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
         # delta(Lt)
         delta = np.zeros_like(update)
         delta[self.getTitrationState(group_index)] = 1
@@ -1462,20 +1492,66 @@ class CalibrationTitration(MonteCarloTitration):
 
 class MBarCalibrationTitration(MonteCarloTitration):
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, integrator, nattempts_per_update=None,
-                 simultaneous_proposal_probability=0.1, debug=False):
-        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, nintegrator,
-                                                       nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug)
+    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, integrator, pressure=None, nattempts_per_update=None,
+                 simultaneous_proposal_probability=0.1, nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False,
+                 debug=False):
+        """
+         Parameters
+        ----------
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature to be simulated.
+        pH : float
+            The pH to be simulated.
+        prmtop : simtk.openmm.app.Prmtop
+            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
+        cpin_filename : string
+            AMBER 'cpin' file defining protonation charge states and energies
+        integrator : simtk.openmm.integrator
+            The integrator used for dynamics
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
+            For explicit solvent simulations, the pressure.
+        nattempts_per_update : int, optional, default=None
+            Number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float, optional, default=0.1
+            Probability of simultaneously proposing two updates
+        debug : bool, optional, default=False
+            Turn debug information on/off.
+        nsteps_per_trial : int, optional, default=0
+            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
+            Timestep to use for NCMC switching
+        maintainChargeNeutrality : bool, optional, default=True
+            If True, waters will be converted to monovalent counterions and vice-versa.
+        cationName : str, optional, default='Na+'
+            Name of cation residue from which parameters are to be taken.
+        anionName : str, optional, default='Cl-'
+            Name of anion residue from which parameters are to be taken.
+        implicit: bool, optional, default=False
+            Flag for implicit simulation. Skips ion parameter lookup.
+
+        """
+        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
+                                                       nattempts_per_update=nattempts_per_update,
+                                                       simultaneous_proposal_probability=simultaneous_proposal_probability,
+                                                       pressure=pressure,
+                                                       nsteps_per_trial=nsteps_per_trial, ncmc_timestep=ncmc_timestep,
+                                                       maintainChargeNeutrality=maintainChargeNeutrality,
+                                                       cationName=cationName, anionName=anionName,
+                                                       implicit=implicit,
+                                                       debug=debug)
 
         self.n_adaptations = 0
         temperature = self.temperature
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
         for i, group in enumerate(self.titrationGroups):
-            self.titrationGroups[i]['adaptation_tracker'] = dict(
-                label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
+            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
 
-    def adapt_weights(self, context, group_index=0, debuglogger=True):
+    def adapt_weights(self, context, group_index=0, debuglogger=False):
         """
         Update the relative free energy of titration states of the specified titratable group
         Parameters

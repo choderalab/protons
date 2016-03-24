@@ -1,12 +1,12 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import MonteCarloTitration
+from constph.constph import MonteCarloTitration, CalibrationTitration, MBarCalibrationTitration
 from unittest import TestCase, skip
 from . import get_data
 
 
-class TestExplicit(TestCase):
+class TyrosineExplicitTestCase(TestCase):
     
     def setUp(self):
         self.temperature = 300.0 * unit.kelvin
@@ -23,7 +23,7 @@ class TestExplicit(TestCase):
         
     def test_tyrosine_instantaneous(self):
         """
-        Test tyrosine in explicit solvent with an instanteneous state switch.
+        Run tyrosine in explicit solvent with an instanteneous state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
@@ -34,9 +34,55 @@ class TestExplicit(TestCase):
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
+    def test_tyrosine_calibration_instantaneous_eq9(self):
+        """
+        Calibrate (eq 9) tyrosine in explicit solvent with an instanteneous state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                            integrator, debug=False,
+                                            pressure=self.pressure, nsteps_per_trial=0, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context, 'eq9')
+
+    def test_tyrosine_calibration_instantaneous_eq12(self):
+        """
+        Calibrate (eq 12) tyrosine in explicit solvent with an instanteneous state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                            integrator, debug=False,
+                                            pressure=self.pressure, nsteps_per_trial=0, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context, 'eq12')
+
+    @skip("Current api incompatible, circular dependency on context")
+    def test_tyrosine_calibration_instantaneous_mbar(self):
+        """
+        Calibrate (MBAR) tyrosine in explicit solvent with an instantaneous state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = MBarCalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                                context, integrator, debug=False,
+                                                pressure=self.pressure, nsteps_per_trial=0, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context)
+
     def test_tyrosine_ncmc(self):
         """
-        Test tyrosine in explicit solvent with an ncmc state switch.
+        Run tyrosine in explicit solvent with an ncmc state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
@@ -46,3 +92,49 @@ class TestExplicit(TestCase):
         context.setPositions(self.positions)  # set to minimized positions
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
+
+    def test_tyrosine_calibration_ncmc_eq9(self):
+        """
+        Calibrate (eq 9) tyrosine in explicit solvent with an ncmc state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                           integrator, debug=False,
+                                           pressure=self.pressure, nsteps_per_trial=10, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context, 'eq9')
+
+    def test_tyrosine_calibration_ncmc_eq12(self):
+        """
+        Calibrate (eq 12) tyrosine in explicit solvent with an ncmc state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                            integrator, debug=False,
+                                            pressure=self.pressure, nsteps_per_trial=10, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context, 'eq12')
+
+    @skip("Current api incompatible, circular dependency on context")
+    def test_tyrosine_calibration_ncmc_mbar(self):
+        """
+        Calibrate (MBAR) tyrosine in explicit solvent with an ncmc state switch
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = MBarCalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                            context, integrator, debug=False,
+                                            pressure=self.pressure, nsteps_per_trial=10, implicit=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+        mc_titration.adapt_weights(context)
