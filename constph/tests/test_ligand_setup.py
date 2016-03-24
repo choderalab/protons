@@ -12,19 +12,19 @@ except ValueError:
 from unittest import skipIf, TestCase
 
 
-class TestLigandXml(TestCase):
+class LigandXmlTestCase(TestCase):
     
     @skipIf(not is_schrodinger_suite_installed() or not found_gaff, "This test requires Schrodinger's suite and gaff")
     def test_ligand_cphxml(self):
         """
-        Run epik on a ligand and parametrize its isomers.
+        Run epik on a ligand and parametrize its isomers
         """
         parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml", pH=4.5)
 
 
     def test_xml_compilation(self):
         """
-        Compile an xml file for the isomers.
+        Compile an xml file for the isomers
         """
         xmlfile = get_data("isomers.xml", "testsystems/ligand_xml")
         m = MultiIsomerResidue(xmlfile)
