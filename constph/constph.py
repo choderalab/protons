@@ -62,7 +62,7 @@ import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
 import pymbar
-from openmmtools.integrators import VelocityVerletIntegrator
+from openmmtools.integrators import VelocityVerletIntegrator, VVVRIntegrator
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
@@ -115,8 +115,8 @@ class MonteCarloTitration(object):
     """
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
-        nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds,
-        maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
+                 nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds, ncmc_collision_rate=91.0 / units.picosecond,
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, vvvr=True):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -147,6 +147,8 @@ class MonteCarloTitration(object):
             Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
         ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
             Timestep to use for NCMC switching
+        ncmc_collision_rate: simtk.unit.Quantity with units compatible with 1 / picoseconds, default 91.0/ps
+            Collision rate for NCMC switching (VVVR only)
         maintainChargeNeutrality : bool, optional, default=True
             If True, waters will be converted to monovalent counterions and vice-versa.
         cationName : str, optional, default='Na+'
@@ -155,6 +157,8 @@ class MonteCarloTitration(object):
             Name of anion residue from which parameters are to be taken.
         implicit: bool, optional, default=False
             Flag for implicit simulation. Skips ion parameter lookup.
+        vvvr: bool optional, default=True
+            Use VVVR as the NCMC integrator. If false, fall back to VelocityVerlet
 
         Todo
         ----
@@ -179,7 +183,10 @@ class MonteCarloTitration(object):
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
-        self.verlet_integrator = VelocityVerletIntegrator(ncmc_timestep)
+        if vvvr:
+            self.verlet_integrator = VVVRIntegrator(temperature=temperature, collision_rate=91.0 / units.picosecond, timestep=ncmc_timestep)
+        else:
+            self.verlet_integrator = VelocityVerletIntegrator(ncmc_timestep)
         self.compound_integrator.addIntegrator(self.verlet_integrator)
         self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
 
@@ -195,16 +202,16 @@ class MonteCarloTitration(object):
         # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
         self.maintainChargeNeutrality = maintainChargeNeutrality
         if not implicit:
-            self.water_residues = self.identifyWaterResidues(prmtop.topology) # water molecules that can be converted to ions
-            self.anion_parameters = self.retrieveIonParameters(prmtop.topology, system, anionName) # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
-            self.cation_parameters = self.retrieveIonParameters(prmtop.topology, system, cationName) # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
-            self.anion_residues = list() # water molecules that have been converted to anions
-            self.cation_residues = list() # water molecules that have been converted to cations
+            self.water_residues = self.identifyWaterResidues(prmtop.topology)  # water molecules that can be converted to ions
+            # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
+            self.anion_parameters = self.retrieveIonParameters(prmtop.topology, system, anionName)
+            # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
+            self.cation_parameters = self.retrieveIonParameters(prmtop.topology, system, cationName)
+            self.anion_residues = list()  # water molecules that have been converted to anions
+            self.cation_residues = list()  # water molecules that have been converted to cations
 
         if implicit and maintainChargeNeutrality:
             raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
-
-
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -270,7 +277,8 @@ class MonteCarloTitration(object):
                 for titration_state in range(num_states):
                     # Extract charges for this titration state.
                     # is defined in elementary_charge units
-                    charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
+                    charges = namelist['CHRGDAT'][
+                        (first_charge + num_atoms * titration_state):(first_charge + num_atoms * (titration_state + 1))]
                     # Extract relative energy for this titration state.
                     relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
                     relative_energy = relative_energy
@@ -327,7 +335,8 @@ class MonteCarloTitration(object):
                 atoms = [atom for atom in residue.atoms()]
                 [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(atoms[0].index)
                 parameters = {'charge': charge, 'sigma': sigma, 'epsilon': epsilon}
-                if self.debug: print('retrieveIonParameters: %s : %s' % (resname, str(parameters)))
+                if self.debug:
+                    print('retrieveIonParameters: %s : %s' % (resname, str(parameters)))
                 return parameters
 
         raise Exception("resname '%s' not found in topology" % resname)
@@ -358,7 +367,8 @@ class MonteCarloTitration(object):
             if residue.name in water_residue_names:
                 water_residues.append(residue)
 
-        if self.debug: print('identifyWaterResidues: %d water molecules identified.' % len(water_residues))
+        if self.debug:
+            print('identifyWaterResidues: %d water molecules identified.' % len(water_residues))
         return water_residues
 
     def get14scaling(self, system):
@@ -1027,8 +1037,7 @@ class MonteCarloTitration(object):
                 # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
                 # since parameter update would occur in the middle of a velocity Verlet step.
                 # TODO: This could be optimized by only calling
-                # context.updateParametersInContext once rather than after every titration
-                # state update.
+                # context.updateParametersInContext once rather than after every titration state update.
                 for titration_group_index in titration_group_indices:
                     self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
                                         titration_group_index], fractional_titration_state=titration_lambda, context=context)
@@ -1154,7 +1163,8 @@ class MonteCarloTitration(object):
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
             if self.debug:
-                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+                print('beta = %s, pressure = %s, volume = %s, multiple = %s' %
+                      (str(beta), str(pressure), str(volume), str(-beta * pressure * volume * units.AVOGADRO_CONSTANT_NA)))
             log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Include reference energy and pH-dependent contributions.
@@ -1162,8 +1172,8 @@ class MonteCarloTitration(object):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_energy = titration_state['relative_energy']
             if self.debug:
-                print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
+                print("beta * relative_energy: %.2f", +beta * relative_energy)
+            log_P += -self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -1471,7 +1481,7 @@ class CalibrationTitration(MonteCarloTitration):
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
 
-        ub_j = self._get_reduced_potentials(context, beta,   group_index)
+        ub_j = self._get_reduced_potentials(context, beta, group_index)
 
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
@@ -1549,7 +1559,8 @@ class MBarCalibrationTitration(MonteCarloTitration):
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
         for i, group in enumerate(self.titrationGroups):
-            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
+            self.titrationGroups[i]['adaptation_tracker'] = dict(
+                label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
 
     def adapt_weights(self, context, group_index=0, debuglogger=False):
         """
