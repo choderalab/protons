@@ -94,6 +94,20 @@ class TyrosineImplicitTestCase(TestCase):
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
+    def test_tyrosine_ncmc_VV(self):
+        """
+        Run tyrosine in implicit solvent with an ncmc state switch with VelocityVerlet
+        """
+        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                           integrator, debug=False,
+                                           pressure=None, nsteps_per_trial=10, implicit=True, vvvr=False)
+        platform = openmm.Platform.getPlatformByName('CPU')
+        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
+        context.setPositions(self.positions)  # set to minimized positions
+        integrator.step(10)  # MD
+        mc_titration.update(context)  # protonation
+
     def test_tyrosine_calibration_ncmc_eq9(self):
         """
         Calibrate (eq 9) tyrosine in implicit solvent with an ncmc state switch
