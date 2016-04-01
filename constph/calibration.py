@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from constph.constph import MonteCarloTitration
+from .constph import MonteCarloTitration
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
