@@ -29,7 +29,7 @@ def setup_systems_thuper_serially():
     
     for solvent in ["implicit"]: # , "explicit"]:
         for aa in ["cys", "lys", "glu", "his", "tyr", "asp"]:
-            foldername = "examples/calibration-{}".format(solvent)
+            foldername = "calibration-{}".format(solvent)
             prmtop = "{}/{}.prmtop".format(foldername, aa)
             inpcrd = "{}/{}.inpcrd".format(foldername, aa)
             outname = "calibration-systems/{}-{}".format(aa,solvent)
@@ -75,9 +75,9 @@ def make_xml_implicit(inpcrd_filename,prmtop_filename,outfile):
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
 
 
-def minimizer(platform_name, system, positions, nsteps=1000):
-    integrator = openmm.VerletIntegrator(0.5 * unit.femtoseconds)
-    CONSTRAINT_TOLERANCE = 1.0e-4
+def minimizer(platform_name, system, positions, nsteps=10000):
+    integrator = openmm.VerletIntegrator(0.1 * unit.femtoseconds)
+    CONSTRAINT_TOLERANCE = 1.0e-7
     integrator.setConstraintTolerance(CONSTRAINT_TOLERANCE)
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, integrator, platform)
