@@ -1,6 +1,7 @@
 from __future__ import print_function
 from constph.calibration import AminoAcidCalibrator
 from unittest import TestCase, skipIf
+from nose.plugins.skip import SkipTest
 import simtk.unit as units
 import os
 
@@ -33,7 +34,7 @@ class TestAminoAcidsImplicitCalibration(object):
         print(aac.calibrate(iterations=1000, mc_every=9, weights_every=1))
 
 
-@skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")
+
 class TestAminoAcidsExplicitCalibration(object):
 
     @classmethod
@@ -57,6 +58,9 @@ class TestAminoAcidsExplicitCalibration(object):
             yield self.calibrate, acid
 
     def calibrate(self, resname):
+        if os.environ.get("TRAVIS", None) == 'true':
+            raise SkipTest
+
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, platform_name="CPU", minimize=False)
         print(aac.calibrate(iterations=10, mc_every=9, weights_every=1))
