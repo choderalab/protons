@@ -688,7 +688,7 @@ class MonteCarloTitration(object):
 
         state = dict()
         state['pKref'] = pKref
-        state['relative_energy'] = relative_energy * self.beta
+        state['relative_energy'] = relative_energy * self.beta  # dimensionless quantity
         state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
