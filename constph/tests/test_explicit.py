@@ -143,16 +143,17 @@ class TyrosineExplicitTestCase(TestCase):
         mc_titration.update(context)  # protonation
         mc_titration.adapt_weights(context)
 
+
 class TestAminoAcidsExplicitCalibration(object):
 
     @classmethod
     def setup(cls):
         settings = dict()
         settings["temperature"] = 300.0 * unit.kelvin
-        settings["timestep"] = 1.8 * unit.femtosecond
+        settings["timestep"] = 1.0 * unit.femtosecond
         settings["pressure"] = 1.0 * unit.hectopascal
         settings["collision_rate"] = 9.1 / unit.picoseconds
-        settings["nsteps_per_trial"] = 10
+        settings["nsteps_per_trial"] = 5
         settings["pH"] = 7.4
         settings["solvent"] = "explicit"
         cls.settings = settings
@@ -173,7 +174,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, platform_name="CPU", minimize=False)
-        print(aac.calibrate(iterations=20, mc_every=9, weights_every=1))
+        print(aac.calibrate(iterations=5, mc_every=4, weights_every=1))
 
 
 @skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")
@@ -198,7 +199,7 @@ class PeptideExplicitTestCase(TestCase):
         calibration_settings["collision_rate"] = self.collision_rate
         calibration_settings["pH"] = self.pH
         calibration_settings["solvent"] = "explicit"
-        calibration_settings["nsteps_per_trial"] = 10
+        calibration_settings["nsteps_per_trial"] = 5
         self.calibration_settings = calibration_settings
 
     def test_peptide_ncmc_calibrated(self):
@@ -210,7 +211,7 @@ class PeptideExplicitTestCase(TestCase):
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
                                            integrator, debug=False,
                                            pressure=self.pressure, nsteps_per_trial=10, implicit=False)
-        mc_titration.calibrate(self.calibration_settings, iterations=10, mc_every=9, weights_every=1)
+        mc_titration.calibrate(self.calibration_settings, iterations=5, mc_every=4, weights_every=1)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions

@@ -6,7 +6,6 @@ from constph.calibration import CalibrationTitration, MBarCalibrationTitration, 
 from unittest import TestCase, skip, skipIf
 from . import get_data
 from nose.plugins.skip import SkipTest
-from simtk import unit
 
 
 class TyrosineImplicitTestCase(TestCase):
@@ -44,7 +43,7 @@ class TyrosineImplicitTestCase(TestCase):
         """
         calibration_settings = dict()
         calibration_settings["temperature"] = 300.0 * unit.kelvin
-        calibration_settings["timestep"] = 1.8 * unit.femtosecond
+        calibration_settings["timestep"] = 1.0 * unit.femtosecond
         calibration_settings["pressure"] = 0.101325 * unit.megapascal
         calibration_settings["collision_rate"] = 9.1 / unit.picoseconds
         calibration_settings["pH"] = 7.4
@@ -175,7 +174,7 @@ class TestAminoAcidsImplicitCalibration(object):
     def setup(cls):
         settings = dict()
         settings["temperature"] = 300.0 * unit.kelvin
-        settings["timestep"] = 1.8 * unit.femtosecond
+        settings["timestep"] = 1.0 * unit.femtosecond
         settings["pressure"] = 1.0 * unit.hectopascal
         settings["collision_rate"] = 9.1 / unit.picoseconds
         settings["pH"] = 7.4
@@ -195,6 +194,7 @@ class TestAminoAcidsImplicitCalibration(object):
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, platform_name="CPU", minimize=False)
         print(aac.calibrate(iterations=100, mc_every=26, weights_every=1))
+
 
 class PeptideImplicitTestCase(TestCase):
 
