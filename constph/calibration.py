@@ -385,8 +385,8 @@ class AminoAcidCalibrator(object):
 
         residue_name = residue_name.lower()
         # Calibration on a terminally-blocked amino acid in implicit/explicit solvent
-        positions = openmm.XmlSerializer.deserialize(open(get_data('calibration-systems/{}-{}.state.xml'.format(residue_name,settings["solvent"]), '')).read()).getPositions(asNumpy=True)
-        system = openmm.XmlSerializer.deserialize(open(get_data('calibration-systems/{}-{}.sys.xml'.format(residue_name,settings["solvent"]), '')).read())
+        positions = openmm.XmlSerializer.deserialize(open(get_data('calibration-systems/{}-{}.state.xml'.format(residue_name, settings["solvent"]), '')).read()).getPositions(asNumpy=True)
+        system = openmm.XmlSerializer.deserialize(open(get_data('calibration-systems/{}-{}.sys.xml'.format(residue_name, settings["solvent"]), '')).read())
         prmtop = app.AmberPrmtopFile(get_data('calibration-systems/{}-{}.prmtop'.format(residue_name,settings["solvent"]), ''))
         cpin_filename = get_data('calibration-systems/{}-{}.cpin'.format(residue_name,settings["solvent"]), '')
         temp = settings["temperature"]
