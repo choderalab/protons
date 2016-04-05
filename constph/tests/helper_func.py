@@ -64,6 +64,41 @@ def make_xml_implicit_tyr(inpcrd_filename='constph/examples/calibration-implicit
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
 
 
+def compute_potential_components(context):
+    """
+    Compute potential energy, raising an exception if it is not finite.
+
+    Parameters
+    ----------
+    context : simtk.openmm.Context
+        The context from which to extract, System, parameters, and positions.
+
+    """
+    import copy
+    system = context.getSystem()
+    system = copy.deepcopy(system)
+    positions = context.getState(getPositions=True).getPositions(asNumpy=True)
+    parameters = context.getParameters()
+    for index in range(system.getNumForces()):
+        force = system.getForce(index)
+        force.setForceGroup(index)
+
+    integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
+    platform = openmm.Platform.getPlatformByName('Reference')
+    context = openmm.Context(system, integrator, platform)
+    context.setPositions(positions)
+    for (parameter, value) in parameters.items():
+        context.setParameter(parameter, value)
+    energy_components = list()
+    for index in range(system.getNumForces()):
+        force = system.getForce(index)
+        forcename = force.__class__.__name__
+        groups = 1<<index
+        potential = context.getState(getEnergy=True, groups=groups).getPotentialEnergy()
+        energy_components.append((forcename, potential))
+    del context, integrator
+    return energy_components
+
 def minimizer(platform_name, system, positions, nsteps=1000):
     integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
     CONSTRAINT_TOLERANCE = 1.0e-5

@@ -27,8 +27,8 @@ def generate(func, *inputs):
 
 def setup_systems_thuper_serially():
     
-    for solvent in ["implicit"]: # , "explicit"]:
-        for aa in ["cys", "lys", "glu", "his", "tyr", "asp"]:
+    for solvent in ["implicit", "explicit"]:
+        for aa in  ["lys"]:  #["cys", "lys", "glu", "his", "tyr", "asp"]:
             foldername = "calibration-{}".format(solvent)
             prmtop = "{}/{}.prmtop".format(foldername, aa)
             inpcrd = "{}/{}.inpcrd".format(foldername, aa)
@@ -77,13 +77,13 @@ def make_xml_implicit(inpcrd_filename,prmtop_filename,outfile):
 
 def minimizer(platform_name, system, positions, nsteps=10000):
     integrator = openmm.VerletIntegrator(0.1 * unit.femtoseconds)
-    CONSTRAINT_TOLERANCE = 1.0e-7
+    CONSTRAINT_TOLERANCE = 1.0e-4
     integrator.setConstraintTolerance(CONSTRAINT_TOLERANCE)
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(positions)
     logging.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
-    openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
+    openmm.LocalEnergyMinimizer.minimize(context, 0.001, nsteps)
     logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
     positions = context.getState(getPositions=True).getPositions(asNumpy=True)
     return context

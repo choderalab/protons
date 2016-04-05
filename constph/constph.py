@@ -1102,6 +1102,40 @@ class MonteCarloTitration(object):
 
         return
 
+    def calibrate(self, settings,iterations=10000, mc_every=100, weights_every=1, scheme='eq9'):
+        """
+        Calibrate all available aminoacids
+
+        Todo
+        ----
+        - How to treat ligands
+        """
+        from .calibration import AminoAcidCalibrator
+
+        residuenames = set()
+        calibrate_residues = dict()
+        for group_index, group in enumerate(self.titrationGroups):
+            supported = False
+            group_name = group['name'].lower()
+            for resn in AminoAcidCalibrator.supported:
+                if resn in group_name:
+                    supported = True
+                    residuenames.add(resn)
+                    calibrate_residues[group_index] = resn
+                    break
+
+            if not supported:
+                raise ValueError("Unsupported residue/ligand: {}".format(group_name))
+
+        updated_frenergies = dict()
+        for aa in residuenames:
+            aac = AminoAcidCalibrator(aa, settings)
+            updated_frenergies[aa] = aac.calibrate(iterations=iterations, mc_every=mc_every, weights_every=weights_every, scheme=scheme)
+
+        for group_index, group in enumerate(self.titrationGroups):
+            for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
+                self.titrationGroups[group_index]['titration_states'][state_index]['relative_energy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
+
     def getAcceptanceProbability(self):
         """
         Return the fraction of accepted moves
