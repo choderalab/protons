@@ -842,6 +842,8 @@ class MonteCarloTitration(object):
             for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
                 atom = {key: atom_initial[key] for key in ['atom_index']}
                 if force_classname == 'NonbondedForce':
+                    # TODO : if we ever change LJ parameters, we need to look into softcore potentials
+                    # and separate out the changes in charge, and sigma/eps into different steps.
                     for parameter_name in ['charge', 'sigma', 'epsilon']:
                         atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
                             fractional_titration_state * atom_final[parameter_name]
@@ -1157,13 +1159,13 @@ class MonteCarloTitration(object):
                 print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
             log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
-        # Include reference energy and pH-dependent contributions.
+        # Subtract reference energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_energy = titration_state['relative_energy']
             if self.debug:
-                print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
+                print("beta * relative_energy: %.2f",  + beta * relative_energy)
+            log_P -= - beta * relative_energy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
