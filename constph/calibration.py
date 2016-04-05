@@ -9,7 +9,6 @@ import logging
 import pymbar
 from . import get_data
 from scipy.misc import logsumexp
-import joblib
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
@@ -353,6 +352,8 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
 
 class AminoAcidCalibrator(object):
+    supported = ("lys", "cys", "tyr", "as4", "gl4", "hip")
+
     def __init__(self, residue_name, settings, platform_name="CPU", weights=None, minimize=False):
         """ Calibrate a single amino acid in a reference system for a given pH.
         Parameters
@@ -431,7 +432,7 @@ class AminoAcidCalibrator(object):
                 if state_updates % weights_every == 0:
                     self.titration.adapt_weights(self.context, scheme)
 
-        return self.titration.get_zeta()
+        return [frener/self.titration.beta for frener in self.titration.get_zeta()]
 
     @staticmethod
     def _minimizer(platform_name, system, positions, nsteps=1000):
