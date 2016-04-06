@@ -25,11 +25,11 @@ def generate(func, *inputs):
 
     return decorator
 
-def setup_systems_thuper_serially():
+def setup_systems_serially():
     
     for solvent in ["implicit", "explicit"]:
         for aa in  ["lys"]:  #["cys", "lys", "glu", "his", "tyr", "asp"]:
-            foldername = "calibration-{}".format(solvent)
+            foldername = "examples/calibration-{}".format(solvent)
             prmtop = "{}/{}.prmtop".format(foldername, aa)
             inpcrd = "{}/{}.inpcrd".format(foldername, aa)
             outname = "calibration-systems/{}-{}".format(aa,solvent)
@@ -89,5 +89,5 @@ def minimizer(platform_name, system, positions, nsteps=10000):
     return context
 
 if __name__ == "__main__":
-    setup_systems_thuper_serially()
+    setup_systems_serially()
   
