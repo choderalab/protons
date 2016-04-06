@@ -170,6 +170,7 @@ class MonteCarloTitration(object):
         # Store parameters.
         self.system = system
         self.temperature = temperature
+        self.beta = 1.0 / (temperature * kB)
         self.pressure = pressure
         self.pH = pH
         self.cpin_filename = cpin_filename
@@ -687,7 +688,7 @@ class MonteCarloTitration(object):
 
         state = dict()
         state['pKref'] = pKref
-        state['relative_energy'] = relative_energy
+        state['relative_energy'] = relative_energy * self.beta  # dimensionless quantity
         state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
@@ -842,6 +843,8 @@ class MonteCarloTitration(object):
             for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
                 atom = {key: atom_initial[key] for key in ['atom_index']}
                 if force_classname == 'NonbondedForce':
+                    # TODO : if we ever change LJ parameters, we need to look into softcore potentials
+                    # and separate out the changes in charge, and sigma/eps into different steps.
                     for parameter_name in ['charge', 'sigma', 'epsilon']:
                         atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
                             fractional_titration_state * atom_final[parameter_name]
@@ -1157,13 +1160,13 @@ class MonteCarloTitration(object):
                 print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
             log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
 
-        # Include reference energy and pH-dependent contributions.
+        # Subtract reference energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_energy = titration_state['relative_energy']
             if self.debug:
-                print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
+                print("beta * relative_energy: %.2f",  + relative_energy)
+            log_P -= - relative_energy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -1365,7 +1368,7 @@ class CalibrationTitration(MonteCarloTitration):
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
         # zeta^{t-1}
-        zeta = self._get_zeta(beta)
+        zeta = self._get_zeta()
         if debuglogger:
             dlogger = dict()
             dlogger['L'] = self.getTitrationState(group_index) + 1
@@ -1392,12 +1395,10 @@ class CalibrationTitration(MonteCarloTitration):
             self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / -beta
         return dlogger
 
-    def _get_zeta(self, beta, group_index=0):
+    def _get_zeta(self, group_index=0):
         """Retrieve relative free energies for specified titratable group.
         Parameters
         ----------
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.group_index
 
@@ -1406,7 +1407,7 @@ class CalibrationTitration(MonteCarloTitration):
         np.ndarray - relative free energy of states
         """
         zeta = np.asarray(
-            list(map(lambda x: np.float64(x['relative_energy'] * -beta), self.titrationGroups[group_index]['titration_states'][:])))
+            list(map(lambda x: -np.float64(x['relative_energy']), self.titrationGroups[group_index]['titration_states'][:])))
         return zeta
 
     def _get_target_weights(self, group_index=0):
@@ -1471,7 +1472,7 @@ class CalibrationTitration(MonteCarloTitration):
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
 
-        ub_j = self._get_reduced_potentials(context, beta,   group_index)
+        ub_j = self._get_reduced_potentials(context, beta, group_index)
 
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
