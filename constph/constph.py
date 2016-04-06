@@ -1235,7 +1235,7 @@ class MonteCarloTitration(object):
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self.getNumTitratableGroups()
 
-    def _get_reduced_potentials(self, context, beta, group_index=0):
+    def _get_reduced_potentials(self, context, group_index=0):
         """Retrieve the reduced potentials for all states of the system given a context.
 
         Parameters
@@ -1252,7 +1252,7 @@ class MonteCarloTitration(object):
 
         ub_j = np.empty(len(self.titrationGroups[group_index]['titration_states']))
         for j in range(ub_j.size):
-            ub_j[j] = self._reduced_potential(context, beta, j, group_index)
+            ub_j[j] = self._reduced_potential(context, j)
 
         # Reset to current state
         return ub_j
