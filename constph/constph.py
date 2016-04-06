@@ -1257,23 +1257,19 @@ class MonteCarloTitration(object):
         # Reset to current state
         return ub_j
 
-    def _reduced_potential(self, context, beta, state_index, group_index=0):
+    def _reduced_potential(self, context, state_index):
         """Retrieve the reduced potential for a given state (specified by index) in the given context.
 
         Parameters
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         state_index : int
             Index of the state for which the reduced potential needs to be calculated.
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
 
         """
         potential_energy = self._get_potential_energy(context, state_index)
-        return self._get_proton_chemical_potential(group_index, state_index) + beta * potential_energy
+        return self.beta * potential_energy
 
     def _get_potential_energy(self, context, state_index, group_index=0):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.
