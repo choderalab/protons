@@ -116,7 +116,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         """
         self.n_adaptations += 1
-        beta = self.beta  # inverse temperature
+
         # zeta^{t-1}
         zeta = self.get_zeta()
         if debuglogger:
@@ -128,7 +128,7 @@ class CalibrationTitration(MonteCarloTitration):
         if scheme == 'eq9':
             update = self._equation9(group_index, dlogger)
         elif scheme == 'eq12':
-            update = self._equation12(context, beta, zeta, group_index, dlogger)
+            update = self._equation12(context, zeta, group_index, dlogger)
         else:
             raise ValueError("Unknown adaptation scheme!")
 
@@ -201,7 +201,7 @@ class CalibrationTitration(MonteCarloTitration):
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _equation12(self, context, beta, zeta, group_index=0, dlogger=None):
+    def _equation12(self, context, zeta, group_index=0, dlogger=None):
         """
         Equation 12 from DOI: 10.1080/10618600.2015.1113975
 
@@ -209,8 +209,6 @@ class CalibrationTitration(MonteCarloTitration):
         ----------
         context :  (simtk.openmm.Context)
             The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         zeta : np.ndarray
             Current estimate of free energies ζ⁽ᵗ⁾
         group_index : int, optional
@@ -225,7 +223,7 @@ class CalibrationTitration(MonteCarloTitration):
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
 
-        ub_j = self._get_reduced_potentials(context, beta,   group_index)
+        ub_j = self._get_reduced_potentials(context, group_index)
 
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j

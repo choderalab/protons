@@ -1174,24 +1174,19 @@ class MonteCarloTitration(object):
 
         """
 
-        temperature = self.temperature
-        pressure = self.pressure
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-
         # Add energetic contribution to log probability.
         state = context.getState(getEnergy=True)
         pot_energy = state.getPotentialEnergy()
         kin_energy = state.getKineticEnergy()
         total_energy = pot_energy + kin_energy
-        log_P = - beta * total_energy
+        log_P = - self.beta * total_energy
 
-        if pressure is not None:
+        if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
             if self.debug:
-                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-            log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
+                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+            log_P += -self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Subtract reference energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
@@ -1242,8 +1237,6 @@ class MonteCarloTitration(object):
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
 
