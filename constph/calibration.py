@@ -142,7 +142,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(zeta_t):
-            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / -beta
+            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state
         return dlogger
 
     def get_zeta(self, group_index=0):
@@ -429,7 +429,7 @@ class AminoAcidCalibrator(object):
                 if state_updates % weights_every == 0:
                     self.titration.adapt_weights(self.context, scheme)
 
-        return [frener/self.titration.beta for frener in self.titration.get_zeta()]
+        return [frener for frener in self.titration.get_zeta()]
 
     @staticmethod
     def _minimizer(platform_name, system, positions, nsteps=1000):

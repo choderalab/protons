@@ -274,7 +274,6 @@ class MonteCarloTitration(object):
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
                     # Extract relative energy for this titration state.
                     relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
-                    relative_energy = relative_energy
 
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
