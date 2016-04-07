@@ -345,11 +345,116 @@ class MBarCalibrationTitration(MonteCarloTitration):
         if debuglogger:
             return dlogger
 
+class Histidine(object):
+    """
+    Amber constant-pH HIP residue state weights at given pH
+    """
+    pKa_d = 6.5
+    pKa_e = 7.1
+
+    def __init__(self, pH):
+        self.kd = pow(10.0, pH - Histidine.pKa_d)
+        self.ke = pow(10.0, pH - Histidine.pKa_e)
+
+    def hip_concentration(self):
+        """
+        Concentration of the doubly protonated form
+        """
+        return 1.0/(self.ke + self.kd + 1.0)
+
+    def hie_concentration(self):
+        """
+        Concentration of the epsilon protonated form
+        """
+        return self.ke / (self.ke + self.kd + 1.0)
+
+    def hid_concentration(self):
+        """
+        Concentration of the delta pronated form
+        """
+        return self.kd / (self.ke + self.kd + 1.0)
+
+    def weights(self):
+        """
+        Returns
+        -------
+        list of float - state weights in order of AMBER cpH residue
+        """
+        return [self.hip_concentration(), self.hid_concentration(), self.hie_concentration()]
+
+
+class Aspartic4(object):
+    """
+    Amber constant-pH AS4 residue state weights at given pH
+    """
+    pKa = 4.0
+
+    def __init__(self, pH):
+        self.k = pow(10.0, pH - self.pKa)
+
+    def protonated_concentration(self):
+        """
+        Concentration of protonated form
+        """
+        return 1.0/(self.k + 1.0)
+
+    def deprotonated_concenration(self):
+        """
+        Concentration of deprotonated form
+        """
+        return self.k / (self.k + 1.0)
+
+    def weights(self):
+        """
+        Returns
+        -------
+        list of float - state weights in order of AMBER cpH residue
+        """
+        acid = self.protonated_concentration() / 4.0
+        return [self.deprotonated_concenration(), acid, acid, acid, acid]
+
+
+class Glutamic4(Aspartic4):
+    """
+    Amber constant-pH GL4 residue state weights at given pH
+    """
+    pKa = 4.4
+
+
+class Lysine(Aspartic4):
+    """
+    Amber constant-pH LYS residue state weights at given pH
+    """
+    pKa = 10.4
+
+    def weights(self):
+        return [self.protonated_concentration(), self.deprotonated_concenration()]
+
+
+class Tyrosine(Lysine):
+    """
+    Amber constant-pH TYR residue state weights at given pH
+    """
+    pKa = 9.6
+
+
+class Cysteine(Lysine):
+    """
+    Amber constant-pH CYS residue state weights at given pH
+    """
+    pKa = 8.5
+
 
 class AminoAcidCalibrator(object):
-    supported = ("lys", "cys", "tyr", "as4", "gl4", "hip")
+    supported = {"lys": Lysine,
+                 "cys": Cysteine,
+                 "tyr": Tyrosine,
+                 "as4": Aspartic4,
+                 "gl4": Glutamic4,
+                 "hip": Histidine
+                 }
 
-    def __init__(self, residue_name, settings, platform_name="CPU", weights=None, minimize=False):
+    def __init__(self, residue_name, settings, platform_name="CPU", minimize=False):
         """ Calibrate a single amino acid in a reference system for a given pH.
         Parameters
         ----------
@@ -395,11 +500,11 @@ class AminoAcidCalibrator(object):
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(press, temp))
             mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press,
-                                                nsteps_per_trial=nspt, implicit=False)
+                                                nsteps_per_trial=nspt, implicit=False, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
             mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None,
-                                                nsteps_per_trial=nspt, implicit=True)
+                                                nsteps_per_trial=nspt, implicit=True, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
         else:
             raise ValueError("Solvent not recognized")
 
@@ -445,3 +550,6 @@ class AminoAcidCalibrator(object):
         logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         return context, positions
+
+
+

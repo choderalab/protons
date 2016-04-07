@@ -38,6 +38,7 @@ test:
   requires:
     - nose
     - coverage
+    - numpy
     - python-coveralls
 
   imports:
