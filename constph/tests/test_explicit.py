@@ -38,9 +38,9 @@ class TyrosineExplicitTestCase(TestCase):
         mc_titration.update(context)  # protonation
 
 
-    def test_tyrosine_calibration_instantaneous_eq9(self):
+    def test_tyrosine_calibration_instantaneous_binary(self):
         """
-        Calibrate (eq 9) tyrosine in explicit solvent with an instanteneous state switch
+        Calibrate (binary update) tyrosine in explicit solvent with an instanteneous state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
@@ -51,11 +51,11 @@ class TyrosineExplicitTestCase(TestCase):
         context.setPositions(self.positions)  # set to minimized positions
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'eq9')
+        mc_titration.adapt_weights(context, 'binary')
 
-    def test_tyrosine_calibration_instantaneous_eq12(self):
+    def test_tyrosine_calibration_instantaneous_global(self):
         """
-        Calibrate (eq 12) tyrosine in explicit solvent with an instanteneous state switch
+        Calibrate (global update) tyrosine in explicit solvent with an instanteneous state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
@@ -66,7 +66,7 @@ class TyrosineExplicitTestCase(TestCase):
         context.setPositions(self.positions)  # set to minimized positions
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'eq12')
+        mc_titration.adapt_weights(context, 'global')
 
     @skip("Current api incompatible, circular dependency on context")
     def test_tyrosine_calibration_instantaneous_mbar(self):
@@ -97,9 +97,9 @@ class TyrosineExplicitTestCase(TestCase):
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
-    def test_tyrosine_calibration_ncmc_eq9(self):
+    def test_tyrosine_calibration_ncmc_binary(self):
         """
-        Calibrate (eq 9) tyrosine in explicit solvent with an ncmc state switch
+        Calibrate (binary update) tyrosine in explicit solvent with an ncmc state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
@@ -110,11 +110,11 @@ class TyrosineExplicitTestCase(TestCase):
         context.setPositions(self.positions)  # set to minimized positions
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'eq9')
+        mc_titration.adapt_weights(context, 'binary')
 
-    def test_tyrosine_calibration_ncmc_eq12(self):
+    def test_tyrosine_calibration_ncmc_global(self):
         """
-        Calibrate (eq 12) tyrosine in explicit solvent with an ncmc state switch
+        Calibrate (global update) tyrosine in explicit solvent with an ncmc state switch
         """
         integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
         mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
@@ -125,7 +125,7 @@ class TyrosineExplicitTestCase(TestCase):
         context.setPositions(self.positions)  # set to minimized positions
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'eq12')
+        mc_titration.adapt_weights(context, 'global')
 
     @skip("Current api incompatible, circular dependency on context")
     def test_tyrosine_calibration_ncmc_mbar(self):

@@ -105,11 +105,12 @@ class CalibrationTitration(MonteCarloTitration):
     def adapt_weights(self, context, scheme, group_index=0, debuglogger=False):
         """
         Update the relative free energy of titration states of the specified titratable group
+        using self-adjusted mixture sampling (SAMS)
         Parameters
         ----------
         context :  (simtk.openmm.Context)
             The context to update
-        scheme : str ('eq9' or 'eq12')
+        scheme : str ('binary' or 'global')
             Scheme from Tan paper.
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
@@ -125,10 +126,10 @@ class CalibrationTitration(MonteCarloTitration):
         else:
             dlogger = None
 
-        if scheme == 'eq9':
-            update = self._equation9(group_index, dlogger)
-        elif scheme == 'eq12':
-            update = self._equation12(context, zeta, group_index, dlogger)
+        if scheme == 'binary':
+            update = self._binary_update(group_index, dlogger)
+        elif scheme == 'global':
+            update = self._global_update(context, zeta, group_index, dlogger)
         else:
             raise ValueError("Unknown adaptation scheme!")
 
@@ -176,9 +177,9 @@ class CalibrationTitration(MonteCarloTitration):
         """
         return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
 
-    def _equation9(self, group_index, dlogger=None):
+    def _binary_update(self, group_index, dlogger=None):
         """
-        Equation 9 from DOI: 10.1080/10618600.2015.1113975
+        Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
 
         Parameters
         ----------
@@ -201,9 +202,9 @@ class CalibrationTitration(MonteCarloTitration):
         update /= self.n_adaptations  # t^{-1}
         return update
 
-    def _equation12(self, context, zeta, group_index=0, dlogger=None):
+    def _global_update(self, context, zeta, group_index=0, dlogger=None):
         """
-        Equation 12 from DOI: 10.1080/10618600.2015.1113975
+        Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
         Parameters
         ----------
@@ -216,7 +217,7 @@ class CalibrationTitration(MonteCarloTitration):
 
         Returns
         -------
-        np.ndarray - free energy updates
+        np.ndarray : free energy updates
         """
         # target weights
         pi_j = self._get_target_weights(group_index)
@@ -306,6 +307,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
     def adapt_weights(self, context, group_index=0, debuglogger=False):
         """
         Update the relative free energy of titration states of the specified titratable group
+        using MBAR
         Parameters
         ----------
         context :  (simtk.openmm.Context)
@@ -378,7 +380,7 @@ class Histidine(object):
         """
         Returns
         -------
-        list of float - state weights in order of AMBER cpH residue
+        list of float : state weights in order of AMBER cpH residue
         """
         return [self.hip_concentration(), self.hid_concentration(), self.hie_concentration()]
 
@@ -408,7 +410,7 @@ class Aspartic4(object):
         """
         Returns
         -------
-        list of float - state weights in order of AMBER cpH residue
+        list of float : state weights in order of AMBER cpH residue
         """
         acid = self.protonated_concentration() / 4.0
         return [self.deprotonated_concenration(), acid, acid, acid, acid]
@@ -446,6 +448,9 @@ class Cysteine(Lysine):
 
 
 class AminoAcidCalibrator(object):
+    """
+    Set up the reference system for one of the AMBER supported amino acids and provide an interface for calibration.
+    """
     supported = {"lys": Lysine,
                  "cys": Cysteine,
                  "tyr": Tyrosine,
@@ -455,31 +460,37 @@ class AminoAcidCalibrator(object):
                  }
 
     def __init__(self, residue_name, settings, platform_name="CPU", minimize=False):
-        """ Calibrate a single amino acid in a reference system for a given pH.
+        """Calibrate a single amino acid in a reference system for a given pH.
+
         Parameters
         ----------
-        residue_name - str
+        residue_name : str
             Three letter abbreviation of the amino acid
-        settings - dict
-            pH - float, the pH of the system
-            temperature - float, temperature of the system
-            solvent - str, implicit or explicit (currently no choice of solvent models)
-            pressure - float, pressure of the system for an explicit solvent system
-            collision_rate - collision rate for Langevin integration
-            timestep - int, timestep for Langevin integration
-            nsteps_per_trial - int, number of ncmc timesteps (0 for instantaneous MC)
+        settings : dict
+            pH : float, the pH of the system
+            temperature : float, temperature of the system
+            solvent : str, implicit or explicit (currently no choice of solvent models)
+            pressure : float, pressure of the system for an explicit solvent system
+            collision_rate : collision rate for Langevin integration
+            timestep : int, timestep for Langevin integration
+            nsteps_per_trial : int, number of ncmc timesteps (0 for instantaneous MC)
 
+        Notes
+        -----
+        The weights for each amino acid are predetermined by the pKas. All that is necessary to supply is the pH.
 
-        weights - list/tuple
-            List of weights for each state
-
+        See Also
+        --------
+        `Histidine` : Histidine pKas based weights
+        `Tyrosine` : Tyrosine pKa based weights
+        `Lysine` : Lysine pKa based weights
+        `Cysteine` : Cysteine pKa based weights
+        `Aspartic4` : Aspartic acid pKa based weights
+        `Glutamic4` : Glutamic acid pKa based weights
 
         Todo
         ----
          - Add choice of solvent model beyond just "explicit" vs "implicit"
-         - What order should weights be defined?
-         - Define states as nodes on a graph?
-         - Convenience function to calculate weights as function of the pKa
 
         """
 
@@ -522,7 +533,26 @@ class AminoAcidCalibrator(object):
         self.titration = mc_titration
         self.settings = settings
 
-    def calibrate(self, iterations=10000, mc_every=100, weights_every=1, scheme='eq9'):
+    def calibrate(self, iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
+        """
+        Calibrate the amino acid
+
+        Parameters
+        ----------
+        iterations : int, optional (default: 10000)
+            Total number of MD iterations
+        mc_every : int, optional (default: 100)
+            Update titration state every `mc_every` steps.
+        weights_every : int, optional (default: 1)
+            Adapt the SAMS weights every `weights_every` titration state updates
+        scheme : str
+            'binary' for binary update
+            'global' for global update
+
+        Returns
+        -------
+
+        """
         state_updates = 0
         for iteration in range(iterations):
             self.integrator.step(1)

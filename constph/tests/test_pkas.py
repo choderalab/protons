@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 from constph.calibration import Histidine, Lysine, Tyrosine, Aspartic4, Cysteine, Glutamic4
-from unittest import TestCase, skip, skipIf
+from unittest import TestCase
 from numpy import linspace
 
 
