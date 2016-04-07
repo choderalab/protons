@@ -1101,7 +1101,7 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, settings,iterations=10000, mc_every=100, weights_every=1, scheme='eq9'):
+    def calibrate(self, settings,iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
         """
         Calibrate all available aminoacids
 

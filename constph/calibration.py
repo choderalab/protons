@@ -131,7 +131,7 @@ class CalibrationTitration(MonteCarloTitration):
         elif scheme == 'global':
             update = self._global_update(context, zeta, group_index, dlogger)
         else:
-            raise ValueError("Unknown adaptation scheme!")
+            raise ValueError("Unknown adaptation scheme: {}!".format(scheme))
 
         # zeta^{t-1/2}
         zeta += update
