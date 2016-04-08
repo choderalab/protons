@@ -102,7 +102,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, group_index=0, debuglogger=False):
+    def adapt_weights(self, context, scheme, b=0.8, t0=50, group_index=0, debuglogger=False):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -112,9 +112,12 @@ class CalibrationTitration(MonteCarloTitration):
             The context to update
         scheme : str ('binary' or 'global')
             Scheme from Tan paper.
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        t0 : int, optional (default : 1.0)
+            Burn-in size for adaptation.
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
-
         """
         self.n_adaptations += 1
 
@@ -127,9 +130,9 @@ class CalibrationTitration(MonteCarloTitration):
             dlogger = None
 
         if scheme == 'binary':
-            update = self._binary_update(group_index, dlogger)
+            update = self._binary_update(group_index=group_index, b=b, t0=t0, dlogger=dlogger)
         elif scheme == 'global':
-            update = self._global_update(context, zeta, group_index, dlogger)
+            update = self._global_update(context, zeta, group_index=group_index, b=b, t0=t0, dlogger=dlogger)
         else:
             raise ValueError("Unknown adaptation scheme: {}!".format(scheme))
 
@@ -177,7 +180,7 @@ class CalibrationTitration(MonteCarloTitration):
         """
         return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
 
-    def _binary_update(self, group_index, dlogger=None):
+    def _binary_update(self, group_index=0, b=1.0, t0=0, dlogger=None):
         """
         Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
 
@@ -185,7 +188,10 @@ class CalibrationTitration(MonteCarloTitration):
         ----------
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
-
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        t0 : int, optional (default : 1.0)
+            Burn-in size for adapation.
         Returns
         -------
         np.ndarray - free energy updates
@@ -199,10 +205,10 @@ class CalibrationTitration(MonteCarloTitration):
         if dlogger is not None:
             for j, d in enumerate(delta):
                 dlogger['δ %d' % (j + 1)] = d
-        update /= self.n_adaptations  # t^{-1}
+        update = np.dot(self._gain_factor(b=b, t0=t0,group_index=group_index), update)
         return update
 
-    def _global_update(self, context, zeta, group_index=0, dlogger=None):
+    def _global_update(self, context, zeta, b=1.0, t0=0, group_index=0, dlogger=None):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -214,6 +220,11 @@ class CalibrationTitration(MonteCarloTitration):
             Current estimate of free energies ζ⁽ᵗ⁾
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        t0 : int, optional (default : 1.0)
+            Burn-in size for adapation.
+
 
         Returns
         -------
@@ -234,13 +245,43 @@ class CalibrationTitration(MonteCarloTitration):
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j
-        update /= self.n_adaptations  # t^{-1}
+        update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
         if dlogger is not None:
             for j, w in enumerate(w_j):
                 dlogger['beta * U_%d(x)' % (j + 1)] = ub_j[j]
                 dlogger['w_%d' % (j + 1)] = w
 
         return update
+
+    def _gain_factor(self, b=1.0, t0=0, group_index=0):
+        """
+
+        Parameters
+        ----------
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        t0 : int, optional (default : 1.0)
+            Burn-in size for adapation.
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+
+        Returns
+        -------
+        np.ndarray - gain factor matrix
+        """
+        if not 0.5 <= b <= 1.0:
+            print(b)
+            raise ValueError("β needs to be between 1/2 and 1.0")
+
+        pi_j = self._get_target_weights(group_index)
+        gain = np.empty_like(pi_j)
+        for j in range(gain.size):
+            if self.n_adaptations <= t0:
+                gain[j] = min(pi_j[j], 1.0/pow(self.n_adaptations, b))
+            elif self.n_adaptations > t0:
+                gain[j] = min(pi_j[j], 1.0/(self.n_adaptations - t0 + pow(t0, b)))
+
+        return np.diag(gain)
 
 
 class MBarCalibrationTitration(MonteCarloTitration):
@@ -302,7 +343,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
         kT = kB * temperature  # thermal energy
         beta = 1.0 / kT  # inverse temperature
         for i, group in enumerate(self.titrationGroups):
-            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
+            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, i)])
 
     def adapt_weights(self, context, group_index=0, debuglogger=False):
         """
@@ -327,7 +368,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
         self.titrationGroups[group_index]['adaptation_tracker']['label'].append(self.getTitrationState(group_index))
         self.titrationGroups[group_index]['adaptation_tracker']['red_potential'].append(
-            self._get_reduced_potentials(context, beta, group_index))
+            self._get_reduced_potentials(context, group_index))
         states = range(len(self.titrationGroups[group_index]['titration_states']))
         N_k = [self.titrationGroups[group_index]['adaptation_tracker']['label'].count(s) for s in states]
         U_k = zip(*self.titrationGroups[group_index]['adaptation_tracker']['red_potential'])
@@ -346,6 +387,7 @@ class MBarCalibrationTitration(MonteCarloTitration):
 
         if debuglogger:
             return dlogger
+
 
 class Histidine(object):
     """
