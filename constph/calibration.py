@@ -102,7 +102,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, b=0.8, t0=50, group_index=0, debuglogger=False):
+    def adapt_weights(self, context, scheme, b=0.8, t0=50, group_index=0):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -123,16 +123,11 @@ class CalibrationTitration(MonteCarloTitration):
 
         # zeta^{t-1}
         zeta = self.get_zeta()
-        if debuglogger:
-            dlogger = dict()
-            dlogger['L'] = self.getTitrationState(group_index) + 1
-        else:
-            dlogger = None
 
         if scheme == 'binary':
-            update = self._binary_update(group_index=group_index, b=b, t0=t0, dlogger=dlogger)
+            update = self._binary_update(group_index=group_index, b=b, t0=t0)
         elif scheme == 'global':
-            update = self._global_update(context, zeta, group_index=group_index, b=b, t0=t0, dlogger=dlogger)
+            update = self._global_update(context, zeta, group_index=group_index, b=b, t0=t0)
         else:
             raise ValueError("Unknown adaptation scheme: {}!".format(scheme))
 
@@ -140,14 +135,12 @@ class CalibrationTitration(MonteCarloTitration):
         zeta += update
         # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
         zeta_t = zeta - zeta[0]
-        if debuglogger:
-            for j, z in enumerate(zeta_t):
-                dlogger['zeta_t %d' % (j + 1)] = z
 
         # Set reference energy based on new zeta
         for i, titr_state in enumerate(zeta_t):
             self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state
-        return dlogger
+
+        return
 
     def get_zeta(self, group_index=0):
         """Retrieve relative free energies for specified titratable group.
@@ -180,7 +173,7 @@ class CalibrationTitration(MonteCarloTitration):
         """
         return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
 
-    def _binary_update(self, group_index=0, b=1.0, t0=0, dlogger=None):
+    def _binary_update(self, group_index=0, b=1.0, t0=0):
         """
         Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
 
@@ -202,13 +195,10 @@ class CalibrationTitration(MonteCarloTitration):
         delta = np.zeros_like(update)
         delta[self.getTitrationState(group_index)] = 1
         update *= delta
-        if dlogger is not None:
-            for j, d in enumerate(delta):
-                dlogger['δ %d' % (j + 1)] = d
-        update = np.dot(self._gain_factor(b=b, t0=t0,group_index=group_index), update)
+        update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
         return update
 
-    def _global_update(self, context, zeta, b=1.0, t0=0, group_index=0, dlogger=None):
+    def _global_update(self, context, zeta, b=1.0, t0=0, group_index=0):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -225,7 +215,6 @@ class CalibrationTitration(MonteCarloTitration):
         t0 : int, optional (default : 1.0)
             Burn-in size for adapation.
 
-
         Returns
         -------
         np.ndarray : free energy updates
@@ -234,22 +223,13 @@ class CalibrationTitration(MonteCarloTitration):
         pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
         update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
-
         ub_j = self._get_reduced_potentials(context, group_index)
-
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
-        if dlogger is not None:
-            for j, z in enumerate(log_w_j):
-                dlogger['-ln(π_{0}) - zeta_{0} - U_{0}(x)'.format(j + 1)] = z
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
-        if dlogger is not None:
-            for j, w in enumerate(w_j):
-                dlogger['beta * U_%d(x)' % (j + 1)] = ub_j[j]
-                dlogger['w_%d' % (j + 1)] = w
 
         return update
 
@@ -270,7 +250,6 @@ class CalibrationTitration(MonteCarloTitration):
         np.ndarray - gain factor matrix
         """
         if not 0.5 <= b <= 1.0:
-            print(b)
             raise ValueError("β needs to be between 1/2 and 1.0")
 
         pi_j = self._get_target_weights(group_index)
@@ -501,7 +480,7 @@ class AminoAcidCalibrator(object):
                  "hip": Histidine
                  }
 
-    def __init__(self, residue_name, settings, platform_name="CPU", minimize=False):
+    def __init__(self, residue_name, settings, minimize=False):
         """Calibrate a single amino acid in a reference system for a given pH.
 
         Parameters
@@ -516,6 +495,7 @@ class AminoAcidCalibrator(object):
             collision_rate : collision rate for Langevin integration
             timestep : int, timestep for Langevin integration
             nsteps_per_trial : int, number of ncmc timesteps (0 for instantaneous MC)
+            platform_name : str, name of the OpenMM Platform (e.g. 'CPU', 'OpenCL')
 
         Notes
         -----
@@ -548,16 +528,15 @@ class AminoAcidCalibrator(object):
         pH = settings["pH"]
         crate = settings["collision_rate"]
         nspt = settings["nsteps_per_trial"]
+        platform_name = settings["platform_name"]
         integrator = openmm.LangevinIntegrator(temp, crate, ts)
 
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(press, temp))
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press,
-                                                nsteps_per_trial=nspt, implicit=False, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press, nsteps_per_trial=nspt, implicit=False, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None,
-                                                nsteps_per_trial=nspt, implicit=True, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None, nsteps_per_trial=nspt, implicit=True, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
         else:
             raise ValueError("Solvent not recognized")
 
@@ -565,7 +544,7 @@ class AminoAcidCalibrator(object):
         context = openmm.Context(system, mc_titration.compound_integrator, platform)
 
         if minimize:
-            xcontext, positions = self._minimizer(platform_name, system, positions)
+            minimized_context, positions = self._minimizer(platform_name, system, positions) # dont use minimized_context
         context.setPositions(positions)  # set to minimized positions
 
         self.context = context

@@ -1135,6 +1135,8 @@ class MonteCarloTitration(object):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
                 self.titrationGroups[group_index]['titration_states'][state_index]['relative_energy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
 
+        return updated_frenergies
+
     def getAcceptanceProbability(self):
         """
         Return the fraction of accepted moves
