@@ -347,7 +347,7 @@ class ConstantSalt(object):
         names = [res.name for res in self.mutable_residues]
         stateVector = np.zeros(len(names))
         for i in range(len(names)):
-            if names[i] == (self.waterName):  stateVector[i] = 0
+            if names[i] == self.waterName:  stateVector[i] = 0
             elif names[i] == self.cationName: stateVector[i] = 1
             elif names[i] == self.anionName: stateVector[i] = 2
         return stateVector
@@ -418,7 +418,6 @@ class ConstantSalt(object):
         self.forces_to_update.updateParametersInContext(context)
         state = context.getState(getEnergy=True)
         pot_energy_new = state.getPotentialEnergy()
-        print("new potential energy =",pot_energy_new)
 
         log_accept = (pot_energy_old - pot_energy_new - self.delta_chem)/kT
         # Accept or reject:
@@ -503,7 +502,7 @@ class ConstantSalt(object):
                 self.forces_to_update.setParticleParameters(atom.index,charge=target_force["charge"],sigma=target_force["sigma"],epsilon=target_force["epsilon"])
                 atm_index += 1
 
-    def update(self, context):
+    def update(self, context,nattempts=None):
         """
         Perform a number of Monte Carlo update trials for the titration state.
 
@@ -511,15 +510,17 @@ class ConstantSalt(object):
         ----------
         context : simtk.openmm.Context
             The context to update
+        nattempts : integer
+            Number of salt insertion and deletion moves to attempt.
 
         Notes
         -----
         The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
 
         """
-
+        if nattempts == None: nattempts = self.nattempts_per_update
         # Perform a number of protonation state update trials.
-        for attempt in range(self.nattempts_per_update):
+        for attempt in range(nattempts):
             self.attempt_identity_swap(context)
         return
 
