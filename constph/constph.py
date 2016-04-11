@@ -1076,7 +1076,7 @@ class MonteCarloTitration(object):
 
         except Exception as err:
 
-            if err.message == 'Particle coordinate is nan' and reject_on_nan:
+            if str(err) == 'Particle coordinate is nan' and reject_on_nan:
                 logging.warning("NaN during NCMC move, rejecting")
                 # Reject.
                 self.pot_energies.append(pot1)
