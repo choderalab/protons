@@ -16,19 +16,7 @@ Non-equilibrium candidate Monte Carlo (NCMC) can be used to increase acceptance 
 Notes
 -----
 
-The code is still being written. The algorithm for constant salt dynamics should rougthly follow:
-    Load system and free energy cost (difference in chemical potential) for switching process
-    Initialize non-bonded parameters for water, cations, and anions
-To update the identities of the molecules:
-    Select whether to add or remove salt with equal probability (remove salt has zero probability when no ions present)
-    If adding ions: identify water molecule indices
-    If removing ions: identify ion indices
-    Calculate energy prior to switch
-    Update non-bonded parameters
-    Calculate new energy
-    Accept or reject new move based on change in energy and input chemical potential difference.
-
-NCMC step to be added as a seperate option and function (based on constph) within the update step and accept step.
+The code is still being written.
 
 
 References
@@ -46,7 +34,7 @@ Coming soon to an interpreter near you!
 TODO
 ----
 
-    * Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
+    * Add NCMC switching moves.
 
 Copyright and license
 ---------------------
@@ -71,8 +59,7 @@ from openmmtools.integrators import VelocityVerletIntegrator
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
-kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
-
+kB = kB.in_units_of(units.kilojoule_per_mole / units.kelvin)
 
 def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
     """Strips the unit from a simtk.units.Quantity object and returns it's value conforming to a unit system
@@ -106,8 +93,8 @@ class ConstantSalt(object):
 
     """
 
-    def __init__(self, system, temperature, chemical_potentials, chemical_names, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
-        nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds, maintainChargeNeutrality=True, cationName='Na+', anionName='Cl-', cationparams = None, anionparams = None,implicit=False):
+    def __init__(self, system, topology,temperature, delta_chem, integrator, pressure=None, nattempts_per_update=50, debug=False,
+        nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds, waterName="HOH", cationName='Na+', anionName='Cl-', cationparams = None, anionparams = None,implicit=False):
         """
         Initialize a Monte Carlo titration driver for semi-grand ensemble simulation.
 
@@ -117,19 +104,14 @@ class ConstantSalt(object):
             System to be titrated, containing all possible protonation sites.
         temperature : simtk.unit.Quantity compatible with kelvin
             Temperature to be simulated.
-        chemical_potentials : numpy array
-            The chemical potentials of each chemical species that can be exchanged.
+        delta_chem : float
+            The difference in chemical potential for swapping 2 water molecules for Na Cl.
         chemical_names : list of strings
             Names of each of the residues whose parameters will be exchanged.
         integrator : simtk.openmm.integrator
             The integrator used for dynamics
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
             For explicit solvent simulations, the pressure.
-        nattempts_per_update : int, optional, default=None
-            Number of protonation state change attempts per update call;
-            if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float, optional, default=0.1
-            Probability of simultaneously proposing two updates
         debug : bool, optional, default=False
             Turn debug information on/off.
         nsteps_per_trial : int, optional, default=0
@@ -147,21 +129,21 @@ class ConstantSalt(object):
 
         Todo
         ----
-        * Create a set of ion parameters that has the same number of dimentions as the water model
         """
 
         # Set defaults.
-        # probability of proposing two simultaneous protonation state changes
-        self.simultaneous_proposal_probability = simultaneous_proposal_probability
 
         # Store parameters.
         self.system = system
+        self.topology = topology
         self.temperature = temperature
         self.pressure = pressure
-        self.chemical_potentials = chemical_potentials
-        self.chemical_names = chemical_names
+        self.delta_chem = delta_chem
         self.debug = debug
-        self.nsteps_per_trial = nsteps_per_trial
+
+        self.anionName = anionName
+        self.cationName = cationName
+        self.waterName = waterName
 
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
@@ -173,24 +155,25 @@ class ConstantSalt(object):
         # Set constraint tolerance.
         self.verlet_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
+        # Store force object pointer.
+        # Unlike constph, only altering nonbonded force (like dual topology calculations).
+        for force_index in range(system.getNumForces()):
+            force = system.getForce(force_index)
+            if force.__class__.__name__ == 'NonbondedForce':
+                self.forces_to_update = force
+
         # Check that system has MonteCarloBarostat if pressure is specified.
         if pressure is not None:
             forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
             if 'MonteCarloBarostat' not in forces:
                 raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
 
-        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
-        self.maintainChargeNeutrality = maintainChargeNeutrality
+        self.mutable_residues = self.identifyResidues(self.topology,residue_names=(self.waterName,self.anionName,self.cationName))
 
-        self.water_residues = self.IdentifyResidues(prmtop.topology, residue_names = ('WAT', 'HOH', 'TP4', 'TP5', 'T4E'))
-        self.cation_residues = self.IdentifyResidues(prmtop.topology, residue_names = ('Na', 'NA', 'Na+'))
-        self.anion_residues = self.IdentifyResidues(prmtop.topology, residue_names = ('Cl', 'CL', 'Cl-'))
-
-        # Describe which residues are waters, cations, or anions with a matrix of ones and zeros.
-        self.stateMatrix = self.getResidueIdentities(topology)
-
-        self.cation_parameters = initializeIonParameters(self,water_name,cationName,ion_params=None)
-        self.anion_parameters = initializeIonParameters(self,water_name,anionName,ion_params=None)
+        self.stateVector = self.initializeStateVector()
+        self.water_parameters = self.retrieveResidueParameters(self.topology,self.system,self.waterName)
+        self.cation_parameters = self.initializeIonParameters(ion_name=self.cationName,ion_params=None)
+        self.anion_parameters = self.initializeIonParameters(ion_name=self.anionName,ion_params=None)
 
         # Describing the identities of water and ions with numpy vectors
 
@@ -206,24 +189,8 @@ class ConstantSalt(object):
         self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
         self.states_per_update = list()
 
-        # Determine 14 Coulomb and Lennard-Jones scaling from system.
-        # TODO: Get this from prmtop file?
-        self.coulomb14scale = self.get14scaling(system)
-
         # Store list of exceptions that may need to be modified.
-        self.atomExceptions = [list() for index in range(prmtop._prmtop.getNumAtoms())]
-        for (atom1, atom2, chargeProd, rMin, epsilon, iScee, iScnb) in prmtop._prmtop.get14Interactions():
-            self.atomExceptions[atom1].append(atom2)
-            self.atomExceptions[atom2].append(atom1)
-
-        # Store force object pointer.
-        # Unlike constph, only altering nonbonded force (like dual topology calculations).
-        for force_index in range(system.getNumForces()):
-            force = system.getForce(force_index)
-            if force.__class__.__name__ == 'NonbondedForce':
-            self.forces_to_update = force
-
-        self.setNumAttemptsPerUpdate(nattempts_per_update)
+        self.nattempts_per_update = nattempts_per_update
 
         # Reset statistics.
         self.resetStatistics()
@@ -255,23 +222,22 @@ class ConstantSalt(object):
 
         """
         # Find the NonbondedForce in the system
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
-        nonbonded_force = forces['NonbondedForce']
-
+        #forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
+        #nonbonded_force = forces['NonbondedForce']
         # Return the first occurrence of NonbondedForce particle parameters matching `resname`
         param_list = []
         for residue in topology.residues():
             if residue.name == resname:
                 atoms = [atom for atom in residue.atoms()]
-                [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(atoms[0].index)
-                parameters = {'charge': charge, 'sigma': sigma, 'epsilon': epsilon}
-                param_list.apped(paramters)
-                if self.debug: print('retrieveResidueParameters: %s : %s' % (resname, str(parameters)))
+                for atm in atoms:
+                    [charge, sigma, epsilon] = self.forces_to_update.getParticleParameters(atm.index)
+                    parameters = {'charge': charge, 'sigma': sigma, 'epsilon': epsilon}
+                    param_list.append(parameters)
+                    #if self.debug: print('retrieveResidueParameters: %s : %s' % (resname, str(parameters)))
                 return param_list
-
         raise Exception("resname '%s' not found in topology" % resname)
 
-    def initializeIonParameters(self,water_name,ion_name,ion_params=None):
+    def initializeIonParameters(self,ion_name,ion_params=None):
         '''
         Initialize the set of ion non-bonded parameters so that they match the number of atoms of the water model.
 
@@ -288,20 +254,23 @@ class ConstantSalt(object):
         '''
 
         # Creating a list of non-bonded parameters that matches the size of the water model.
-        num_wat_atoms = len(retrieveResidueParameters(topology,system,water_name))
-        ion_param_list = [{'charge': 0.0, 'sigma': 0.0, 'epsilon': 0.0}]*num_wat_atoms
+        num_wat_atoms = len(self.water_parameters)
+
+        # Initialising dummy atoms to having the smallest float that's not zero, due to a bug
+        eps = sys.float_info.epsilon
+        ion_param_list = num_wat_atoms*[{'charge': eps*units.elementary_charge,'sigma': eps*units.nanometer,'epsilon':eps*units.kilojoule_per_mole}]
 
         # Making the first element of list of parameter dictionaries the ion. This means that ions will be centered
         # on the water oxygen atoms.
         # If ion parameters are not supplied, use Joung and Cheatham parameters.
-        if ion_name == cationName:
+        if ion_name == self.cationName:
             if ion_params == None:
-                ion_param_list[0] = {'charge': 1.0, 'sigma': 0.4477657, 'epsilon': 0.148912744}
+                ion_param_list[0] = {'charge': 1.0*units.elementary_charge,'sigma': 0.4477657*units.nanometer,'epsilon':0.148912744*units.kilojoule_per_mole}
             else:
                 ion_param_list[0] = ion_params
-        elif ion_name == anionName:
+        elif ion_name == self.anionName:
             if ion_params == None:
-                ion_param_list[0] = {'charge': -1.0, 'sigma': 0.2439281, 'epsilon': 0.3658460312}
+                ion_param_list[0] = {'charge': -1.0*units.elementary_charge, 'sigma': 0.2439281*units.nanometer, 'epsilon': 0.3658460312*units.kilojoule_per_mole}
             else:
                 ion_parm_list[0] = ion_params
         else:
@@ -341,12 +310,10 @@ class ConstantSalt(object):
     def getResidueIdentities(self,topology):
         '''
         Describe the identities of water, cations, and anions with a 3 by N matrix of ones and zeros.
-
         Parameters
         ----------
         topology : simtk.openmm.app.topology
             The topology from which water and ion residues are to be identified.
-
         Returns
         -------
         stateMatrix : numpy array
@@ -364,8 +331,27 @@ class ConstantSalt(object):
         # The third row indicates anions
         anion_indices = [res.index for res in self.anion_residues]
         stateMatrix[2,anion_indices] = 1
-
         return stateMatrix
+
+    def initializeStateVector(self):
+        '''
+        Stores the identity of the mutabable residues in a numpy array for efficient seaching and updating of
+        residue identies.
+
+        Returns
+        -------
+        stateVector : numpy array
+            Array of 0s, 1s, and 2s to indicate water, sodium, and chlorine.
+
+        '''
+        names = [res.name for res in self.mutable_residues]
+        stateVector = np.zeros(len(names))
+        for i in range(len(names)):
+            if names[i] == (self.waterName):  stateVector[i] = 0
+            elif names[i] == self.cationName: stateVector[i] = 1
+            elif names[i] == self.anionName: stateVector[i] = 2
+        return stateVector
+
 
     def resetStatistics(self):
         """
@@ -381,170 +367,8 @@ class ConstantSalt(object):
 
         self.nattempted = 0
         self.naccepted = 0
-        self.work_history = list()
 
         return
-
-    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0, context=None):
-        """
-        Update the force parameters to a new titration state by reading them from the cache
-
-        Parameters
-        ----------
-        titration_group_index : int
-            Index of the group that is changing state
-        titration_state_index : int
-            Index of the state of the chosen residue
-        initial_titration_state_index : int, optional, default=None
-            If blending two titration states, the initial titration state to blend.
-            If `None`, set to `titration_state_index`
-        fractional_titration_state : float, optional, default=1.0
-            Fraction of `titration_state_index` to be blended with `initial_titration_state_index`.
-            If 0.0, `initial_titration_state_index` is fully active; if 1.0, `titration_state_index` is fully active.
-        context : simtk.openmm.Context, optional, default=None
-            If provided, will update forces state in the specified Context
-
-        Notes
-        -----
-        * Every titration state has a list called forces, which stores parameters for all forces that need updating.
-        * Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
-        * NonbondedForces also have an entry called `exceptions`, containing exception parameters.
-
-        """
-        # `initial_titration_state_index` should have no effect if not specified, so set it identical to `final_titration_state_index` in that case
-        if initial_titration_state_index is None:
-            initial_titration_state_index = final_titration_state_index
-
-        # Retrieve cached force parameters fro this titration state.
-        cache_initial = self.titrationGroups[titration_group_index]['titration_states'][initial_titration_state_index]['forces']
-        cache_final = self.titrationGroups[titration_group_index]['titration_states'][final_titration_state_index]['forces']
-
-        # Modify charges and exceptions.
-        for force_index, force in enumerate(self.forces_to_update):
-            # Get name of force class.
-            force_classname = force.__class__.__name__
-            # Get atom indices and charges.
-
-            # Update forces using appropriately blended parameters
-            for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
-                atom = {key: atom_initial[key] for key in ['atom_index']}
-                if force_classname == 'NonbondedForce':
-                    for parameter_name in ['charge', 'sigma', 'epsilon']:
-                        atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                            fractional_titration_state * atom_final[parameter_name]
-                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
-                elif force_classname == 'GBSAOBCForce':
-                    for parameter_name in ['charge', 'radius', 'scaleFactor']:
-                        atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                            fractional_titration_state * atom_final[parameter_name]
-                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
-                else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
-
-            # Update exceptions
-            # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                for (exc_initial, exc_final) in zip(cache_initial[force_index]['exceptions'], cache_final[force_index]['exceptions']):
-                    exc = {key: exc_initial[key] for key in ['exception_index', 'particle1', 'particle2']}
-                    for parameter_name in ['chargeProd', 'sigma', 'epsilon']:
-                        exc[parameter_name] = (1.0 - fractional_titration_state) * exc_initial[parameter_name] + \
-                            fractional_titration_state * exc_final[parameter_name]
-                    force.setExceptionParameters(
-                        exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
-
-            # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'):
-                force.updateParametersInContext(context)
-
-    def _cache_force(self, titration_group_index, titration_state_index):
-        """
-        Cache the force parameters for a single titration state.
-
-        Parameters
-        ----------
-        titration_group_index : int
-            Index of the group
-        titration_state_index : int
-            Index of the titration state of the group
-
-        Notes
-        -----
-
-        Call this function to set up the 'forces' information for a single titration state.
-        Every titration state has a list called forces, which stores parameters for all forces that need updating.
-        Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
-        NonbondedForces also have an entry called `exceptions`, containing exception parameters.
-
-        Returns
-        -------
-
-        """
-
-        titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]
-
-        # Store the parameters per individual force
-        f_params = list()
-        for force_index, force in enumerate(self.forces_to_update):
-            # Store parameters for this particular force
-            f_params.append(dict(atoms=list()))
-            # Get name of force class.
-            force_classname = force.__class__.__name__
-            # Get atom indices and charges.
-            charges = titration_state['charges']
-            atom_indices = titration_group['atom_indices']
-
-            charge_by_atom_index = dict(zip(atom_indices, charges))
-
-            # Update charges.
-            # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
-            for atom_index in atom_indices:
-                if force_classname == 'NonbondedForce':
-                    f_params[force_index]['atoms'].append(
-                        {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
-                elif force_classname == 'GBSAOBCForce':
-                    f_params[force_index]['atoms'].append(
-                        {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
-                else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
-                f_params[force_index]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
-                f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
-
-            # Update exceptions
-            # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                f_params[force_index]['exceptions'] = list()
-                for e_ix, exception_index in enumerate(titration_group['exception_indices']):
-                    [particle1, particle2, chargeProd, sigma, epsilon] = map(
-                        strip_in_unit_system, force.getExceptionParameters(exception_index))
-
-                    # Deal with exceptions between atoms outside of titratable residue
-                    try:
-                        charge_1 = charge_by_atom_index[particle1]
-                    except KeyError:
-                        charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
-                    try:
-                        charge_2 = charge_by_atom_index[particle2]
-                    except KeyError:
-                        charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
-
-                    chargeProd = self.coulomb14scale * charge_1 * charge_2
-
-                    # chargeprod and sigma cannot be identically zero or else we risk the error:
-                    # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
-                    # TODO: Once OpenMM interface permits this, omit this code.
-                    if (2 * chargeProd == chargeProd):
-                        chargeProd = sys.float_info.epsilon
-                    if (2 * epsilon == epsilon):
-                        epsilon = sys.float_info.epsilon
-
-                    # store specific local variables in dict by name
-                    exc_dict = dict()
-                    for i in ('exception_index', 'particle1', 'particle2', 'chargeProd', 'sigma', 'epsilon'):
-                        exc_dict[i] = locals()[i]
-                    f_params[force_index]['exceptions'].append(exc_dict)
-
-        self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
     def attempt_identity_swap(self,context):
         '''
@@ -554,156 +378,130 @@ class ConstantSalt(object):
         ----------
         context : simtk.openmm.Context
             The context to update
+        temperature : quantity in units of Kelvin
+            The inverse temperature of the simulation
 
         Notes
         -----
         Code currently written specifically for exchanging two water molecules for Na and Cl, with generalisation to follow.
         Currently without NCMC, to be added.
         '''
-
+        kT=kB * self.temperature
+        self.nattempted += 1
         # Getting the current potential energy
         state = context.getState(getEnergy=True)
         pot_energy_old = state.getPotentialEnergy()
-        if self.debug: print "old potential energy = ", pot_energy_old
+        if self.debug: print("old potential energy =", pot_energy_old)
 
         # Saving and assigning the initial and final state matrix respectively.
-        initial_identities = copy.deepcopy(self.stateMatrix)
-        final_identities = copy.deepcopy(self.stateMatrix)
+        initial_identities = copy.deepcopy(self.mutable_residues)
+        final_identities = copy.deepcopy(self.mutable_residues)
 
         # Whether to delete or add salt by selecting random water molecules to turn into a cation and an anion or vice versa.
         # Here could add the option to create multiple pairs of waters options for configurational biasing
-        if (len(self.cation_residues)==0) or ((len(self.cation_residues) < len(self.water_residues)*0.5) and (np.random.random() < 0.5)):
-            indices = np.random.choice(a=np.where(self.stateMatrix[0] == 1)[0],size=2,replace=False)
-            final_identities[0][indices] = 0
-            final_identities[1][indices[0]] = 1
-            final_identities[2][indices[1]] = 1
+        if (sum(self.stateVector==1)==0) or (sum(self.stateVector==1) < sum(self.stateVector==0)*0.5) and (np.random.random() < 0.5):
+            change_indices = np.random.choice(a=np.where(self.stateVector == 0)[0],size=2,replace=False)
+            mode_forward = "add salt"
+            mode_backward ="remove salt"
         else:
-            cation_index = np.random.choice(a=np.where(self.stateMatrix[1]==1)[0],size=1)
-            anion_index = np.random.choice(a=np.where(self.stateMatrix[2]==1)[0],size=1)
-            final_identities[0][cation_index] = 1
-            final_identities[0][anion_index] = 1
-            final_identities[1][cation_index] = 0
-            final_identities[2][anion_index] = 0
+            mode_forward = "remove salt"
+            mode_backward = "add salt"
+            cation_index = np.random.choice(a=np.where(self.stateVector==1)[0],size=1)
+            anion_index = np.random.choice(a=np.where(self.stateVector==2)[0],size=1)
+            change_indices = np.array([cation_index,anion_index])
 
-        # TODO: set forcefield parameters to new values, calculate new energy, accept or reject.
-        # TODO: option for NCMC.
+        # TODO: option for NCMC. The section below should go into a separete function
+        # Update the names and forces of the selected mutable residues.
+        self.updateForces(mode_forward,change_indices)
+        # Get the new energy of the state
+        # .updateParameters may be very slow, as ALL of the parameters are updated.
+        self.forces_to_update.updateParametersInContext(context)
+        state = context.getState(getEnergy=True)
+        pot_energy_new = state.getPotentialEnergy()
+        print("new potential energy =",pot_energy_new)
 
-    def attempt_protonation_state_change(self, context):
-        """
-        Attempt a single Monte Carlo protonation state change.
+        log_accept = (pot_energy_old - pot_energy_new - self.delta_chem)/kT
+        # Accept or reject:
+        if (log_accept > 0.0) or (random.random() < math.exp(log_accept)):
+            # Accept :D
+            self.naccepted += 1
+            self.setIdentity(mode_forward,change_indices)
+            if self.debug==True: print(mode_forward,"accepted")
+        else:
+            # Reject :(
+            # Revert parameters to their previous value
+            self.updateForces(mode_backward,change_indices)
+            # As above, optimise this step so only the relavent paramaters are updated.
+            self.forces_to_update.updateParametersInContext(context)
+            if self.debug==True: print(mode_forward,"rejected")
+
+    def setIdentity(self,mode,exchange_indices):
+        '''
+        Function to set the names of the mutated residues and update the state vector. Called after a transformation
+        of the forcefield parameters has been accepted.
 
         Parameters
         ----------
-        context : simtk.openmm.Context
-            The context to update
+        mode : string
+            Either 'add salt' or 'remove  salt'
+        exchange_indices : numpy array
+            Two element vector containing the residue indices that have been changed
 
-        Notes
-        -----
-        The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.
+        '''
 
-        """
+        if mode == "add salt":
+            self.mutable_residues[exchange_indices[0]].name = self.cationName
+            self.stateVector[exchange_indices[0]] = 1
+            self.mutable_residues[exchange_indices[1]].name = self.anionName
+            self.stateVector[exchange_indices[1]] = 2
+        if mode == "remove salt":
+            self.mutable_residues[exchange_indices[0]].name = self.waterName
+            self.mutable_residues[exchange_indices[1]].name = self.waterName
+            self.stateVector[exchange_indices] = 0
 
-        # Activate velocity Verlet integrator
-        self.compound_integrator.setCurrentIntegrator(1)
+    def updateForces(self,mode,exchange_indices):
+        '''
+        Update the forcefield parameters and names according the state vector.
 
-        # If using NCMC, store initial positions.
-        if self.nsteps_per_trial > 0:
-            initial_positions = context.getState(getPositions=True).getPositions(asNumpy=True)
+        Parameters
+        ----------
+        mode : string
+            Whether the supplied indices will be used to 'add salt' or 'remove salt'
+        exchange_indices : numpy array
+            Which water residues will be converted to cation and anion, or which cation and anion will be turned
+            into 2 water residue.
+        Returns
+        -------
 
-        # Compute initial probability of this protonation state.
-        log_P_initial, pot1, kin1 = self._compute_log_probability(context)
+        '''
+        # TODO: add fractional state for NCMC.
 
-        if self.debug:
-            state = context.getState(getEnergy=True)
-            initial_potential = state.getPotentialEnergy()
-            print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
-
-        # Store current titration state indices.
-        initial_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
-
-        # Select new titration states.
-        final_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
-        # Choose how many titratable groups to simultaneously attempt to update.
-        # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
-        ndraw = 1
-        if (self.getNumTitratableGroups() > 1) and (random.random() < self.simultaneous_proposal_probability):
-            ndraw = 2
-        # Select which titratible residues to update.
-        titration_group_indices = random.sample(range(self.getNumTitratableGroups()), ndraw)
-        # Select new titration states.
-        for titration_group_index in titration_group_indices:
-            # Choose a titration state with uniform probability (even if it is the same as the current state).
-            titration_state_index = random.choice(range(self.getNumTitrationStates(titration_group_index)))
-            final_titration_states[titration_group_index] = titration_state_index
-        # TODO: Always accept self transitions, or avoid them altogether.
-
-        if self.maintainChargeNeutrality:
-            # TODO: Designate waters/ions to switch to maintain charge neutrality
-            raise Exception('maintainChargeNeutrality feature not yet supported')
-
-        # Compute work for switching to new protonation states.
-        if self.nsteps_per_trial == 0:
-            # Use instantaneous switching.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-        else:
-            # Run NCMC integration.
-            for step in range(self.nsteps_per_trial):
-                # Take a Verlet integrator step.
-                self.verlet_integrator.step(1)
-                # Update the titration state.
-                titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-                # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
-                # since parameter update would occur in the middle of a velocity Verlet step.
-                # TODO: This could be optimized by only calling
-                # context.updateParametersInContext once rather than after every titration
-                # state update.
-                for titration_group_index in titration_group_indices:
-                    self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
-                                        titration_group_index], fractional_titration_state=titration_lambda, context=context)
-                    # TODO: Optimize where integrator.step() is called
-                    self.verlet_integrator.step(1)
-
-        # Compute final probability of this protonation state.
-        log_P_final, pot2, kin2 = self._compute_log_probability(context)
-
-        # Compute work and store work history.
-        work = - (log_P_final - log_P_initial)
-        self.work_history.append((initial_titration_states, final_titration_states, work))
-
-        # Accept or reject with Metropolis criteria.
-        log_P_accept = -work
-        if self.debug:
-            print("LOGP" + str(log_P_accept))
-        if self.debug:
-            print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-        self.nattempted += 1
-        if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
-            # Accept.
-            self.naccepted += 1
-            self.pot_energies.append(pot2)
-            self.kin_energies.append(kin2)
-            # Update titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-            # If using NCMC, flip velocities to satisfy super-detailed balance.
-            if self.nsteps_per_trial > 0:
-                context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
-        else:
-            # Reject.
-            self.pot_energies.append(pot1)
-            self.kin_energies.append(kin1)
-            # Restore titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-            # If using NCMC, restore coordinates and flip velocities.
-            if self.nsteps_per_trial > 0:
-                context.setPositions(initial_positions)
-
-        # Restore user integrator
-        self.compound_integrator.setCurrentIntegrator(0)
-
-        return
+        if mode == 'add salt':
+            molecule = [atom for atom in self.mutable_residues[exchange_indices[0]].atoms()]
+            atm_index = 0
+            for atom in molecule:
+                target_force = self.cation_parameters[atm_index]
+                self.forces_to_update.setParticleParameters(atom.index,charge=target_force["charge"],sigma=target_force["sigma"],epsilon=target_force["epsilon"])
+                atm_index += 1
+            molecule = [atom for atom in self.mutable_residues[exchange_indices[1]].atoms()]
+            atm_index = 0
+            for atom in molecule:
+                target_force = self.anion_parameters[atm_index]
+                self.forces_to_update.setParticleParameters(atom.index,charge=target_force["charge"],sigma=target_force["sigma"],epsilon=target_force["epsilon"])
+                atm_index += 1
+        if mode == 'remove salt':
+            molecule = [atom for atom in self.mutable_residues[exchange_indices[0]].atoms()]
+            atm_index = 0
+            for atom in molecule:
+                target_force = self.water_parameters[atm_index]
+                self.forces_to_update.setParticleParameters(atom.index,charge=target_force["charge"],sigma=target_force["sigma"],epsilon=target_force["epsilon"])
+                atm_index += 1
+            molecule = [atom for atom in self.mutable_residues[exchange_indices[1]].atoms()]
+            atm_index = 0
+            for atom in molecule:
+                target_force = self.water_parameters[atm_index]
+                self.forces_to_update.setParticleParameters(atom.index,charge=target_force["charge"],sigma=target_force["sigma"],epsilon=target_force["epsilon"])
+                atm_index += 1
 
     def update(self, context):
         """
@@ -722,10 +520,7 @@ class ConstantSalt(object):
 
         # Perform a number of protonation state update trials.
         for attempt in range(self.nattempts_per_update):
-            self.attempt_protonation_state_change(context)
-
-        self.states_per_update.append(self.getTitrationStates())
-
+            self.attempt_identity_swap(context)
         return
 
     def getAcceptanceProbability(self):
@@ -740,150 +535,3 @@ class ConstantSalt(object):
 
         """
         return float(self.naccepted) / float(self.nattempted)
-
-    def _compute_log_probability(self, context):
-        """
-        Compute log probability of current configuration and protonation state.
-
-        Parameters
-        ----------
-
-        context : simtk.openmm.Context
-            the context
-
-        Returns
-        -------
-        log_P : float
-            log probability of the current context
-        pot_energy : float
-            potential energy of the current context
-        kin_energy : float
-            kinetic energy of the current context
-
-        TODO
-        ----
-        * Generalize this to use ThermodynamicState concept of reduced potential (from repex)
-
-
-        """
-
-        temperature = self.temperature
-        pressure = self.pressure
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-
-        # Add energetic contribution to log probability.
-        state = context.getState(getEnergy=True)
-        pot_energy = state.getPotentialEnergy()
-        kin_energy = state.getKineticEnergy()
-        total_energy = pot_energy + kin_energy
-        log_P = - beta * total_energy
-
-        if pressure is not None:
-            # Add pressure contribution for periodic simulations.
-            volume = context.getState().getPeriodicBoxVolume()
-            if self.debug:
-                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-            log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
-
-        # Include reference energy and pH-dependent contributions.
-        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
-            titration_state = titration_group['titration_states'][titration_state_index]
-            relative_energy = titration_state['relative_energy']
-            if self.debug:
-                print("beta * relative_energy: %.2f",  +beta * relative_energy)
-            log_P += - self._get_proton_chemical_potential(titration_group_index, titration_state_index) + beta * relative_energy
-
-        # Return the log probability.
-        return log_P, pot_energy, kin_energy
-
-    def getNumAttemptsPerUpdate(self):
-        """
-        Get the number of Monte Carlo titration state change attempts per call to update().
-
-        Returns
-        -------
-
-        nattempts_per_iteration : int
-            the number of attempts to be made per iteration
-
-        """
-        return self.nattempts_per_update
-
-    def setNumAttemptsPerUpdate(self, nattempts=None):
-        """
-        Set the number of Monte Carlo titration state change attempts per call to update().
-
-        Parameters
-        ----------
-
-        nattempts : int
-            the number to attempts to make per iteration;
-            if None, this value is computed automatically based on the number of titratable groups (default None)
-
-        """
-        self.nattempts_per_update = nattempts
-        if nattempts is None:
-            # TODO: Perform enough titration attempts to ensure thorough mixing without taking too long per update.
-            # TODO: Cache already-visited states to avoid recomputing?
-            self.nattempts_per_update = self.getNumTitratableGroups()
-
-    def _get_reduced_potentials(self, context, beta, group_index=0):
-        """Retrieve the reduced potentials for all states of the system given a context.
-
-        Parameters
-        ----------
-        context : simtk.openmm.Context
-            The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-        # beta * U(x)_j
-
-        ub_j = np.empty(len(self.titrationGroups[group_index]['titration_states']))
-        for j in range(ub_j.size):
-            ub_j[j] = self._reduced_potential(context, beta, j, group_index)
-
-        # Reset to current state
-        return ub_j
-
-    def _reduced_potential(self, context, beta, state_index, group_index=0):
-        """Retrieve the reduced potential for a given state (specified by index) in the given context.
-
-        Parameters
-        ----------
-        context : simtk.openmm.Context
-            The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
-        state_index : int
-            Index of the state for which the reduced potential needs to be calculated.
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-        potential_energy = self._get_potential_energy(context, state_index)
-        return self._get_proton_chemical_potential(group_index, state_index) + beta * potential_energy
-
-    def _get_potential_energy(self, context, state_index, group_index=0):
-        """ Retrieve the potential energy for a given state (specified by index) in the given context.
-
-        Parameters
-        ----------
-        context : simtk.openmm.Context
-            The context to update
-        state_index : int
-            Index of the state for which the reduced potential needs to be calculated.
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-        current_state = self.getTitrationState(group_index)
-        self.setTitrationState(group_index, state_index, context)
-        temp_state = context.getState(getEnergy=True)
-        potential_energy = temp_state.getPotentialEnergy()
-        self.setTitrationState(group_index, current_state, context)
-        return potential_energy
