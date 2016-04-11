@@ -56,7 +56,7 @@ import math
 import random
 import copy
 import numpy as np
-
+import logging
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
@@ -961,7 +961,7 @@ class MonteCarloTitration(object):
 
         self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
-    def attempt_protonation_state_change(self, context):
+    def attempt_protonation_state_change(self, context, reject_on_nan=True):
         """
         Attempt a single Monte Carlo protonation state change.
 
@@ -1014,67 +1014,84 @@ class MonteCarloTitration(object):
             # TODO: Designate waters/ions to switch to maintain charge neutrality
             raise Exception('maintainChargeNeutrality feature not yet supported')
 
-        # Compute work for switching to new protonation states.
-        if self.nsteps_per_trial == 0:
-            # Use instantaneous switching.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-        else:
-            # Run NCMC integration.
-            for step in range(self.nsteps_per_trial):
-                # Take a Verlet integrator step.
-                self.verlet_integrator.step(1)
-                # Update the titration state.
-                titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-                # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
-                # since parameter update would occur in the middle of a velocity Verlet step.
-                # TODO: This could be optimized by only calling
-                # context.updateParametersInContext once rather than after every titration
-                # state update.
+        try:
+            # Compute work for switching to new protonation states.
+            if self.nsteps_per_trial == 0:
+                # Use instantaneous switching.
                 for titration_group_index in titration_group_indices:
-                    self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
-                                        titration_group_index], fractional_titration_state=titration_lambda, context=context)
-                    # TODO: Optimize where integrator.step() is called
+                    self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+            else:
+                # Run NCMC integration.
+                for step in range(self.nsteps_per_trial):
+                    # Take a Verlet integrator step.
                     self.verlet_integrator.step(1)
+                    # Update the titration state.
+                    titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
+                    # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
+                    # since parameter update would occur in the middle of a velocity Verlet step.
+                    # TODO: This could be optimized by only calling
+                    # context.updateParametersInContext once rather than after every titration
+                    # state update.
+                    for titration_group_index in titration_group_indices:
+                        self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
+                                            titration_group_index], fractional_titration_state=titration_lambda, context=context)
+                        # TODO: Optimize where integrator.step() is called
+                        self.verlet_integrator.step(1)
 
-        # Compute final probability of this protonation state.
-        log_P_final, pot2, kin2 = self._compute_log_probability(context)
+            # Compute final probability of this protonation state.
+            log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
-        # Compute work and store work history.
-        work = - (log_P_final - log_P_initial)
-        self.work_history.append((initial_titration_states, final_titration_states, work))
+            # Compute work and store work history.
+            work = - (log_P_final - log_P_initial)
+            self.work_history.append((initial_titration_states, final_titration_states, work))
 
-        # Accept or reject with Metropolis criteria.
-        log_P_accept = -work
-        if self.debug:
-            print("LOGP" + str(log_P_accept))
-        if self.debug:
-            print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-        self.nattempted += 1
-        if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
-            # Accept.
-            self.naccepted += 1
-            self.pot_energies.append(pot2)
-            self.kin_energies.append(kin2)
-            # Update titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-            # If using NCMC, flip velocities to satisfy super-detailed balance.
-            if self.nsteps_per_trial > 0:
-                context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
-        else:
-            # Reject.
-            self.pot_energies.append(pot1)
-            self.kin_energies.append(kin1)
-            # Restore titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-            # If using NCMC, restore coordinates and flip velocities.
-            if self.nsteps_per_trial > 0:
-                context.setPositions(initial_positions)
+            # Accept or reject with Metropolis criteria.
+            log_P_accept = -work
+            if self.debug:
+                print("LOGP" + str(log_P_accept))
+            if self.debug:
+                print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+            self.nattempted += 1
+            if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
+                # Accept.
+                self.naccepted += 1
+                self.pot_energies.append(pot2)
+                self.kin_energies.append(kin2)
+                # Update titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+                # If using NCMC, flip velocities to satisfy super-detailed balance.
+                if self.nsteps_per_trial > 0:
+                    context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
+            else:
+                # Reject.
+                self.pot_energies.append(pot1)
+                self.kin_energies.append(kin1)
+                # Restore titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
+                # If using NCMC, restore coordinates and flip velocities.
+                if self.nsteps_per_trial > 0:
+                    context.setPositions(initial_positions)
 
-        # Restore user integrator
-        self.compound_integrator.setCurrentIntegrator(0)
+        except Exception as err:
+
+            if err.message == 'Particle coordinate is nan' and reject_on_nan:
+                logging.warning("NaN during NCMC move, rejecting")
+                # Reject.
+                self.pot_energies.append(pot1)
+                self.kin_energies.append(kin1)
+                # Restore titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
+                # If using NCMC, restore coordinates and flip velocities.
+                if self.nsteps_per_trial > 0:
+                    context.setPositions(initial_positions)
+            else:
+                raise
+        finally:
+            # Restore user integrator
+            self.compound_integrator.setCurrentIntegrator(0)
 
         return
 
@@ -1101,7 +1118,7 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, settings,iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
+    def calibrate(self, settings, iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
         """
         Calibrate all available aminoacids
 

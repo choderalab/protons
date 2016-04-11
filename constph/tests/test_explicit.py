@@ -173,7 +173,7 @@ class TestAminoAcidsExplicitCalibration(object):
                 raise SkipTest
 
         print(resname)
-        aac = AminoAcidCalibrator(resname, self.settings, platform_name="CPU", minimize=False)
+        aac = AminoAcidCalibrator(resname, self.settings, minimize=False)
         print(aac.calibrate(iterations=5, mc_every=4, weights_every=1))
 
 
