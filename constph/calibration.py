@@ -102,7 +102,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, b=0.8, t0=50, group_index=0):
+    def adapt_weights(self, context, scheme, b=0.85, t0=10000, group_index=0):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -127,7 +127,7 @@ class CalibrationTitration(MonteCarloTitration):
         if scheme == 'binary':
             update = self._binary_update(group_index=group_index, b=b, t0=t0)
         elif scheme == 'global':
-            update = self._global_update(context, zeta, group_index=group_index, b=b, t0=t0)
+            update = self._global_update(context, group_index=group_index, b=b, t0=t0)
         else:
             raise ValueError("Unknown adaptation scheme: {}!".format(scheme))
 
@@ -137,27 +137,38 @@ class CalibrationTitration(MonteCarloTitration):
         zeta_t = zeta - zeta[0]
 
         # Set reference energy based on new zeta
-        for i, titr_state in enumerate(zeta_t):
-            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state
-
+        self.set_relative_free_energy(zeta_t, group_index=group_index)
         return
 
+    def set_relative_free_energy(self, zetas, group_index=0):
+        """
+        Set relative free energies based on provided zetas
+        Parameters
+        ----------
+        zetas : list of float
+            Zeta values for each titration state
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0
+        """
+
+        for i, titr_state_zeta in enumerate(zetas):
+            # Zeta has opposite sign of relative energies
+            self.titrationGroups[group_index]['titration_states'][i]['relative_frenergy'] = titr_state_zeta
+
     def get_zeta(self, group_index=0):
-        """Retrieve relative free energies for specified titratable group.
+        """Retrieve zeta for specified titratable group.
         Parameters
         ----------
         beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
             inverse temperature
         group_index : int, optional
-            Index of the group that needs updating, defaults to 0.group_index
+            Index of the group that needs updating, defaults to 0
 
         Returns
         -------
-        np.ndarray - relative free energy of states
+        np.ndarray - zeta of states
         """
-
-        zeta = np.asarray(
-            list(map(lambda x: np.float64(- x['relative_energy']), self.titrationGroups[group_index]['titration_states'][:])))
+        zeta = np.asarray(list(map(lambda x: x['relative_frenergy'], self.titrationGroups[group_index]['titration_states'][:])))
         return zeta
 
     def _get_target_weights(self, group_index=0):
@@ -196,9 +207,11 @@ class CalibrationTitration(MonteCarloTitration):
         delta[self.getTitrationState(group_index)] = 1
         update *= delta
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
+        # update /= self.n_adaptations
+
         return update
 
-    def _global_update(self, context, zeta, b=1.0, t0=0, group_index=0):
+    def _global_update(self, context, b=1.0, t0=0, group_index=0):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -219,10 +232,10 @@ class CalibrationTitration(MonteCarloTitration):
         -------
         np.ndarray : free energy updates
         """
-        # target weights
+        zeta = self.get_zeta(group_index)
         pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
-        update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
+        update = np.apply_along_axis(lambda x: 1.0 / x, 0, pi_j)
         ub_j = self._get_reduced_potentials(context, group_index)
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
@@ -230,6 +243,7 @@ class CalibrationTitration(MonteCarloTitration):
         w_j = np.exp(log_w_j)
         update *= w_j
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
+        # update /= self.n_adaptations
 
         return update
 
@@ -249,11 +263,13 @@ class CalibrationTitration(MonteCarloTitration):
         -------
         np.ndarray - gain factor matrix
         """
+
         if not 0.5 <= b <= 1.0:
             raise ValueError("β needs to be between 1/2 and 1.0")
 
         pi_j = self._get_target_weights(group_index)
-        gain = np.empty_like(pi_j)
+
+        gain = np.zeros_like(pi_j)
         for j in range(gain.size):
             if self.n_adaptations <= t0:
                 gain[j] = min(pi_j[j], 1.0/pow(self.n_adaptations, b))
@@ -480,7 +496,7 @@ class AminoAcidCalibrator(object):
                  "hip": Histidine
                  }
 
-    def __init__(self, residue_name, settings, minimize=False):
+    def __init__(self, residue_name, settings, guess_free_energy=None, minimize=False):
         """Calibrate a single amino acid in a reference system for a given pH.
 
         Parameters
@@ -496,6 +512,8 @@ class AminoAcidCalibrator(object):
             timestep : int, timestep for Langevin integration
             nsteps_per_trial : int, number of ncmc timesteps (0 for instantaneous MC)
             platform_name : str, name of the OpenMM Platform (e.g. 'CPU', 'OpenCL')
+        guess_free_energy : list, optional
+            Reference free energies for the single amino acid from a previous calibration, to continue where one left off.
 
         Notes
         -----
@@ -531,17 +549,23 @@ class AminoAcidCalibrator(object):
         platform_name = settings["platform_name"]
         integrator = openmm.LangevinIntegrator(temp, crate, ts)
 
+        self.target_weights = [AminoAcidCalibrator.supported[residue_name](pH).weights()]
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(press, temp))
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press, nsteps_per_trial=nspt, implicit=False, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press, nsteps_per_trial=nspt, implicit=False, target_weights=self.target_weights)
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None, nsteps_per_trial=nspt, implicit=True, target_weights=[AminoAcidCalibrator.supported[residue_name](pH).weights()])
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None, nsteps_per_trial=nspt, implicit=True, target_weights=self.target_weights)
         else:
             raise ValueError("Solvent not recognized")
 
+        if guess_free_energy is not None:
+            # Zeta has opposite sign of relative free energy
+            mc_titration.set_relative_free_energy(guess_free_energy)
         platform = openmm.Platform.getPlatformByName(platform_name)
         context = openmm.Context(system, mc_titration.compound_integrator, platform)
+
+        platform.setPropertyValue(context, "CudaDeviceIndex", "1")
 
         if minimize:
             minimized_context, positions = self._minimizer(platform_name, system, positions) # dont use minimized_context
@@ -570,20 +594,22 @@ class AminoAcidCalibrator(object):
             'binary' for binary update
             'global' for global update
 
-        Returns
+        Yields
         -------
-
+        np.ndarray - relative free energy from calibration
         """
         state_updates = 0
-        for iteration in range(iterations):
+        for iteration in range(1, iterations):
             self.integrator.step(1)
             if iteration % mc_every == 0:
                 state_updates += 1
                 self.titration.update(self.context)
+                # print("state", self.titration.getTitrationState(0))
                 if state_updates % weights_every == 0:
                     self.titration.adapt_weights(self.context, scheme)
+                    yield self.titration.get_zeta()
 
-        return [frener for frener in self.titration.get_zeta()]
+
 
     @staticmethod
     def _minimizer(platform_name, system, positions, nsteps=1000):

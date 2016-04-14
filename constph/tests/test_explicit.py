@@ -151,7 +151,7 @@ class TestAminoAcidsExplicitCalibration(object):
         settings = dict()
         settings["temperature"] = 300.0 * unit.kelvin
         settings["timestep"] = 1.0 * unit.femtosecond
-        settings["pressure"] = 1.0 * unit.hectopascal
+        settings["pressure"] = 1013.25 * unit.hectopascal
         settings["collision_rate"] = 9.1 / unit.picoseconds
         settings["nsteps_per_trial"] = 5
         settings["pH"] = 7.4

@@ -176,7 +176,10 @@ class MonteCarloTitration(object):
         self.cpin_filename = cpin_filename
         self.debug = debug
         self.nsteps_per_trial = nsteps_per_trial
-
+        if implicit:
+            self.solvent = "implicit"
+        else:
+            self.solvent = "explicit"
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
@@ -204,8 +207,6 @@ class MonteCarloTitration(object):
 
         if implicit and maintainChargeNeutrality:
             raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
-
-
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -272,9 +273,10 @@ class MonteCarloTitration(object):
                     # Extract charges for this titration state.
                     # is defined in elementary_charge units
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
-                    # Extract relative energy for this titration state.
-                    relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
 
+                    # Extract relative energy for this titration state.
+                    # relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
+                    relative_energy = 0.0 * units.kilocalories_per_mole
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
                     # Get proton count.
@@ -454,6 +456,7 @@ class MonteCarloTitration(object):
 
         self.nattempted = 0
         self.naccepted = 0
+        self.nrejected = 0
         self.work_history = list()
 
         return
@@ -687,7 +690,7 @@ class MonteCarloTitration(object):
 
         state = dict()
         state['pKref'] = pKref
-        state['relative_energy'] = relative_energy * self.beta  # dimensionless quantity
+        state['relative_frenergy'] = relative_energy * self.beta  # dimensionless quantity
         state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
@@ -1065,6 +1068,7 @@ class MonteCarloTitration(object):
                     context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
             else:
                 # Reject.
+                self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
                 # Restore titration states.
@@ -1075,10 +1079,10 @@ class MonteCarloTitration(object):
                     context.setPositions(initial_positions)
 
         except Exception as err:
-
             if str(err) == 'Particle coordinate is nan' and reject_on_nan:
                 logging.warning("NaN during NCMC move, rejecting")
                 # Reject.
+                self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
                 # Restore titration states.
@@ -1118,13 +1122,14 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, settings, iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
+    def calibrate(self, platform_name="Reference", iterations=10000, mc_every=100, weights_every=1, scheme='binary', updated_frenergies=None):
         """
         Calibrate all available aminoacids
 
         Todo
         ----
         - How to treat ligands
+        - document
         """
         from .calibration import AminoAcidCalibrator
 
@@ -1143,16 +1148,35 @@ class MonteCarloTitration(object):
             if not supported:
                 raise ValueError("Unsupported residue/ligand: {}".format(group_name))
 
-        updated_frenergies = dict()
+        if updated_frenergies is None:
+            updated_frenergies = {key: None for (key) in residuenames}
+        else:
+            updated_frenergies = dict(updated_frenergies)  # deepcopy
+
+
+        # TODO currently only works if user is also using a Langevin integrator
+        calibration_settings = dict()
+        calibration_settings["temperature"] = self.temperature
+        calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize() # Should be the user integrator
+        calibration_settings["pressure"] = self.pressure
+        calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
+        calibration_settings["pH"] = self.pH
+        calibration_settings["solvent"] = self.solvent
+        calibration_settings["nsteps_per_trial"] = self.nsteps_per_trial
+        calibration_settings["platform_name"] = platform_name
+
         for aa in residuenames:
-            aac = AminoAcidCalibrator(aa, settings)
-            updated_frenergies[aa] = aac.calibrate(iterations=iterations, mc_every=mc_every, weights_every=weights_every, scheme=scheme)
+            aac = AminoAcidCalibrator(aa, calibration_settings, guess_free_energy=updated_frenergies[aa])
+            updated_frenergy = [frener for frener in aac.calibrate(iterations=iterations, mc_every=mc_every, weights_every=weights_every, scheme=scheme)]
+            updated_frenergies[aa] = updated_frenergy[-1]
 
         for group_index, group in enumerate(self.titrationGroups):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
-                self.titrationGroups[group_index]['titration_states'][state_index]['relative_energy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
+                self.titrationGroups[group_index]['titration_states'][state_index]['relative_frenergy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
 
         return updated_frenergies
+
+
 
     def getAcceptanceProbability(self):
         """
@@ -1207,13 +1231,13 @@ class MonteCarloTitration(object):
                 print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA)))
             log_P += -self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
-        # Subtract reference energy contributions.
+        # Add reference free energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
-            relative_energy = titration_state['relative_energy']
+            relative_frenergy = titration_state['relative_frenergy']
             if self.debug:
-                print("beta * relative_energy: %.2f",  + relative_energy)
-            log_P -= - relative_energy
+                print("beta * relative_energy: %.2f",  + relative_frenergy)
+            log_P += relative_frenergy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy

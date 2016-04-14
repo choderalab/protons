@@ -99,6 +99,7 @@ def compute_potential_components(context):
     del context, integrator
     return energy_components
 
+
 def minimizer(platform_name, system, positions, nsteps=1000):
     integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
     CONSTRAINT_TOLERANCE = 1.0e-5
@@ -110,4 +111,4 @@ def minimizer(platform_name, system, positions, nsteps=1000):
     openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
     logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
     positions = context.getState(getPositions=True).getPositions(asNumpy=True)
-    return context
+    return context, positions
