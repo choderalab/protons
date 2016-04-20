@@ -21,7 +21,6 @@ class LigandXmlTestCase(TestCase):
         """
         parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml", pH=4.5)
 
-
     def test_xml_compilation(self):
         """
         Compile an xml file for the isomers

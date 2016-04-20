@@ -55,13 +55,12 @@ import sys
 import math
 import random
 import copy
-import time
 import numpy as np
-from scipy.misc import logsumexp
+import logging
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
-import pymbar
+from .logger import logger
 from openmmtools.integrators import VelocityVerletIntegrator
 
 # MODULE CONSTANTS
@@ -170,13 +169,17 @@ class MonteCarloTitration(object):
         # Store parameters.
         self.system = system
         self.temperature = temperature
-        self.beta = 1.0 / (temperature * kB)
+        kT = kB * temperature  # thermal energy
+        self.beta = 1.0 / kT  # inverse temperature
         self.pressure = pressure
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
         self.nsteps_per_trial = nsteps_per_trial
-
+        if implicit:
+            self.solvent = "implicit"
+        else:
+            self.solvent = "explicit"
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
@@ -204,8 +207,6 @@ class MonteCarloTitration(object):
 
         if implicit and maintainChargeNeutrality:
             raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
-
-
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -272,10 +273,10 @@ class MonteCarloTitration(object):
                     # Extract charges for this titration state.
                     # is defined in elementary_charge units
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
-                    # Extract relative energy for this titration state.
-                    relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
-                    relative_energy = relative_energy
 
+                    # Extract relative energy for this titration state.
+                    # relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
+                    relative_energy = 0.0 * units.kilocalories_per_mole
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
                     # Get proton count.
@@ -455,6 +456,7 @@ class MonteCarloTitration(object):
 
         self.nattempted = 0
         self.naccepted = 0
+        self.nrejected = 0
         self.work_history = list()
 
         return
@@ -688,7 +690,7 @@ class MonteCarloTitration(object):
 
         state = dict()
         state['pKref'] = pKref
-        state['relative_energy'] = relative_energy * self.beta  # dimensionless quantity
+        state['relative_frenergy'] = relative_energy * self.beta  # dimensionless quantity
         state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
@@ -962,7 +964,7 @@ class MonteCarloTitration(object):
 
         self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
-    def attempt_protonation_state_change(self, context):
+    def attempt_protonation_state_change(self, context, reject_on_nan=True):
         """
         Attempt a single Monte Carlo protonation state change.
 
@@ -1015,67 +1017,85 @@ class MonteCarloTitration(object):
             # TODO: Designate waters/ions to switch to maintain charge neutrality
             raise Exception('maintainChargeNeutrality feature not yet supported')
 
-        # Compute work for switching to new protonation states.
-        if self.nsteps_per_trial == 0:
-            # Use instantaneous switching.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-        else:
-            # Run NCMC integration.
-            for step in range(self.nsteps_per_trial):
-                # Take a Verlet integrator step.
-                self.verlet_integrator.step(1)
-                # Update the titration state.
-                titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-                # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
-                # since parameter update would occur in the middle of a velocity Verlet step.
-                # TODO: This could be optimized by only calling
-                # context.updateParametersInContext once rather than after every titration
-                # state update.
+        try:
+            # Compute work for switching to new protonation states.
+            if self.nsteps_per_trial == 0:
+                # Use instantaneous switching.
                 for titration_group_index in titration_group_indices:
-                    self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
-                                        titration_group_index], fractional_titration_state=titration_lambda, context=context)
-                    # TODO: Optimize where integrator.step() is called
+                    self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+            else:
+                # Run NCMC integration.
+                for step in range(self.nsteps_per_trial):
+                    # Take a Verlet integrator step.
                     self.verlet_integrator.step(1)
+                    # Update the titration state.
+                    titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
+                    # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
+                    # since parameter update would occur in the middle of a velocity Verlet step.
+                    # TODO: This could be optimized by only calling
+                    # context.updateParametersInContext once rather than after every titration
+                    # state update.
+                    for titration_group_index in titration_group_indices:
+                        self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
+                                            titration_group_index], fractional_titration_state=titration_lambda, context=context)
+                        # TODO: Optimize where integrator.step() is called
+                        self.verlet_integrator.step(1)
 
-        # Compute final probability of this protonation state.
-        log_P_final, pot2, kin2 = self._compute_log_probability(context)
+            # Compute final probability of this protonation state.
+            log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
-        # Compute work and store work history.
-        work = - (log_P_final - log_P_initial)
-        self.work_history.append((initial_titration_states, final_titration_states, work))
+            # Compute work and store work history.
+            work = - (log_P_final - log_P_initial)
+            self.work_history.append((initial_titration_states, final_titration_states, work))
 
-        # Accept or reject with Metropolis criteria.
-        log_P_accept = -work
-        if self.debug:
-            print("LOGP" + str(log_P_accept))
-        if self.debug:
-            print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-        self.nattempted += 1
-        if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
-            # Accept.
-            self.naccepted += 1
-            self.pot_energies.append(pot2)
-            self.kin_energies.append(kin2)
-            # Update titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
-            # If using NCMC, flip velocities to satisfy super-detailed balance.
-            if self.nsteps_per_trial > 0:
-                context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
-        else:
-            # Reject.
-            self.pot_energies.append(pot1)
-            self.kin_energies.append(kin1)
-            # Restore titration states.
-            for titration_group_index in titration_group_indices:
-                self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
-            # If using NCMC, restore coordinates and flip velocities.
-            if self.nsteps_per_trial > 0:
-                context.setPositions(initial_positions)
+            # Accept or reject with Metropolis criteria.
+            log_P_accept = -work
+            if self.debug:
+                print("LOGP" + str(log_P_accept))
+            if self.debug:
+                print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+            self.nattempted += 1
+            if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
+                # Accept.
+                self.naccepted += 1
+                self.pot_energies.append(pot2)
+                self.kin_energies.append(kin2)
+                # Update titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, final_titration_states[titration_group_index], context)
+                # If using NCMC, flip velocities to satisfy super-detailed balance.
+                if self.nsteps_per_trial > 0:
+                    context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
+            else:
+                # Reject.
+                self.nrejected += 1
+                self.pot_energies.append(pot1)
+                self.kin_energies.append(kin1)
+                # Restore titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
+                # If using NCMC, restore coordinates and flip velocities.
+                if self.nsteps_per_trial > 0:
+                    context.setPositions(initial_positions)
 
-        # Restore user integrator
-        self.compound_integrator.setCurrentIntegrator(0)
+        except Exception as err:
+            if str(err) == 'Particle coordinate is nan' and reject_on_nan:
+                logging.warning("NaN during NCMC move, rejecting")
+                # Reject.
+                self.nrejected += 1
+                self.pot_energies.append(pot1)
+                self.kin_energies.append(kin1)
+                # Restore titration states.
+                for titration_group_index in titration_group_indices:
+                    self.setTitrationState(titration_group_index, initial_titration_states[titration_group_index], context)
+                # If using NCMC, restore coordinates and flip velocities.
+                if self.nsteps_per_trial > 0:
+                    context.setPositions(initial_positions)
+            else:
+                raise
+        finally:
+            # Restore user integrator
+            self.compound_integrator.setCurrentIntegrator(0)
 
         return
 
@@ -1101,6 +1121,84 @@ class MonteCarloTitration(object):
         self.states_per_update.append(self.getTitrationStates())
 
         return
+
+    def calibrate(self, platform_name="CPU", updated_frenergies=None, **kwargs):
+        """
+        Calibrate all available aminoacids
+
+        Parameters
+        ----------
+
+        threshold : float, optional (default: 1.e-7)
+            Maximum absolute gradient to assume convergence.
+        mc_every : int, optional (default: 100)
+            Update titration state every `mc_every` steps.
+        zeta_every : int, optional (default: 1)
+            Adapt the SAMS zeta every `zeta_every` titration state updates
+        window : int, optional (default: 2000)
+            Gradient is evaluated every `window` steps, over the last `window` samples.
+        max_iter : int, optional
+            Maxmimum number of iterations to run.
+        scheme : str
+            'global' for global update
+            'binary' for binary update (not recommended)
+        kwargs : optional keyword arguments are passed to underlying calibration engine.
+            See `constph.calibration.AminoAcidCalibrator#calibrate_till_converged`
+        Todo
+        ----
+        - How to treat ligands
+        - document
+        """
+        from .calibration import AminoAcidCalibrator
+
+        residuenames = set()
+        calibrate_residues = dict()
+        for group_index, group in enumerate(self.titrationGroups):
+            supported = False
+            group_name = group['name'].lower()
+            for resn in AminoAcidCalibrator.supported:
+                if resn in group_name:
+                    supported = True
+                    residuenames.add(resn)
+                    calibrate_residues[group_index] = resn
+                    break
+
+            if not supported:
+                raise ValueError("Unsupported residue/ligand: {}".format(group_name))
+
+        if updated_frenergies is None:
+            updated_frenergies = {key: None for (key) in residuenames}
+        else:
+            updated_frenergies = dict(updated_frenergies)  # deepcopy
+
+
+        # TODO currently only works if user is also using a Langevin integrator
+        calibration_settings = dict()
+        calibration_settings["temperature"] = self.temperature
+        calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize() # Should be the user integrator
+        calibration_settings["pressure"] = self.pressure
+        calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
+        calibration_settings["pH"] = self.pH
+        calibration_settings["solvent"] = self.solvent
+        calibration_settings["nsteps_per_trial"] = self.nsteps_per_trial
+        calibration_settings["platform_name"] = platform_name
+
+        for aa in residuenames:
+            aac = AminoAcidCalibrator(aa, calibration_settings, guess_free_energy=updated_frenergies[aa])
+            updated_frenergy = None
+            # calibrate till converged is a generator.
+            # updated_frenergy will contain the latest estimate when the loop ends
+            for updated_frenergy in aac.calibrate_till_converged(**kwargs):
+                pass
+            updated_frenergies[aa] = updated_frenergy
+
+        for group_index, group in enumerate(self.titrationGroups):
+            for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
+                self.titrationGroups[group_index]['titration_states'][state_index]['relative_frenergy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
+
+        return updated_frenergies
+
+
 
     def getAcceptanceProbability(self):
         """
@@ -1141,32 +1239,26 @@ class MonteCarloTitration(object):
 
         """
 
-        temperature = self.temperature
-        pressure = self.pressure
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-
         # Add energetic contribution to log probability.
         state = context.getState(getEnergy=True)
         pot_energy = state.getPotentialEnergy()
         kin_energy = state.getKineticEnergy()
         total_energy = pot_energy + kin_energy
-        log_P = - beta * total_energy
+        log_P = - self.beta * total_energy
 
-        if pressure is not None:
+        if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
             if self.debug:
-                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(beta), str(pressure), str(volume), str(-beta*pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-            log_P += -beta * pressure * volume * units.AVOGADRO_CONSTANT_NA
+                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA)))
+            log_P += -self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
-        # Subtract reference energy contributions.
+        # Add reference free energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
-            relative_energy = titration_state['relative_energy']
-            if self.debug:
-                print("beta * relative_energy: %.2f",  + relative_energy)
-            log_P -= - relative_energy
+            relative_frenergy = titration_state['relative_frenergy']
+            logger.debug("beta * relative_energy: %.2f",  relative_frenergy)
+            log_P -= relative_frenergy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -1202,15 +1294,13 @@ class MonteCarloTitration(object):
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self.getNumTitratableGroups()
 
-    def _get_reduced_potentials(self, context, beta, group_index=0):
+    def _get_reduced_potentials(self, context, group_index=0):
         """Retrieve the reduced potentials for all states of the system given a context.
 
         Parameters
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
 
@@ -1219,28 +1309,30 @@ class MonteCarloTitration(object):
 
         ub_j = np.empty(len(self.titrationGroups[group_index]['titration_states']))
         for j in range(ub_j.size):
-            ub_j[j] = self._reduced_potential(context, beta, j, group_index)
+            ub_j[j] = self._reduced_potential(context, j)
 
         # Reset to current state
         return ub_j
 
-    def _reduced_potential(self, context, beta, state_index, group_index=0):
+    def _reduced_potential(self, context, state_index):
         """Retrieve the reduced potential for a given state (specified by index) in the given context.
 
         Parameters
         ----------
         context : simtk.openmm.Context
             The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
         state_index : int
             Index of the state for which the reduced potential needs to be calculated.
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
 
         """
         potential_energy = self._get_potential_energy(context, state_index)
-        return self._get_proton_chemical_potential(group_index, state_index) + beta * potential_energy
+        red_pot = self.beta * potential_energy
+
+        # TODO is the below necessary?
+        # if self.solvent == "explicit":
+        #     red_pot += self.beta * self.pressure * self.volume * units.AVOGADRO_CONSTANT_NA
+
+        return red_pot
 
     def _get_potential_energy(self, context, state_index, group_index=0):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.
@@ -1254,6 +1346,9 @@ class MonteCarloTitration(object):
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
 
+        TODO
+        ----
+         * NCMC version of this?
         """
         current_state = self.getTitrationState(group_index)
         self.setTitrationState(group_index, state_index, context)
@@ -1263,333 +1358,3 @@ class MonteCarloTitration(object):
         return potential_energy
 
 
-class CalibrationTitration(MonteCarloTitration):
-    """Implementation of self-adjusted mixture sampling for calibrating titratable residues.
-
-    Attributes
-    ----------
-    n_adaptations : int
-        Number of times the relative free energies have been adapted.
-
-    References
-    ----------
-    .. [1] Z. Tan, Optimally adjusted mixture sampling and locally weighted histogram analysis
-        DOI: 10.1080/10618600.2015.1113975
-
-    """
-
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None,
-                 nattempts_per_update=None, simultaneous_proposal_probability=0.1,
-                 nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
-                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, target_weights=None, debug=False):
-        """
-        Initialize a Monte Carlo titration driver for constant pH simulation.
-
-        Parameters
-        ----------
-        system : simtk.openmm.System
-            System to be titrated, containing all possible protonation sites.
-        temperature : simtk.unit.Quantity compatible with kelvin
-            Temperature to be simulated.
-        pH : float
-            The pH to be simulated.
-        prmtop : simtk.openmm.app.Prmtop
-            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
-        cpin_filename : string
-            AMBER 'cpin' file defining protonation charge states and energies
-        integrator : simtk.openmm.integrator
-            The integrator used for dynamics
-        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
-            For explicit solvent simulations, the pressure.
-        nattempts_per_update : int, optional, default=None
-            Number of protonation state change attempts per update call;
-            if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float, optional, default=0.1
-            Probability of simultaneously proposing two updates
-        debug : bool, optional, default=False
-            Turn debug information on/off.
-        nsteps_per_trial : int, optional, default=0
-            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
-        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
-            Timestep to use for NCMC switching
-        maintainChargeNeutrality : bool, optional, default=True
-            If True, waters will be converted to monovalent counterions and vice-versa.
-        cationName : str, optional, default='Na+'
-            Name of cation residue from which parameters are to be taken.
-        anionName : str, optional, default='Cl-'
-            Name of anion residue from which parameters are to be taken.
-        implicit: bool, optional, default=False
-            Flag for implicit simulation. Skips ion parameter lookup.
-        target_weights : list, optional
-            Nested list indexed [group][state] of relative weights (pi) for SAMS method
-            If unspecified, all target weights are set to equally sample all states.
-
-        Other Parameters
-        ----------------
-        debug : bool, optional
-            turn debug information on/off
-
-        """
-
-        super(CalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
-                                                   nattempts_per_update=nattempts_per_update,
-                                                   simultaneous_proposal_probability=simultaneous_proposal_probability,
-                                                   pressure=pressure,
-                                                   nsteps_per_trial=nsteps_per_trial, ncmc_timestep=ncmc_timestep,
-                                                   maintainChargeNeutrality=maintainChargeNeutrality,
-                                                   cationName=cationName, anionName=anionName,
-                                                   implicit=implicit,
-                                                   debug=debug)
-
-        self.n_adaptations = 0
-
-        for i, group in enumerate(self.titrationGroups):
-            for j, state in enumerate(self.titrationGroups[i]['titration_states']):
-                if target_weights is not None:
-                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
-                else:
-                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
-
-    def adapt_weights(self, context, scheme, group_index=0, debuglogger=False):
-        """
-        Update the relative free energy of titration states of the specified titratable group
-        Parameters
-        ----------
-        context :  (simtk.openmm.Context)
-            The context to update
-        scheme : str ('eq9' or 'eq12')
-            Scheme from Tan paper.
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-        self.n_adaptations += 1
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        # zeta^{t-1}
-        zeta = self._get_zeta()
-        if debuglogger:
-            dlogger = dict()
-            dlogger['L'] = self.getTitrationState(group_index) + 1
-        else:
-            dlogger = None
-
-        if scheme == 'eq9':
-            update = self._equation9(group_index, dlogger)
-        elif scheme == 'eq12':
-            update = self._equation12(context, beta, zeta, group_index, dlogger)
-        else:
-            raise ValueError("Unknown adaptation scheme!")
-
-        # zeta^{t-1/2}
-        zeta += update
-        # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
-        zeta_t = zeta - zeta[0]
-        if debuglogger:
-            for j, z in enumerate(zeta_t):
-                dlogger['zeta_t %d' % (j + 1)] = z
-
-        # Set reference energy based on new zeta
-        for i, titr_state in enumerate(zeta_t):
-            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / -beta
-        return dlogger
-
-    def _get_zeta(self, group_index=0):
-        """Retrieve relative free energies for specified titratable group.
-        Parameters
-        ----------
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.group_index
-
-        Returns
-        -------
-        np.ndarray - relative free energy of states
-        """
-        zeta = np.asarray(
-            list(map(lambda x: -np.float64(x['relative_energy']), self.titrationGroups[group_index]['titration_states'][:])))
-        return zeta
-
-    def _get_target_weights(self, group_index=0):
-        """Retrieve target weights for specified titratable group.
-        Parameters
-        ----------
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.group_index
-
-        Returns
-        -------
-        np.ndarray - relative free energy of states
-        """
-        return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
-
-    def _equation9(self, group_index, dlogger=None):
-        """
-        Equation 9 from DOI: 10.1080/10618600.2015.1113975
-
-        Parameters
-        ----------
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        Returns
-        -------
-        np.ndarray - free energy updates
-        """
-        # [1/pi_1...1/pi_i]
-        update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
-        # delta(Lt)
-        delta = np.zeros_like(update)
-        delta[self.getTitrationState(group_index)] = 1
-        update *= delta
-        if dlogger is not None:
-            for j, d in enumerate(delta):
-                dlogger['δ %d' % (j + 1)] = d
-        update /= self.n_adaptations  # t^{-1}
-        return update
-
-    def _equation12(self, context, beta, zeta, group_index=0, dlogger=None):
-        """
-        Equation 12 from DOI: 10.1080/10618600.2015.1113975
-
-        Parameters
-        ----------
-        context :  (simtk.openmm.Context)
-            The context to update
-        beta : simtk.unit.Quantity compatible with simtk.unit.mole/simtk.unit.kcal
-            inverse temperature
-        zeta : np.ndarray
-            Current estimate of free energies ζ⁽ᵗ⁾
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        Returns
-        -------
-        np.ndarray - free energy updates
-        """
-        # target weights
-        pi_j = self._get_target_weights(group_index)
-        # [1/pi_1...1/pi_i]
-        update = np.apply_along_axis(lambda x: 1 / x, 0, pi_j)
-
-        ub_j = self._get_reduced_potentials(context, beta, group_index)
-
-        # w_j(X;ζ⁽ᵗ⁻¹⁾)
-        log_w_j = np.log(pi_j) - zeta - ub_j
-        if dlogger is not None:
-            for j, z in enumerate(log_w_j):
-                dlogger['-ln(π_{0}) - zeta_{0} - U_{0}(x)'.format(j + 1)] = z
-        log_w_j -= logsumexp(log_w_j)
-        w_j = np.exp(log_w_j)
-        update *= w_j
-        update /= self.n_adaptations  # t^{-1}
-        if dlogger is not None:
-            for j, w in enumerate(w_j):
-                dlogger['beta * U_%d(x)' % (j + 1)] = ub_j[j]
-                dlogger['w_%d' % (j + 1)] = w
-
-        return update
-
-
-class MBarCalibrationTitration(MonteCarloTitration):
-
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, integrator, pressure=None, nattempts_per_update=None,
-                 simultaneous_proposal_probability=0.1, nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
-                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False,
-                 debug=False):
-        """
-         Parameters
-        ----------
-        system : simtk.openmm.System
-            System to be titrated, containing all possible protonation sites.
-        temperature : simtk.unit.Quantity compatible with kelvin
-            Temperature to be simulated.
-        pH : float
-            The pH to be simulated.
-        prmtop : simtk.openmm.app.Prmtop
-            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
-        cpin_filename : string
-            AMBER 'cpin' file defining protonation charge states and energies
-        integrator : simtk.openmm.integrator
-            The integrator used for dynamics
-        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
-            For explicit solvent simulations, the pressure.
-        nattempts_per_update : int, optional, default=None
-            Number of protonation state change attempts per update call;
-            if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float, optional, default=0.1
-            Probability of simultaneously proposing two updates
-        debug : bool, optional, default=False
-            Turn debug information on/off.
-        nsteps_per_trial : int, optional, default=0
-            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
-        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
-            Timestep to use for NCMC switching
-        maintainChargeNeutrality : bool, optional, default=True
-            If True, waters will be converted to monovalent counterions and vice-versa.
-        cationName : str, optional, default='Na+'
-            Name of cation residue from which parameters are to be taken.
-        anionName : str, optional, default='Cl-'
-            Name of anion residue from which parameters are to be taken.
-        implicit: bool, optional, default=False
-            Flag for implicit simulation. Skips ion parameter lookup.
-
-        """
-        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
-                                                       nattempts_per_update=nattempts_per_update,
-                                                       simultaneous_proposal_probability=simultaneous_proposal_probability,
-                                                       pressure=pressure,
-                                                       nsteps_per_trial=nsteps_per_trial, ncmc_timestep=ncmc_timestep,
-                                                       maintainChargeNeutrality=maintainChargeNeutrality,
-                                                       cationName=cationName, anionName=anionName,
-                                                       implicit=implicit,
-                                                       debug=debug)
-
-        self.n_adaptations = 0
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        for i, group in enumerate(self.titrationGroups):
-            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, beta, i)])
-
-    def adapt_weights(self, context, group_index=0, debuglogger=False):
-        """
-        Update the relative free energy of titration states of the specified titratable group
-        Parameters
-        ----------
-        context :  (simtk.openmm.Context)
-            The context to update
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-
-        if debuglogger:
-            dlogger = dict()
-        self.n_adaptations += 1
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        # zeta^{t-1}
-
-        self.titrationGroups[group_index]['adaptation_tracker']['label'].append(self.getTitrationState(group_index))
-        self.titrationGroups[group_index]['adaptation_tracker']['red_potential'].append(
-            self._get_reduced_potentials(context, beta, group_index))
-        states = range(len(self.titrationGroups[group_index]['titration_states']))
-        N_k = [self.titrationGroups[group_index]['adaptation_tracker']['label'].count(s) for s in states]
-        U_k = zip(*self.titrationGroups[group_index]['adaptation_tracker']['red_potential'])
-        mbar = pymbar.MBAR(U_k, N_k)
-        frenergy = mbar.getFreeEnergyDifferences()[0][0]
-
-        if debuglogger:
-            dlogger['L'] = self.titrationGroups[group_index]['adaptation_tracker']['label'][-1] + 1
-            for j, z in enumerate(frenergy):
-                dlogger['beta * U_%d(x)' % (j + 1)] = self.titrationGroups[group_index]['adaptation_tracker']['red_potential'][-1][j]
-                dlogger['zeta_t %d' % (j + 1)] = z
-
-        # Set reference energy based on new zeta
-        for i, titr_state in enumerate(frenergy):
-            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / beta
-
-        if debuglogger:
-            return dlogger

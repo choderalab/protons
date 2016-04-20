@@ -1,7 +1,6 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import *
 import logging
 
 
@@ -26,10 +25,24 @@ def generate(func, *inputs):
 
     return decorator
 
+def setup_systems_serially():
+    
+    for solvent in ["implicit", "explicit"]:
+        for aa in  ["lys"]:  #["cys", "lys", "glu", "his", "tyr", "asp"]:
+            foldername = "examples/calibration-{}".format(solvent)
+            prmtop = "{}/{}.prmtop".format(foldername, aa)
+            inpcrd = "{}/{}.inpcrd".format(foldername, aa)
+            outname = "calibration-systems/{}-{}".format(aa,solvent)
+            
+            if solvent == "explicit":
+                callf = make_xml_explicit
+            else:
+                callf = make_xml_implicit
+            print(aa,solvent)
+            callf(inpcrd, prmtop, outname)
+            
 
-def make_xml_explicit_tyr(inpcrd_filename='constph/examples/calibration-explicit/tyr.inpcrd',
-                          prmtop_filename='constph/examples/calibration-explicit/tyr.prmtop',
-                          outfile='tyrosine_explicit'):
+def make_xml_explicit(inpcrd_filename,prmtop_filename,outfile):
 
     temperature = 300.0 * unit.kelvin
     pressure = 1.0 * unit.atmospheres
@@ -46,9 +59,7 @@ def make_xml_explicit_tyr(inpcrd_filename='constph/examples/calibration-explicit
     outfile1.write(openmm.XmlSerializer.serialize(system))
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
 
-def make_xml_implicit_tyr(inpcrd_filename='constph/examples/calibration-implicit/tyr.inpcrd',
-                          prmtop_filename='constph/examples/calibration-implicit/tyr.prmtop',
-                          outfile='tyrosine_implicit'):
+def make_xml_implicit(inpcrd_filename,prmtop_filename,outfile):
 
     temperature = 300.0 * unit.kelvin
     outfile1=open('{}.sys.xml'.format(outfile), 'w')
@@ -64,51 +75,19 @@ def make_xml_implicit_tyr(inpcrd_filename='constph/examples/calibration-implicit
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
 
 
-def compute_potential_components(context):
-    """
-    Compute potential energy, raising an exception if it is not finite.
-
-    Parameters
-    ----------
-    context : simtk.openmm.Context
-        The context from which to extract, System, parameters, and positions.
-
-    """
-    import copy
-    system = context.getSystem()
-    system = copy.deepcopy(system)
-    positions = context.getState(getPositions=True).getPositions(asNumpy=True)
-    parameters = context.getParameters()
-    for index in range(system.getNumForces()):
-        force = system.getForce(index)
-        force.setForceGroup(index)
-
-    integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
-    platform = openmm.Platform.getPlatformByName('Reference')
-    context = openmm.Context(system, integrator, platform)
-    context.setPositions(positions)
-    for (parameter, value) in parameters.items():
-        context.setParameter(parameter, value)
-    energy_components = list()
-    for index in range(system.getNumForces()):
-        force = system.getForce(index)
-        forcename = force.__class__.__name__
-        groups = 1<<index
-        potential = context.getState(getEnergy=True, groups=groups).getPotentialEnergy()
-        energy_components.append((forcename, potential))
-    del context, integrator
-    return energy_components
-
-
-def minimizer(platform_name, system, positions, nsteps=1000):
-    integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
-    CONSTRAINT_TOLERANCE = 1.0e-5
+def minimizer(platform_name, system, positions, nsteps=10000):
+    integrator = openmm.VerletIntegrator(0.1 * unit.femtoseconds)
+    CONSTRAINT_TOLERANCE = 1.0e-4
     integrator.setConstraintTolerance(CONSTRAINT_TOLERANCE)
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, integrator, platform)
     context.setPositions(positions)
     logging.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
-    openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
+    openmm.LocalEnergyMinimizer.minimize(context, 0.001, nsteps)
     logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
     positions = context.getState(getPositions=True).getPositions(asNumpy=True)
-    return context, positions
+    return context
+
+if __name__ == "__main__":
+    setup_systems_serially()
+  
