@@ -1,5 +1,5 @@
 #!/bin/bash
 
-install_dir=$(python setup.py install | awk '/Installed/{print $2}')
+install_dir=$(${PYTHON} setup.py install | awk '/Installed/{print $2}')
 rm ${install_dir}/constph/diagnostics.py*
 
