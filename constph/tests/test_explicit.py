@@ -143,7 +143,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, minimize=False)
-        print(aac.calibrate(iterations=5, mc_every=4, zeta_every=1))
+        aac.calibrate_till_converged(max_iter=10, platform_name="CPU")
 
 
 @skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")

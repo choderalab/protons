@@ -162,7 +162,7 @@ class TestAminoAcidsImplicitCalibration(object):
     def calibrate(self, resname):
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, minimize=False)
-        print(aac.calibrate(iterations=100, mc_every=26, zeta_every=1))
+        aac.calibrate_till_converged(max_iter=10, platform_name="CPU")
 
 
 class PeptideImplicitTestCase(TestCase):
