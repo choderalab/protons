@@ -2,7 +2,7 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from constph.constph import MonteCarloTitration
-from constph.calibration import CalibrationTitration, MBarCalibrationTitration, AminoAcidCalibrator
+from constph.calibration import CalibrationTitration, AminoAcidCalibrator
 from unittest import TestCase, skip, skipIf
 from . import get_data
 from nose.plugins.skip import SkipTest
@@ -68,22 +68,6 @@ class TyrosineExplicitTestCase(TestCase):
         mc_titration.update(context)  # protonation
         mc_titration.adapt_weights(context, 'global')
 
-    @skip("Current api incompatible, circular dependency on context")
-    def test_tyrosine_calibration_instantaneous_mbar(self):
-        """
-        Calibrate (MBAR) tyrosine in explicit solvent with an instantaneous state switch
-        """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = MBarCalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                                context, integrator, debug=False,
-                                                pressure=self.pressure, nsteps_per_trial=0, implicit=False)
-        platform = openmm.Platform.getPlatformByName('CPU')
-        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
-        context.setPositions(self.positions)  # set to minimized positions
-        integrator.step(10)  # MD
-        mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context)
-
     def test_tyrosine_ncmc(self):
         """
         Run tyrosine in explicit solvent with an ncmc state switch
@@ -127,22 +111,6 @@ class TyrosineExplicitTestCase(TestCase):
         mc_titration.update(context)  # protonation
         mc_titration.adapt_weights(context, 'global')
 
-    @skip("Current api incompatible, circular dependency on context")
-    def test_tyrosine_calibration_ncmc_mbar(self):
-        """
-        Calibrate (MBAR) tyrosine in explicit solvent with an ncmc state switch
-        """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = MBarCalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                            context, integrator, debug=False,
-                                            pressure=self.pressure, nsteps_per_trial=10, implicit=False)
-        platform = openmm.Platform.getPlatformByName('CPU')
-        context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
-        context.setPositions(self.positions)  # set to minimized positions
-        integrator.step(10)  # MD
-        mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context)
-
 
 class TestAminoAcidsExplicitCalibration(object):
 
@@ -156,6 +124,7 @@ class TestAminoAcidsExplicitCalibration(object):
         settings["nsteps_per_trial"] = 5
         settings["pH"] = 7.4
         settings["solvent"] = "explicit"
+        settings["platform_name"] = "CPU"
         cls.settings = settings
 
     def test_calibration(self):
@@ -174,7 +143,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         print(resname)
         aac = AminoAcidCalibrator(resname, self.settings, minimize=False)
-        print(aac.calibrate(iterations=5, mc_every=4, weights_every=1))
+        print(aac.calibrate(iterations=5, mc_every=4, zeta_every=1))
 
 
 @skipIf(os.environ.get("TRAVIS", None) == 'true', "Skip expensive test on travis")
@@ -211,7 +180,7 @@ class PeptideExplicitTestCase(TestCase):
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
                                            integrator, debug=False,
                                            pressure=self.pressure, nsteps_per_trial=10, implicit=False)
-        mc_titration.calibrate(self.calibration_settings, iterations=5, mc_every=4, weights_every=1)
+        mc_titration.calibrate(max_iter=10)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions

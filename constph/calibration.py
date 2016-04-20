@@ -5,10 +5,12 @@ from .constph import MonteCarloTitration
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
-import logging
+from .logger import logger
 import pymbar
 from . import get_data
 from scipy.misc import logsumexp
+from collections import deque
+
 
 # MODULE CONSTANTS
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
@@ -102,7 +104,7 @@ class CalibrationTitration(MonteCarloTitration):
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
 
-    def adapt_weights(self, context, scheme, b=0.85, t0=10000, group_index=0):
+    def adapt_weights(self, context, scheme='global', b=0.85, t0=10000, group_index=0):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -207,7 +209,6 @@ class CalibrationTitration(MonteCarloTitration):
         delta[self.getTitrationState(group_index)] = 1
         update *= delta
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
-        # update /= self.n_adaptations
 
         return update
 
@@ -243,12 +244,12 @@ class CalibrationTitration(MonteCarloTitration):
         w_j = np.exp(log_w_j)
         update *= w_j
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
-        # update /= self.n_adaptations
 
         return update
 
     def _gain_factor(self, b=1.0, t0=0, group_index=0):
         """
+        Two stage update scheme (equation 15) from DOI: 10.1080/10618600.2015.1113975
 
         Parameters
         ----------
@@ -277,111 +278,6 @@ class CalibrationTitration(MonteCarloTitration):
                 gain[j] = min(pi_j[j], 1.0/(self.n_adaptations - t0 + pow(t0, b)))
 
         return np.diag(gain)
-
-
-class MBarCalibrationTitration(MonteCarloTitration):
-
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, context, integrator, pressure=None, nattempts_per_update=None,
-                 simultaneous_proposal_probability=0.1, nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
-                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False,
-                 debug=False):
-        """
-         Parameters
-        ----------
-        system : simtk.openmm.System
-            System to be titrated, containing all possible protonation sites.
-        temperature : simtk.unit.Quantity compatible with kelvin
-            Temperature to be simulated.
-        pH : float
-            The pH to be simulated.
-        prmtop : simtk.openmm.app.Prmtop
-            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
-        cpin_filename : string
-            AMBER 'cpin' file defining protonation charge states and energies
-        integrator : simtk.openmm.integrator
-            The integrator used for dynamics
-        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
-            For explicit solvent simulations, the pressure.
-        nattempts_per_update : int, optional, default=None
-            Number of protonation state change attempts per update call;
-            if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float, optional, default=0.1
-            Probability of simultaneously proposing two updates
-        debug : bool, optional, default=False
-            Turn debug information on/off.
-        nsteps_per_trial : int, optional, default=0
-            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
-        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
-            Timestep to use for NCMC switching
-        maintainChargeNeutrality : bool, optional, default=True
-            If True, waters will be converted to monovalent counterions and vice-versa.
-        cationName : str, optional, default='Na+'
-            Name of cation residue from which parameters are to be taken.
-        anionName : str, optional, default='Cl-'
-            Name of anion residue from which parameters are to be taken.
-        implicit: bool, optional, default=False
-            Flag for implicit simulation. Skips ion parameter lookup.
-
-        """
-        super(MBarCalibrationTitration, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
-                                                       nattempts_per_update=nattempts_per_update,
-                                                       simultaneous_proposal_probability=simultaneous_proposal_probability,
-                                                       pressure=pressure,
-                                                       nsteps_per_trial=nsteps_per_trial, ncmc_timestep=ncmc_timestep,
-                                                       maintainChargeNeutrality=maintainChargeNeutrality,
-                                                       cationName=cationName, anionName=anionName,
-                                                       implicit=implicit,
-                                                       debug=debug)
-
-        self.n_adaptations = 0
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        for i, group in enumerate(self.titrationGroups):
-            self.titrationGroups[i]['adaptation_tracker'] = dict(label=[self.getTitrationState(i)], red_potential=[self._get_reduced_potentials(context, i)])
-
-    def adapt_weights(self, context, group_index=0, debuglogger=False):
-        """
-        Update the relative free energy of titration states of the specified titratable group
-        using MBAR
-        Parameters
-        ----------
-        context :  (simtk.openmm.Context)
-            The context to update
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-
-        if debuglogger:
-            dlogger = dict()
-        self.n_adaptations += 1
-        temperature = self.temperature
-        kT = kB * temperature  # thermal energy
-        beta = 1.0 / kT  # inverse temperature
-        # zeta^{t-1}
-
-        self.titrationGroups[group_index]['adaptation_tracker']['label'].append(self.getTitrationState(group_index))
-        self.titrationGroups[group_index]['adaptation_tracker']['red_potential'].append(
-            self._get_reduced_potentials(context, group_index))
-        states = range(len(self.titrationGroups[group_index]['titration_states']))
-        N_k = [self.titrationGroups[group_index]['adaptation_tracker']['label'].count(s) for s in states]
-        U_k = zip(*self.titrationGroups[group_index]['adaptation_tracker']['red_potential'])
-        mbar = pymbar.MBAR(U_k, N_k)
-        frenergy = mbar.getFreeEnergyDifferences()[0][0]
-
-        if debuglogger:
-            dlogger['L'] = self.titrationGroups[group_index]['adaptation_tracker']['label'][-1] + 1
-            for j, z in enumerate(frenergy):
-                dlogger['beta * U_%d(x)' % (j + 1)] = self.titrationGroups[group_index]['adaptation_tracker']['red_potential'][-1][j]
-                dlogger['zeta_t %d' % (j + 1)] = z
-
-        # Set reference energy based on new zeta
-        for i, titr_state in enumerate(frenergy):
-            self.titrationGroups[group_index]['titration_states'][i]['relative_energy'] = titr_state / beta
-
-        if debuglogger:
-            return dlogger
 
 
 class Histidine(object):
@@ -565,7 +461,7 @@ class AminoAcidCalibrator(object):
         platform = openmm.Platform.getPlatformByName(platform_name)
         context = openmm.Context(system, mc_titration.compound_integrator, platform)
 
-        platform.setPropertyValue(context, "CudaDeviceIndex", "1")
+        # platform.setPropertyValue(context, "CudaDeviceIndex", "0")
 
         if minimize:
             minimized_context, positions = self._minimizer(platform_name, system, positions) # dont use minimized_context
@@ -578,9 +474,9 @@ class AminoAcidCalibrator(object):
         self.titration = mc_titration
         self.settings = settings
 
-    def calibrate(self, iterations=10000, mc_every=100, weights_every=1, scheme='binary'):
+    def calibrate(self, iterations=10000, mc_every=100, zeta_every=1, scheme='global'):
         """
-        Calibrate the amino acid
+        Calibrate the amino acid for a fixed number of iterations
 
         Parameters
         ----------
@@ -588,28 +484,86 @@ class AminoAcidCalibrator(object):
             Total number of MD iterations
         mc_every : int, optional (default: 100)
             Update titration state every `mc_every` steps.
-        weights_every : int, optional (default: 1)
-            Adapt the SAMS weights every `weights_every` titration state updates
+        zeta_every : int, optional (default: 1)
+            Adapt the SAMS zeta every `zeta_every` titration state updates
         scheme : str
-            'binary' for binary update
             'global' for global update
+            'binary' for binary update (not recommended)
 
         Yields
         -------
         np.ndarray - relative free energy from calibration
         """
-        state_updates = 0
         for iteration in range(1, iterations):
-            self.integrator.step(1)
-            if iteration % mc_every == 0:
-                state_updates += 1
-                self.titration.update(self.context)
-                # print("state", self.titration.getTitrationState(0))
-                if state_updates % weights_every == 0:
-                    self.titration.adapt_weights(self.context, scheme)
-                    yield self.titration.get_zeta()
+            self.integrator.step(mc_every)
+            self.titration.update(self.context)
+            # print("state", self.titration.getTitrationState(0))
+            if iteration % zeta_every == 0:
+                self.titration.adapt_weights(self.context, scheme)
+                yield self.titration.get_zeta()
+
+    def calibrate_till_converged(self, threshold=1.e-5, mc_every=100, zeta_every=1, convergence_frequency=500, window=2000, max_iter=None, **kwargs):
+        """
+        Calibrate the amino acid until converged to below the gradient threshold
+
+        Parameters
+        ----------
+        threshold : float, optional (default: 1.e-7)
+            Maximum absolute gradient to assume convergence.
+        mc_every : int, optional (default: 100)
+            Update titration state every `mc_every` steps.
+        zeta_every : int, optional (default: 1)
+            Adapt the SAMS zeta every `zeta_every` titration state updates
+        convergence_frequency: int, optional (default: 500)
+            Check for convergence for this amount of zeta updates
+        window : int, optional (default: 2000)
+            Gradient is evaluated over the last `window` samples.
+        max_iter : int, optional
+            Maxmimum number of iterations to run.
+        scheme : str
+            'global' for global update
+            'binary' for binary update (not recommended)
+        kwargs : optional keyword arguments are passed to underlying SAMS sampler.
+            See `constph.calibration.CalibrationTitration#adapt_weights`.
+
+        Yields
+        -------
+        np.ndarray - relative free energy from calibration
+        """
+
+        # Default value for optional arguments to weight adaptation scheme
+        t0 = kwargs.pop("t0", 1500)
+        b = kwargs.pop("b", .9)
+        scheme=kwargs.pop("scheme", "global")
+
+        if kwargs:
+            raise TypeError('"{}" are not valid keyword arguments.'.format('", "'.join(kwargs.keys())))
+
+        state_updates = 0
+        zeta_updates = 0
+        iteration = 1
+        zeta_window = deque(maxlen=window)
+        while True:
+            self.integrator.step(mc_every)
+            iteration += 1
+            self.titration.update(self.context)
+            if iteration % zeta_every == 0:
+                zeta_updates += 1
+                self.titration.adapt_weights(self.context, t0=t0, b=b, scheme=scheme)
+                zeta = self.titration.get_zeta()
+                zeta_window.append(zeta)
+                yield zeta
+
+                if zeta_updates % convergence_frequency == 0:
+                    grad = np.average(np.gradient(zeta_window, 10), axis=1)[0]  # average gradient for each state
+                    logger.info("Gradient magnitude: {}".format([ "{:.3f}".format(np.log10(abs(g))) for g in grad]))
+                    # Absolute gradient of all states is equal/below threshold
+                    if (abs(grad) <= threshold).all() and zeta_updates >= t0 + window:
+                        break
 
 
+            if max_iter is not None and iteration == max_iter:
+                break
 
     @staticmethod
     def _minimizer(platform_name, system, positions, nsteps=1000):
@@ -622,9 +576,9 @@ class AminoAcidCalibrator(object):
         platform = openmm.Platform.getPlatformByName(platform_name)
         context = openmm.Context(system, integrator, platform)
         context.setPositions(positions)
-        logging.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        logger.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
-        logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        logger.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         return context, positions
 

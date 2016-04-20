@@ -60,7 +60,7 @@ import logging
 import simtk
 import simtk.openmm as openmm
 import simtk.unit as units
-
+from .logger import logger
 from openmmtools.integrators import VelocityVerletIntegrator
 
 # MODULE CONSTANTS
@@ -1122,10 +1122,28 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, platform_name="Reference", iterations=10000, mc_every=100, weights_every=1, scheme='binary', updated_frenergies=None):
+    def calibrate(self, platform_name="CPU", updated_frenergies=None, **kwargs):
         """
         Calibrate all available aminoacids
 
+        Parameters
+        ----------
+
+        threshold : float, optional (default: 1.e-7)
+            Maximum absolute gradient to assume convergence.
+        mc_every : int, optional (default: 100)
+            Update titration state every `mc_every` steps.
+        zeta_every : int, optional (default: 1)
+            Adapt the SAMS zeta every `zeta_every` titration state updates
+        window : int, optional (default: 2000)
+            Gradient is evaluated every `window` steps, over the last `window` samples.
+        max_iter : int, optional
+            Maxmimum number of iterations to run.
+        scheme : str
+            'global' for global update
+            'binary' for binary update (not recommended)
+        kwargs : optional keyword arguments are passed to underlying calibration engine.
+            See `constph.calibration.AminoAcidCalibrator#calibrate_till_converged`
         Todo
         ----
         - How to treat ligands
@@ -1167,8 +1185,12 @@ class MonteCarloTitration(object):
 
         for aa in residuenames:
             aac = AminoAcidCalibrator(aa, calibration_settings, guess_free_energy=updated_frenergies[aa])
-            updated_frenergy = [frener for frener in aac.calibrate(iterations=iterations, mc_every=mc_every, weights_every=weights_every, scheme=scheme)]
-            updated_frenergies[aa] = updated_frenergy[-1]
+            updated_frenergy = None
+            # calibrate till converged is a generator.
+            # updated_frenergy will contain the latest estimate when the loop ends
+            for updated_frenergy in aac.calibrate_till_converged(**kwargs):
+                pass
+            updated_frenergies[aa] = updated_frenergy
 
         for group_index, group in enumerate(self.titrationGroups):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
@@ -1235,9 +1257,8 @@ class MonteCarloTitration(object):
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
             relative_frenergy = titration_state['relative_frenergy']
-            if self.debug:
-                print("beta * relative_energy: %.2f",  + relative_frenergy)
-            log_P += relative_frenergy
+            logger.debug("beta * relative_energy: %.2f",  relative_frenergy)
+            log_P -= relative_frenergy
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -1305,7 +1326,13 @@ class MonteCarloTitration(object):
 
         """
         potential_energy = self._get_potential_energy(context, state_index)
-        return self.beta * potential_energy
+        red_pot = self.beta * potential_energy
+
+        # TODO is the below necessary?
+        # if self.solvent == "explicit":
+        #     red_pot += self.beta * self.pressure * self.volume * units.AVOGADRO_CONSTANT_NA
+
+        return red_pot
 
     def _get_potential_energy(self, context, state_index, group_index=0):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.
@@ -1319,6 +1346,9 @@ class MonteCarloTitration(object):
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
 
+        TODO
+        ----
+         * NCMC version of this?
         """
         current_state = self.getTitrationState(group_index)
         self.setTitrationState(group_index, state_index, context)

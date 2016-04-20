@@ -1,44 +1,54 @@
+"""Script to run the complete API including calibration """
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from constph import get_data
+from constph.logger import logger
 from constph.constph import MonteCarloTitration
+from constph.calibration import Histidine
 import logging
+
+logger.setLevel(logging.INFO)
 
 # Import one of the standard systems.
 temperature = 300.0 * unit.kelvin
 pressure = 1.0 * unit.atmospheres
 timestep = 1.0 * unit.femtoseconds
 collision_rate = 9.1 / unit.picoseconds
-pH = 8.6
+pH = 7.0
 platform_name = 'CUDA'
+
+# Get histidine files from the calibration system directory
 testsystems = get_data('.', 'calibration-systems')
-positions = openmm.XmlSerializer.deserialize(open('{}/tyr-implicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
-system = openmm.XmlSerializer.deserialize(open('{}/tyr-implicit.sys.xml'.format(testsystems)).read())
-prmtop = app.AmberPrmtopFile('{}/tyr-implicit.prmtop'.format(testsystems))
-cpin_filename = '{}/tyr-implicit.cpin'.format(testsystems)
+positions = openmm.XmlSerializer.deserialize(open('{}/hip-implicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
+system = openmm.XmlSerializer.deserialize(open('{}/hip-implicit.sys.xml'.format(testsystems)).read())
+prmtop = app.AmberPrmtopFile('{}/hip-implicit.prmtop'.format(testsystems))
+cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
+
 integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
-mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=None, nsteps_per_trial=50, implicit=True)
-datapoints = list()
-frens = dict(tyr=[0, 108.0])
-dps = 3
+mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=None, nsteps_per_trial=0, implicit=True)
+platform = openmm.Platform.getPlatformByName('CUDA')
+context = openmm.Context(system, mc_titration.compound_integrator, platform)
+context.setPositions(positions)  # set to minimized positions
 
-for x in range(dps):
-    print(x)
-    frens = dict(mc_titration.calibrate(platform_name="CUDA", iterations=100000, mc_every=100, weights_every=1, scheme='global'))
-    datapoints.append(frens["tyr"])
+logger.debug("Calibrating")
+mc_titration.calibrate(platform_name="CUDA", threshold=1.e-7)
 
 
-import matplotlib
-matplotlib.use('Agg')
-import seaborn as sns
+niter = 1000 # 1 ns
+mc_freq = 1000
+counts = {0: 0, 1 : 0, 2 : 0}
+for iteration in range(1, niter):
+    if iteration % (niter/100) == 0:
+        print(iteration/niter, "\%")
+    integrator.step(mc_freq)
+    mc_titration.update(context)  # protonation
+    counts[mc_titration.getTitrationState(0)] += 1
 
-sns.plt.plot(range(dps), datapoints)
-sns.plt.title("tyr calibration")
-sns.plt.xlabel("updates * 1000")
-sns.plt.ylabel("Reference energies")
-
-sns.plt.legend()
-sns.plt.savefig("tyr-calibrated_energies.png")
+totcounts = sum(counts.values())
+for key in counts.keys():
+    counts[key] /= totcounts
 
 
+print("Target:", Histidine(pH).weights())
+print("Observed", counts)
