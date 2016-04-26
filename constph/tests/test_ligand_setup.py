@@ -19,6 +19,8 @@ class LigandXmlTestCase(TestCase):
         """
         Run epik on a ligand and parametrize its isomers
         """
+        import sys
+
         parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml", pH=4.5)
 
     def test_xml_compilation(self):
