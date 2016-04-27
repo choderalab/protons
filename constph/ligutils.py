@@ -1,11 +1,51 @@
 from __future__ import print_function
-
+from builtins import input # python 2 and 3 compatible commandline input
 from glob import glob
 import openmoltools as omt
 from joblib import Parallel, delayed
 from lxml import etree, objectify
 import re, os, sys, logging, tempfile, shutil
+from collections import OrderedDict
 from math import exp
+from constph.logger import logger
+
+
+def _make_xml_root(rootname):
+    """
+    Create a new xmlfile to store epik data for each state
+
+    Returns
+    -------
+        Xml tree
+    """
+    xml = '<{0}></{0}>'.format(rootname)
+    root = objectify.fromstring(xml)
+    return root
+
+
+def _make_cph_xml():
+    """
+    Returns an empty CPH xml file template
+    """
+
+    xml = _make_xml_root("TitratableResidue")
+    ff = _make_xml_root("ForceField")
+    iso = _make_xml_root("IsomerData")
+    atypes = _make_xml_root("AtomTypes")
+    ress = _make_xml_root("Residues")
+    resi = _make_xml_root("Residue")
+    hbf = _make_xml_root("HarmonicBondForce")
+    haf = _make_xml_root("HarmonicAngleForce")
+    ptf = _make_xml_root("PeriodicTorsionForce")
+    ress.append(resi)
+    ff.append(atypes)
+    ff.append(ress)
+    ff.append(hbf)
+    ff.append(haf)
+    ff.append(ptf)
+    xml.append(ff)
+    xml.append(iso)
+    return xml
 
 
 class _Bond(object):
@@ -65,64 +105,245 @@ class _Bond(object):
     __repr__ = __str__
 
 
+class _Atom(object):
+    """
+        Private class representing an atom that is part of a single residue
+    """
+
+    def __init__(self, resname, name):
+        self.resname = resname
+        self.name = name
+        self.number = int(re.findall(r"\d+", name)[-1])
+        self.type = "{}-{}".format(resname,name)
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def _same_res(self, other):
+        """Compare resnames"""
+        return self.resname == other.resname
+
+    def __gt__(self, other):
+        if not self._same_res(other):
+            raise ValueError("Cannot compare atoms between residues.")
+        if self.number > other.number:
+            return True
+        else:
+            return False
+
+    def __lt__(self, other):
+        if not self._same_res(other):
+            raise ValueError("Cannot compare atoms between residues.")
+        if self.number < other.number:
+            return True
+        else:
+            return False
+
+    def __le__(self, other):
+        if not self._same_res(other):
+            raise ValueError("Cannot compare atoms between residues.")
+        if self.number <= other.number:
+            return True
+        else:
+            return False
+
+    def __ge__(self, other):
+        if not self._same_res(other):
+            raise ValueError("Cannot compare atoms between residues.")
+        if self.number >= other.number:
+            return True
+        else:
+            return False
+
+    def __str__(self):
+        return '<Atom name="{name}" type="{type}"/>'.format(**self.__dict__)
+
+    __repr__ = __str__
+
+
+class _AtomType(object):
+    """
+        Private class representing an atomtype
+    """
+    def __init__(self, resname, atomname, aclass, element, mass):
+        self.name = "{}-{}".format(resname, atomname)
+        self.aclass = aclass
+        self.element = element
+        self.mass = float(mass)
+        self.number = int(re.findall(r"\d+", atomname)[-1])
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __str__(self):
+        return '<Type name="{name}" class="{aclass}" element="{element}" mass="{mass}"/>'.format(**self.__dict__)
+
+    __repr__ = __str__
+
+    def nonbonded_placeholder(self):
+        """
+        Returns
+        -------
+        str - Placeholder for non-bonded block.
+        """
+        return '<Atom type="{name}" charge="0.0" sigma="1.0" epsilon="1.0"/>'.format(**self.__dict__)
+
+
+class _NonbondedForce(object):
+    """
+    Private class representing the parameters for a nonbonded atom type
+    """
+    def __init__(self, resname, state, atomname, epsilon, sigma, charge):
+        self.resname = resname
+        self.state = state
+        self.atomname = atomname
+        self.epsilon = epsilon
+        self.sigma = sigma
+        self.charge = charge
+        self.type = self.resname + "-" + self.atomname
+
+    def __str__(self):
+        return '<Atom type="{type}" charge="{charge}" sigma="{sigma}" epsilon="{epsilon}"/>'.format(**self.__dict__)
+
+    __repr__ = __str__
+
+
+class _Isomer(object):
+    def __init__(self, index, population, charge):
+        self.index = index
+        self.population = population
+        self.charge = charge
+        self.nonbondedtypes = OrderedDict()
+
+    def __str__(self):
+        return '<IsomericState index="{index}" population="{population}" netcharge="{charge}"/>'.format(**self.__dict__)
+
+    def __len__(self):
+        return len(self.nonbondedtypes)
+
+    __repr__ = __str__
+
+
 class MultiIsomerResidue(object):
     # TODO make sure we're not changing sigma/epsilon
-    dummy_nonb = '<Atom type="" charge="0.0" sigma="0.0" epsilon="0.0"/>'
-    # format of atomtype names resname(single word)-isomer(number)-atomname(non-number)atomnumber(number)
+    # format of atomtype name
+    # Groups 1: resname, 2: isomer number, 3: atom letter, 4 atom number
     name_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
 
     def __init__(self, xmlfile):
-        self._atoms = set()
+        self._atoms = list()
         self._bonds = list()
+        self._atom_types = list()
+        self._isostates = OrderedDict()
         xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-        self._tree = etree.parse(xmlfile, parser=xmlparser)
-        self._fill_missing_atoms(xmlfile)
+        self._input_tree = etree.parse(xmlfile, parser=xmlparser)
+        self._make_output_tree()
 
-    def _fill_missing_atoms(self, xmlfile):
+    def _make_output_tree(self):
         """Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
-
-        Parameters
-        ----------
-        xmlfile - str,
-            An ffxml file containing isomers parametrized with GAFF.
         """
-        # Create a registry of atom names in self._atoms
-        self._register_atoms()
+        self._resname = None
+        # Create a registry of atom names in self._atoms and atom types in self._atom_types
+        self._complete_atom_registry()
+        self._output_tree = _make_cph_xml()
 
-        for residue in self._tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
-            lastnum=0
+        # Add missing atoms to shift indices of atoms in bonds correctly, then register bonds
+        self._complete_bond_registry()
+
+        # Register the isomeric states (without nonbonded parameters)
+        self._complete_state_registry()
+
+        # Add nonbonded terms for each state (excludes placeholders for the ForceField block)
+        self._complete_nonbonded_registry()
+
+        self._sort_atoms()
+        self._sort_bonds()
+        self._sort_atypes()
+
+        # Add atoms and bonds to the output
+        for residue in self._output_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
+            residue.attrib["name"] = self._resname
+
+            for atom in self._atoms:
+                residue.append(etree.fromstring(str(atom)))
+
+            for bond in self._bonds:
+                residue.append(etree.fromstring(str(bond)))
+
+        # Add atomtypes to the output
+        for atypes in self._output_tree.xpath('/TitratableResidue/ForceField/AtomTypes'):
+            for atype in self._atom_types:
+                atypes.append(etree.fromstring(str(atype)))
+
+        # Copy bonded definitions from input directly to output
+        for hbfblock in self._output_tree.xpath('/TitratableResidue/ForceField/HarmonicBondForce'):
+            for harmonicbondforce in self._input_tree.xpath('/TitratableResidue/ForceField/HarmonicBondForce/Bond'):
+                hbfblock.append(harmonicbondforce)
+
+        for hafblock in self._output_tree.xpath('/TitratableResidue/ForceField/HarmonicAngleForce'):
+            for harmonicangleforce in self._input_tree.xpath('/TitratableResidue/ForceField/HarmonicAngleForce/Angle'):
+                hafblock.append(harmonicangleforce)
+
+        for pdtblock in self._output_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce'):
+            for propertorsionforce in self._input_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce/Proper'):
+                pdtblock.append(propertorsionforce)
+            for impropertorsionforce in self._input_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce/Improper'):
+                pdtblock.append(impropertorsionforce)
+
+        # Fill in nonbonded atomtypes (placeholders)
+        for forcefieldblock in self._output_tree.xpath('/TitratableResidue/ForceField'):
+            for nonbondedblock in self._input_tree.xpath('/TitratableResidue/ForceField/NonbondedForce'):
+
+                # Remove all old nonbonded terms
+                for anonbond in nonbondedblock.xpath('/TitratableResidue/ForceField/NonbondedForce/Atom'):
+                    anonbond.getparent().remove(anonbond)
+                nonbondedblock.append(etree.Comment("Placeholder values. Each state has its own block in IsomerData."))
+
+                # Make placeholder entries in the nonbonded block for each atom type.
+                for atype in self._atom_types:
+                    nonbondedblock.append((etree.fromstring(atype.nonbonded_placeholder())))
+                forcefieldblock.append(nonbondedblock)
+
+        for isodata in self._output_tree.xpath('/TitratableResidue/IsomerData'):
+            for isoindex, isostate in self._isostates.items():
+                statexml = etree.fromstring(str(isostate))
+                for nonbondtype in isostate.nonbondedtypes.values():
+                    statexml.append(etree.fromstring(str(nonbondtype)))
+                isodata.append(statexml)
+
+        # TODO ADD GB solvent parameters
+
+    def _complete_bond_registry(self):
+        for residue in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
+            lastnum = 0
             for atom in residue.xpath('Atom'):
                 atomnum = int(MultiIsomerResidue.name_format.search(atom.attrib['type']).group(4))
-                
+
                 missing_atoms = atomnum - lastnum
                 # Count backwards
-                for relative_index in range(missing_atoms-1, 0, -1):
+                for relative_index in range(missing_atoms - 1, 0, -1):
                     # Missing number is the last atom found - the missing index
                     missingnum = atomnum - relative_index
-                    self._new_dummy(missingnum, residue)
+                    self._new_dummy(missingnum, residue)  # Adds new dummy and shifts bond indices
                 lastnum = atomnum
 
             # Add missing atoms at end
-            for atomnum in range(lastnum+1, len(self._atoms)+1):
+            for atomnum in range(lastnum + 1, len(self._atoms) + 1):
                 # One based index of number missing from end of residue
                 self._new_dummy(atomnum, residue)
 
             # Create a registry of bonds in self._bonds
             self._register_bonds()
 
-        # Remove all bonds from current tree
-        for residue in self._tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
-            for bond in residue.findall('Bond'):
-                bond.getparent().remove(bond)
+    def write(self, filename=None):
+        objectify.deannotate(self._output_tree)
+        etree.cleanup_namespaces(self._output_tree)
+        xmlstring = etree.tostring(self._output_tree, pretty_print=True, xml_declaration=False)
+        if filename is not None:
+            with open(filename, 'wb') as fstream:
+                fstream.write(xmlstring)
 
-        # Reintroduce all necessary bonds from stored list
-        self._sort_bonds()
-        for residue in self._tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
-            for bond in self._bonds:
-                residue.append(etree.fromstring(str(bond)))
-
-    def write(self, filename):
-        self._tree.write(filename, pretty_print=True)
+        return xmlstring.decode("utf-8")
 
     def _new_dummy(self, atom_index, residue):
         """
@@ -138,23 +359,52 @@ class MultiIsomerResidue(object):
         -------
 
         """
-        atomname = 'X{}'.format(atom_index)
+        atomname = 'H{}'.format(atom_index)
         typestr = ('{}-' + atomname).format(residue.attrib['name'])
         newtype = self._new_dummy_type(typestr)
         newatom = self._new_dummy_atom(atomname, typestr)
         newnonbond = self._new_dummy_nonbond(typestr)
-        self._tree.xpath('/TitratableResidue/ForceField/AtomTypes')[0].append(newtype)
-        self._tree.xpath('/TitratableResidue/ForceField/NonbondedForce')[0].append(newnonbond)
+        self._input_tree.xpath('/TitratableResidue/ForceField/AtomTypes')[0].append(newtype)
+        self._input_tree.xpath('/TitratableResidue/ForceField/NonbondedForce')[0].append(newnonbond)
         residue.insert(atom_index - 1, newatom)
         self._shift_bonds(atom_index, residue)
 
-    def _register_atoms(self):
+    def _complete_atom_registry(self):
         """
         Registers unique atom names. Store in self._atomnames from atom type list.
         """
-        for atype in self._tree.xpath('/TitratableResidue/ForceField/AtomTypes/Type'):
-            atomname = MultiIsomerResidue.name_format.search(atype.attrib['name']).group(3, 4)
-            self._atoms.add(''.join(atomname))
+        for atype in self._input_tree.xpath('/TitratableResidue/ForceField/AtomTypes/Type'):
+            matched_names = MultiIsomerResidue.name_format.search(atype.attrib['name'])
+            if self._resname is None:
+                self._resname = matched_names.group(1)
+            atomname = matched_names.group(3, 4)
+            atomname = ''.join(atomname)
+            self._atoms.append(_Atom(self._resname,atomname))
+            self._atom_types.append(_AtomType(self._resname, atomname, atype.attrib['class'], atype.attrib['element'], atype.attrib['mass']))
+
+        self._unique_atoms()
+        self._unique_atom_types(autoresolve=1)
+
+    def _complete_state_registry(self):
+        for isostate in self._input_tree.xpath('/TitratableResidue/IsomerData/IsomericState'):
+            isomer = _Isomer(int(isostate.attrib["index"]), isostate.attrib["population"], isostate.attrib["netcharge"])
+            self._isostates[int(isostate.attrib["index"])] = isomer
+
+    def _complete_nonbonded_registry(self):
+        """
+        Register the non_bonded interactions for all states.
+        """
+        for isoindex, isostate in self._isostates.items():
+            for nonbondatom in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce/Atom"):
+                matched_names = MultiIsomerResidue.name_format.search(nonbondatom.attrib['type'])
+                atomname = matched_names.group(3, 4)
+                atomname = ''.join(atomname)
+
+                stateidx_nonbond = int(matched_names.group(2)) + 1
+                if stateidx_nonbond == isoindex:
+                    self._isostates[isoindex].nonbondedtypes[atomname] = _NonbondedForce(matched_names.group(1), stateidx_nonbond, atomname, nonbondatom.attrib['epsilon'], nonbondatom.attrib['sigma'], nonbondatom.attrib['charge'])
+
+        pass
 
     def _register_bonds(self):
         """
@@ -165,25 +415,102 @@ class MultiIsomerResidue(object):
         Only run this after all atom indices have been finalized.
 
         """
-        for bond in self._tree.xpath('/TitratableResidue/ForceField/Residues/Residue/Bond'):
+        for bond in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue/Bond'):
             fr = bond.attrib['from']
             to = bond.attrib['to']
-            # etree.tostring(bond)
             self._bonds.append(_Bond(fr, to))
 
         self._unique_bonds()
 
     def _unique_bonds(self):
+        """Ensure only unique bonds are kept."""
         bonds = list()
-
         for bond in self._bonds:
             if bond not in bonds:
                 bonds.append(bond)
 
         self._bonds = bonds
 
+    def _unique_atoms(self):
+        """Ensure only unique atoms are kept."""
+        atoms = list()
+        for atom in self._atoms:
+            if atom not in atoms:
+                atoms.append(atom)
+        self._atoms = atoms
+
+    def _unique_atom_types(self, autoresolve):
+        """Ensure only unique atomtypes are kept. Provide conflict resolution."""
+        atypes = list()
+        for atype in self._atom_types:
+            if atype not in atypes:
+                atypes.append(atype)
+        self._atom_types = atypes
+
+        # Atomtypes might be different between isomers. We can only support one type at the moment
+        while len(self._atom_types) != len(self._atoms):
+            for atype1 in self._atom_types:
+                conflicts = [atype1]
+                for atype2 in self._atom_types:
+                    if atype1 == atype2:
+                        continue
+                    elif atype1.name == atype2.name:
+                        conflicts.append(atype2)
+
+                    if len(conflicts) > 1:
+                        self._resolve_type_conflict(conflicts, autoresolve=autoresolve)
+
+    def _resolve_type_conflict(self, conflicts, autoresolve):
+        """Keep all but one of the conflicting atom types.
+
+        Parameters
+        ----------
+        conflicts - list
+            Conflicting atom types
+        autoresolve - int
+            one based index of the type to keep in each case.
+            If not provided, interactive choice will be provided.
+
+        Notes
+        -----
+        If the autoresolve index is out of bounds, will fallback to interactive mode.
+        """
+        if autoresolve:
+            try:
+                logger.info("Using atomtype {}".format(conflicts[autoresolve-1]))
+                conflicts.remove(conflicts[autoresolve-1])
+                logger.debug("Deleting atomtypes {}".format(conflicts))
+                for conf in conflicts:
+                    self._atom_types.remove(conf)
+            except IndexError:
+                logger.warning("Automatic type resolution failure (out of bounds.) Switching to manual.")
+                self._manual_type_resolution(conflicts)
+        else:
+            self._manual_type_resolution(conflicts)
+
+    def _manual_type_resolution(self, conflicts):
+        while True:
+            for c, conf in enumerate(conflicts, start=1):
+                print("Type {}) : {}".format(c,conf))
+            keep = int(input("Which type do you want to keep? (1/2)").strip())
+            if keep not in range(1, len(conflicts)+1):
+                print("Please pick a number from the list.")
+            else:
+                logger.info("Using atomtype {}".format(conflicts[keep-1]))
+                conflicts.remove(conflicts[keep-1])
+                logger.debug("Deleting atomtypes {}".format(conflicts))
+                for conf in conflicts:
+                    self._atom_types.remove(conf)
+                break
+
+    def _sort_atoms(self):
+        self._atoms = sorted(self._atoms)  # Sort by atom number
+
     def _sort_bonds(self):
-        self._bonds = sorted(self._bonds)
+        self._bonds = sorted(self._bonds)  # Sort by first, then second atom in bond
+
+    def _sort_atypes(self):
+        self._atom_types = sorted(self._atom_types, key=lambda at: at.number)
 
     def _new_dummy_atom(self, atomname, typestr):
         newatom = etree.Element('Atom')
@@ -221,19 +548,6 @@ def _param_isomer(isomer, tmpdir, q):
     # Read temporary file containing net charge
     omt.amber.run_antechamber('isomer_{}'.format(isomer),'{}/{}.mol2'.format(tmpdir,isomer), charge_method="bcc", net_charge=q)
     logging.info("Parametrized isomer{}".format(isomer))
-
-
-def _make_xml_root(rootname):
-    """
-    Create a new xmlfile to store epik data for each state
-
-    Returns
-    -------
-        Xml tree
-    """
-    xml = '<{0}></{0}>'.format(rootname)
-    root = objectify.fromstring(xml)
-    return root
 
 
 def line_prepender(filename, line):
@@ -308,7 +622,7 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
         if store:
             value = line.strip()
 
-            if store == "Population":
+            if store == "population":
                 value = float(value)
                 value /= 298.15 * 1.9872036e-3 # / RT in kcal/mol/K at 25 Celsius (Epik default)
                 value = exp(-value)
@@ -316,7 +630,7 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
             obj.set(store, str(value))
 
             # NOTE: relies on state penalty coming before charge
-            if store == "NetCharge":
+            if store == "netcharge":
                 epikxml.append(obj)
                 charges[isomer_index] = int(value)
                 del(obj)
@@ -325,14 +639,14 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
 
         elif "r_epik_State_Penalty" in line:
             # Next line contains epik state penalty
-            store = "Population"
+            store = "population"
             isomer_index += 1
             obj = objectify.Element("IsomericState")
             obj.set("index", str(isomer_index))
 
         elif "i_epik_Tot_Q" in line:
             # Next line contains charge
-            store = "NetCharge"
+            store = "netcharge"
 
 
     # remove lxml annotation
