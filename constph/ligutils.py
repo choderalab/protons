@@ -4,7 +4,7 @@ from glob import glob
 import openmoltools as omt
 from joblib import Parallel, delayed
 from lxml import etree, objectify
-import re, os, sys, logging, tempfile, shutil
+import re, os, sys, logging, tempfile, shutil, random
 from collections import OrderedDict
 from math import exp
 from constph.logger import logger
@@ -202,6 +202,12 @@ class _NonbondedForce(object):
         self.charge = charge
         self.type = self.resname + "-" + self.atomname
 
+    def __eq__(self, other):
+        if not self.type == other.type:
+            raise ValueError("Can only compare identical-atom types.")
+
+        return self.sigma == other.sigma and self.epsilon == other.epsilon
+
     def __str__(self):
         return '<Atom type="{type}" charge="{charge}" sigma="{sigma}" epsilon="{epsilon}"/>'.format(**self.__dict__)
 
@@ -224,27 +230,42 @@ class _Isomer(object):
     __repr__ = __str__
 
 
-class MultiIsomerResidue(object):
+class _TitratableForceFieldCompiler(object):
+    """
+    Compiles a
+    """
     # TODO make sure we're not changing sigma/epsilon
     # format of atomtype name
     # Groups 1: resname, 2: isomer number, 3: atom letter, 4 atom number
     name_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
 
-    def __init__(self, xmlfile):
+    def __init__(self, xmlfile, autoresolve=0):
+        """
+        Compliles the intermediate ffxml files into a constant-pH compatible ffxml file.
+
+        Parameters
+        ----------
+        xmlfile - str
+            Path of the intermediate xml file.
+        autoresolve - int, optional
+            Automatically resolve any type conflicts by picking the entry numbered. Unpredictable.
+            Choose 0 unless you know exactly what you are doing.
+            0 leads to an interactive resolution of conflicts (recommended!).
+        """
         self._atoms = list()
         self._bonds = list()
         self._atom_types = list()
         self._isostates = OrderedDict()
         xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
         self._input_tree = etree.parse(xmlfile, parser=xmlparser)
-        self._make_output_tree()
+        self._make_output_tree(autoresolve)
 
-    def _make_output_tree(self):
+    def _make_output_tree(self, autoresolve):
         """Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
         """
         self._resname = None
         # Create a registry of atom names in self._atoms and atom types in self._atom_types
-        self._complete_atom_registry()
+        self._complete_atom_registry(autoresolve=autoresolve)
         self._output_tree = _make_cph_xml()
 
         # Add missing atoms to shift indices of atoms in bonds correctly, then register bonds
@@ -254,7 +275,7 @@ class MultiIsomerResidue(object):
         self._complete_state_registry()
 
         # Add nonbonded terms for each state (excludes placeholders for the ForceField block)
-        self._complete_nonbonded_registry()
+        self._complete_nonbonded_registry(autoresolve=autoresolve)
 
         self._sort_atoms()
         self._sort_bonds()
@@ -317,7 +338,7 @@ class MultiIsomerResidue(object):
         for residue in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
             lastnum = 0
             for atom in residue.xpath('Atom'):
-                atomnum = int(MultiIsomerResidue.name_format.search(atom.attrib['type']).group(4))
+                atomnum = int(_TitratableForceFieldCompiler.name_format.search(atom.attrib['type']).group(4))
 
                 missing_atoms = atomnum - lastnum
                 # Count backwards
@@ -369,12 +390,12 @@ class MultiIsomerResidue(object):
         residue.insert(atom_index - 1, newatom)
         self._shift_bonds(atom_index, residue)
 
-    def _complete_atom_registry(self):
+    def _complete_atom_registry(self, autoresolve):
         """
         Registers unique atom names. Store in self._atomnames from atom type list.
         """
         for atype in self._input_tree.xpath('/TitratableResidue/ForceField/AtomTypes/Type'):
-            matched_names = MultiIsomerResidue.name_format.search(atype.attrib['name'])
+            matched_names = _TitratableForceFieldCompiler.name_format.search(atype.attrib['name'])
             if self._resname is None:
                 self._resname = matched_names.group(1)
             atomname = matched_names.group(3, 4)
@@ -383,20 +404,20 @@ class MultiIsomerResidue(object):
             self._atom_types.append(_AtomType(self._resname, atomname, atype.attrib['class'], atype.attrib['element'], atype.attrib['mass']))
 
         self._unique_atoms()
-        self._unique_atom_types(autoresolve=1)
+        self._unique_atom_types(autoresolve=autoresolve)
 
     def _complete_state_registry(self):
         for isostate in self._input_tree.xpath('/TitratableResidue/IsomerData/IsomericState'):
             isomer = _Isomer(int(isostate.attrib["index"]), isostate.attrib["population"], isostate.attrib["netcharge"])
             self._isostates[int(isostate.attrib["index"])] = isomer
 
-    def _complete_nonbonded_registry(self):
+    def _complete_nonbonded_registry(self, autoresolve):
         """
         Register the non_bonded interactions for all states.
         """
         for isoindex, isostate in self._isostates.items():
             for nonbondatom in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce/Atom"):
-                matched_names = MultiIsomerResidue.name_format.search(nonbondatom.attrib['type'])
+                matched_names = _TitratableForceFieldCompiler.name_format.search(nonbondatom.attrib['type'])
                 atomname = matched_names.group(3, 4)
                 atomname = ''.join(atomname)
 
@@ -404,7 +425,55 @@ class MultiIsomerResidue(object):
                 if stateidx_nonbond == isoindex:
                     self._isostates[isoindex].nonbondedtypes[atomname] = _NonbondedForce(matched_names.group(1), stateidx_nonbond, atomname, nonbondatom.attrib['epsilon'], nonbondatom.attrib['sigma'], nonbondatom.attrib['charge'])
 
-        pass
+        for atom in self._atoms:
+            self._resolve_lj_params(atom, autoresolve=autoresolve)
+
+    def _resolve_lj_params(self, atom, autoresolve):
+        typelist = OrderedDict()
+        for isoindex, isostate in self._isostates.items():
+            nbtype = isostate.nonbondedtypes[atom.name]
+            # Assume zero values for all are newly added dummy atoms, and should not be suggested as types.
+            if (float(nbtype.epsilon) > 0.0 and float(nbtype.sigma) > 0.0) or abs(float(nbtype.charge)) > 0.0:
+               typelist[isoindex] = nbtype
+
+        # Select an arbitrary type to compare all to
+        randomindex = random.choice(list(typelist.keys()))
+        first_state_type = typelist[randomindex]
+        # Check if all remaining types have the same LJ parameters
+        if all(atype == first_state_type for atype in typelist.values()):
+            logger.debug("All types shared for {}".format(atom))
+            # Still need to standardize the dummies.
+            self._standardize_lj_params(atom, randomindex)
+        elif autoresolve:
+            if autoresolve not in typelist.keys():
+                raise UserWarning("Nonbonded type reference provided a dummy atom, this is probably a bad idea.")
+            for key, value in typelist.items():
+                logger.debug("{}:{}".format(key, value))
+            self._standardize_lj_params(atom, autoresolve)
+        else:
+            self._manual_lj_params(atom, typelist)
+
+    def _standardize_lj_params(self, atom, reference_state_index):
+        """
+        Set the epsilon and sigma for the atom to that of the reference state, for all other states.
+        """
+        epsilon = self._isostates[reference_state_index].nonbondedtypes[atom.name].epsilon
+        sigma = self._isostates[reference_state_index].nonbondedtypes[atom.name].sigma
+        logger.info("Setting epsilon/sigma for {} to {} / {}".format(atom.name, epsilon, sigma))
+        for isoindex in self._isostates.keys():
+            self._isostates[isoindex].nonbondedtypes[atom.name].epsilon = epsilon
+            self._isostates[isoindex].nonbondedtypes[atom.name].sigma = sigma
+
+    def _manual_lj_params(self, atom, typelist):
+        print("Atom types for {}".format(atom.name))
+        for isoindex, atype in typelist.items():
+            print("{}), {}".format(isoindex, atype))
+        choice = -1
+        while choice not in typelist.keys():
+            print("Please pick a number from the list:")
+            choice = int(input("Which sigma/epsilon would you like to keep?").strip())
+
+        self._standardize_lj_params(atom, choice)
 
     def _register_bonds(self):
         """
@@ -461,7 +530,7 @@ class MultiIsomerResidue(object):
                         self._resolve_type_conflict(conflicts, autoresolve=autoresolve)
 
     def _resolve_type_conflict(self, conflicts, autoresolve):
-        """Keep all but one of the conflicting atom types.
+        """Keep all but one of the conflicting bonded atom types.
 
         Parameters
         ----------
@@ -590,13 +659,6 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
     -------
     str : The absolute path of the outputfile
     """
-
-    logger = logging.getLogger()
-    formatter = logging.Formatter('[%(levelname)s] %(message)s')
-    handler = logging.StreamHandler(stream=sys.stdout)
-    handler.setFormatter(formatter)
-    handler.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
     logger.info("Running Epik to detect protomers and tautomers...")
     inputmol2 = os.path.abspath(inputmol2)
@@ -605,6 +667,7 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
     if tmpdir is None:
         tmpdir = tempfile.mkdtemp()
     os.chdir(tmpdir)
+    logger.debug("Running in {}".format(tmpdir))
 
     # Using very tolerant settings, since we can't predict probability from just ref states.
     omt.schrodinger.run_epik(inputmol2, "epik.mae", ph=pH, min_probability=0.00001, ph_tolerance=5.0)
@@ -671,16 +734,18 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
     Parallel(n_jobs=max_antechambers)(delayed(_param_isomer)(i, tmpdir, charges[i]) for i in range(1, isomer_index + 1))
     logger.info("Done!")
     logger.info("Combining isomers into one XML file.")
-    omt.utils.create_ffxml_file(glob("isomer*.mol2"), glob("isomer*.frcmod"), ffxml_filename=outputffxml)
+
+    omt.utils.create_ffxml_file(glob("isomer*.mol2"), glob("isomer*.frcmod"), ffxml_filename="intermediate.xml")
+
+    # Append epik information to the end of the file
+    with open("intermediate.xml", mode='ab') as outfile:
+        outfile.write(epikxmlstring)
+        outfile.write(b"</TitratableResidue>")
+    line_prepender("intermediate.xml", "<TitratableResidue>")
+
+    _TitratableForceFieldCompiler("intermediate.xml").write(outputffxml)
     logger.info("Done, your result is located here: {}!".format(outputffxml))
     if remove_temp_files:
         shutil.rmtree(tmpdir)
-
-    # Append epik information to the end of the file
-    with open(outputffxml, mode='ab') as outfile:
-        outfile.write(epikxmlstring)
-        outfile.write(b"</TitratableResidue>")
-
-    line_prepender(outputffxml, "<TitratableResidue>")
     os.chdir(oldwd)
     return outputffxml
