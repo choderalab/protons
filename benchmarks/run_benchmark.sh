@@ -1,7 +1,7 @@
 #! /usr/bin/bash
 source activate constph
 
-for folder in his-implicit dhfr-implicit abl-implicit ldha-implicit 
+for folder in histidine-implicit dhfr-implicit dhfr-explicit abl-implicit abl-explicit
 do
 cd ${folder}
 echo Running ${folder} benchmark!
