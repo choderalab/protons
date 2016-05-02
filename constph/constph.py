@@ -1122,13 +1122,14 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, platform_name="CPU", updated_frenergies=None, **kwargs):
+    def calibrate(self, platform_name=None, updated_frenergies=None, **kwargs):
         """
         Calibrate all available aminoacids
 
         Parameters
         ----------
-
+        platform_name : str, optional, default=None
+            Use specified platform, or if None, use fastest platform.
         threshold : float, optional (default: 1.e-7)
             Maximum absolute gradient to assume convergence.
         mc_every : int, optional (default: 100)
@@ -1177,7 +1178,7 @@ class MonteCarloTitration(object):
         calibration_settings["temperature"] = self.temperature
         calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize() # Should be the user integrator
         calibration_settings["pressure"] = self.pressure
-        calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
+        #calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
         calibration_settings["pH"] = self.pH
         calibration_settings["solvent"] = self.solvent
         calibration_settings["nsteps_per_trial"] = self.nsteps_per_trial
@@ -1356,5 +1357,3 @@ class MonteCarloTitration(object):
         potential_energy = temp_state.getPotentialEnergy()
         self.setTitrationState(group_index, current_state, context)
         return potential_energy
-
-
