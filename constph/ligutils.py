@@ -28,7 +28,6 @@ def _make_cph_xml():
     Returns an empty CPH xml file template
     """
 
-    xml = _make_xml_root("TitratableResidue")
     ff = _make_xml_root("ForceField")
     iso = _make_xml_root("IsomerData")
     atypes = _make_xml_root("AtomTypes")
@@ -37,15 +36,15 @@ def _make_cph_xml():
     hbf = _make_xml_root("HarmonicBondForce")
     haf = _make_xml_root("HarmonicAngleForce")
     ptf = _make_xml_root("PeriodicTorsionForce")
+    resi.append(iso)
     ress.append(resi)
     ff.append(atypes)
     ff.append(ress)
     ff.append(hbf)
     ff.append(haf)
     ff.append(ptf)
-    xml.append(ff)
-    xml.append(iso)
-    return xml
+
+    return ff
 
 
 class _Bond(object):
@@ -110,10 +109,16 @@ class _Atom(object):
         Private class representing an atom that is part of a single residue
     """
 
-    def __init__(self, resname, name):
+    def __init__(self, resname, name, number=None):
         self.resname = resname
         self.name = name
-        self.number = int(re.findall(r"\d+", name)[-1])
+
+        #  If number not supplied, guess by looking for a number at the end of the atom name
+        # numerical component in name. NOT equivalent to index in Residue block
+        if number is None:
+            self.number = int(re.findall(r"\d+", name)[-1])
+        else:
+            self.number = number
         self.type = "{}-{}".format(resname,name)
 
     def __eq__(self, other):
@@ -122,6 +127,10 @@ class _Atom(object):
     def _same_res(self, other):
         """Compare resnames"""
         return self.resname == other.resname
+
+    def __int__(self):
+        """Convert atom to integer."""
+        return int(self.number) - 1
 
     def __gt__(self, other):
         if not self._same_res(other):
@@ -158,7 +167,8 @@ class _Atom(object):
     def __str__(self):
         return '<Atom name="{name}" type="{type}"/>'.format(**self.__dict__)
 
-    __repr__ = __str__
+    def __repr__ (self):
+        self.__str__() + str(self.number)
 
 
 class _AtomType(object):
@@ -237,9 +247,9 @@ class _TitratableForceFieldCompiler(object):
     # TODO make sure we're not changing sigma/epsilon
     # format of atomtype name
     # Groups 1: resname, 2: isomer number, 3: atom letter, 4 atom number
-    name_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
+    typename_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
 
-    def __init__(self, xmlfile, autoresolve=0):
+    def __init__(self, xmlfile, autoresolve=1):
         """
         Compliles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
@@ -252,7 +262,7 @@ class _TitratableForceFieldCompiler(object):
             Choose 0 unless you know exactly what you are doing.
             0 leads to an interactive resolution of conflicts (recommended!).
         """
-        self._atoms = list()
+        self._atoms = OrderedDict()
         self._bonds = list()
         self._atom_types = list()
         self._isostates = OrderedDict()
@@ -277,42 +287,41 @@ class _TitratableForceFieldCompiler(object):
         # Add nonbonded terms for each state (excludes placeholders for the ForceField block)
         self._complete_nonbonded_registry(autoresolve=autoresolve)
 
-        self._sort_atoms()
         self._sort_bonds()
         self._sort_atypes()
 
         # Add atoms and bonds to the output
-        for residue in self._output_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
+        for residue in self._output_tree.xpath('/ForceField/Residues/Residue'):
             residue.attrib["name"] = self._resname
 
-            for atom in self._atoms:
+            for atom in self._atoms.values():
                 residue.append(etree.fromstring(str(atom)))
 
             for bond in self._bonds:
                 residue.append(etree.fromstring(str(bond)))
 
         # Add atomtypes to the output
-        for atypes in self._output_tree.xpath('/TitratableResidue/ForceField/AtomTypes'):
+        for atypes in self._output_tree.xpath('/ForceField/AtomTypes'):
             for atype in self._atom_types:
                 atypes.append(etree.fromstring(str(atype)))
 
         # Copy bonded definitions from input directly to output
-        for hbfblock in self._output_tree.xpath('/TitratableResidue/ForceField/HarmonicBondForce'):
+        for hbfblock in self._output_tree.xpath('/ForceField/HarmonicBondForce'):
             for harmonicbondforce in self._input_tree.xpath('/TitratableResidue/ForceField/HarmonicBondForce/Bond'):
                 hbfblock.append(harmonicbondforce)
 
-        for hafblock in self._output_tree.xpath('/TitratableResidue/ForceField/HarmonicAngleForce'):
+        for hafblock in self._output_tree.xpath('/ForceField/HarmonicAngleForce'):
             for harmonicangleforce in self._input_tree.xpath('/TitratableResidue/ForceField/HarmonicAngleForce/Angle'):
                 hafblock.append(harmonicangleforce)
 
-        for pdtblock in self._output_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce'):
+        for pdtblock in self._output_tree.xpath('/ForceField/PeriodicTorsionForce'):
             for propertorsionforce in self._input_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce/Proper'):
                 pdtblock.append(propertorsionforce)
             for impropertorsionforce in self._input_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce/Improper'):
                 pdtblock.append(impropertorsionforce)
 
         # Fill in nonbonded atomtypes (placeholders)
-        for forcefieldblock in self._output_tree.xpath('/TitratableResidue/ForceField'):
+        for forcefieldblock in self._output_tree.xpath('/ForceField'):
             for nonbondedblock in self._input_tree.xpath('/TitratableResidue/ForceField/NonbondedForce'):
 
                 # Remove all old nonbonded terms
@@ -325,7 +334,7 @@ class _TitratableForceFieldCompiler(object):
                     nonbondedblock.append((etree.fromstring(atype.nonbonded_placeholder())))
                 forcefieldblock.append(nonbondedblock)
 
-        for isodata in self._output_tree.xpath('/TitratableResidue/IsomerData'):
+        for isodata in self._output_tree.xpath('/ForceField/Residues/Residue/IsomerData'):
             for isoindex, isostate in self._isostates.items():
                 statexml = etree.fromstring(str(isostate))
                 for nonbondtype in isostate.nonbondedtypes.values():
@@ -336,75 +345,50 @@ class _TitratableForceFieldCompiler(object):
 
     def _complete_bond_registry(self):
         for residue in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
-            lastnum = 0
-            for atom in residue.xpath('Atom'):
-                atomnum = int(_TitratableForceFieldCompiler.name_format.search(atom.attrib['type']).group(4))
+            per_state_index = OrderedDict()
+            for aix, atom in enumerate(residue.xpath('Atom')):
 
-                missing_atoms = atomnum - lastnum
-                # Count backwards
-                for relative_index in range(missing_atoms - 1, 0, -1):
-                    # Missing number is the last atom found - the missing index
-                    missingnum = atomnum - relative_index
-                    self._new_dummy(missingnum, residue)  # Adds new dummy and shifts bond indices
-                lastnum = atomnum
+                per_state_index[aix] = atom.attrib["name"]
 
-            # Add missing atoms at end
-            for atomnum in range(lastnum + 1, len(self._atoms) + 1):
-                # One based index of number missing from end of residue
-                self._new_dummy(atomnum, residue)
+            for bond in residue.xpath('Bond'):
+                atomnames = list(self._atoms.keys())
+                from_atom = per_state_index[int(bond.attrib["from"])]
+                to_atom = per_state_index[int(bond.attrib["to"])]
 
-            # Create a registry of bonds in self._bonds
-            self._register_bonds()
+                self._bonds.append(_Bond(atomnames.index(from_atom), atomnames.index(to_atom)))
 
-    def write(self, filename=None):
+        self._unique_bonds()
+
+    def write(self, filename=None, moleculename="UNK"):
         objectify.deannotate(self._output_tree)
         etree.cleanup_namespaces(self._output_tree)
-        xmlstring = etree.tostring(self._output_tree, pretty_print=True, xml_declaration=False)
+        xmlstring = etree.tostring(self._output_tree, encoding="utf-8", pretty_print=True, xml_declaration=False)
+        xmlstring = xmlstring.decode("utf-8")
+        xmlstring = xmlstring.replace("non-", "{}-".format(moleculename))
+        xmlstring = xmlstring.replace('name="non"', 'name="{}"'.format(moleculename))
+
         if filename is not None:
-            with open(filename, 'wb') as fstream:
+            with open(filename, 'w') as fstream:
                 fstream.write(xmlstring)
 
-        return xmlstring.decode("utf-8")
-
-    def _new_dummy(self, atom_index, residue):
-        """
-
-        Parameters
-        ----------
-        atom_index - int
-            One-based index of the atom
-        residue - etree.Element
-            Residue to add atom to.
-
-        Returns
-        -------
-
-        """
-        atomname = 'H{}'.format(atom_index)
-        typestr = ('{}-' + atomname).format(residue.attrib['name'])
-        newtype = self._new_dummy_type(typestr)
-        newatom = self._new_dummy_atom(atomname, typestr)
-        newnonbond = self._new_dummy_nonbond(typestr)
-        self._input_tree.xpath('/TitratableResidue/ForceField/AtomTypes')[0].append(newtype)
-        self._input_tree.xpath('/TitratableResidue/ForceField/NonbondedForce')[0].append(newnonbond)
-        residue.insert(atom_index - 1, newatom)
-        self._shift_bonds(atom_index, residue)
+        return xmlstring
 
     def _complete_atom_registry(self, autoresolve):
         """
         Registers unique atom names. Store in self._atomnames from atom type list.
         """
         for atype in self._input_tree.xpath('/TitratableResidue/ForceField/AtomTypes/Type'):
-            matched_names = _TitratableForceFieldCompiler.name_format.search(atype.attrib['name'])
+            matched_names = _TitratableForceFieldCompiler.typename_format.search(atype.attrib['name'])
             if self._resname is None:
                 self._resname = matched_names.group(1)
             atomname = matched_names.group(3, 4)
             atomname = ''.join(atomname)
-            self._atoms.append(_Atom(self._resname,atomname))
+            if atomname not in self._atoms:
+                self._atoms[atomname] = _Atom(self._resname, atomname)
             self._atom_types.append(_AtomType(self._resname, atomname, atype.attrib['class'], atype.attrib['element'], atype.attrib['mass']))
 
-        self._unique_atoms()
         self._unique_atom_types(autoresolve=autoresolve)
+        self._sort_atoms()
 
     def _complete_state_registry(self):
         for isostate in self._input_tree.xpath('/TitratableResidue/IsomerData/IsomericState'):
@@ -416,16 +400,23 @@ class _TitratableForceFieldCompiler(object):
         Register the non_bonded interactions for all states.
         """
         for isoindex, isostate in self._isostates.items():
+            unmatched_atoms = list(self._atoms.keys())
             for nonbondatom in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce/Atom"):
-                matched_names = _TitratableForceFieldCompiler.name_format.search(nonbondatom.attrib['type'])
+                matched_names = _TitratableForceFieldCompiler.typename_format.search(nonbondatom.attrib['type'])
                 atomname = matched_names.group(3, 4)
                 atomname = ''.join(atomname)
-
                 stateidx_nonbond = int(matched_names.group(2)) + 1
                 if stateidx_nonbond == isoindex:
-                    self._isostates[isoindex].nonbondedtypes[atomname] = _NonbondedForce(matched_names.group(1), stateidx_nonbond, atomname, nonbondatom.attrib['epsilon'], nonbondatom.attrib['sigma'], nonbondatom.attrib['charge'])
+                    unmatched_atoms.remove(atomname)
+                    self._isostates[isoindex].nonbondedtypes[atomname] = _NonbondedForce(self._resname, isoindex, atomname, nonbondatom.attrib['epsilon'], nonbondatom.attrib['sigma'], nonbondatom.attrib['charge'])
 
-        for atom in self._atoms:
+            for unmatched in unmatched_atoms:
+                self._isostates[isoindex].nonbondedtypes[unmatched] = _NonbondedForce(self._resname, isoindex,
+                                                                             unmatched, "0.0",
+                                                                             "0.0",
+                                                                             "0.0")
+
+        for atom in self._atoms.values():
             self._resolve_lj_params(atom, autoresolve=autoresolve)
 
     def _resolve_lj_params(self, atom, autoresolve):
@@ -475,22 +466,6 @@ class _TitratableForceFieldCompiler(object):
 
         self._standardize_lj_params(atom, choice)
 
-    def _register_bonds(self):
-        """
-        Register the unique bonds. Store in self._bonds.
-
-        Notes
-        -----
-        Only run this after all atom indices have been finalized.
-
-        """
-        for bond in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue/Bond'):
-            fr = bond.attrib['from']
-            to = bond.attrib['to']
-            self._bonds.append(_Bond(fr, to))
-
-        self._unique_bonds()
-
     def _unique_bonds(self):
         """Ensure only unique bonds are kept."""
         bonds = list()
@@ -499,14 +474,6 @@ class _TitratableForceFieldCompiler(object):
                 bonds.append(bond)
 
         self._bonds = bonds
-
-    def _unique_atoms(self):
-        """Ensure only unique atoms are kept."""
-        atoms = list()
-        for atom in self._atoms:
-            if atom not in atoms:
-                atoms.append(atom)
-        self._atoms = atoms
 
     def _unique_atom_types(self, autoresolve):
         """Ensure only unique atomtypes are kept. Provide conflict resolution."""
@@ -573,7 +540,7 @@ class _TitratableForceFieldCompiler(object):
                 break
 
     def _sort_atoms(self):
-        self._atoms = sorted(self._atoms)  # Sort by atom number
+        self._atoms = OrderedDict(sorted(self._atoms.items(), key=lambda t: t[1]))  # Sort by atom number
 
     def _sort_bonds(self):
         self._bonds = sorted(self._bonds)  # Sort by first, then second atom in bond
@@ -608,13 +575,14 @@ class _TitratableForceFieldCompiler(object):
             b_from = int(bond.attrib['from'])
             b_to = int(bond.attrib['to'])
             if b_from > start:
-                bond.attrib['from'] = str(b_from + 1)
+                bond.attrib['from'] >= str(b_from + 1)
             if b_to > start:
-                bond.attrib['to'] = str(b_to + 1)
+                bond.attrib['to'] >= str(b_to + 1)
 
 
 def _param_isomer(isomer, tmpdir, q):
     # Read temporary file containing net charge
+    #TODO hardcoded using gasteiger charges for debugging speed
     omt.amber.run_antechamber('isomer_{}'.format(isomer),'{}/{}.mol2'.format(tmpdir,isomer), charge_method="bcc", net_charge=q)
     logging.info("Parametrized isomer{}".format(isomer))
 
