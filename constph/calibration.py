@@ -144,7 +144,7 @@ class CalibrationTitration(MonteCarloTitration):
         # Set reference energy based on new zeta
         self.set_relative_free_energy(zeta_t, group_index=group_index)
 
-        logger.info('Adaptation step %8d : zeta_t = %s, N_k = %s' % (self.n_adaptations, str(zeta_t), str(self.state_counts / self.state_counts.sum())))
+        logger.debug('Adaptation step %8d : zeta_t = %s, N_k = %s' % (self.n_adaptations, str(zeta_t), str(self.state_counts / self.state_counts.sum())))
 
         return
 
@@ -461,7 +461,7 @@ class AminoAcidCalibrator(object):
         integrator = openmm.LangevinIntegrator(temp, crate, ts)
 
         # TODO: Change to recording state log probabilities
-        self.log_state_probabilities = [np.log(np.array(AminoAcidCalibrator.supported[residue_name](pH).weights()))]
+        self.log_state_probabilities = np.log(np.array(AminoAcidCalibrator.supported[residue_name](pH).weights()))
 
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
         if settings["solvent"] == "explicit":
@@ -487,7 +487,7 @@ class AminoAcidCalibrator(object):
         if minimize:
             minimized_context, positions = self._minimizer(platform_name, system, positions) # dont use minimized_context
         context.setPositions(positions)  # set to minimized positions
-
+        context.setVelocitiesToTemperature(temp)
         self.context = context
         self.integrator = integrator
         self.integrator.step(1)
@@ -495,8 +495,7 @@ class AminoAcidCalibrator(object):
         self.titration = mc_titration
         self.settings = settings
 
-
-    def calibrate_till_converged(self, threshold=1.e-5, mc_every=500, zeta_every=1, convergence_frequency=500, window=2000, max_iter=None, **kwargs):
+    def calibrate_till_converged(self, threshold=1.e-5, mc_every=500, zeta_every=1, check_frequency=500, window=2000, max_iter=None, **kwargs):
         """
         Calibrate the amino acid until converged to below the gradient threshold
 
@@ -508,7 +507,7 @@ class AminoAcidCalibrator(object):
             Update titration state every `mc_every` steps.
         zeta_every : int, optional (default: 1)
             Adapt the SAMS zeta every `zeta_every` titration state updates
-        convergence_frequency: int, optional (default: 500)
+        check_frequency: int, optional (default: 500)
             Check for convergence for this amount of zeta updates
         window : int, optional (default: 2000)
             Gradient is evaluated over the last `window` samples.
@@ -528,7 +527,7 @@ class AminoAcidCalibrator(object):
         # Default value for optional arguments to weight adaptation scheme
         t0 = kwargs.pop("t0", 1500)
         b = kwargs.pop("b", .9)
-        scheme=kwargs.pop("scheme", "global")
+        scheme = kwargs.pop("scheme", "global")
 
         if kwargs:
             raise TypeError('"{}" are not valid keyword arguments.'.format('", "'.join(kwargs.keys())))
@@ -549,13 +548,12 @@ class AminoAcidCalibrator(object):
                 zeta_window.append(zeta)
                 yield g_k
 
-                if zeta_updates % convergence_frequency == 0:
+                if zeta_updates % check_frequency == 0:
                     grad = np.average(np.gradient(zeta_window, 10), axis=1)[0]  # average gradient for each state
                     logger.info("Gradient magnitude: {}".format([ "{:.3f}".format(np.log10(abs(g))) for g in grad]))
                     # Absolute gradient of all states is equal/below threshold
                     if (abs(grad) <= threshold).all() and zeta_updates >= t0 + window:
                         break
-
 
             if max_iter is not None and iteration == max_iter:
                 break
