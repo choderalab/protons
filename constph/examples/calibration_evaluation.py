@@ -6,13 +6,16 @@ from constph import get_data
 from constph.logger import logger
 from constph.constph import MonteCarloTitration
 from constph.calibration import Histidine
+import numpy as np
+import openmmtools
 import logging
 
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # Import one of the standard systems.
 temperature = 300.0 * unit.kelvin
-pressure = 1.0 * unit.atmospheres
+# pressure = 1.0 * unit.atmospheres
+pressure = None
 timestep = 1.0 * unit.femtoseconds
 collision_rate = 9.1 / unit.picoseconds
 pH = 7.0
@@ -25,17 +28,20 @@ system = openmm.XmlSerializer.deserialize(open('{}/hip-implicit.sys.xml'.format(
 prmtop = app.AmberPrmtopFile('{}/hip-implicit.prmtop'.format(testsystems))
 cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
-integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
-mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=None, nsteps_per_trial=0, implicit=True)
-platform = openmm.Platform.getPlatformByName('CUDA')
-context = openmm.Context(system, mc_titration.compound_integrator, platform)
+integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
+mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, nsteps_per_trial=0, implicit=True)
+if platform_name:
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    context = openmm.Context(system, mc_titration.compound_integrator, platform)
+else:
+    context = openmm.Context(system, mc_titration.compound_integrator)
 context.setPositions(positions)  # set to minimized positions
+context.setVelocitiesToTemperature(temperature)
+logger.info("Calibrating")
+mc_titration.calibrate(platform_name=platform_name, threshold=1./50000, t0=50, mc_every=100, window=50, check_frequency=100, b=0.75, scheme="global",updated_frenergies={'hip': np.array([  1.60072121,   5.73840545,  13.66377965])})
 
-logger.debug("Calibrating")
-mc_titration.calibrate(platform_name="CUDA", threshold=1.e-7)
 
-
-niter = 1000 # 1 ns
+niter = 100 # 1 ns
 mc_freq = 1000
 counts = {0: 0, 1 : 0, 2 : 0}
 for iteration in range(1, niter):

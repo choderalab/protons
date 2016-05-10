@@ -183,12 +183,12 @@ class MonteCarloTitration(object):
         # Create a Verlet integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
-        self.verlet_integrator = VelocityVerletIntegrator(ncmc_timestep)
-        self.compound_integrator.addIntegrator(self.verlet_integrator)
+        self.ncmc_propagation_integrator = VelocityVerletIntegrator(ncmc_timestep)
+        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
         self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
 
         # Set constraint tolerance.
-        self.verlet_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
+        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
         # Check that system has MonteCarloBarostat if pressure is specified.
         if pressure is not None:
@@ -989,10 +989,7 @@ class MonteCarloTitration(object):
         # Compute initial probability of this protonation state.
         log_P_initial, pot1, kin1 = self._compute_log_probability(context)
 
-        if self.debug:
-            state = context.getState(getEnergy=True)
-            initial_potential = state.getPotentialEnergy()
-            print("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), initial_potential / units.kilocalories_per_mole))
+        logger.debug("   initial %s   %12.3f kcal/mol" % (str(self.getTitrationStates()), pot1 / units.kilocalories_per_mole))
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
@@ -1027,7 +1024,7 @@ class MonteCarloTitration(object):
                 # Run NCMC integration.
                 for step in range(self.nsteps_per_trial):
                     # Take a Verlet integrator step.
-                    self.verlet_integrator.step(1)
+                    self.ncmc_propagation_integrator.step(1)
                     # Update the titration state.
                     titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
                     # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
@@ -1039,7 +1036,7 @@ class MonteCarloTitration(object):
                         self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
                                             titration_group_index], fractional_titration_state=titration_lambda, context=context)
                         # TODO: Optimize where integrator.step() is called
-                        self.verlet_integrator.step(1)
+                    self.ncmc_propagation_integrator.step(1)
 
             # Compute final probability of this protonation state.
             log_P_final, pot2, kin2 = self._compute_log_probability(context)
@@ -1050,10 +1047,10 @@ class MonteCarloTitration(object):
 
             # Accept or reject with Metropolis criteria.
             log_P_accept = -work
-            if self.debug:
-                print("LOGP" + str(log_P_accept))
-            if self.debug:
-                print("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+
+            logger.debug("LOGP" + str(log_P_accept))
+            logger.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+
             self.nattempted += 1
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
@@ -1122,13 +1119,14 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, platform_name="CPU", updated_frenergies=None, **kwargs):
+    def calibrate(self, platform_name=None, updated_frenergies=None, **kwargs):
         """
         Calibrate all available aminoacids
 
         Parameters
         ----------
-
+        platform_name : str, optional, default=None
+            Use specified platform, or if None, use fastest platform.
         threshold : float, optional (default: 1.e-7)
             Maximum absolute gradient to assume convergence.
         mc_every : int, optional (default: 100)
@@ -1172,12 +1170,11 @@ class MonteCarloTitration(object):
             updated_frenergies = dict(updated_frenergies)  # deepcopy
 
 
-        # TODO currently only works if user is also using a Langevin integrator
         calibration_settings = dict()
         calibration_settings["temperature"] = self.temperature
         calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize() # Should be the user integrator
         calibration_settings["pressure"] = self.pressure
-        calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
+        #calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
         calibration_settings["pH"] = self.pH
         calibration_settings["solvent"] = self.solvent
         calibration_settings["nsteps_per_trial"] = self.nsteps_per_trial
@@ -1195,7 +1192,7 @@ class MonteCarloTitration(object):
         for group_index, group in enumerate(self.titrationGroups):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
                 self.titrationGroups[group_index]['titration_states'][state_index]['relative_frenergy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
-
+        logger.info(updated_frenergies)
         return updated_frenergies
 
 
@@ -1249,9 +1246,8 @@ class MonteCarloTitration(object):
         if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
-            if self.debug:
-                print('beta = %s, pressure = %s, volume = %s, multiple = %s' % (str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA)))
-            log_P += -self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
+            logger.debug('beta = %s, pressure = %s, volume = %s, multiple = %s' , str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA))
+            log_P -= self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Add reference free energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
@@ -1329,8 +1325,9 @@ class MonteCarloTitration(object):
         red_pot = self.beta * potential_energy
 
         # TODO is the below necessary?
-        # if self.solvent == "explicit":
-        #     red_pot += self.beta * self.pressure * self.volume * units.AVOGADRO_CONSTANT_NA
+        if self.solvent == "explicit":
+            volume = context.getState().getPeriodicBoxVolume()
+            red_pot -= self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         return red_pot
 
@@ -1356,5 +1353,3 @@ class MonteCarloTitration(object):
         potential_energy = temp_state.getPotentialEnergy()
         self.setTitrationState(group_index, current_state, context)
         return potential_energy
-
-
