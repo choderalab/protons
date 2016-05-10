@@ -19,7 +19,7 @@ pressure = None
 timestep = 1.0 * unit.femtoseconds
 collision_rate = 9.1 / unit.picoseconds
 pH = 7.0
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
 
 # Get histidine files from the calibration system directory
 testsystems = get_data('.', 'calibration-systems')
@@ -29,7 +29,7 @@ prmtop = app.AmberPrmtopFile('{}/hip-implicit.prmtop'.format(testsystems))
 cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
 integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
-mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, nsteps_per_trial=0, implicit=True)
+mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, nsteps_per_trial=100, implicit=True)
 if platform_name:
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
@@ -38,7 +38,7 @@ else:
 context.setPositions(positions)  # set to minimized positions
 context.setVelocitiesToTemperature(temperature)
 logger.info("Calibrating")
-mc_titration.calibrate(platform_name=platform_name, threshold=1./50000, t0=50, mc_every=100, window=50, check_frequency=100, b=0.75, scheme="global",updated_frenergies={'hip': np.array([  1.60072121,   5.73840545,  13.66377965])})
+mc_titration.calibrate(platform_name=platform_name, threshold=1./50000, t0=50, mc_every=100, window=50, check_frequency=100, b=0.75, scheme="binary",updated_frenergies={'hip': np.array([  1.60072121,   5.73840545,  13.66377965])})
 
 
 niter = 100 # 1 ns
