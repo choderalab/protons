@@ -12,24 +12,24 @@ build:
 requirements:
   build:
     - python
-    - openmm-dev
+    - openmm ==7.0rc1
     - numpy
     - scipy
-    - openmmtools-dev
+    - openmmtools
     - pymbar
-    - openmoltools-dev
+    - openmoltools >=0.7.0
     - ambermini
     - joblib
     - lxml
 
   run:
     - python
-    - openmm-dev
+    - openmm ==7.0rc1
     - numpy
     - scipy
-    - openmmtools-dev
+    - openmmtools
     - pymbar
-    - openmoltools-dev
+    - openmoltools >=0.7.0
     - ambermini
     - joblib
     - lxml

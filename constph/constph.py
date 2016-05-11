@@ -1038,6 +1038,10 @@ class MonteCarloTitration(object):
                         # TODO: Optimize where integrator.step() is called
                     self.ncmc_propagation_integrator.step(1)
 
+                # Update titration states so that log state penalties are accurately reflected.
+                for titration_group_index in titration_group_indices:
+                    self.titrationStates[titration_group_index] = titration_state_index
+
             # Compute final probability of this protonation state.
             log_P_final, pot2, kin2 = self._compute_log_probability(context)
 
