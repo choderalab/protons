@@ -35,7 +35,7 @@ class CalibrationTitration(MonteCarloTitration):
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None,
                  nattempts_per_update=None, simultaneous_proposal_probability=0.1,
                  nsteps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
-                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, target_weights=None, debug=False):
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, debug=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -74,9 +74,6 @@ class CalibrationTitration(MonteCarloTitration):
             Name of anion residue from which parameters are to be taken.
         implicit: bool, optional, default=False
             Flag for implicit simulation. Skips ion parameter lookup.
-        target_weights : list, optional
-            Nested list indexed [group][state] of relative weights (pi) for SAMS method
-            If unspecified, all target weights are set to equally sample all states.
 
         Other Parameters
         ----------------
@@ -97,12 +94,18 @@ class CalibrationTitration(MonteCarloTitration):
 
         self.n_adaptations = 0
 
+        target_weights = None
         for i, group in enumerate(self.titrationGroups):
             for j, state in enumerate(self.titrationGroups[i]['titration_states']):
                 if target_weights is not None:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
                 else:
                     self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
+
+        group_index = 0
+        nstates = len(self.titrationGroups[group_index]['titration_states'])
+        self.state_counts = np.zeros(nstates, np.float64)
+        logger.info('There are %d titration states' % nstates)
 
     def adapt_weights(self, context, scheme='global', b=0.85, t0=10000, group_index=0):
         """
@@ -140,6 +143,9 @@ class CalibrationTitration(MonteCarloTitration):
 
         # Set reference energy based on new zeta
         self.set_relative_free_energy(zeta_t, group_index=group_index)
+
+        logger.info('Adaptation step %8d : zeta_t = %s, N_k = %s' % (self.n_adaptations, str(zeta_t), str(self.state_counts / self.state_counts.sum())))
+
         return
 
     def set_relative_free_energy(self, zetas, group_index=0):
@@ -210,6 +216,11 @@ class CalibrationTitration(MonteCarloTitration):
         update *= delta
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
 
+        # Update histogram count of current state.
+        group_index = 0
+        current_state = self.getTitrationState(group_index)
+        self.state_counts[current_state] += np.sqrt(self.n_adaptations)
+
         return update
 
     def _global_update(self, context, b=1.0, t0=0, group_index=0):
@@ -236,14 +247,17 @@ class CalibrationTitration(MonteCarloTitration):
         zeta = self.get_zeta(group_index)
         pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
-        update = np.apply_along_axis(lambda x: 1.0 / x, 0, pi_j)
+        update = 1.0 / pi_j
         ub_j = self._get_reduced_potentials(context, group_index)
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
-        update *= w_j
+        update *= w_j / pi_j
         update = np.dot(self._gain_factor(b=b, t0=t0, group_index=group_index), update)
+
+        # Update histogram count of current state.
+        self.state_counts += np.sqrt(self.n_adaptations) * w_j
 
         return update
 
@@ -440,26 +454,33 @@ class AminoAcidCalibrator(object):
         ts = settings["timestep"]
         press = settings["pressure"]
         pH = settings["pH"]
-        crate = settings["collision_rate"]
+        #crate = settings["collision_rate"]
+        crate = 9.1 / units.picoseconds
         nspt = settings["nsteps_per_trial"]
         platform_name = settings["platform_name"]
         integrator = openmm.LangevinIntegrator(temp, crate, ts)
 
-        self.target_weights = [AminoAcidCalibrator.supported[residue_name](pH).weights()]
+        # TODO: Change to recording state log probabilities
+        self.log_state_probabilities = [np.log(np.array(AminoAcidCalibrator.supported[residue_name](pH).weights()))]
+
+        # Use SAMS to determine free energies of each protonation state under uniform state target weights.
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(press, temp))
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press, nsteps_per_trial=nspt, implicit=False, target_weights=self.target_weights)
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=press, nsteps_per_trial=nspt, implicit=False)
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None, nsteps_per_trial=nspt, implicit=True, target_weights=self.target_weights)
+            mc_titration = CalibrationTitration(system, temp, pH, prmtop, cpin_filename, integrator, pressure=None, nsteps_per_trial=nspt, implicit=True)
         else:
             raise ValueError("Solvent not recognized")
 
         if guess_free_energy is not None:
             # Zeta has opposite sign of relative free energy
             mc_titration.set_relative_free_energy(guess_free_energy)
-        platform = openmm.Platform.getPlatformByName(platform_name)
-        context = openmm.Context(system, mc_titration.compound_integrator, platform)
+        if platform_name:
+            platform = openmm.Platform.getPlatformByName(platform_name)
+            context = openmm.Context(system, mc_titration.compound_integrator, platform)
+        else:
+            context = openmm.Context(system, mc_titration.compound_integrator)
 
         # platform.setPropertyValue(context, "CudaDeviceIndex", "0")
 
@@ -474,35 +495,8 @@ class AminoAcidCalibrator(object):
         self.titration = mc_titration
         self.settings = settings
 
-    def calibrate(self, iterations=10000, mc_every=100, zeta_every=1, scheme='global'):
-        """
-        Calibrate the amino acid for a fixed number of iterations
 
-        Parameters
-        ----------
-        iterations : int, optional (default: 10000)
-            Total number of MD iterations
-        mc_every : int, optional (default: 100)
-            Update titration state every `mc_every` steps.
-        zeta_every : int, optional (default: 1)
-            Adapt the SAMS zeta every `zeta_every` titration state updates
-        scheme : str
-            'global' for global update
-            'binary' for binary update (not recommended)
-
-        Yields
-        -------
-        np.ndarray - relative free energy from calibration
-        """
-        for iteration in range(1, iterations):
-            self.integrator.step(mc_every)
-            self.titration.update(self.context)
-            # print("state", self.titration.getTitrationState(0))
-            if iteration % zeta_every == 0:
-                self.titration.adapt_weights(self.context, scheme)
-                yield self.titration.get_zeta()
-
-    def calibrate_till_converged(self, threshold=1.e-5, mc_every=100, zeta_every=1, convergence_frequency=500, window=2000, max_iter=None, **kwargs):
+    def calibrate_till_converged(self, threshold=1.e-5, mc_every=500, zeta_every=1, convergence_frequency=500, window=2000, max_iter=None, **kwargs):
         """
         Calibrate the amino acid until converged to below the gradient threshold
 
@@ -528,7 +522,7 @@ class AminoAcidCalibrator(object):
 
         Yields
         -------
-        np.ndarray - relative free energy from calibration
+        np.ndarray - log bias weight g_k from calibration to give log state populations in solvent
         """
 
         # Default value for optional arguments to weight adaptation scheme
@@ -551,8 +545,9 @@ class AminoAcidCalibrator(object):
                 zeta_updates += 1
                 self.titration.adapt_weights(self.context, t0=t0, b=b, scheme=scheme)
                 zeta = self.titration.get_zeta()
+                g_k = zeta - self.log_state_probabilities
                 zeta_window.append(zeta)
-                yield zeta
+                yield g_k
 
                 if zeta_updates % convergence_frequency == 0:
                     grad = np.average(np.gradient(zeta_window, 10), axis=1)[0]  # average gradient for each state
@@ -581,6 +576,3 @@ class AminoAcidCalibrator(object):
         logger.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         return context, positions
-
-
-

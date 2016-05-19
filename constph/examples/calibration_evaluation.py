@@ -6,6 +6,7 @@ from constph import get_data
 from constph.logger import logger
 from constph.constph import MonteCarloTitration
 from constph.calibration import Histidine
+import openmmtools
 import logging
 
 logger.setLevel(logging.INFO)
@@ -16,7 +17,7 @@ pressure = 1.0 * unit.atmospheres
 timestep = 1.0 * unit.femtoseconds
 collision_rate = 9.1 / unit.picoseconds
 pH = 7.0
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
 
 # Get histidine files from the calibration system directory
 testsystems = get_data('.', 'calibration-systems')
@@ -25,14 +26,17 @@ system = openmm.XmlSerializer.deserialize(open('{}/hip-implicit.sys.xml'.format(
 prmtop = app.AmberPrmtopFile('{}/hip-implicit.prmtop'.format(testsystems))
 cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
-integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
+integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
 mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=None, nsteps_per_trial=0, implicit=True)
-platform = openmm.Platform.getPlatformByName('CUDA')
-context = openmm.Context(system, mc_titration.compound_integrator, platform)
+if platform_name:
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    context = openmm.Context(system, mc_titration.compound_integrator, platform)
+else:
+    context = openmm.Context(system, mc_titration.compound_integrator)
 context.setPositions(positions)  # set to minimized positions
 
 logger.debug("Calibrating")
-mc_titration.calibrate(platform_name="CUDA", threshold=1.e-7)
+mc_titration.calibrate(platform_name=platform_name, threshold=1.e-7, t0=100)
 
 
 niter = 1000 # 1 ns
