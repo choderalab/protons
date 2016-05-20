@@ -12,14 +12,14 @@ class HistidineTestCase(TestCase):
         """
         Weights for histidine at pH == pKa_delta
         """
-        weights = Histidine(Histidine.pKa_d).weights()
+        weights = Histidine(Histidine.pKa_d).populations()
         self.assertAlmostEqual(weights[0], weights[1])
 
     def test_pKa_eps(self):
         """
         Weights for histidine at pH == pKa_eps
         """
-        weights = Histidine(Histidine.pKa_e).weights()
+        weights = Histidine(Histidine.pKa_e).populations()
         self.assertAlmostEqual(weights[0], weights[2])
 
     def test_totals(self):
@@ -28,7 +28,7 @@ class HistidineTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Histidine(pH).weights()))
+            self.assertAlmostEqual(1.0, sum(Histidine(pH).populations()))
 
 
 class LysineTestCase(TestCase):
