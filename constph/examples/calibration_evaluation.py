@@ -3,16 +3,19 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from constph import get_data
+
 from constph.logger import logger
 from constph.constph import MonteCarloTitration
 from constph.calibration import Histidine
+import numpy as np
+import openmmtools
 import logging
 
 logger.setLevel(logging.INFO)
 
 # Import one of the standard systems.
 temperature = 300.0 * unit.kelvin
-pressure = 1.0 * unit.atmospheres
+pressure = None
 timestep = 1.0 * unit.femtoseconds
 collision_rate = 9.1 / unit.picoseconds
 pH = 7.0
@@ -25,22 +28,33 @@ system = openmm.XmlSerializer.deserialize(open('{}/hip-implicit.sys.xml'.format(
 prmtop = app.AmberPrmtopFile('{}/hip-implicit.prmtop'.format(testsystems))
 cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
-integrator = openmm.LangevinIntegrator(temperature, collision_rate, timestep)
-mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=None, nsteps_per_trial=0, implicit=True)
-platform = openmm.Platform.getPlatformByName('CUDA')
-context = openmm.Context(system, mc_titration.compound_integrator, platform)
-context.setPositions(positions)  # set to minimized positions
+# integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
+integrator = openmmtools.integrators.VelocityVerletIntegrator(timestep)
+mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
+if platform_name:
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    context = openmm.Context(system, mc_titration.compound_integrator, platform)
+else:
+    context = openmm.Context(system, mc_titration.compound_integrator)
 
-logger.debug("Calibrating")
-mc_titration.calibrate(platform_name="CUDA", threshold=1.e-7)
+context.setPositions(positions)
+context.setVelocitiesToTemperature(temperature)
+
+logger.info("Calibrating")
+logger.info("Restypes by index %s", mc_titration.detect_residues()[0])
+mc_titration.calibrate(platform_name=platform_name)
+
+# Example of how to read in pre-equilibrated values.
+#mc_titration.import_gk_values({'hip': np.array([1.60072121,   5.50168959,  13.32546669])})
 
 
-niter = 1000 # 1 ns
-mc_freq = 1000
-counts = {0: 0, 1 : 0, 2 : 0}
+
+niter = 20000 # .6 ns
+mc_freq = 6
+counts = {0: 0, 1: 0, 2: 0}
 for iteration in range(1, niter):
     if iteration % (niter/100) == 0:
-        print(iteration/niter, "\%")
+        print(100* iteration/niter, "%")
     integrator.step(mc_freq)
     mc_titration.update(context)  # protonation
     counts[mc_titration.getTitrationState(0)] += 1
@@ -50,5 +64,5 @@ for key in counts.keys():
     counts[key] /= totcounts
 
 
-print("Target:", Histidine(pH).weights())
+print("Target:", Histidine(pH).populations())
 print("Observed", counts)

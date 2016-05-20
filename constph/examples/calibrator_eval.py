@@ -1,7 +1,7 @@
 """Script to run the calibrator"""
 from __future__ import print_function
 from simtk import unit, openmm
-from constph.calibration import AminoAcidCalibrator
+from constph.calibration import CalibrationSystem
 import logging
 from constph.constph import logger
 import numpy as np
@@ -18,11 +18,11 @@ settings["solvent"] = "implicit"
 settings["nsteps_per_trial"] = 0
 settings["platform_name"] = "CUDA"
 datapoints = dict(HIP=[], HID=[], HIE=[],idx=[])
-aac = AminoAcidCalibrator("hip", settings, minimize=True, guess_free_energy=[0.0, 0.0, 0.0])
+aac = CalibrationSystem("hip", settings, minimize=True, guess_free_energy=[0.0, 0.0, 0.0])
 print(aac.target_weights)
 
 window = 1000
-for i,x in enumerate(aac.calibrate_till_converged(threshold=1.e-6, mc_every=100, zeta_every=1, window=window, scheme='global'), start=1):
+for i,x in enumerate(aac.sams_till_converged(threshold=1.e-6, mc_every=100, gk_every=1, window=window, scheme='global'), start=1):
     datapoints['HIP'].append(x[0])
     datapoints['HID'].append(x[1])
     datapoints['HIE'].append(x[2])
