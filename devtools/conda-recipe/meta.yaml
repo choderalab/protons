@@ -13,11 +13,11 @@ requirements:
   build:
     - python
     - openmm ==7.0rc1
-    - numpy
-    - scipy
-    - openmmtools
+    - numpy >=1.10
+    - scipy >=0.17.0
+    - openmmtools ==0.7.5
     - pymbar
-    - openmoltools >=0.7.0
+    - openmoltools ==0.7.0
     - ambermini
     - joblib
     - lxml
@@ -25,11 +25,11 @@ requirements:
   run:
     - python
     - openmm ==7.0rc1
-    - numpy
-    - scipy
-    - openmmtools
+    - numpy >=1.10
+    - scipy >=0.17.0
+    - openmmtools ==0.7.5
     - pymbar
-    - openmoltools >=0.7.0
+    - openmoltools ==0.7.0
     - ambermini
     - joblib
     - lxml

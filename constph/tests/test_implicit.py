@@ -2,10 +2,11 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from constph.constph import MonteCarloTitration
-from constph.calibration import CalibrationTitration, AminoAcidCalibrator
+from constph.calibration import SelfAdjustedMixtureSampling, CalibrationSystem
 from unittest import TestCase, skip, skipIf
 from . import get_data
 from nose.plugins.skip import SkipTest
+import openmmtools
 
 
 class TyrosineImplicitTestCase(TestCase):
@@ -28,12 +29,13 @@ class TyrosineImplicitTestCase(TestCase):
         """
         Run tyrosine in implicit solvent with an instanteneous state switch.
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
-                                           pressure=None, nsteps_per_trial=0, implicit=True)
+                                           pressure=None, ncmc_steps_per_trial=0, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
@@ -50,15 +52,16 @@ class TyrosineImplicitTestCase(TestCase):
         calibration_settings["solvent"] = "implicit"
         calibration_settings["nsteps_per_trial"] = 0
 
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
                                            integrator, debug=False,
-                                           pressure=None, nsteps_per_trial=0, implicit=True)
+                                           pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
         mc_titration.calibrate(max_iter=2)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
@@ -66,42 +69,45 @@ class TyrosineImplicitTestCase(TestCase):
         """
         Calibrate (binary update) tyrosine in implicit solvent with an instantaneous state switch
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                            integrator, debug=False,
-                                            pressure=None, nsteps_per_trial=0, implicit=True)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
+        mc_titration = SelfAdjustedMixtureSampling(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                                   integrator, debug=False,
+                                                   pressure=None, ncmc_steps_per_trial=0, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'binary')
+        mc_titration.adapt_zetas(context, 'binary')
 
     def test_tyrosine_calibration_instantaneous_global(self):
         """
         Calibrate (global update) tyrosine in implicit solvent with an instantaneous state switch
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                            integrator, debug=False,
-                                            pressure=None, nsteps_per_trial=0, implicit=True)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
+        mc_titration = SelfAdjustedMixtureSampling(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                                   integrator, debug=False,
+                                                   pressure=None, ncmc_steps_per_trial=0, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'global')
+        mc_titration.adapt_zetas(context, 'global')
 
     def test_tyrosine_ncmc(self):
         """
         Run tyrosine in implicit solvent with an ncmc state switch
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
-                                           pressure=None, nsteps_per_trial=10, implicit=True)
+                                           pressure=None, ncmc_steps_per_trial=10, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
 
@@ -109,31 +115,33 @@ class TyrosineImplicitTestCase(TestCase):
         """
         Calibrate (binary update) tyrosine in implicit solvent with an ncmc state switch
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                            integrator, debug=False,
-                                            pressure=None, nsteps_per_trial=10, implicit=True)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
+        mc_titration = SelfAdjustedMixtureSampling(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                                   integrator, debug=False,
+                                                   pressure=None, ncmc_steps_per_trial=10, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'binary')
+        mc_titration.adapt_zetas(context, 'binary')
 
     def test_tyrosine_calibration_ncmc_global(self):
         """
         Calibrate (global update) tyrosine in implicit solvent with an ncmc state switch
         """
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
-        mc_titration = CalibrationTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                            integrator, debug=False,
-                                            pressure=None, nsteps_per_trial=10, implicit=True)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
+        mc_titration = SelfAdjustedMixtureSampling(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                                   integrator, debug=False,
+                                                   pressure=None, ncmc_steps_per_trial=10, implicit=True)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
-        mc_titration.adapt_weights(context, 'global')
+        mc_titration.adapt_zetas(context, 'global')
 
 
 class TestAminoAcidsImplicitCalibration(object):
@@ -161,8 +169,8 @@ class TestAminoAcidsImplicitCalibration(object):
 
     def calibrate(self, resname):
         print(resname)
-        aac = AminoAcidCalibrator(resname, self.settings, minimize=False)
-        aac.calibrate_till_converged(max_iter=10, platform_name="CPU")
+        aac = CalibrationSystem(resname, self.settings, minimize=False)
+        aac.sams_till_converged(max_iter=10, platform_name="CPU")
 
 
 class PeptideImplicitTestCase(TestCase):
@@ -195,14 +203,15 @@ class PeptideImplicitTestCase(TestCase):
         Run edchky peptide in implicit solvent with an instanteneous state switch. with calibration
         """
 
-        integrator = openmm.LangevinIntegrator(self.temperature, self.collision_rate, self.timestep)
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
         mc_titration = MonteCarloTitration(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
                                            integrator, debug=False,
-                                           pressure=None, nsteps_per_trial=0, implicit=True)
+                                           pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
         mc_titration.calibrate(max_iter=10, platform_name="CPU")
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(self.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation

@@ -63,7 +63,7 @@ import simtk.unit as units
 from .logger import logger
 from openmmtools.integrators import VelocityVerletIntegrator
 
-# MODULE CONSTANTS
+# Module constants
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
 
@@ -114,8 +114,8 @@ class MonteCarloTitration(object):
     """
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
-        nsteps_per_trial=0, ncmc_timestep=1.0*units.femtoseconds,
-        maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
+                 ncmc_steps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
         Initialize a Monte Carlo titration driver for constant pH simulation.
 
@@ -142,7 +142,7 @@ class MonteCarloTitration(object):
             Probability of simultaneously proposing two updates
         debug : bool, optional, default=False
             Turn debug information on/off.
-        nsteps_per_trial : int, optional, default=0
+        ncmc_steps_per_trial : int, optional, default=0
             Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
         ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
             Timestep to use for NCMC switching
@@ -175,7 +175,7 @@ class MonteCarloTitration(object):
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
-        self.nsteps_per_trial = nsteps_per_trial
+        self.nsteps_per_trial = ncmc_steps_per_trial
         if implicit:
             self.solvent = "implicit"
         else:
@@ -690,7 +690,7 @@ class MonteCarloTitration(object):
 
         state = dict()
         state['pKref'] = pKref
-        state['relative_frenergy'] = relative_energy * self.beta  # dimensionless quantity
+        state['g_k'] = relative_energy * self.beta  # dimensionless quantity
         state['charges'] = copy.deepcopy(charges)
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
@@ -1123,83 +1123,120 @@ class MonteCarloTitration(object):
 
         return
 
-    def calibrate(self, platform_name=None, updated_frenergies=None, **kwargs):
+    def calibrate(self, platform_name=None, g_k=None, **kwargs):
         """
-        Calibrate all available aminoacids
+        Calibrate all aminoacids that are found in the structure.
 
         Parameters
         ----------
         platform_name : str, optional, default=None
             Use specified platform, or if None, use fastest platform.
-        threshold : float, optional (default: 1.e-7)
-            Maximum absolute gradient to assume convergence.
-        mc_every : int, optional (default: 100)
-            Update titration state every `mc_every` steps.
-        zeta_every : int, optional (default: 1)
-            Adapt the SAMS zeta every `zeta_every` titration state updates
-        window : int, optional (default: 2000)
-            Gradient is evaluated every `window` steps, over the last `window` samples.
-        max_iter : int, optional
-            Maxmimum number of iterations to run.
-        scheme : str
-            'global' for global update
-            'binary' for binary update (not recommended)
+        g_k : dict, optional
+            dict of starting value g_k estimates in numpy arrays, with residue names as keys.
+
         kwargs : optional keyword arguments are passed to underlying calibration engine.
-            See `constph.calibration.AminoAcidCalibrator#calibrate_till_converged`
-        Todo
+            Expert users: see `calibration.CalibrationSystem#sams_till_converged` for details.
+
+        TODO
         ----
         - How to treat ligands
         - document
+
         """
-        from .calibration import AminoAcidCalibrator
+        from .calibration import CalibrationSystem
+        resname_per_index, unique_residuenames = self.detect_residues(CalibrationSystem.supported_aminoacids)
 
-        residuenames = set()
-        calibrate_residues = dict()
-        for group_index, group in enumerate(self.titrationGroups):
-            supported = False
-            group_name = group['name'].lower()
-            for resn in AminoAcidCalibrator.supported:
-                if resn in group_name:
-                    supported = True
-                    residuenames.add(resn)
-                    calibrate_residues[group_index] = resn
-                    break
-
-            if not supported:
-                raise ValueError("Unsupported residue/ligand: {}".format(group_name))
-
-        if updated_frenergies is None:
-            updated_frenergies = {key: None for (key) in residuenames}
+        if g_k is None:
+            g_k = {key: None for (key) in unique_residuenames}
         else:
-            updated_frenergies = dict(updated_frenergies)  # deepcopy
+            g_k = dict(g_k)  # deepcopy
 
+        for resn in unique_residuenames:
+            if resn not in g_k:
+                g_k[resn] = None
 
         calibration_settings = dict()
         calibration_settings["temperature"] = self.temperature
-        calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize() # Should be the user integrator
+        # index 0 Should be the user integrator
+        calibration_settings["timestep"] = self.compound_integrator.getIntegrator(0).getStepSize()
         calibration_settings["pressure"] = self.pressure
-        #calibration_settings["collision_rate"] = self.compound_integrator.getIntegrator(0).getFriction() # Should be the user integrator
         calibration_settings["pH"] = self.pH
         calibration_settings["solvent"] = self.solvent
         calibration_settings["nsteps_per_trial"] = self.nsteps_per_trial
         calibration_settings["platform_name"] = platform_name
 
-        for aa in residuenames:
-            aac = AminoAcidCalibrator(aa, calibration_settings, guess_free_energy=updated_frenergies[aa])
-            updated_frenergy = None
-            # calibrate till converged is a generator.
-            # updated_frenergy will contain the latest estimate when the loop ends
-            for updated_frenergy in aac.calibrate_till_converged(**kwargs):
+        # Only calibrate once for each unique residue type
+        for residuename in unique_residuenames:
+            # This sets up a system for calibration, with a SAMS sampler under the hood.
+            calibration_system = CalibrationSystem(residuename, calibration_settings, guess_free_energy=g_k[residuename])
+            gk_values = None
+            # sams_till_converged is a generator.
+            # gk_values will contain the latest estimate when the loop ends
+            for gk_values in calibration_system.sams_till_converged(**kwargs):
                 pass
-            updated_frenergies[aa] = updated_frenergy
+            g_k[residuename] = gk_values
 
+        # Set the g_k values of the MCTitration to the calibrated values.
         for group_index, group in enumerate(self.titrationGroups):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
-                self.titrationGroups[group_index]['titration_states'][state_index]['relative_frenergy'] = updated_frenergies[calibrate_residues[group_index]][state_index]
-        logger.info(updated_frenergies)
-        return updated_frenergies
+                self.titrationGroups[group_index]['titration_states'][state_index]['g_k'] = g_k[resname_per_index[group_index]][state_index]
+
+        logger.debug("Calibration results %s", g_k)
+        return g_k
+
+    def import_gk_values(self, gk_dict):
+        """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
+
+        If you changed any details, rerun calibrate instead!
+
+        Parameters
+        ----------
+        gk_dict : dict
+            dict of starting value g_k estimates in numpy arrays, with residue names as keys.
+
+        """
+        from .calibration import CalibrationSystem
+        resname_per_index, unique_residuenames = self.detect_residues(CalibrationSystem.supported_aminoacids)
+
+        # Set the g_k values to the user supplied values.
+        for group_index, group in enumerate(self.titrationGroups):
+            for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
+                self.titrationGroups[group_index]['titration_states'][state_index]['g_k'] = \
+                    gk_dict[resname_per_index[group_index]][state_index]
+
+    def detect_residues(self, supported_residues=None):
+        """
+        Detect the residues in the system that can be calibrated.
+
+        Parameters
+        ----------
+        supported_residues : set
+            set of residue names to flag as titratable.
+
+        Returns
+        -------
+        dict of resnames with group index as keys, set of unique titratable residue names found
+        """
+        if supported_residues is None:
+            from .calibration import CalibrationSystem
+            supported_residues = CalibrationSystem.supported_aminoacids
 
 
+        unique_residuenames = set()
+        resname_per_index = dict()
+        for group_index, group in enumerate(self.titrationGroups):
+            supported = False
+            group_name = group['name'].lower()
+            for resn in supported_residues:
+                if resn in group_name:
+                    supported = True
+                    unique_residuenames.add(resn)
+                    resname_per_index[group_index] = resn
+                    break
+            if not supported:
+                raise ValueError("Unsupported residue/ligand found in titration groups: {}".format(group_name))
+
+        return resname_per_index, unique_residuenames
 
     def getAcceptanceProbability(self):
         """
@@ -1256,9 +1293,9 @@ class MonteCarloTitration(object):
         # Add reference free energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
-            relative_frenergy = titration_state['relative_frenergy']
-            logger.debug("beta * relative_energy: %.2f",  relative_frenergy)
-            log_P -= relative_frenergy
+            g_k = titration_state['g_k']
+            logger.debug("g_k: %.2f",  g_k)
+            log_P -= g_k
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy

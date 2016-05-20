@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
     from constph.constph import MonteCarloTitration
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, nsteps_per_trial=10, implicit=running_implicit)
+    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
 
     # Create Context (using compound integrator from MonteCarloTitration).
     platform = openmm.Platform.getPlatformByName(platform_name)
