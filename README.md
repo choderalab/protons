@@ -1,8 +1,8 @@
 openmm-constph
 ==============
 
-[![Build Status](https://travis-ci.org/choderalab/openmm-constph.svg?branch=master)](https://travis-ci.org/choderalab/openmm-constph)
-[![Code Health](https://landscape.io/github/choderalab/openmm-constph/master/landscape.svg?style=flat)](https://landscape.io/github/choderalab/openmm-constph/master)
+[![Build Status](https://travis-ci.org/choderalab/constph-openmm.svg?branch=master)](https://travis-ci.org/choderalab/constph-openmm)
+[![Code Health](https://landscape.io/github/choderalab/constph-openmm/master/landscape.svg?style=flat)](https://landscape.io/github/choderalab/constph-openmm/master)
 [![Coverage Status](https://coveralls.io/repos/github/choderalab/openmm-constph/badge.svg?branch=master)](https://coveralls.io/github/choderalab/openmm-constph?branch=master)
 
 Testbed for constant-pH methodologies using OpenMM.
