@@ -1,6 +1,7 @@
 from __future__ import print_function
 from builtins import input # python 2 and 3 compatible commandline input
 from glob import glob
+import parmed
 import openmoltools as omt
 from joblib import Parallel, delayed
 from lxml import etree, objectify
@@ -8,6 +9,7 @@ import re, os, sys, logging, tempfile, shutil, random
 from collections import OrderedDict
 from math import exp
 from constph.logger import logger
+from copy import deepcopy
 
 
 def _make_xml_root(rootname):
@@ -28,23 +30,24 @@ def _make_cph_xml():
     Returns an empty CPH xml file template
     """
 
-    ff = _make_xml_root("ForceField")
-    iso = _make_xml_root("IsomerData")
-    atypes = _make_xml_root("AtomTypes")
-    ress = _make_xml_root("Residues")
-    resi = _make_xml_root("Residue")
-    hbf = _make_xml_root("HarmonicBondForce")
-    haf = _make_xml_root("HarmonicAngleForce")
-    ptf = _make_xml_root("PeriodicTorsionForce")
-    resi.append(iso)
-    ress.append(resi)
-    ff.append(atypes)
-    ff.append(ress)
-    ff.append(hbf)
-    ff.append(haf)
-    ff.append(ptf)
+    forcefield_block = _make_xml_root("ForceField")
+    isomerdata_block = _make_xml_root("IsomerData")
+    atomtypes_block = _make_xml_root("AtomTypes")
+    residues_block = _make_xml_root("Residues")
+    residue_block = _make_xml_root("Residue")
+    harmonicbondforce_block = _make_xml_root("HarmonicBondForce")
+    harmonicangleforce_block = _make_xml_root("HarmonicAngleForce")
+    periodictorsionforce_block = _make_xml_root("PeriodicTorsionForce")
+    # Blocks for NonbondedForce and GBSAOBC forces are generated elsewhere on the fly
 
-    return ff
+    residue_block.append(isomerdata_block)
+    residues_block.append(residue_block)
+    forcefield_block.append(atomtypes_block)
+    forcefield_block.append(residues_block)
+    forcefield_block.append(harmonicbondforce_block)
+    forcefield_block.append(harmonicangleforce_block)
+    forcefield_block.append(periodictorsionforce_block)
+    return forcefield_block
 
 
 class _Bond(object):
@@ -172,9 +175,7 @@ class _Atom(object):
 
 
 class _AtomType(object):
-    """
-        Private class representing an atomtype
-    """
+    """Private class representing an atomtype"""
     def __init__(self, resname, atomname, aclass, element, mass):
         self.name = "{}-{}".format(resname, atomname)
         self.aclass = aclass
@@ -189,14 +190,6 @@ class _AtomType(object):
         return '<Type name="{name}" class="{aclass}" element="{element}" mass="{mass}"/>'.format(**self.__dict__)
 
     __repr__ = __str__
-
-    def nonbonded_placeholder(self):
-        """
-        Returns
-        -------
-        str - Placeholder for non-bonded block.
-        """
-        return '<Atom type="{name}" charge="0.0" sigma="1.0" epsilon="1.0"/>'.format(**self.__dict__)
 
 
 class _NonbondedForce(object):
@@ -224,12 +217,42 @@ class _NonbondedForce(object):
     __repr__ = __str__
 
 
+class _GBSAOBCForce(object):
+    """
+    Private class representing the parameters of a GBSAOBCForce type
+    """
+    def __init__(self, resname, state, atomname, charge, radius, scale):
+        self.resname = resname
+        self.state = state
+        self.atomname = atomname
+        self.radius = radius
+        self.scale = scale
+        self.charge = charge
+        self.type = self.resname + "-" + self.atomname
+
+    def __eq__(self, other):
+        if not self.type == other.type:
+            raise ValueError("Can only compare identical-atom types.")
+
+        return self.radius == other.radius and self.scale == other.scale and self.charge == other.charge
+
+    def __str__(self):
+        return '<Atom type="{type}" charge="{charge}" radius="{radius}" scale="{scale}"/>'.format(**self.__dict__)
+
+    __repr__ = __str__
+
+
 class _Isomer(object):
-    def __init__(self, index, population, charge):
+    """Private class representing a single isomeric state of the molecule.
+    """
+    def __init__(self, index, population, charge, coulomb14scale, lj14scale):
         self.index = index
         self.population = population
         self.charge = charge
         self.nonbondedtypes = OrderedDict()
+        self.gbsaobctypes = OrderedDict()
+        self.coulomb14sale = coulomb14scale
+        self.lj14scale = lj14scale
 
     def __str__(self):
         return '<IsomericState index="{index}" population="{population}" netcharge="{charge}"/>'.format(**self.__dict__)
@@ -237,19 +260,66 @@ class _Isomer(object):
     def __len__(self):
         return len(self.nonbondedtypes)
 
+    def to_xml(self):
+        """
+        Generate the IsomericState blocks for the output file.
+        """
+
+        xml = etree.fromstring(str(self))
+        nonbondblock = _make_xml_root("NonbondedForce")
+        gbsaobc_block = _make_xml_root("GBSAOBCForce")
+
+        nonbondblock.attrib['coulomb14scale'] = self.coulomb14sale
+        nonbondblock.attrib['lj14scale'] = self.lj14scale
+
+        for nonbondtype in self.nonbondedtypes.values():
+            nonbondblock.append(etree.fromstring(str(nonbondtype)))
+
+        for gbsaobc_type in self.gbsaobctypes.values():
+            gbsaobc_block.append(etree.fromstring(str(gbsaobc_type)))
+
+        xml.append(nonbondblock)
+        xml.append(gbsaobc_block)
+
+        return xml
     __repr__ = __str__
+
+    def to_placeholder_xml(self):
+        """
+        Dummy placeholders for xml file
+        """
+        nonbond_block = _make_xml_root("NonbondedForce")
+        nonbond_block.attrib['coulomb14scale'] = self.coulomb14sale
+        nonbond_block.attrib['lj14scale'] = self.lj14scale
+
+        for nonbondtype in self.nonbondedtypes.values():
+            dummytype = deepcopy(nonbondtype)
+            dummytype.charge = 0.0
+            dummytype.epsilon = 1.0
+            dummytype.sigma = 1.0
+            nonbond_block.append(etree.fromstring(str(dummytype)))
+
+        gbsaobc_block = _make_xml_root("GBSAOBCForce")
+
+        for gbsaobc_type in self.gbsaobctypes.values():
+            dummytype = deepcopy(gbsaobc_type)
+            dummytype.charge = 0.0
+            dummytype.radius = 0.0
+            dummytype.scale = 1.0
+            gbsaobc_block.append(etree.fromstring(str(dummytype)))
+
+        return nonbond_block, gbsaobc_block
 
 
 class _TitratableForceFieldCompiler(object):
     """
-    Compiles a
+    Compiles an intermediate xml file to the final constant-ph ffxml file.
     """
-    # TODO make sure we're not changing sigma/epsilon
     # format of atomtype name
     # Groups 1: resname, 2: isomer number, 3: atom letter, 4 atom number
     typename_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
 
-    def __init__(self, xmlfile, autoresolve=1):
+    def __init__(self, xmlfile, gbparams=True, autoresolve=1):
         """
         Compliles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
@@ -265,7 +335,7 @@ class _TitratableForceFieldCompiler(object):
         self._atoms = OrderedDict()
         self._bonds = list()
         self._atom_types = list()
-        self._isostates = OrderedDict()
+        self._isomeric_states = OrderedDict()
         xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
         self._input_tree = etree.parse(xmlfile, parser=xmlparser)
         self._make_output_tree(autoresolve)
@@ -284,8 +354,11 @@ class _TitratableForceFieldCompiler(object):
         # Register the isomeric states (without nonbonded parameters)
         self._complete_state_registry()
 
-        # Add nonbonded terms for each state (excludes placeholders for the ForceField block)
+        # Add nonbonded terms for each state
         self._complete_nonbonded_registry(autoresolve=autoresolve)
+
+        # Add GB parameters if applicable
+        self._complete_gbparams_registry()
 
         self._sort_bonds()
         self._sort_atypes()
@@ -320,30 +393,21 @@ class _TitratableForceFieldCompiler(object):
             for impropertorsionforce in self._input_tree.xpath('/TitratableResidue/ForceField/PeriodicTorsionForce/Improper'):
                 pdtblock.append(impropertorsionforce)
 
-        # Fill in nonbonded atomtypes (placeholders)
+        # Fill in nonbonded  and gbsaobc atomtype placeholders
         for forcefieldblock in self._output_tree.xpath('/ForceField'):
-            for nonbondedblock in self._input_tree.xpath('/TitratableResidue/ForceField/NonbondedForce'):
+            for placeholder in self._isomeric_states[1].to_placeholder_xml():
+                forcefieldblock.append(placeholder)
 
-                # Remove all old nonbonded terms
-                for anonbond in nonbondedblock.xpath('/TitratableResidue/ForceField/NonbondedForce/Atom'):
-                    anonbond.getparent().remove(anonbond)
-                nonbondedblock.append(etree.Comment("Placeholder values. Each state has its own block in IsomerData."))
-
-                # Make placeholder entries in the nonbonded block for each atom type.
-                for atype in self._atom_types:
-                    nonbondedblock.append((etree.fromstring(atype.nonbonded_placeholder())))
-                forcefieldblock.append(nonbondedblock)
-
-        for isodata in self._output_tree.xpath('/ForceField/Residues/Residue/IsomerData'):
-            for isoindex, isostate in self._isostates.items():
-                statexml = etree.fromstring(str(isostate))
-                for nonbondtype in isostate.nonbondedtypes.values():
-                    statexml.append(etree.fromstring(str(nonbondtype)))
-                isodata.append(statexml)
-
-        # TODO ADD GB solvent parameters
+        # Fill in isomer specific nonbonded and gbsaobctypes
+        for isodatablock in self._output_tree.xpath('/ForceField/Residues/Residue/IsomerData'):
+            for isoindex, isostate in self._isomeric_states.items():
+                isodatablock.append(isostate.to_xml())
 
     def _complete_bond_registry(self):
+        """
+        Register all bonds.
+        """
+
         for residue in self._input_tree.xpath('/TitratableResidue/ForceField/Residues/Residue'):
             per_state_index = OrderedDict()
             for aix, atom in enumerate(residue.xpath('Atom')):
@@ -359,13 +423,18 @@ class _TitratableForceFieldCompiler(object):
 
         self._unique_bonds()
 
-    def write(self, filename=None, moleculename="UNK"):
+    def write(self, filename=None, moleculename="LIG"):
+        """Generate the output xml."""
+
+        # Get rid of extra junk information that is added to the xml files.
         objectify.deannotate(self._output_tree)
         etree.cleanup_namespaces(self._output_tree)
+
+        # Generate the string version. Replace ligand name that comes out of antechamber/tleap
         xmlstring = etree.tostring(self._output_tree, encoding="utf-8", pretty_print=True, xml_declaration=False)
         xmlstring = xmlstring.decode("utf-8")
-        xmlstring = xmlstring.replace("non-", "{}-".format(moleculename))
-        xmlstring = xmlstring.replace('name="non"', 'name="{}"'.format(moleculename))
+        xmlstring = xmlstring.replace("isom-", "{}-".format(moleculename))
+        xmlstring = xmlstring.replace('name="isom"', 'name="{}"'.format(moleculename))
 
         if filename is not None:
             with open(filename, 'w') as fstream:
@@ -391,41 +460,99 @@ class _TitratableForceFieldCompiler(object):
         self._sort_atoms()
 
     def _complete_state_registry(self):
+
+        # Default scale in case we can't find it.
+        coulomb14scale = 1.0
+        lj14scale = 1.0
+
+        for nonbondblock in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce"):
+            coulomb14scale = nonbondblock.attrib['coulomb14scale']
+            lj14scale = nonbondblock.attrib['lj14scale']
+
+        # Create new states for each proto/tautomer
         for isostate in self._input_tree.xpath('/TitratableResidue/IsomerData/IsomericState'):
-            isomer = _Isomer(int(isostate.attrib["index"]), isostate.attrib["population"], isostate.attrib["netcharge"])
-            self._isostates[int(isostate.attrib["index"])] = isomer
+            isomer = _Isomer(int(isostate.attrib["index"]), isostate.attrib["population"], isostate.attrib["netcharge"], coulomb14scale, lj14scale)
+            self._isomeric_states[int(isostate.attrib["index"])] = isomer
 
     def _complete_nonbonded_registry(self, autoresolve):
         """
         Register the non_bonded interactions for all states.
         """
-        for isoindex, isostate in self._isostates.items():
+
+        for isomer_state_index, isomer_state in self._isomeric_states.items():
+            # Keep track of atoms that haven't been observed for this state, so we can add dummies later.
             unmatched_atoms = list(self._atoms.keys())
-            for nonbondatom in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce/Atom"):
-                matched_names = _TitratableForceFieldCompiler.typename_format.search(nonbondatom.attrib['type'])
+
+            # Atom types are pulled from the NonbondedForce block in the intermediate xml file
+            for nonbond_atom in self._input_tree.xpath("/TitratableResidue/ForceField/NonbondedForce/Atom"):
+                matched_names = _TitratableForceFieldCompiler.typename_format.search(nonbond_atom.attrib['type'])
                 atomname = matched_names.group(3, 4)
                 atomname = ''.join(atomname)
-                stateidx_nonbond = int(matched_names.group(2)) + 1
-                if stateidx_nonbond == isoindex:
+                # atom types have the isomer in them, also, converting zero to one based
+                state_index_nonbonded_atom = int(matched_names.group(2)) + 1
+
+                # If the isomer matches the state that the atom type belongs to, store it as part of the state.
+                if state_index_nonbonded_atom == isomer_state_index:
                     unmatched_atoms.remove(atomname)
-                    self._isostates[isoindex].nonbondedtypes[atomname] = _NonbondedForce(self._resname, isoindex, atomname, nonbondatom.attrib['epsilon'], nonbondatom.attrib['sigma'], nonbondatom.attrib['charge'])
+                    self._isomeric_states[isomer_state_index].nonbondedtypes[atomname] = _NonbondedForce(self._resname, isomer_state_index, atomname, nonbond_atom.attrib['epsilon'], nonbond_atom.attrib['sigma'], nonbond_atom.attrib['charge'])
 
+            # Add dummies for any atom undetected in the entire nonbonded block
             for unmatched in unmatched_atoms:
-                self._isostates[isoindex].nonbondedtypes[unmatched] = _NonbondedForce(self._resname, isoindex,
-                                                                             unmatched, "0.0",
-                                                                             "0.0",
-                                                                             "0.0")
+                self._isomeric_states[isomer_state_index].nonbondedtypes[unmatched] = _NonbondedForce(self._resname,
+                                                                                                      isomer_state_index,
+                                                                                                      unmatched, "0.0",
+                                                                                                      "0.0",
+                                                                                                      "0.0")
 
+        # We need to resolve LJ types so they don't change between atoms, and fill in LJ for dummies.
         for atom in self._atoms.values():
             self._resolve_lj_params(atom, autoresolve=autoresolve)
 
+    def _complete_gbparams_registry(self):
+        """
+        Register the GBSAOBC parameters for each isomeric state.
+        """
+
+        for isomeric_state_index, isomeric_state in self._isomeric_states.items():
+            unmatched_atoms = list(self._atoms.keys())
+            # Keep track of atoms that haven't been observed for this state, so we can add dummies later.
+            for gbsaobcatom in self._input_tree.xpath("/TitratableResidue/GBSAOBCForce/Atom"):
+
+                matched_names = _TitratableForceFieldCompiler.typename_format.search(gbsaobcatom.attrib['type'])
+                atomname = matched_names.group(3, 4)
+                atomname = ''.join(atomname)
+                # atom types have the isomer encoded in them, also, converting zero to one based
+                state_index_gbsa_atom = int(matched_names.group(2)) + 1
+                if state_index_gbsa_atom == isomeric_state_index:
+                    unmatched_atoms.remove(atomname)
+
+                    # If the isomer matches the state that the atom type belongs to, store it as part of the state.
+                    # Ensure charge is same as nonbonded type charge.
+                    self._isomeric_states[isomeric_state_index].gbsaobctypes[atomname] = _GBSAOBCForce(self._resname, isomeric_state_index, atomname,
+                                                                                           self._isomeric_states[isomeric_state_index].nonbondedtypes[atomname].charge,
+                                                                                           gbsaobcatom.attrib['radius'],
+                                                                                           gbsaobcatom.attrib['scale'])
+
+            # Add dummies for any atom undetected in the entire GBSAOBC block
+            for unmatched in unmatched_atoms:
+                # charge should be 0, but this also checks if we already knew about the atom from nonbonded forces,
+                # in case there is a discrepancy.
+                self._isomeric_states[isomeric_state_index].gbsaobctypes[unmatched] = _GBSAOBCForce(self._resname,
+                                                                                                    isomeric_state_index,
+                                                                                                    unmatched,
+                                                                                                    self._isomeric_states[
+                                                                                                        isomeric_state_index].nonbondedtypes[
+                                                                                                        unmatched].charge,
+                                                                                                    0.0,
+                                                                                                    1.0)
+
     def _resolve_lj_params(self, atom, autoresolve):
         typelist = OrderedDict()
-        for isoindex, isostate in self._isostates.items():
-            nbtype = isostate.nonbondedtypes[atom.name]
+        for isomeric_state_index, isomeric_state in self._isomeric_states.items():
+            nbtype = isomeric_state.nonbondedtypes[atom.name]
             # Assume zero values for all are newly added dummy atoms, and should not be suggested as types.
             if (float(nbtype.epsilon) > 0.0 and float(nbtype.sigma) > 0.0) or abs(float(nbtype.charge)) > 0.0:
-               typelist[isoindex] = nbtype
+               typelist[isomeric_state_index] = nbtype
 
         # Select an arbitrary type to compare all to
         randomindex = random.choice(list(typelist.keys()))
@@ -448,14 +575,15 @@ class _TitratableForceFieldCompiler(object):
         """
         Set the epsilon and sigma for the atom to that of the reference state, for all other states.
         """
-        epsilon = self._isostates[reference_state_index].nonbondedtypes[atom.name].epsilon
-        sigma = self._isostates[reference_state_index].nonbondedtypes[atom.name].sigma
+        epsilon = self._isomeric_states[reference_state_index].nonbondedtypes[atom.name].epsilon
+        sigma = self._isomeric_states[reference_state_index].nonbondedtypes[atom.name].sigma
         logger.info("Setting epsilon/sigma for {} to {} / {}".format(atom.name, epsilon, sigma))
-        for isoindex in self._isostates.keys():
-            self._isostates[isoindex].nonbondedtypes[atom.name].epsilon = epsilon
-            self._isostates[isoindex].nonbondedtypes[atom.name].sigma = sigma
+        for isoindex in self._isomeric_states.keys():
+            self._isomeric_states[isoindex].nonbondedtypes[atom.name].epsilon = epsilon
+            self._isomeric_states[isoindex].nonbondedtypes[atom.name].sigma = sigma
 
     def _manual_lj_params(self, atom, typelist):
+        """Interactive choice between LJ parameter types."""
         print("Atom types for {}".format(atom.name))
         for isoindex, atype in typelist.items():
             print("{}), {}".format(isoindex, atype))
@@ -548,43 +676,80 @@ class _TitratableForceFieldCompiler(object):
     def _sort_atypes(self):
         self._atom_types = sorted(self._atom_types, key=lambda at: at.number)
 
-    def _new_dummy_atom(self, atomname, typestr):
-        newatom = etree.Element('Atom')
-        newatom.set('name', atomname)
-        newatom.set('type', typestr)
-        return newatom
-
-    def _new_dummy_nonbond(self, typestr):
-        newnonbond = etree.Element('Atom')
-        newnonbond.set('type', typestr)
-        newnonbond.set('charge', "0.0")
-        newnonbond.set('sigma', '0.0')
-        newnonbond.set('epsilon', '0.0')
-        return newnonbond
-
-    def _new_dummy_type(self, typestr, mass=1.007947):
-        newtype = etree.Element('Type')
-        newtype.set('name', typestr)
-        newtype.set('class', 'du')
-        newtype.set('element', 'H')
-        newtype.set('mass', str(mass))
-        return newtype
-
-    def _shift_bonds(self, start, residue):
-        for bond in residue.findall('Bond'):
-            b_from = int(bond.attrib['from'])
-            b_to = int(bond.attrib['to'])
-            if b_from > start:
-                bond.attrib['from'] >= str(b_from + 1)
-            if b_to > start:
-                bond.attrib['to'] >= str(b_to + 1)
 
 
-def _param_isomer(isomer, tmpdir, q):
-    # Read temporary file containing net charge
-    #TODO hardcoded using gasteiger charges for debugging speed
-    omt.amber.run_antechamber('isomer_{}'.format(isomer),'{}/{}.mol2'.format(tmpdir,isomer), charge_method="bcc", net_charge=q)
+def _param_isomer(isomer, tmpdir, q, shortname="LIG"):
+    """
+    Run a single ligand isomer through antechamber and tleap
+
+    Parameters
+    ----------
+    isomer - int
+        Isomer state index ( will be used to find filenames)
+    tmpdir - str
+        Working directory
+    q - int
+        Net charge of molecule
+    shortname - str
+        Short (3 character ) name for ligand to use in output files.
+    """
+
+    # TODO hardcoded using gasteiger charges for debugging speed
+    molecule_name = 'isomer_{}'.format(isomer)
+    omt.amber.run_antechamber(molecule_name, '{}/{}.mol2'.format(tmpdir, isomer), charge_method="gas", net_charge=q, resname=shortname)
+    omt.utils.run_tleap(molecule_name, "{}.gaff.mol2".format(molecule_name), "{}.frcmod".format(molecule_name), prmtop_filename=None, inpcrd_filename=None, log_debug_output=False)
+    _extract_gbparms(isomer, "{}.prmtop".format(molecule_name))
     logging.info("Parametrized isomer{}".format(isomer))
+
+
+def _extract_gbparms(isomer, prmtop_filename=None):
+    """
+    Extract GB parameters from a prmtop file and return xml string containing them.
+
+    Parameters
+    ----------
+    isomer - int
+        Index of the isomer from which to fetch the prmtop file
+    prmtop_filename - str
+        override the prmtop filename
+
+    Returns
+    -------
+    str - Name of xml file containing parameters
+
+
+    """
+
+    # Go for the standard filename
+    if prmtop_filename is None:
+        prmtop_filename = "isomer_{}.prmtop".format(isomer)
+
+    prmtop = parmed.load_file(prmtop_filename)
+
+
+    # TODO is there an official way to extract information from a prmtop using parmed?
+    atoms = prmtop.parm_data['ATOM_NAME']
+    # TODO do these match the other charges in the mol2 files?
+    charges = prmtop.parm_data['CHARGE']
+    radii = [ x / 10.0 for x in prmtop.parm_data['RADII'] ]  # nanometers for the openmm god
+    scale = prmtop.parm_data['SCREEN']
+
+    # Compile data into an xml format
+    combined = zip(atoms, charges, radii, scale)
+    template = '  <Atom type="isom-{0}-{1}" charge="{2}" radius="{3}" scale="{4}"/>\n'
+    block = '<GBSAOBCForce id="{}">\n'.format(isomer)
+    for atom in combined:
+        block += template.format(isomer -1, *atom) # zero based isomer index for intermediate files
+    block += '</GBSAOBCForce>\n'
+
+    # Write xml to intermediate files
+    xml_output = "isomer_{}.gbparams.xml".format(isomer)
+    xml_parameters = open(xml_output, 'w')
+    xml_parameters.write(block)
+    xml_parameters.close()
+
+    # Return the file name for convenience
+    return xml_output
 
 
 def line_prepender(filename, line):
@@ -595,7 +760,7 @@ def line_prepender(filename, line):
         f.write(line.rstrip('\r\n') + '\n' + content) # add new line before the current content
 
 
-def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, remove_temp_files=False, pH=7.4):
+def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, gb_params=True, tmpdir=None, remove_temp_files=False, pH=7.4, resname="LIG"):
     """
     Parametrize a ligand for constant-pH simulation using Epik.
 
@@ -612,10 +777,15 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
         The pH that Epik should use
     max_antechambers : int, optional (default : 1)
         Maximal number of concurrent antechamber processes.
+    gb_params : bool (default : True)
+        If true, add GB params to the xml files.
     tmpdir : str, optional
         Temporary directory for storing intermediate files.
     remove_temp_files : bool, optional (default : True)
         Remove temporary files when done.
+
+    resname : str, optional (default : "LIG")
+        Residue name in output files.
 
     Notes
     -----
@@ -705,13 +875,24 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, tmpdir=None, 
 
     omt.utils.create_ffxml_file(glob("isomer*.mol2"), glob("isomer*.frcmod"), ffxml_filename="intermediate.xml")
 
+    # Look for the xml files containing gbparameters
+    if gb_params:
+        gb_xml_files = glob("isomer_*.gbparams.xml")
+    else:
+        gb_xml_files = []
+
     # Append epik information to the end of the file
     with open("intermediate.xml", mode='ab') as outfile:
         outfile.write(epikxmlstring)
+        for gb_xml_file in gb_xml_files:
+            gb_xml_contents = open(gb_xml_file, 'rb').read()
+            outfile.write(gb_xml_contents)
+
+
         outfile.write(b"</TitratableResidue>")
     line_prepender("intermediate.xml", "<TitratableResidue>")
 
-    _TitratableForceFieldCompiler("intermediate.xml").write(outputffxml)
+    _TitratableForceFieldCompiler("intermediate.xml").write(outputffxml, moleculename=resname)
     logger.info("Done, your result is located here: {}!".format(outputffxml))
     if remove_temp_files:
         shutil.rmtree(tmpdir)
