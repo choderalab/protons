@@ -21,8 +21,7 @@ submit.sh - batch script
 trajectory.dcd - system trajectory written out by simulation
 
 states_output.dat - csv file with residue names in the headers, current state index as value per row. If you need a reminder of each state index physical meaning,
-use `cpinutil.py --describe HIP` for example.
-Every row is a 6 ps time interval
+use `cpinutil.py --describe HIP` for example. Every row was written out at a 6 ps time interval. The number of protonation state update trials  per 6 ps is equal to the number of residues.
 
 
 failed.txt - appears if simulation ended in an error instead of completing
