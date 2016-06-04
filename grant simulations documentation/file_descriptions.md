@@ -1,5 +1,5 @@
 # Simulation directories, content description
-
+/cbio/jclab/home/rustenburg/constph-grant/systems/simulations
 ## tleap input files
 
 protein.pdb
