@@ -1,0 +1,1424 @@
+
+
+<!doctype html>
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>constph.constph &mdash; Constant-pH for OpenMM 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/bizstyle.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/javascript" src="../../_static/bizstyle.js"></script>
+    <link rel="top" title="Constant-pH for OpenMM 0.0.1 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <!--[if lt IE 9]>
+    <script type="text/javascript" src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">Constant-pH for OpenMM 0.0.1 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for constph.constph</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/local/bin/env python</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">print_function</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">simtk</span>
+<span class="kn">import</span> <span class="nn">simtk.openmm</span> <span class="kn">as</span> <span class="nn">openmm</span>
+<span class="kn">import</span> <span class="nn">simtk.unit</span> <span class="kn">as</span> <span class="nn">units</span>
+<span class="kn">from</span> <span class="nn">.logger</span> <span class="kn">import</span> <span class="n">logger</span>
+<span class="kn">from</span> <span class="nn">openmmtools.integrators</span> <span class="kn">import</span> <span class="n">VelocityVerletIntegrator</span>
+
+<span class="c1"># Module constants</span>
+<span class="n">kB</span> <span class="o">=</span> <span class="n">units</span><span class="o">.</span><span class="n">BOLTZMANN_CONSTANT_kB</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">AVOGADRO_CONSTANT_NA</span>
+<span class="n">kB</span> <span class="o">=</span> <span class="n">kB</span><span class="o">.</span><span class="n">in_units_of</span><span class="p">(</span><span class="n">units</span><span class="o">.</span><span class="n">kilocalories_per_mole</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">kelvin</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">strip_in_unit_system</span><span class="p">(</span><span class="n">quant</span><span class="p">,</span> <span class="n">unit_system</span><span class="o">=</span><span class="n">units</span><span class="o">.</span><span class="n">md_unit_system</span><span class="p">,</span> <span class="n">compatible_with</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Strips the unit from a simtk.units.Quantity object and returns it&#39;s value conforming to a unit system</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    quant : simtk.unit.Quantity</span>
+<span class="sd">        object from which units are to be stripped</span>
+<span class="sd">    unit_system : simtk.unit.UnitSystem:</span>
+<span class="sd">        unit system to which the unit needs to be converted, default is the OpenMM unit system (md_unit_system)</span>
+<span class="sd">    compatible_with : simtk.unit.Unit</span>
+<span class="sd">        Supply to make sure that the unit is compatible with an expected unit</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    quant : object with no units attached</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">units</span><span class="o">.</span><span class="n">is_quantity</span><span class="p">(</span><span class="n">quant</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">compatible_with</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">quant</span> <span class="o">=</span> <span class="n">quant</span><span class="o">.</span><span class="n">in_units_of</span><span class="p">(</span><span class="n">compatible_with</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">quant</span><span class="o">.</span><span class="n">value_in_unit_system</span><span class="p">(</span><span class="n">unit_system</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">quant</span>
+
+
+<div class="viewcode-block" id="MonteCarloTitration"><a class="viewcode-back" href="../../index.html#constph.constph.MonteCarloTitration">[docs]</a><span class="k">class</span> <span class="nc">MonteCarloTitration</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Monte Carlo titration driver for constant-pH dynamics.</span>
+
+<span class="sd">    This move type implements the constant-pH dynamics of Mongan and Case [1]_, Stern [2]_ and Nilmeier [3]_.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MonteCarloTitration.__init__"><a class="viewcode-back" href="../../index.html#constph.constph.MonteCarloTitration.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system</span><span class="p">,</span> <span class="n">temperature</span><span class="p">,</span> <span class="n">pH</span><span class="p">,</span> <span class="n">prmtop</span><span class="p">,</span> <span class="n">cpin_filename</span><span class="p">,</span> <span class="n">integrator</span><span class="p">,</span> <span class="n">pressure</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">nattempts_per_update</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">simultaneous_proposal_probability</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">ncmc_steps_per_trial</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ncmc_timestep</span><span class="o">=</span><span class="mf">1.0</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">femtoseconds</span><span class="p">,</span>
+                 <span class="n">maintainChargeNeutrality</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">cationName</span><span class="o">=</span><span class="s1">&#39;Na+&#39;</span><span class="p">,</span> <span class="n">anionName</span><span class="o">=</span><span class="s1">&#39;Cl-&#39;</span><span class="p">,</span> <span class="n">implicit</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize a Monte Carlo titration driver for constant pH simulation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        system : simtk.openmm.System</span>
+<span class="sd">            System to be titrated, containing all possible protonation sites.</span>
+<span class="sd">        temperature : simtk.unit.Quantity compatible with kelvin</span>
+<span class="sd">            Temperature to be simulated.</span>
+<span class="sd">        pH : float</span>
+<span class="sd">            The pH to be simulated.</span>
+<span class="sd">        prmtop : simtk.openmm.app.Prmtop</span>
+<span class="sd">            Parsed AMBER &#39;prmtop&#39; file (necessary to provide information on exclusions</span>
+<span class="sd">        cpin_filename : string</span>
+<span class="sd">            AMBER &#39;cpin&#39; file defining protonation charge states and energies</span>
+<span class="sd">        integrator : simtk.openmm.integrator</span>
+<span class="sd">            The integrator used for dynamics</span>
+<span class="sd">        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None</span>
+<span class="sd">            For explicit solvent simulations, the pressure.</span>
+<span class="sd">        nattempts_per_update : int, optional, default=None</span>
+<span class="sd">            Number of protonation state change attempts per update call;</span>
+<span class="sd">            if None, set automatically based on number of titratible groups (default: None)</span>
+<span class="sd">        simultaneous_proposal_probability : float, optional, default=0.1</span>
+<span class="sd">            Probability of simultaneously proposing two updates</span>
+<span class="sd">        debug : bool, optional, default=False</span>
+<span class="sd">            Turn debug information on/off.</span>
+<span class="sd">        ncmc_steps_per_trial : int, optional, default=0</span>
+<span class="sd">            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.</span>
+<span class="sd">        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds</span>
+<span class="sd">            Timestep to use for NCMC switching</span>
+<span class="sd">        maintainChargeNeutrality : bool, optional, default=True</span>
+<span class="sd">            If True, waters will be converted to monovalent counterions and vice-versa.</span>
+<span class="sd">        cationName : str, optional, default=&#39;Na+&#39;</span>
+<span class="sd">            Name of cation residue from which parameters are to be taken.</span>
+<span class="sd">        anionName : str, optional, default=&#39;Cl-&#39;</span>
+<span class="sd">            Name of anion residue from which parameters are to be taken.</span>
+<span class="sd">        implicit: bool, optional, default=False</span>
+<span class="sd">            Flag for implicit simulation. Skips ion parameter lookup.</span>
+
+<span class="sd">        Todo</span>
+<span class="sd">        ----</span>
+<span class="sd">        * Allow constant-pH dynamics to be initialized in other ways than using the AMBER cpin file (e.g. from OpenMM app; automatically).</span>
+<span class="sd">        * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Set defaults.</span>
+        <span class="c1"># probability of proposing two simultaneous protonation state changes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">simultaneous_proposal_probability</span> <span class="o">=</span> <span class="n">simultaneous_proposal_probability</span>
+
+        <span class="c1"># Store parameters.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">system</span> <span class="o">=</span> <span class="n">system</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span> <span class="o">=</span> <span class="n">temperature</span>
+        <span class="n">kT</span> <span class="o">=</span> <span class="n">kB</span> <span class="o">*</span> <span class="n">temperature</span>  <span class="c1"># thermal energy</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">kT</span>  <span class="c1"># inverse temperature</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">=</span> <span class="n">pressure</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pH</span> <span class="o">=</span> <span class="n">pH</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpin_filename</span> <span class="o">=</span> <span class="n">cpin_filename</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">debug</span> <span class="o">=</span> <span class="n">debug</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">=</span> <span class="n">ncmc_steps_per_trial</span>
+        <span class="k">if</span> <span class="n">implicit</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">solvent</span> <span class="o">=</span> <span class="s2">&quot;implicit&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">solvent</span> <span class="o">=</span> <span class="s2">&quot;explicit&quot;</span>
+        <span class="c1"># Create a Verlet integrator to handle NCMC integration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span> <span class="o">=</span> <span class="n">openmm</span><span class="o">.</span><span class="n">CompoundIntegrator</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">addIntegrator</span><span class="p">(</span><span class="n">integrator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ncmc_propagation_integrator</span> <span class="o">=</span> <span class="n">VelocityVerletIntegrator</span><span class="p">(</span><span class="n">ncmc_timestep</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">addIntegrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ncmc_propagation_integrator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">setCurrentIntegrator</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># make user integrator active</span>
+
+        <span class="c1"># Set constraint tolerance.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ncmc_propagation_integrator</span><span class="o">.</span><span class="n">setConstraintTolerance</span><span class="p">(</span><span class="n">integrator</span><span class="o">.</span><span class="n">getConstraintTolerance</span><span class="p">())</span>
+
+        <span class="c1"># Check that system has MonteCarloBarostat if pressure is specified.</span>
+        <span class="k">if</span> <span class="n">pressure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">forces</span> <span class="o">=</span> <span class="p">{</span><span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">:</span> <span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">system</span><span class="o">.</span><span class="n">getNumForces</span><span class="p">())}</span>
+            <span class="k">if</span> <span class="s1">&#39;MonteCarloBarostat&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">forces</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Store options for maintaining charge neutrality by converting waters to/from monovalent ions.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maintainChargeNeutrality</span> <span class="o">=</span> <span class="n">maintainChargeNeutrality</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">implicit</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">water_residues</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">identifyWaterResidues</span><span class="p">(</span><span class="n">prmtop</span><span class="o">.</span><span class="n">topology</span><span class="p">)</span> <span class="c1"># water molecules that can be converted to ions</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">anion_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retrieveIonParameters</span><span class="p">(</span><span class="n">prmtop</span><span class="o">.</span><span class="n">topology</span><span class="p">,</span> <span class="n">system</span><span class="p">,</span> <span class="n">anionName</span><span class="p">)</span> <span class="c1"># dict of [&#39;charge&#39;, &#39;sigma&#39;, &#39;epsilon&#39;] for cation parameters</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cation_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retrieveIonParameters</span><span class="p">(</span><span class="n">prmtop</span><span class="o">.</span><span class="n">topology</span><span class="p">,</span> <span class="n">system</span><span class="p">,</span> <span class="n">cationName</span><span class="p">)</span> <span class="c1"># dict of [&#39;charge&#39;, &#39;sigma&#39;, &#39;epsilon&#39;] for anion parameters</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">anion_residues</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span> <span class="c1"># water molecules that have been converted to anions</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cation_residues</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span> <span class="c1"># water molecules that have been converted to cations</span>
+
+        <span class="k">if</span> <span class="n">implicit</span> <span class="ow">and</span> <span class="n">maintainChargeNeutrality</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Implicit solvent and charge neutrality are mutually exclusive.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Initialize titration group records.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+
+        <span class="c1"># Keep track of forces and whether they&#39;re cached.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">precached_forces</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="c1"># Track simulation state</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kin_energies</span> <span class="o">=</span> <span class="n">units</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="nb">list</span><span class="p">(),</span> <span class="n">units</span><span class="o">.</span><span class="n">kilocalorie_per_mole</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pot_energies</span> <span class="o">=</span> <span class="n">units</span><span class="o">.</span><span class="n">Quantity</span><span class="p">(</span><span class="nb">list</span><span class="p">(),</span> <span class="n">units</span><span class="o">.</span><span class="n">kilocalorie_per_mole</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">states_per_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+
+        <span class="c1"># Determine 14 Coulomb and Lennard-Jones scaling from system.</span>
+        <span class="c1"># TODO: Get this from prmtop file?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">coulomb14scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get14scaling</span><span class="p">(</span><span class="n">system</span><span class="p">)</span>
+
+        <span class="c1"># Store list of exceptions that may need to be modified.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">atomExceptions</span> <span class="o">=</span> <span class="p">[</span><span class="nb">list</span><span class="p">()</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">prmtop</span><span class="o">.</span><span class="n">_prmtop</span><span class="o">.</span><span class="n">getNumAtoms</span><span class="p">())]</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">atom1</span><span class="p">,</span> <span class="n">atom2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">rMin</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">,</span> <span class="n">iScee</span><span class="p">,</span> <span class="n">iScnb</span><span class="p">)</span> <span class="ow">in</span> <span class="n">prmtop</span><span class="o">.</span><span class="n">_prmtop</span><span class="o">.</span><span class="n">get14Interactions</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">atomExceptions</span><span class="p">[</span><span class="n">atom1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">atomExceptions</span><span class="p">[</span><span class="n">atom2</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">atom1</span><span class="p">)</span>
+
+        <span class="c1"># Store force object pointers.</span>
+        <span class="c1"># TODO: Add Custom forces.</span>
+        <span class="n">force_classes_to_update</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;NonbondedForce&#39;</span><span class="p">,</span> <span class="s1">&#39;GBSAOBCForce&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">forces_to_update</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">force_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">getNumForces</span><span class="p">()):</span>
+            <span class="n">force</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">force_index</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">force</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span> <span class="ow">in</span> <span class="n">force_classes_to_update</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">forces_to_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">force</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">cpin_filename</span><span class="p">:</span>
+            <span class="c1"># Load AMBER cpin file defining protonation states.</span>
+            <span class="n">namelist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_fortran_namelist</span><span class="p">(</span><span class="n">cpin_filename</span><span class="p">,</span> <span class="s1">&#39;CNSTPH&#39;</span><span class="p">)</span>
+
+            <span class="c1"># Make sure RESSTATE is a list.</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESSTATE&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">int</span><span class="p">:</span>
+                <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESSTATE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESSTATE&#39;</span><span class="p">]]</span>
+
+            <span class="c1"># Make sure RESNAME is a list.</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESNAME&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+                <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESNAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESNAME&#39;</span><span class="p">]]</span>
+
+            <span class="c1"># Extract number of titratable groups.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ngroups</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESSTATE&#39;</span><span class="p">])</span>
+
+            <span class="c1"># Define titratable groups and titration states.</span>
+            <span class="k">for</span> <span class="n">group_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ngroups</span><span class="p">):</span>
+                <span class="c1"># Extract information about this titration group.</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESNAME&#39;</span><span class="p">][</span><span class="n">group_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+                <span class="n">first_atom</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;STATEINF(</span><span class="si">%d</span><span class="s1">)</span><span class="si">%%</span><span class="s1">FIRST_ATOM&#39;</span> <span class="o">%</span> <span class="n">group_index</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+                <span class="n">first_charge</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;STATEINF(</span><span class="si">%d</span><span class="s1">)</span><span class="si">%%</span><span class="s1">FIRST_CHARGE&#39;</span> <span class="o">%</span> <span class="n">group_index</span><span class="p">]</span>
+                <span class="n">first_state</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;STATEINF(</span><span class="si">%d</span><span class="s1">)</span><span class="si">%%</span><span class="s1">FIRST_STATE&#39;</span> <span class="o">%</span> <span class="n">group_index</span><span class="p">]</span>
+                <span class="n">num_atoms</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;STATEINF(</span><span class="si">%d</span><span class="s1">)</span><span class="si">%%</span><span class="s1">NUM_ATOMS&#39;</span> <span class="o">%</span> <span class="n">group_index</span><span class="p">]</span>
+                <span class="n">num_states</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;STATEINF(</span><span class="si">%d</span><span class="s1">)</span><span class="si">%%</span><span class="s1">NUM_STATES&#39;</span> <span class="o">%</span> <span class="n">group_index</span><span class="p">]</span>
+
+                <span class="c1"># Define titratable group.</span>
+                <span class="n">atom_indices</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">first_atom</span><span class="p">,</span> <span class="n">first_atom</span> <span class="o">+</span> <span class="n">num_atoms</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">addTitratableGroup</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">)</span>
+
+                <span class="c1"># Define titration states.</span>
+                <span class="k">for</span> <span class="n">titration_state</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_states</span><span class="p">):</span>
+                    <span class="c1"># Extract charges for this titration state.</span>
+                    <span class="c1"># is defined in elementary_charge units</span>
+                    <span class="n">charges</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;CHRGDAT&#39;</span><span class="p">][(</span><span class="n">first_charge</span><span class="o">+</span><span class="n">num_atoms</span><span class="o">*</span><span class="n">titration_state</span><span class="p">):(</span><span class="n">first_charge</span><span class="o">+</span><span class="n">num_atoms</span><span class="o">*</span><span class="p">(</span><span class="n">titration_state</span><span class="o">+</span><span class="mi">1</span><span class="p">))]</span>
+
+                    <span class="c1"># Extract relative energy for this titration state.</span>
+                    <span class="c1"># relative_energy = namelist[&#39;STATENE&#39;][first_state + titration_state] * units.kilocalories_per_mole</span>
+                    <span class="n">relative_energy</span> <span class="o">=</span> <span class="mf">0.0</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">kilocalories_per_mole</span>
+                    <span class="c1"># Don&#39;t use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.</span>
+                    <span class="n">pKref</span> <span class="o">=</span> <span class="mf">0.0</span>
+                    <span class="c1"># Get proton count.</span>
+                    <span class="n">proton_count</span> <span class="o">=</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;PROTCNT&#39;</span><span class="p">][</span><span class="n">first_state</span> <span class="o">+</span> <span class="n">titration_state</span><span class="p">]</span>
+                    <span class="c1"># Create titration state.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">addTitrationState</span><span class="p">(</span><span class="n">group_index</span><span class="p">,</span> <span class="n">pKref</span><span class="p">,</span> <span class="n">relative_energy</span><span class="p">,</span> <span class="n">charges</span><span class="p">,</span> <span class="n">proton_count</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cache_force</span><span class="p">(</span><span class="n">group_index</span><span class="p">,</span> <span class="n">titration_state</span><span class="p">)</span>
+                <span class="c1"># Set default state for this group.</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">group_index</span><span class="p">,</span> <span class="n">namelist</span><span class="p">[</span><span class="s1">&#39;RESSTATE&#39;</span><span class="p">][</span><span class="n">group_index</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">setNumAttemptsPerUpdate</span><span class="p">(</span><span class="n">nattempts_per_update</span><span class="p">)</span>
+
+        <span class="c1"># Reset statistics.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resetStatistics</span><span class="p">()</span>
+
+        <span class="k">return</span></div>
+
+    <span class="k">def</span> <span class="nf">retrieveIonParameters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topology</span><span class="p">,</span> <span class="n">system</span><span class="p">,</span> <span class="n">resname</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve parameters from specified monovalent atomic ion.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        topology : simtk.openmm.app.topology</span>
+<span class="sd">            The topology from which water residues are to be identified.</span>
+<span class="sd">        system : simtk.openmm.System</span>
+<span class="sd">            The System object from which parameters are to be extracted.</span>
+<span class="sd">        resname : str</span>
+<span class="sd">            The residue name of the monovalent atomic anion or cation from which parameters are to be retrieved.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        parameters : dict of str:float</span>
+<span class="sd">            NonbondedForce parameter dict (&#39;charge&#39;, &#39;sigma&#39;, &#39;epsilon&#39;) for ion parameters.</span>
+
+<span class="sd">        Warnings</span>
+<span class="sd">        --------</span>
+<span class="sd">        * Only `NonbondedForce` parameters are returned</span>
+<span class="sd">        * If the system contains more than one `NonbondedForce`, behavior is undefined</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Find the NonbondedForce in the system</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="p">{</span><span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">:</span> <span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">system</span><span class="o">.</span><span class="n">getNumForces</span><span class="p">())}</span>
+        <span class="n">nonbonded_force</span> <span class="o">=</span> <span class="n">forces</span><span class="p">[</span><span class="s1">&#39;NonbondedForce&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Return the first occurrence of NonbondedForce particle parameters matching `resname`</span>
+        <span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">topology</span><span class="o">.</span><span class="n">residues</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">residue</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">resname</span><span class="p">:</span>
+                <span class="n">atoms</span> <span class="o">=</span> <span class="p">[</span><span class="n">atom</span> <span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">residue</span><span class="o">.</span><span class="n">atoms</span><span class="p">()]</span>
+                <span class="p">[</span><span class="n">charge</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">]</span> <span class="o">=</span> <span class="n">nonbonded_force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">atoms</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+                <span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;charge&#39;</span><span class="p">:</span> <span class="n">charge</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">:</span> <span class="n">sigma</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">:</span> <span class="n">epsilon</span><span class="p">}</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s1">&#39;retrieveIonParameters: </span><span class="si">%s</span><span class="s1"> : </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">resname</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">parameters</span><span class="p">)))</span>
+                <span class="k">return</span> <span class="n">parameters</span>
+
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;resname &#39;</span><span class="si">%s</span><span class="s2">&#39; not found in topology&quot;</span> <span class="o">%</span> <span class="n">resname</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">identifyWaterResidues</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">topology</span><span class="p">,</span> <span class="n">water_residue_names</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;WAT&#39;</span><span class="p">,</span> <span class="s1">&#39;HOH&#39;</span><span class="p">,</span> <span class="s1">&#39;TP4&#39;</span><span class="p">,</span> <span class="s1">&#39;TP5&#39;</span><span class="p">,</span> <span class="s1">&#39;T4E&#39;</span><span class="p">)):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compile a list of water residues that could be converted to/from monovalent ions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        topology : simtk.openmm.app.topology</span>
+<span class="sd">            The topology from which water residues are to be identified.</span>
+<span class="sd">        water_residue_names : list of str</span>
+<span class="sd">            Residues identified as water molecules.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        water_residues : list of simtk.openmm.app.Residue</span>
+<span class="sd">            Water residues.</span>
+
+<span class="sd">        TODO</span>
+<span class="sd">        ----</span>
+<span class="sd">        * Can this feature be added to simt.openmm.app.Topology?</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">water_residues</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">residue</span> <span class="ow">in</span> <span class="n">topology</span><span class="o">.</span><span class="n">residues</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">residue</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">water_residue_names</span><span class="p">:</span>
+                <span class="n">water_residues</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">residue</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span> <span class="k">print</span><span class="p">(</span><span class="s1">&#39;identifyWaterResidues: </span><span class="si">%d</span><span class="s1"> water molecules identified.&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">water_residues</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">water_residues</span>
+
+    <span class="k">def</span> <span class="nf">get14scaling</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Determine Coulomb 14 scaling.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        system : simtk.openmm.System</span>
+<span class="sd">            the system to examine</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        coulomb14scale (float) - degree to which 1,4 coulomb interactions are scaled</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Look for a NonbondedForce.</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="p">{</span><span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">:</span> <span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">system</span><span class="o">.</span><span class="n">getNumForces</span><span class="p">())}</span>
+        <span class="n">force</span> <span class="o">=</span> <span class="n">forces</span><span class="p">[</span><span class="s1">&#39;NonbondedForce&#39;</span><span class="p">]</span>
+        <span class="c1"># Determine coulomb14scale from first exception with nonzero chargeprod.</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">force</span><span class="o">.</span><span class="n">getNumExceptions</span><span class="p">()):</span>
+            <span class="p">[</span><span class="n">particle1</span><span class="p">,</span> <span class="n">particle2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">]</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getExceptionParameters</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+            <span class="p">[</span><span class="n">charge1</span><span class="p">,</span> <span class="n">sigma1</span><span class="p">,</span> <span class="n">epsilon1</span><span class="p">]</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">particle1</span><span class="p">)</span>
+            <span class="p">[</span><span class="n">charge2</span><span class="p">,</span> <span class="n">sigma2</span><span class="p">,</span> <span class="n">epsilon2</span><span class="p">]</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">particle2</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">charge1</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">elementary_charge</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">charge2</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">elementary_charge</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+                <span class="n">coulomb14scale</span> <span class="o">=</span> <span class="n">chargeProd</span> <span class="o">/</span> <span class="p">(</span><span class="n">charge1</span> <span class="o">*</span> <span class="n">charge2</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">coulomb14scale</span>
+
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">get14exceptions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">system</span><span class="p">,</span> <span class="n">particle_indices</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a list of all 1,4 exceptions involving the specified particles that are not exclusions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        system : simtk.openmm.System</span>
+<span class="sd">            the system to examine</span>
+<span class="sd">        particle_indices :list of int</span>
+<span class="sd">            only exceptions involving at least one of these particles are returned</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        exception_indices : list</span>
+<span class="sd">            list of exception indices for NonbondedForce</span>
+
+<span class="sd">        Todo</span>
+<span class="sd">        ----</span>
+
+<span class="sd">        * Deal with the case where there may be multiple NonbondedForce objects.</span>
+<span class="sd">        * Deal with electrostatics implmented as CustomForce objects (by CustomNonbondedForce + CustomBondForce)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Locate NonbondedForce object.</span>
+        <span class="n">forces</span> <span class="o">=</span> <span class="p">{</span><span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span><span class="p">:</span> <span class="n">system</span><span class="o">.</span><span class="n">getForce</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">system</span><span class="o">.</span><span class="n">getNumForces</span><span class="p">())}</span>
+        <span class="n">force</span> <span class="o">=</span> <span class="n">forces</span><span class="p">[</span><span class="s1">&#39;NonbondedForce&#39;</span><span class="p">]</span>
+        <span class="c1"># Build a list of exception indices involving any of the specified particles.</span>
+        <span class="n">exception_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">exception_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">force</span><span class="o">.</span><span class="n">getNumExceptions</span><span class="p">()):</span>
+            <span class="p">[</span><span class="n">particle1</span><span class="p">,</span> <span class="n">particle2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">]</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getExceptionParameters</span><span class="p">(</span><span class="n">exception_index</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">particle1</span> <span class="ow">in</span> <span class="n">particle_indices</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">particle2</span> <span class="ow">in</span> <span class="n">particle_indices</span><span class="p">):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">particle2</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">atomExceptions</span><span class="p">[</span><span class="n">particle1</span><span class="p">])</span> <span class="ow">or</span> <span class="p">(</span><span class="n">particle1</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">atomExceptions</span><span class="p">[</span><span class="n">particle2</span><span class="p">]):</span>
+                    <span class="n">exception_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">exception_index</span><span class="p">)</span>
+                    <span class="c1"># BEGIN UGLY HACK</span>
+                    <span class="c1"># chargeprod and sigma cannot be identically zero or else we risk the error:</span>
+                    <span class="c1"># Exception: updateParametersInContext: The number of non-excluded exceptions has changed</span>
+                    <span class="c1"># TODO: Once OpenMM interface permits this, omit this code.</span>
+                    <span class="p">[</span><span class="n">particle1</span><span class="p">,</span> <span class="n">particle2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">]</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getExceptionParameters</span><span class="p">(</span><span class="n">exception_index</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">chargeProd</span> <span class="o">==</span> <span class="n">chargeProd</span><span class="p">):</span>
+                        <span class="n">chargeProd</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">epsilon</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">epsilon</span> <span class="o">==</span> <span class="n">epsilon</span><span class="p">):</span>
+                        <span class="n">epsilon</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">epsilon</span>
+                    <span class="n">force</span><span class="o">.</span><span class="n">setExceptionParameters</span><span class="p">(</span><span class="n">exception_index</span><span class="p">,</span> <span class="n">particle1</span><span class="p">,</span> <span class="n">particle2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+                    <span class="c1"># END UGLY HACK</span>
+
+        <span class="k">return</span> <span class="n">exception_indices</span>
+
+    <span class="k">def</span> <span class="nf">resetStatistics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Reset statistics of titration state tracking.</span>
+
+<span class="sd">        Todo</span>
+<span class="sd">        ----</span>
+
+<span class="sd">        * Keep track of more statistics regarding history of individual protonation states.</span>
+<span class="sd">        * Keep track of work values for individual trials to use for calibration.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">nattempted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">naccepted</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nrejected</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">work_history</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">_parse_fortran_namelist</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">namelist_name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parse a fortran namelist generated by AMBER 11 constant-pH python scripts.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        filename : string</span>
+<span class="sd">            the name of the file containing the fortran namelist</span>
+<span class="sd">        namelist_name : string</span>
+<span class="sd">            name of the namelist section to parse</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        namelist : dict</span>
+<span class="sd">            namelist[key] indexes read values, converted to Python types</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+
+<span class="sd">        This code is not fully general for all Fortran namelists---it is specialized to the cpin files.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Read file contents.</span>
+        <span class="n">infile</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">infile</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="n">infile</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="c1"># Concatenate all text.</span>
+        <span class="n">contents</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+            <span class="n">contents</span> <span class="o">+=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+        <span class="c1"># Extract section corresponding to keyword.</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="s1">&#39;&amp;&#39;</span> <span class="o">+</span> <span class="n">namelist_name</span>
+        <span class="n">terminator</span> <span class="o">=</span> <span class="s1">&#39;/&#39;</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span> <span class="o">+</span> <span class="s1">&#39;(.*)&#39;</span> <span class="o">+</span> <span class="n">terminator</span><span class="p">,</span> <span class="n">contents</span><span class="p">)</span>
+        <span class="n">contents</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">groups</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># Parse contents.</span>
+        <span class="c1"># These regexp match strings come from fortran-namelist from Stephane Chamberland (stephane.chamberland@ec.gc.ca) [LGPL].</span>
+        <span class="n">valueInt</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">r&#39;[+-]?[0-9]+&#39;</span><span class="p">)</span>
+        <span class="n">valueReal</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">r&#39;[+-]?([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)&#39;</span><span class="p">)</span>
+        <span class="n">valueString</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">r&#39;^[</span><span class="se">\&#39;</span><span class="s1">\&quot;](.*)[</span><span class="se">\&#39;</span><span class="s1">\&quot;]$&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Parse contents.</span>
+        <span class="n">namelist</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">contents</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Peel off variable name.</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s1">r&#39;^([^,]+)=(.+)$&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">match</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">contents</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+            <span class="c1"># Peel off value, which extends to either next variable name or end of section.</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="s1">r&#39;^([^=]+),([^,]+)=(.+)$&#39;</span><span class="p">,</span> <span class="n">contents</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="n">contents</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">+</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">contents</span>
+                <span class="n">contents</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+
+            <span class="c1"># Split value on commas.</span>
+            <span class="n">elements</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">elements</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">valueReal</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">element</span><span class="p">):</span>
+                    <span class="n">element</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">valueInt</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">element</span><span class="p">):</span>
+                    <span class="n">element</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">valueString</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">element</span><span class="p">):</span>
+                    <span class="n">element</span> <span class="o">=</span> <span class="n">element</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">element</span> <span class="o">!=</span> <span class="s1">&#39;&#39;</span><span class="p">:</span>
+                    <span class="n">value</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">element</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+            <span class="n">namelist</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+        <span class="k">return</span> <span class="n">namelist</span>
+
+    <span class="k">def</span> <span class="nf">_get_proton_chemical_potential</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Calculate the chemical potential contribution of protons of individual titratable sites.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            Index of the group</span>
+<span class="sd">        titration_state_index : int</span>
+<span class="sd">            Index of the state</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">titration_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">titration_state_index</span><span class="p">]</span>
+        <span class="n">proton_count</span> <span class="o">=</span> <span class="n">titration_state</span><span class="p">[</span><span class="s1">&#39;proton_count&#39;</span><span class="p">]</span>
+        <span class="n">pKref</span> <span class="o">=</span> <span class="n">titration_state</span><span class="p">[</span><span class="s1">&#39;pKref&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s2">&quot;proton_count = </span><span class="si">%d</span><span class="s2"> | pH = </span><span class="si">%.1f</span><span class="s2"> | pKref = </span><span class="si">%.1f</span><span class="s2"> | </span><span class="si">%.1f</span><span class="s2"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">proton_count</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pH</span><span class="p">,</span> <span class="n">pKref</span><span class="p">,</span> <span class="o">-</span> <span class="n">proton_count</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pH</span> <span class="o">-</span> <span class="n">pKref</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">)))</span>
+
+        <span class="k">return</span> <span class="n">proton_count</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pH</span> <span class="o">-</span> <span class="n">pKref</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">getNumTitratableGroups</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the number of titratable groups.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        ngroups : int</span>
+<span class="sd">            the number of titratable groups that have been defined</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">addTitratableGroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">atom_indices</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Define a new titratable group.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        atom_indices : list of int</span>
+<span class="sd">            the atom indices defining the titration group</span>
+
+<span class="sd">        Other Parameters</span>
+<span class="sd">        ----------------</span>
+<span class="sd">        name : str</span>
+<span class="sd">            name of the group, e.g. Residue: LYS 13.</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+
+<span class="sd">        No two titration groups may share atoms.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Check to make sure the requested group does not share atoms with any existing titration group.</span>
+        <span class="k">for</span> <span class="n">group</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;atom_indices&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Titration groups cannot share atoms.  The requested atoms of new titration group (</span><span class="si">%s</span><span class="s2">) share atoms with another group (</span><span class="si">%s</span><span class="s2">).&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s1">&#39;atom_indices&#39;</span><span class="p">])))</span>
+
+        <span class="c1"># Define the new group.</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;atom_indices&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">)</span>  <span class="c1"># deep copy</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;titration_states&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="n">group_index</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">group_index</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;nstates&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1"># NonbondedForce exceptions associated with this titration state</span>
+        <span class="n">group</span><span class="p">[</span><span class="s1">&#39;exception_indices&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get14exceptions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">system</span><span class="p">,</span> <span class="n">atom_indices</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+
+        <span class="c1"># Note that we haven&#39;t yet defined any titration states, so current state is set to None.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">group_index</span>
+
+    <span class="k">def</span> <span class="nf">getNumTitrationStates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the number of titration states defined for the specified titratable group.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            the titration group to be queried</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        nstates : int</span>
+<span class="sd">            the number of titration states defined for the specified titration group</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">titration_group_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titratable group requested.  Requested </span><span class="si">%d</span><span class="s2">, valid groups are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()))</span>
+
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">addTitrationState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">pKref</span><span class="p">,</span> <span class="n">relative_energy</span><span class="p">,</span> <span class="n">charges</span><span class="p">,</span> <span class="n">proton_count</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Add a titration state to a titratable group.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            the index of the titration group to which a new titration state is to be added</span>
+<span class="sd">        pKref : float</span>
+<span class="sd">            the pKa for the reference compound used in calibration</span>
+<span class="sd">        relative_energy : simtk.unit.Quantity with units compatible with simtk.unit.kilojoules_per_mole</span>
+<span class="sd">            the relative energy of this protonation state</span>
+<span class="sd">        charges : list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge</span>
+<span class="sd">            the atomic charges for this titration state</span>
+<span class="sd">        proton_count : int</span>
+<span class="sd">            number of protons in this titration state</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+
+<span class="sd">        The relative free energy of a titration state is computed as</span>
+
+<span class="sd">        relative_energy + kT * proton_count * ln (10^(pH - pKa))</span>
+<span class="sd">        = relative_energy + kT * proton_count * (pH - pKa) * ln 10</span>
+
+<span class="sd">        The number of charges specified must match the number (and order) of atoms in the defined titration group.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Check input arguments.</span>
+        <span class="k">if</span> <span class="n">titration_group_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titratable group requested.  Requested </span><span class="si">%d</span><span class="s2">, valid groups are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">charges</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;atom_indices&#39;</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;The number of charges must match the number (and order) of atoms in the defined titration group.&#39;</span><span class="p">)</span>
+
+        <span class="n">state</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;pKref&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pKref</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;g_k&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">relative_energy</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span>  <span class="c1"># dimensionless quantity</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;charges&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">charges</span><span class="p">)</span>
+        <span class="n">state</span><span class="p">[</span><span class="s1">&#39;proton_count&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">proton_count</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+        <span class="c1"># Increment count of titration states and set current state to last defined state.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;nstates&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;nstates&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">getTitrationState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the current titration state for the specified titratable group.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            the titration group to be queried</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        state : int</span>
+<span class="sd">            the titration state for the specified titration group</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">titration_group_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titratable group requested.  Requested </span><span class="si">%d</span><span class="s2">, valid groups are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()))</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">getTitrationStates</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the current titration states for all titratable groups.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        states : list of int</span>
+<span class="sd">            the titration states for all titratable groups</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">)</span>  <span class="c1"># deep copy</span>
+
+    <span class="k">def</span> <span class="nf">getTitrationStateTotalCharge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the total charge for the specified titration state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            the titration group to be queried</span>
+
+<span class="sd">        titration_state_index : int</span>
+<span class="sd">            the titration state to be queried</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        charge : simtk.openmm.Quantity compatible with simtk.unit.elementary_charge</span>
+<span class="sd">            total charge for the specified titration state</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">titration_group_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titratable group requested.  Requested </span><span class="si">%d</span><span class="s2">, valid groups are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="n">titration_state_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitrationStates</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titration state requested.  Requested </span><span class="si">%d</span><span class="s2">, valid states are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_state_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitrationStates</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">)))</span>
+
+        <span class="n">charges</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">titration_state_index</span><span class="p">][</span><span class="s1">&#39;charges&#39;</span><span class="p">][:]</span>
+        <span class="k">return</span> <span class="n">simtk</span><span class="o">.</span><span class="n">unit</span><span class="o">.</span><span class="n">Quantity</span><span class="p">((</span><span class="n">charges</span> <span class="o">/</span> <span class="n">charges</span><span class="o">.</span><span class="n">unit</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="n">charges</span><span class="o">.</span><span class="n">unit</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">setTitrationState</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Change the titration state of the designated group for the provided state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            the index of the titratable group whose titration state should be updated</span>
+<span class="sd">        titration_state_index : int</span>
+<span class="sd">            the titration state to set as active</span>
+
+<span class="sd">        Other Parameters</span>
+<span class="sd">        ----------------</span>
+
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            if provided, will update protonation state in the specified Context (default: None)</span>
+<span class="sd">        debug : bool</span>
+<span class="sd">            if True, will print debug information</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Check parameters for validity.</span>
+        <span class="k">if</span> <span class="n">titration_group_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titratable group requested.  Requested </span><span class="si">%d</span><span class="s2">, valid groups are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()))</span>
+        <span class="k">if</span> <span class="n">titration_state_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitrationStates</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Invalid titration state requested.  Requested </span><span class="si">%d</span><span class="s2">, valid states are in range(</span><span class="si">%d</span><span class="s2">).&quot;</span> <span class="o">%</span>
+                            <span class="p">(</span><span class="n">titration_state_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitrationStates</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">)))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_update_forces</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">titration_state_index</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">_update_forces</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">final_titration_state_index</span><span class="p">,</span> <span class="n">initial_titration_state_index</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">fractional_titration_state</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update the force parameters to a new titration state by reading them from the cache</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            Index of the group that is changing state</span>
+<span class="sd">        titration_state_index : int</span>
+<span class="sd">            Index of the state of the chosen residue</span>
+<span class="sd">        initial_titration_state_index : int, optional, default=None</span>
+<span class="sd">            If blending two titration states, the initial titration state to blend.</span>
+<span class="sd">            If `None`, set to `titration_state_index`</span>
+<span class="sd">        fractional_titration_state : float, optional, default=1.0</span>
+<span class="sd">            Fraction of `titration_state_index` to be blended with `initial_titration_state_index`.</span>
+<span class="sd">            If 0.0, `initial_titration_state_index` is fully active; if 1.0, `titration_state_index` is fully active.</span>
+<span class="sd">        context : simtk.openmm.Context, optional, default=None</span>
+<span class="sd">            If provided, will update forces state in the specified Context</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        * Every titration state has a list called forces, which stores parameters for all forces that need updating.</span>
+<span class="sd">        * Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.</span>
+<span class="sd">        * NonbondedForces also have an entry called `exceptions`, containing exception parameters.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># `initial_titration_state_index` should have no effect if not specified, so set it identical to `final_titration_state_index` in that case</span>
+        <span class="k">if</span> <span class="n">initial_titration_state_index</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">initial_titration_state_index</span> <span class="o">=</span> <span class="n">final_titration_state_index</span>
+
+        <span class="c1"># Retrieve cached force parameters fro this titration state.</span>
+        <span class="n">cache_initial</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">initial_titration_state_index</span><span class="p">][</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span>
+        <span class="n">cache_final</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">final_titration_state_index</span><span class="p">][</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Modify charges and exceptions.</span>
+        <span class="k">for</span> <span class="n">force_index</span><span class="p">,</span> <span class="n">force</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">forces_to_update</span><span class="p">):</span>
+            <span class="c1"># Get name of force class.</span>
+            <span class="n">force_classname</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+            <span class="c1"># Get atom indices and charges.</span>
+
+            <span class="c1"># Update forces using appropriately blended parameters</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">atom_initial</span><span class="p">,</span> <span class="n">atom_final</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cache_initial</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">],</span> <span class="n">cache_final</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">]):</span>
+                <span class="n">atom</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">atom_initial</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;atom_index&#39;</span><span class="p">]}</span>
+                <span class="k">if</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;NonbondedForce&#39;</span><span class="p">:</span>
+                    <span class="c1"># TODO : if we ever change LJ parameters, we need to look into softcore potentials</span>
+                    <span class="c1"># and separate out the changes in charge, and sigma/eps into different steps.</span>
+                    <span class="k">for</span> <span class="n">parameter_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;charge&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">]:</span>
+                        <span class="n">atom</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">fractional_titration_state</span><span class="p">)</span> <span class="o">*</span> <span class="n">atom_initial</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">+</span> \
+                            <span class="n">fractional_titration_state</span> <span class="o">*</span> <span class="n">atom_final</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span>
+                    <span class="n">force</span><span class="o">.</span><span class="n">setParticleParameters</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s1">&#39;atom_index&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;charge&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;epsilon&#39;</span><span class="p">])</span>
+                <span class="k">elif</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;GBSAOBCForce&#39;</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">parameter_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;charge&#39;</span><span class="p">,</span> <span class="s1">&#39;radius&#39;</span><span class="p">,</span> <span class="s1">&#39;scaleFactor&#39;</span><span class="p">]:</span>
+                        <span class="n">atom</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">fractional_titration_state</span><span class="p">)</span> <span class="o">*</span> <span class="n">atom_initial</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">+</span> \
+                            <span class="n">fractional_titration_state</span> <span class="o">*</span> <span class="n">atom_final</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span>
+                    <span class="n">force</span><span class="o">.</span><span class="n">setParticleParameters</span><span class="p">(</span><span class="n">atom</span><span class="p">[</span><span class="s1">&#39;atom_index&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;charge&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;radius&#39;</span><span class="p">],</span> <span class="n">atom</span><span class="p">[</span><span class="s1">&#39;scaleFactor&#39;</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Don&#39;t know how to update force type &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">force_classname</span><span class="p">)</span>
+
+            <span class="c1"># Update exceptions</span>
+            <span class="c1"># TODO: Handle Custom forces.</span>
+            <span class="k">if</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;NonbondedForce&#39;</span><span class="p">:</span>
+                <span class="k">for</span> <span class="p">(</span><span class="n">exc_initial</span><span class="p">,</span> <span class="n">exc_final</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cache_initial</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;exceptions&#39;</span><span class="p">],</span> <span class="n">cache_final</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;exceptions&#39;</span><span class="p">]):</span>
+                    <span class="n">exc</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">exc_initial</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;exception_index&#39;</span><span class="p">,</span> <span class="s1">&#39;particle1&#39;</span><span class="p">,</span> <span class="s1">&#39;particle2&#39;</span><span class="p">]}</span>
+                    <span class="k">for</span> <span class="n">parameter_name</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;chargeProd&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">]:</span>
+                        <span class="n">exc</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">fractional_titration_state</span><span class="p">)</span> <span class="o">*</span> <span class="n">exc_initial</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span> <span class="o">+</span> \
+                            <span class="n">fractional_titration_state</span> <span class="o">*</span> <span class="n">exc_final</span><span class="p">[</span><span class="n">parameter_name</span><span class="p">]</span>
+                    <span class="n">force</span><span class="o">.</span><span class="n">setExceptionParameters</span><span class="p">(</span>
+                        <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;exception_index&#39;</span><span class="p">],</span> <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;particle1&#39;</span><span class="p">],</span> <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;particle2&#39;</span><span class="p">],</span> <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;chargeProd&#39;</span><span class="p">],</span> <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">exc</span><span class="p">[</span><span class="s1">&#39;epsilon&#39;</span><span class="p">])</span>
+
+            <span class="c1"># Update parameters in Context, if specified.</span>
+            <span class="k">if</span> <span class="n">context</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">force</span><span class="p">,</span> <span class="s1">&#39;updateParametersInContext&#39;</span><span class="p">):</span>
+                <span class="n">force</span><span class="o">.</span><span class="n">updateParametersInContext</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_cache_force</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Cache the force parameters for a single titration state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        titration_group_index : int</span>
+<span class="sd">            Index of the group</span>
+<span class="sd">        titration_state_index : int</span>
+<span class="sd">            Index of the titration state of the group</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+
+<span class="sd">        Call this function to set up the &#39;forces&#39; information for a single titration state.</span>
+<span class="sd">        Every titration state has a list called forces, which stores parameters for all forces that need updating.</span>
+<span class="sd">        Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.</span>
+<span class="sd">        NonbondedForces also have an entry called `exceptions`, containing exception parameters.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">titration_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span>
+        <span class="n">titration_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">titration_state_index</span><span class="p">]</span>
+
+        <span class="c1"># Store the parameters per individual force</span>
+        <span class="n">f_params</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">force_index</span><span class="p">,</span> <span class="n">force</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">forces_to_update</span><span class="p">):</span>
+            <span class="c1"># Store parameters for this particular force</span>
+            <span class="n">f_params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">atoms</span><span class="o">=</span><span class="nb">list</span><span class="p">()))</span>
+            <span class="c1"># Get name of force class.</span>
+            <span class="n">force_classname</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">__name__</span>
+            <span class="c1"># Get atom indices and charges.</span>
+            <span class="n">charges</span> <span class="o">=</span> <span class="n">titration_state</span><span class="p">[</span><span class="s1">&#39;charges&#39;</span><span class="p">]</span>
+            <span class="n">atom_indices</span> <span class="o">=</span> <span class="n">titration_group</span><span class="p">[</span><span class="s1">&#39;atom_indices&#39;</span><span class="p">]</span>
+
+            <span class="n">charge_by_atom_index</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">atom_indices</span><span class="p">,</span> <span class="n">charges</span><span class="p">))</span>
+
+            <span class="c1"># Update charges.</span>
+            <span class="c1"># TODO: Handle Custom forces, looking for &quot;charge&quot; and &quot;chargeProd&quot;.</span>
+            <span class="k">for</span> <span class="n">atom_index</span> <span class="ow">in</span> <span class="n">atom_indices</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;NonbondedForce&#39;</span><span class="p">:</span>
+                    <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="s1">&#39;charge&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">],</span> <span class="nb">map</span><span class="p">(</span><span class="n">strip_in_unit_system</span><span class="p">,</span> <span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">atom_index</span><span class="p">)))})</span>
+                <span class="k">elif</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;GBSAOBCForce&#39;</span><span class="p">:</span>
+                    <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="s1">&#39;charge&#39;</span><span class="p">,</span> <span class="s1">&#39;radius&#39;</span><span class="p">,</span> <span class="s1">&#39;scaleFactor&#39;</span><span class="p">],</span> <span class="nb">map</span><span class="p">(</span><span class="n">strip_in_unit_system</span><span class="p">,</span> <span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">atom_index</span><span class="p">)))})</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Don&#39;t know how to update force type &#39;</span><span class="si">%s</span><span class="s2">&#39;&quot;</span> <span class="o">%</span> <span class="n">force_classname</span><span class="p">)</span>
+                <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="s1">&#39;charge&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">charge_by_atom_index</span><span class="p">[</span><span class="n">atom_index</span><span class="p">]</span>
+                <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;atoms&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="s1">&#39;atom_index&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">atom_index</span>
+
+            <span class="c1"># Update exceptions</span>
+            <span class="c1"># TODO: Handle Custom forces.</span>
+            <span class="k">if</span> <span class="n">force_classname</span> <span class="o">==</span> <span class="s1">&#39;NonbondedForce&#39;</span><span class="p">:</span>
+                <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;exceptions&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">e_ix</span><span class="p">,</span> <span class="n">exception_index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">titration_group</span><span class="p">[</span><span class="s1">&#39;exception_indices&#39;</span><span class="p">]):</span>
+                    <span class="p">[</span><span class="n">particle1</span><span class="p">,</span> <span class="n">particle2</span><span class="p">,</span> <span class="n">chargeProd</span><span class="p">,</span> <span class="n">sigma</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">]</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span>
+                        <span class="n">strip_in_unit_system</span><span class="p">,</span> <span class="n">force</span><span class="o">.</span><span class="n">getExceptionParameters</span><span class="p">(</span><span class="n">exception_index</span><span class="p">))</span>
+
+                    <span class="c1"># Deal with exceptions between atoms outside of titratable residue</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">charge_1</span> <span class="o">=</span> <span class="n">charge_by_atom_index</span><span class="p">[</span><span class="n">particle1</span><span class="p">]</span>
+                    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                        <span class="n">charge_1</span> <span class="o">=</span> <span class="n">strip_in_unit_system</span><span class="p">(</span><span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">particle1</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">charge_2</span> <span class="o">=</span> <span class="n">charge_by_atom_index</span><span class="p">[</span><span class="n">particle2</span><span class="p">]</span>
+                    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                        <span class="n">charge_2</span> <span class="o">=</span> <span class="n">strip_in_unit_system</span><span class="p">(</span><span class="n">force</span><span class="o">.</span><span class="n">getParticleParameters</span><span class="p">(</span><span class="n">particle2</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+
+                    <span class="n">chargeProd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coulomb14scale</span> <span class="o">*</span> <span class="n">charge_1</span> <span class="o">*</span> <span class="n">charge_2</span>
+
+                    <span class="c1"># chargeprod and sigma cannot be identically zero or else we risk the error:</span>
+                    <span class="c1"># Exception: updateParametersInContext: The number of non-excluded exceptions has changed</span>
+                    <span class="c1"># TODO: Once OpenMM interface permits this, omit this code.</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">chargeProd</span> <span class="o">==</span> <span class="n">chargeProd</span><span class="p">):</span>
+                        <span class="n">chargeProd</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">epsilon</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">epsilon</span> <span class="o">==</span> <span class="n">epsilon</span><span class="p">):</span>
+                        <span class="n">epsilon</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">float_info</span><span class="o">.</span><span class="n">epsilon</span>
+
+                    <span class="c1"># store specific local variables in dict by name</span>
+                    <span class="n">exc_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">&#39;exception_index&#39;</span><span class="p">,</span> <span class="s1">&#39;particle1&#39;</span><span class="p">,</span> <span class="s1">&#39;particle2&#39;</span><span class="p">,</span> <span class="s1">&#39;chargeProd&#39;</span><span class="p">,</span> <span class="s1">&#39;sigma&#39;</span><span class="p">,</span> <span class="s1">&#39;epsilon&#39;</span><span class="p">):</span>
+                        <span class="n">exc_dict</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">locals</span><span class="p">()[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="n">f_params</span><span class="p">[</span><span class="n">force_index</span><span class="p">][</span><span class="s1">&#39;exceptions&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">exc_dict</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">titration_state_index</span><span class="p">][</span><span class="s1">&#39;forces&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">f_params</span>
+
+    <span class="k">def</span> <span class="nf">attempt_protonation_state_change</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">reject_on_nan</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Attempt a single Monte Carlo protonation state change.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            The context to update</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Activate velocity Verlet integrator</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">setCurrentIntegrator</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># If using NCMC, store initial positions.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">initial_positions</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">(</span><span class="n">getPositions</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">getPositions</span><span class="p">(</span><span class="n">asNumpy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="c1"># Compute initial probability of this protonation state.</span>
+        <span class="n">log_P_initial</span><span class="p">,</span> <span class="n">pot1</span><span class="p">,</span> <span class="n">kin1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_log_probability</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;   initial </span><span class="si">%s</span><span class="s2">   </span><span class="si">%12.3f</span><span class="s2"> kcal/mol&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getTitrationStates</span><span class="p">()),</span> <span class="n">pot1</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">kilocalories_per_mole</span><span class="p">))</span>
+
+        <span class="c1"># Store current titration state indices.</span>
+        <span class="n">initial_titration_states</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">)</span>  <span class="c1"># deep copy</span>
+
+        <span class="c1"># Select new titration states.</span>
+        <span class="n">final_titration_states</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">)</span>  <span class="c1"># deep copy</span>
+        <span class="c1"># Choose how many titratable groups to simultaneously attempt to update.</span>
+        <span class="c1"># TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.</span>
+        <span class="n">ndraw</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">simultaneous_proposal_probability</span><span class="p">):</span>
+            <span class="n">ndraw</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="c1"># Select which titratible residues to update.</span>
+        <span class="n">titration_group_indices</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()),</span> <span class="n">ndraw</span><span class="p">)</span>
+        <span class="c1"># Select new titration states.</span>
+        <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+            <span class="c1"># Choose a titration state with uniform probability (even if it is the same as the current state).</span>
+            <span class="n">titration_state_index</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getNumTitrationStates</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">)))</span>
+            <span class="n">final_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">titration_state_index</span>
+        <span class="c1"># TODO: Always accept self transitions, or avoid them altogether.</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">maintainChargeNeutrality</span><span class="p">:</span>
+            <span class="c1"># TODO: Designate waters/ions to switch to maintain charge neutrality</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s1">&#39;maintainChargeNeutrality feature not yet supported&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Compute work for switching to new protonation states.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># Use instantaneous switching.</span>
+                <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">final_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">],</span> <span class="n">context</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Run NCMC integration.</span>
+                <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span><span class="p">):</span>
+                    <span class="c1"># Take a Verlet integrator step.</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">ncmc_propagation_integrator</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="c1"># Update the titration state.</span>
+                    <span class="n">titration_lambda</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">step</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span><span class="p">)</span>
+                    <span class="c1"># TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,</span>
+                    <span class="c1"># since parameter update would occur in the middle of a velocity Verlet step.</span>
+                    <span class="c1"># TODO: This could be optimized by only calling</span>
+                    <span class="c1"># context.updateParametersInContext once rather than after every titration</span>
+                    <span class="c1"># state update.</span>
+                    <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_update_forces</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">final_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">],</span> <span class="n">initial_titration_state_index</span><span class="o">=</span><span class="n">initial_titration_states</span><span class="p">[</span>
+                                            <span class="n">titration_group_index</span><span class="p">],</span> <span class="n">fractional_titration_state</span><span class="o">=</span><span class="n">titration_lambda</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+                        <span class="c1"># TODO: Optimize where integrator.step() is called</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">ncmc_propagation_integrator</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+                <span class="c1"># Update titration states so that log state penalties are accurately reflected.</span>
+                <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">titration_state_index</span>
+
+            <span class="c1"># Compute final probability of this protonation state.</span>
+            <span class="n">log_P_final</span><span class="p">,</span> <span class="n">pot2</span><span class="p">,</span> <span class="n">kin2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_log_probability</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+            <span class="c1"># Compute work and store work history.</span>
+            <span class="n">work</span> <span class="o">=</span> <span class="o">-</span> <span class="p">(</span><span class="n">log_P_final</span> <span class="o">-</span> <span class="n">log_P_initial</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">work_history</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">initial_titration_states</span><span class="p">,</span> <span class="n">final_titration_states</span><span class="p">,</span> <span class="n">work</span><span class="p">))</span>
+
+            <span class="c1"># Accept or reject with Metropolis criteria.</span>
+            <span class="n">log_P_accept</span> <span class="o">=</span> <span class="o">-</span><span class="n">work</span>
+
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;LOGP&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_P_accept</span><span class="p">))</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;   proposed log probability change: </span><span class="si">%f</span><span class="s2"> -&gt; </span><span class="si">%f</span><span class="s2"> | work </span><span class="si">%f</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">log_P_initial</span><span class="p">,</span> <span class="n">log_P_final</span><span class="p">,</span> <span class="n">work</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">nattempted</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">log_P_accept</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">log_P_accept</span><span class="p">)):</span>
+                <span class="c1"># Accept.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">naccepted</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pot_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pot2</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">kin_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kin2</span><span class="p">)</span>
+                <span class="c1"># Update titration states.</span>
+                <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">final_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">],</span> <span class="n">context</span><span class="p">)</span>
+                <span class="c1"># If using NCMC, flip velocities to satisfy super-detailed balance.</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">setVelocities</span><span class="p">(</span><span class="o">-</span><span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">(</span><span class="n">getVelocities</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">getVelocities</span><span class="p">(</span><span class="n">asNumpy</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Reject.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">nrejected</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pot_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pot1</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">kin_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kin1</span><span class="p">)</span>
+                <span class="c1"># Restore titration states.</span>
+                <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">initial_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">],</span> <span class="n">context</span><span class="p">)</span>
+                <span class="c1"># If using NCMC, restore coordinates and flip velocities.</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">setPositions</span><span class="p">(</span><span class="n">initial_positions</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">err</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;Particle coordinate is nan&#39;</span> <span class="ow">and</span> <span class="n">reject_on_nan</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;NaN during NCMC move, rejecting&quot;</span><span class="p">)</span>
+                <span class="c1"># Reject.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">nrejected</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pot_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pot1</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">kin_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">kin1</span><span class="p">)</span>
+                <span class="c1"># Restore titration states.</span>
+                <span class="k">for</span> <span class="n">titration_group_index</span> <span class="ow">in</span> <span class="n">titration_group_indices</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">titration_group_index</span><span class="p">,</span> <span class="n">initial_titration_states</span><span class="p">[</span><span class="n">titration_group_index</span><span class="p">],</span> <span class="n">context</span><span class="p">)</span>
+                <span class="c1"># If using NCMC, restore coordinates and flip velocities.</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">context</span><span class="o">.</span><span class="n">setPositions</span><span class="p">(</span><span class="n">initial_positions</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="c1"># Restore user integrator</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">setCurrentIntegrator</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform a number of Monte Carlo update trials for the titration state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            The context to update</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The titration state actually present in the given context is not checked; it is assumed the MonteCarloTitration internal state is correct.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Perform a number of protonation state update trials.</span>
+        <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nattempts_per_update</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">attempt_protonation_state_change</span><span class="p">(</span><span class="n">context</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">states_per_update</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getTitrationStates</span><span class="p">())</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">calibrate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">platform_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">g_k</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calibrate all aminoacids that are found in the structure.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        platform_name : str, optional, default=None</span>
+<span class="sd">            Use specified platform, or if None, use fastest platform.</span>
+<span class="sd">        g_k : dict, optional</span>
+<span class="sd">            dict of starting value g_k estimates in numpy arrays, with residue names as keys.</span>
+
+<span class="sd">        kwargs : optional keyword arguments are passed to underlying calibration engine.</span>
+<span class="sd">            Expert users: see `calibration.CalibrationSystem#sams_till_converged` for details.</span>
+
+<span class="sd">        TODO</span>
+<span class="sd">        ----</span>
+<span class="sd">        - How to treat ligands</span>
+<span class="sd">        - document</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span> <span class="nn">.calibration</span> <span class="kn">import</span> <span class="n">CalibrationSystem</span>
+        <span class="n">resname_per_index</span><span class="p">,</span> <span class="n">unique_residuenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">detect_residues</span><span class="p">(</span><span class="n">CalibrationSystem</span><span class="o">.</span><span class="n">supported_aminoacids</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">g_k</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">g_k</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="bp">None</span> <span class="k">for</span> <span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">in</span> <span class="n">unique_residuenames</span><span class="p">}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">g_k</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">g_k</span><span class="p">)</span>  <span class="c1"># deepcopy</span>
+
+        <span class="k">for</span> <span class="n">resn</span> <span class="ow">in</span> <span class="n">unique_residuenames</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">resn</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">g_k</span><span class="p">:</span>
+                <span class="n">g_k</span><span class="p">[</span><span class="n">resn</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="n">calibration_settings</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;temperature&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span>
+        <span class="c1"># index 0 Should be the user integrator</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;timestep&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compound_integrator</span><span class="o">.</span><span class="n">getIntegrator</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">getStepSize</span><span class="p">()</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;pressure&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;pH&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pH</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;solvent&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">solvent</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;nsteps_per_trial&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsteps_per_trial</span>
+        <span class="n">calibration_settings</span><span class="p">[</span><span class="s2">&quot;platform_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">platform_name</span>
+
+        <span class="c1"># Only calibrate once for each unique residue type</span>
+        <span class="k">for</span> <span class="n">residuename</span> <span class="ow">in</span> <span class="n">unique_residuenames</span><span class="p">:</span>
+            <span class="c1"># This sets up a system for calibration, with a SAMS sampler under the hood.</span>
+            <span class="n">calibration_system</span> <span class="o">=</span> <span class="n">CalibrationSystem</span><span class="p">(</span><span class="n">residuename</span><span class="p">,</span> <span class="n">calibration_settings</span><span class="p">,</span> <span class="n">guess_free_energy</span><span class="o">=</span><span class="n">g_k</span><span class="p">[</span><span class="n">residuename</span><span class="p">])</span>
+            <span class="n">gk_values</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="c1"># sams_till_converged is a generator.</span>
+            <span class="c1"># gk_values will contain the latest estimate when the loop ends</span>
+            <span class="k">for</span> <span class="n">gk_values</span> <span class="ow">in</span> <span class="n">calibration_system</span><span class="o">.</span><span class="n">sams_till_converged</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                <span class="k">pass</span>
+            <span class="n">g_k</span><span class="p">[</span><span class="n">residuename</span><span class="p">]</span> <span class="o">=</span> <span class="n">gk_values</span>
+
+        <span class="c1"># Set the g_k values of the MCTitration to the calibrated values.</span>
+        <span class="k">for</span> <span class="n">group_index</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">]):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">state_index</span><span class="p">][</span><span class="s1">&#39;g_k&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">g_k</span><span class="p">[</span><span class="n">resname_per_index</span><span class="p">[</span><span class="n">group_index</span><span class="p">]][</span><span class="n">state_index</span><span class="p">]</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Calibration results </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">g_k</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">g_k</span>
+
+    <span class="k">def</span> <span class="nf">import_gk_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">gk_dict</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Import precalibrated gk values. Only use this if your simulation settings are exactly the same.</span>
+
+<span class="sd">        If you changed any details, rerun calibrate instead!</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        gk_dict : dict</span>
+<span class="sd">            dict of starting value g_k estimates in numpy arrays, with residue names as keys.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span> <span class="nn">.calibration</span> <span class="kn">import</span> <span class="n">CalibrationSystem</span>
+        <span class="n">resname_per_index</span><span class="p">,</span> <span class="n">unique_residuenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">detect_residues</span><span class="p">(</span><span class="n">CalibrationSystem</span><span class="o">.</span><span class="n">supported_aminoacids</span><span class="p">)</span>
+
+        <span class="c1"># Set the g_k values to the user supplied values.</span>
+        <span class="k">for</span> <span class="n">group_index</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">]):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">state_index</span><span class="p">][</span><span class="s1">&#39;g_k&#39;</span><span class="p">]</span> <span class="o">=</span> \
+                    <span class="n">gk_dict</span><span class="p">[</span><span class="n">resname_per_index</span><span class="p">[</span><span class="n">group_index</span><span class="p">]][</span><span class="n">state_index</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">detect_residues</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">supported_residues</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Detect the residues in the system that can be calibrated.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        supported_residues : set</span>
+<span class="sd">            set of residue names to flag as titratable.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict of resnames with group index as keys, set of unique titratable residue names found</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">supported_residues</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">.calibration</span> <span class="kn">import</span> <span class="n">CalibrationSystem</span>
+            <span class="n">supported_residues</span> <span class="o">=</span> <span class="n">CalibrationSystem</span><span class="o">.</span><span class="n">supported_aminoacids</span>
+
+
+        <span class="n">unique_residuenames</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">resname_per_index</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">group_index</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">):</span>
+            <span class="n">supported</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="n">group_name</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">resn</span> <span class="ow">in</span> <span class="n">supported_residues</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">resn</span> <span class="ow">in</span> <span class="n">group_name</span><span class="p">:</span>
+                    <span class="n">supported</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="n">unique_residuenames</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">resn</span><span class="p">)</span>
+                    <span class="n">resname_per_index</span><span class="p">[</span><span class="n">group_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">resn</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">supported</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unsupported residue/ligand found in titration groups: {}&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">group_name</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">resname_per_index</span><span class="p">,</span> <span class="n">unique_residuenames</span>
+
+    <span class="k">def</span> <span class="nf">getAcceptanceProbability</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the fraction of accepted moves</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        fraction : float</span>
+<span class="sd">            the fraction of accepted moves</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">naccepted</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nattempted</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_compute_log_probability</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute log probability of current configuration and protonation state.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            the context</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        log_P : float</span>
+<span class="sd">            log probability of the current context</span>
+<span class="sd">        pot_energy : float</span>
+<span class="sd">            potential energy of the current context</span>
+<span class="sd">        kin_energy : float</span>
+<span class="sd">            kinetic energy of the current context</span>
+
+<span class="sd">        TODO</span>
+<span class="sd">        ----</span>
+<span class="sd">        * Generalize this to use ThermodynamicState concept of reduced potential (from repex)</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Add energetic contribution to log probability.</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">(</span><span class="n">getEnergy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">pot_energy</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">getPotentialEnergy</span><span class="p">()</span>
+        <span class="n">kin_energy</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">getKineticEnergy</span><span class="p">()</span>
+        <span class="n">total_energy</span> <span class="o">=</span> <span class="n">pot_energy</span> <span class="o">+</span> <span class="n">kin_energy</span>
+        <span class="n">log_P</span> <span class="o">=</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">*</span> <span class="n">total_energy</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c1"># Add pressure contribution for periodic simulations.</span>
+            <span class="n">volume</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">()</span><span class="o">.</span><span class="n">getPeriodicBoxVolume</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;beta = </span><span class="si">%s</span><span class="s1">, pressure = </span><span class="si">%s</span><span class="s1">, volume = </span><span class="si">%s</span><span class="s1">, multiple = </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pressure</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">volume</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">pressure</span><span class="o">*</span><span class="n">volume</span><span class="o">*</span><span class="n">units</span><span class="o">.</span><span class="n">AVOGADRO_CONSTANT_NA</span><span class="p">))</span>
+            <span class="n">log_P</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">AVOGADRO_CONSTANT_NA</span>
+
+        <span class="c1"># Add reference free energy contributions.</span>
+        <span class="k">for</span> <span class="n">titration_group_index</span><span class="p">,</span> <span class="p">(</span><span class="n">titration_group</span><span class="p">,</span> <span class="n">titration_state_index</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">titrationStates</span><span class="p">)):</span>
+            <span class="n">titration_state</span> <span class="o">=</span> <span class="n">titration_group</span><span class="p">[</span><span class="s1">&#39;titration_states&#39;</span><span class="p">][</span><span class="n">titration_state_index</span><span class="p">]</span>
+            <span class="n">g_k</span> <span class="o">=</span> <span class="n">titration_state</span><span class="p">[</span><span class="s1">&#39;g_k&#39;</span><span class="p">]</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;g_k: </span><span class="si">%.2f</span><span class="s2">&quot;</span><span class="p">,</span>  <span class="n">g_k</span><span class="p">)</span>
+            <span class="n">log_P</span> <span class="o">-=</span> <span class="n">g_k</span>
+
+        <span class="c1"># Return the log probability.</span>
+        <span class="k">return</span> <span class="n">log_P</span><span class="p">,</span> <span class="n">pot_energy</span><span class="p">,</span> <span class="n">kin_energy</span>
+
+    <span class="k">def</span> <span class="nf">getNumAttemptsPerUpdate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the number of Monte Carlo titration state change attempts per call to update().</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+
+<span class="sd">        nattempts_per_iteration : int</span>
+<span class="sd">            the number of attempts to be made per iteration</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">nattempts_per_update</span>
+
+    <span class="k">def</span> <span class="nf">setNumAttemptsPerUpdate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nattempts</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set the number of Monte Carlo titration state change attempts per call to update().</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        nattempts : int</span>
+<span class="sd">            the number to attempts to make per iteration;</span>
+<span class="sd">            if None, this value is computed automatically based on the number of titratable groups (default None)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nattempts_per_update</span> <span class="o">=</span> <span class="n">nattempts</span>
+        <span class="k">if</span> <span class="n">nattempts</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c1"># TODO: Perform enough titration attempts to ensure thorough mixing without taking too long per update.</span>
+            <span class="c1"># TODO: Cache already-visited states to avoid recomputing?</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nattempts_per_update</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getNumTitratableGroups</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_get_reduced_potentials</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">group_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve the reduced potentials for all states of the system given a context.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            The context to update</span>
+<span class="sd">        group_index : int, optional</span>
+<span class="sd">            Index of the group that needs updating, defaults to 0.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># beta * U(x)_j</span>
+
+        <span class="n">ub_j</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">titrationGroups</span><span class="p">[</span><span class="n">group_index</span><span class="p">][</span><span class="s1">&#39;titration_states&#39;</span><span class="p">]))</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">ub_j</span><span class="o">.</span><span class="n">size</span><span class="p">):</span>
+            <span class="n">ub_j</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reduced_potential</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
+
+        <span class="c1"># Reset to current state</span>
+        <span class="k">return</span> <span class="n">ub_j</span>
+
+    <span class="k">def</span> <span class="nf">_reduced_potential</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">state_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieve the reduced potential for a given state (specified by index) in the given context.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            The context to update</span>
+<span class="sd">        state_index : int</span>
+<span class="sd">            Index of the state for which the reduced potential needs to be calculated.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">potential_energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_potential_energy</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">state_index</span><span class="p">)</span>
+        <span class="n">red_pot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">*</span> <span class="n">potential_energy</span>
+
+        <span class="c1"># TODO is the below necessary?</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">solvent</span> <span class="o">==</span> <span class="s2">&quot;explicit&quot;</span><span class="p">:</span>
+            <span class="n">volume</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">()</span><span class="o">.</span><span class="n">getPeriodicBoxVolume</span><span class="p">()</span>
+            <span class="n">red_pot</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">pressure</span> <span class="o">*</span> <span class="n">volume</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">AVOGADRO_CONSTANT_NA</span>
+
+        <span class="k">return</span> <span class="n">red_pot</span>
+
+    <span class="k">def</span> <span class="nf">_get_potential_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">group_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Retrieve the potential energy for a given state (specified by index) in the given context.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        context : simtk.openmm.Context</span>
+<span class="sd">            The context to update</span>
+<span class="sd">        state_index : int</span>
+<span class="sd">            Index of the state for which the reduced potential needs to be calculated.</span>
+<span class="sd">        group_index : int, optional</span>
+<span class="sd">            Index of the group that needs updating, defaults to 0.</span>
+
+<span class="sd">        TODO</span>
+<span class="sd">        ----</span>
+<span class="sd">         * NCMC version of this?</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">current_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTitrationState</span><span class="p">(</span><span class="n">group_index</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">group_index</span><span class="p">,</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="n">temp_state</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">getState</span><span class="p">(</span><span class="n">getEnergy</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">potential_energy</span> <span class="o">=</span> <span class="n">temp_state</span><span class="o">.</span><span class="n">getPotentialEnergy</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">setTitrationState</span><span class="p">(</span><span class="n">group_index</span><span class="p">,</span> <span class="n">current_state</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">potential_energy</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">Constant-pH for OpenMM 0.0.1 documentation</a> &raquo;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2016, Bas Rustenburg, Greg Ross, John Chodera et al..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.1.
+    </div>
+  </body>
+</html>
