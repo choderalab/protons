@@ -1,54 +1,6 @@
 #!/usr/local/bin/env python
 # -*- coding: utf-8 -*-
 
-
-"""
-Constant pH dynamics in OpenMM.
-
-Description
------------
-
-This module implements a pure python constant pH functionality in OpenMM.
-
-Notes
------
-
-This is still in development.
-
-References
-----------
-
-[1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-http://dx.doi.org/10.1002/jcc.20139
-
-[2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-http://link.aip.org/link/doi/10.1063/1.2731781
-
-[3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-http://dx.doi.org/10.1073/pnas.1106094108
-
-Examples
---------
-
-Coming soon to an interpreter near you!
-
-TODO
-----
-
-    * Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
-    * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-      - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-    * Allow specification of probabilities for selecting N residues to change protonation state at once.
-    * Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
-    * Add automatic tuning of switching times for optimal acceptance.
-    * Extend to handle systems set up via OpenMM app Forcefield class.
-
-Copyright and license
----------------------
-
-@author John D. Chodera <jchodera@gmail.com>
-
-"""
 from __future__ import print_function
 import re
 import sys
@@ -96,21 +48,7 @@ class MonteCarloTitration(object):
     """
     Monte Carlo titration driver for constant-pH dynamics.
 
-    This move type implements the constant-pH dynamics of Mongan and Case [1].
-
-    References
-    ----------
-
-    .. [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-    http://dx.doi.org/10.1002/jcc.20139
-
-    .. [2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-    http://link.aip.org/link/doi/10.1063/1.2731781
-
-    .. [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-    http://dx.doi.org/10.1073/pnas.1106094108
-
-
+    This move type implements the constant-pH dynamics of Mongan and Case [1]_, Stern [2]_ and Nilmeier [3]_.
     """
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
