@@ -20,7 +20,7 @@ Example::
 3. Adjust themes, and other options that you like in ``conf.py``.
 
 
-4. You can add documentation by editing ``index.rst``, which uses reST_. Please read the sphinx documenation for further instructions on how to write your docs.
+4. You can add documentation by editing ``index.rst``, which uses reST_. Please read the sphinx documentation for further instructions on how to write your docs.
 
 .. _reST: http://www.sphinx-doc.org/en/stable/rest.html
 
