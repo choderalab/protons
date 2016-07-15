@@ -19,9 +19,15 @@ Example::
 
 3. Adjust themes, and other options that you like in ``conf.py``.
 
-4. Test your docs using ``make html`` as a command. Depending on what build directory you specified (default ``_build``), you will find the html documentation there. There is no need to commit this. You may wish to add the directory to your ``.gitignore`` file.
 
-5. Fix any errors or warnings that may pop up. Common errors are docstrings including ``rst`` syntax errors, and missing python dependencies.
+4. You can add documentation by editing `index.rst`, which uses reST_. Please read the sphinx documenation for further instructions on how to write your docs.
+
+.. _reST: http://www.sphinx-doc.org/en/stable/rest.html
+
+5. Test your docs using ``make html`` as a command. Depending on what build directory you specified (default ``_build``), you will find the html documentation there. There is no need to commit this. You may wish to add the directory to your ``.gitignore`` file.
+
+
+6. Fix any errors or warnings that may pop up. Common errors are docstrings including ``rst`` syntax errors, and missing python dependencies.
 
 
 Read the docs!
@@ -32,7 +38,7 @@ Next, the documentation needs to be built on www.readthedocs.org. This next sect
 Enable a conda environment for ReadTheDocs_
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-4. Describe the necessary conda environment in a yml file, including the channels from which to download packages. 
+7. Describe the necessary conda environment in a yml file, including the channels from which to download packages. 
 
 Example::
 
@@ -51,7 +57,7 @@ Example::
       - joblib
       - lxml
 
-5. In the top level directory of the repository, place a file called ``readthedocs.yml`` that links to it.
+8. In the top level directory of the repository, place a file called ``readthedocs.yml`` that links to it.
 
 Example::
     
@@ -62,9 +68,9 @@ Example::
 Website settings
 ~~~~~~~~~~~~~~~~
 
-6. Enable the repository on ReadTheDocs_. Now, everytime code is pushed to master, or a release is made, new docs are automatically built. 
+9. Enable the repository on ReadTheDocs_. Now, everytime code is pushed to master, or a release is made, new docs are automatically built. 
 
-7. While writing documentation, you can use ``make html`` to build it locally to see a preview. If all goes well, your docs should look exactly the same on ReadTheDocs_.
+10. While writing documentation, you can use ``make html`` to build it locally to see a preview. If all goes well, your docs should look exactly the same on ReadTheDocs_.
 
 .. _ReadTheDocs: https://www.readthedocs.org 
 
