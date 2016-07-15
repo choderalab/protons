@@ -79,7 +79,7 @@ Website settings
 Disclaimer
 ~~~~~~~~~~
 
-Note that conda is currently a beta feature of readthedocs. The exact way this will work might change. Manual builds can still be carried out by using ``make html``.
+Note that conda is currently a beta feature of readthedocs. The exact way this will work might change.
 
 Happy documenting!
 ==================
