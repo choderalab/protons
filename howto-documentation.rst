@@ -6,9 +6,9 @@ Part one of this procedure sets up a documentation framework using Sphinx. Part 
 Set up sphinx
 =============
 
-1. Run ``sphinx-quickstart`` and follow instructions to set up your documentation. If you run this in a `docs` subdirectory, you can prevent it from cluttering up your code directories. Autodoc is recommended for python projects. You can also enable mathjax for displaying math. Be sure to generate a MakeFile and a make batch file for windows, since you'll need these to build your documentation. 
+1. Run ``sphinx-quickstart`` and follow instructions to set up your documentation. If you run this in a ``docs`` subdirectory, you can prevent it from cluttering up your code directories. Autodoc is recommended for python projects. You can also enable mathjax for displaying math. Be sure to generate a MakeFile and a make batch file for windows, since you'll need these to build your documentation. 
 
-2. Modify ``conf.py`` to add your library to the path of the script, for instance if your documentation lives in a `docs` subdirectory of the project.
+2. Modify ``conf.py`` to add your library to the path of the script, for instance if your documentation lives in a ``docs`` subdirectory of the project.
 
 Example::
 
@@ -27,7 +27,7 @@ Example::
 Read the docs!
 ==============
 
-Next, the documentation needs to be built on read the docs.org. This next section is important if you use conda packages to run your code and build your docs.
+Next, the documentation needs to be built on www.readthedocs.org. This next section is important if you use conda packages to run your code and build your docs.
 
 Enable a conda environment for ReadTheDocs_
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,7 +64,7 @@ Website settings
 
 6. Enable the repository on ReadTheDocs_. Now, everytime code is pushed to master, or a release is made, new docs are automatically built. 
 
-7. While writing documentation, you can use `make html` to build it locally to see a preview. If all goes well, your docs should look exactly the same on ReadTheDocs_.
+7. While writing documentation, you can use ``make html`` to build it locally to see a preview. If all goes well, your docs should look exactly the same on ReadTheDocs_.
 
 .. _ReadTheDocs: https://www.readthedocs.org 
 
