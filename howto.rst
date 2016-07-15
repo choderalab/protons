@@ -6,9 +6,9 @@ Part one of this procedure sets up a documentation framework using Sphinx. Part 
 Set up sphinx
 =============
 
-1. Run ``sphinx-quickstart`` and follow instructions to set up your documentation. Autodoc is recommended for python projects. You can also enable mathjax for math. Be sure to generate a MakeFile and a make batch file for windows, since you'll need these to build your documentation. 
+1. Run ``sphinx-quickstart`` and follow instructions to set up your documentation. If you run this in a `docs` subdirectory, you can prevent it from cluttering up your code directories. Autodoc is recommended for python projects. You can also enable mathjax for displaying math. Be sure to generate a MakeFile and a make batch file for windows, since you'll need these to build your documentation. 
 
-2. Modify ``conf.py`` to add your library to the path of the script, for instance if your documentation lives in a subdirectory of the project.
+2. Modify ``conf.py`` to add your library to the path of the script, for instance if your documentation lives in a `docs` subdirectory of the project.
 
 Example::
 
