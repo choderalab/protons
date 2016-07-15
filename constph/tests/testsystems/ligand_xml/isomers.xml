@@ -1,22 +1,23 @@
+<TitratableResidue>
 <!-- Time and parameters of origin: -->
-<!-- 2016-03-03 15:07:51.151123 -->
+<!-- 2016-04-25 18:27:46.032197 -->
 <!--  -->
 
 <ForceField>
  <AtomTypes>
-  <Type name="UNK-0-O1" class="o" element="O" mass="15.99943"/>
+  <Type name="UNK-0-O1" class="oh" element="O" mass="15.99943"/>
   <Type name="UNK-0-O2" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-0-N3" class="na" element="N" mass="14.00672"/>
-  <Type name="UNK-0-N4" class="na" element="N" mass="14.00672"/>
+  <Type name="UNK-0-N4" class="nc" element="N" mass="14.00672"/>
   <Type name="UNK-0-N5" class="nh" element="N" mass="14.00672"/>
-  <Type name="UNK-0-C6" class="cc" element="C" mass="12.01078"/>
-  <Type name="UNK-0-C7" class="cd" element="C" mass="12.01078"/>
-  <Type name="UNK-0-C8" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-0-C6" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-0-C7" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-0-C8" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-0-C9" class="c" element="C" mass="12.01078"/>
   <Type name="UNK-0-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-0-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-0-H13" class="hn" element="H" mass="1.007947"/>
-  <Type name="UNK-0-H15" class="hn" element="H" mass="1.007947"/>
+  <Type name="UNK-0-H14" class="ho" element="H" mass="1.007947"/>
   <Type name="UNK-0-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-1-O1" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-1-O2" class="o" element="O" mass="15.99943"/>
@@ -46,85 +47,85 @@
   <Type name="UNK-2-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-2-H13" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-2-H16" class="hn" element="H" mass="1.007947"/>
-  <Type name="UNK-3-O1" class="oh" element="O" mass="15.99943"/>
+  <Type name="UNK-3-O1" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-3-O2" class="o" element="O" mass="15.99943"/>
-  <Type name="UNK-3-N3" class="nc" element="N" mass="14.00672"/>
+  <Type name="UNK-3-N3" class="na" element="N" mass="14.00672"/>
   <Type name="UNK-3-N4" class="na" element="N" mass="14.00672"/>
   <Type name="UNK-3-N5" class="nh" element="N" mass="14.00672"/>
   <Type name="UNK-3-C6" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-3-C7" class="cd" element="C" mass="12.01078"/>
-  <Type name="UNK-3-C8" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-3-C8" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-3-C9" class="c" element="C" mass="12.01078"/>
+  <Type name="UNK-3-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-3-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-3-H13" class="hn" element="H" mass="1.007947"/>
-  <Type name="UNK-3-H14" class="ho" element="H" mass="1.007947"/>
   <Type name="UNK-3-H15" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-3-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-4-O1" class="oh" element="O" mass="15.99943"/>
   <Type name="UNK-4-O2" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-4-N3" class="na" element="N" mass="14.00672"/>
-  <Type name="UNK-4-N4" class="nc" element="N" mass="14.00672"/>
+  <Type name="UNK-4-N4" class="na" element="N" mass="14.00672"/>
   <Type name="UNK-4-N5" class="nh" element="N" mass="14.00672"/>
-  <Type name="UNK-4-C6" class="cd" element="C" mass="12.01078"/>
-  <Type name="UNK-4-C7" class="cc" element="C" mass="12.01078"/>
-  <Type name="UNK-4-C8" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-4-C6" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-4-C7" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-4-C8" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-4-C9" class="c" element="C" mass="12.01078"/>
   <Type name="UNK-4-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-4-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-4-H13" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-4-H14" class="ho" element="H" mass="1.007947"/>
+  <Type name="UNK-4-H15" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-4-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-5-O1" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-5-O2" class="o" element="O" mass="15.99943"/>
-  <Type name="UNK-5-N3" class="na" element="N" mass="14.00672"/>
-  <Type name="UNK-5-N4" class="nc" element="N" mass="14.00672"/>
+  <Type name="UNK-5-N3" class="nc" element="N" mass="14.00672"/>
+  <Type name="UNK-5-N4" class="na" element="N" mass="14.00672"/>
   <Type name="UNK-5-N5" class="n4" element="N" mass="14.00672"/>
-  <Type name="UNK-5-C6" class="cd" element="C" mass="12.01078"/>
-  <Type name="UNK-5-C7" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-5-C6" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-5-C7" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-5-C8" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-5-C9" class="c" element="C" mass="12.01078"/>
-  <Type name="UNK-5-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-5-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-5-H12" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-5-H13" class="hn" element="H" mass="1.007947"/>
+  <Type name="UNK-5-H15" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-5-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-6-O1" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-6-O2" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-6-N3" class="nc" element="N" mass="14.00672"/>
   <Type name="UNK-6-N4" class="na" element="N" mass="14.00672"/>
-  <Type name="UNK-6-N5" class="n4" element="N" mass="14.00672"/>
+  <Type name="UNK-6-N5" class="nh" element="N" mass="14.00672"/>
   <Type name="UNK-6-C6" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-6-C7" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-6-C8" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-6-C9" class="c" element="C" mass="12.01078"/>
   <Type name="UNK-6-H11" class="h5" element="H" mass="1.007947"/>
-  <Type name="UNK-6-H12" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-6-H13" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-6-H15" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-6-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-7-O1" class="o" element="O" mass="15.99943"/>
   <Type name="UNK-7-O2" class="o" element="O" mass="15.99943"/>
-  <Type name="UNK-7-N3" class="nc" element="N" mass="14.00672"/>
-  <Type name="UNK-7-N4" class="na" element="N" mass="14.00672"/>
-  <Type name="UNK-7-N5" class="nh" element="N" mass="14.00672"/>
-  <Type name="UNK-7-C6" class="cc" element="C" mass="12.01078"/>
-  <Type name="UNK-7-C7" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-7-N3" class="na" element="N" mass="14.00672"/>
+  <Type name="UNK-7-N4" class="nc" element="N" mass="14.00672"/>
+  <Type name="UNK-7-N5" class="n4" element="N" mass="14.00672"/>
+  <Type name="UNK-7-C6" class="cd" element="C" mass="12.01078"/>
+  <Type name="UNK-7-C7" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-7-C8" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-7-C9" class="c" element="C" mass="12.01078"/>
+  <Type name="UNK-7-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-7-H11" class="h5" element="H" mass="1.007947"/>
+  <Type name="UNK-7-H12" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-7-H13" class="hn" element="H" mass="1.007947"/>
-  <Type name="UNK-7-H15" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-7-H16" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-8-O1" class="oh" element="O" mass="15.99943"/>
   <Type name="UNK-8-O2" class="o" element="O" mass="15.99943"/>
-  <Type name="UNK-8-N3" class="na" element="N" mass="14.00672"/>
+  <Type name="UNK-8-N3" class="nc" element="N" mass="14.00672"/>
   <Type name="UNK-8-N4" class="na" element="N" mass="14.00672"/>
   <Type name="UNK-8-N5" class="nh" element="N" mass="14.00672"/>
   <Type name="UNK-8-C6" class="cc" element="C" mass="12.01078"/>
   <Type name="UNK-8-C7" class="cd" element="C" mass="12.01078"/>
-  <Type name="UNK-8-C8" class="cc" element="C" mass="12.01078"/>
+  <Type name="UNK-8-C8" class="cd" element="C" mass="12.01078"/>
   <Type name="UNK-8-C9" class="c" element="C" mass="12.01078"/>
-  <Type name="UNK-8-H10" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-8-H11" class="h5" element="H" mass="1.007947"/>
   <Type name="UNK-8-H13" class="hn" element="H" mass="1.007947"/>
   <Type name="UNK-8-H14" class="ho" element="H" mass="1.007947"/>
@@ -145,16 +146,16 @@
    <Atom name="H10" type="UNK-0-H10"/>
    <Atom name="H11" type="UNK-0-H11"/>
    <Atom name="H13" type="UNK-0-H13"/>
-   <Atom name="H15" type="UNK-0-H15"/>
+   <Atom name="H14" type="UNK-0-H14"/>
    <Atom name="H16" type="UNK-0-H16"/>
    <Bond from="0" to="8"/>
+   <Bond from="0" to="12"/>
    <Bond from="1" to="8"/>
    <Bond from="2" to="5"/>
    <Bond from="2" to="7"/>
    <Bond from="2" to="9"/>
    <Bond from="3" to="6"/>
    <Bond from="3" to="7"/>
-   <Bond from="3" to="12"/>
    <Bond from="4" to="6"/>
    <Bond from="4" to="11"/>
    <Bond from="4" to="13"/>
@@ -232,25 +233,25 @@
    <Atom name="C7" type="UNK-3-C7"/>
    <Atom name="C8" type="UNK-3-C8"/>
    <Atom name="C9" type="UNK-3-C9"/>
+   <Atom name="H10" type="UNK-3-H10"/>
    <Atom name="H11" type="UNK-3-H11"/>
    <Atom name="H13" type="UNK-3-H13"/>
-   <Atom name="H14" type="UNK-3-H14"/>
    <Atom name="H15" type="UNK-3-H15"/>
    <Atom name="H16" type="UNK-3-H16"/>
    <Bond from="0" to="8"/>
-   <Bond from="0" to="11"/>
    <Bond from="1" to="8"/>
    <Bond from="2" to="5"/>
    <Bond from="2" to="7"/>
+   <Bond from="2" to="9"/>
    <Bond from="3" to="6"/>
    <Bond from="3" to="7"/>
    <Bond from="3" to="12"/>
    <Bond from="4" to="6"/>
-   <Bond from="4" to="10"/>
+   <Bond from="4" to="11"/>
    <Bond from="4" to="13"/>
    <Bond from="5" to="6"/>
    <Bond from="5" to="8"/>
-   <Bond from="7" to="9"/>
+   <Bond from="7" to="10"/>
   </Residue>
   <Residue name="UNK-4">
    <Atom name="O1" type="UNK-4-O1"/>
@@ -266,126 +267,8 @@
    <Atom name="H11" type="UNK-4-H11"/>
    <Atom name="H13" type="UNK-4-H13"/>
    <Atom name="H14" type="UNK-4-H14"/>
+   <Atom name="H15" type="UNK-4-H15"/>
    <Atom name="H16" type="UNK-4-H16"/>
-   <Bond from="0" to="8"/>
-   <Bond from="0" to="12"/>
-   <Bond from="1" to="8"/>
-   <Bond from="2" to="5"/>
-   <Bond from="2" to="7"/>
-   <Bond from="2" to="9"/>
-   <Bond from="3" to="6"/>
-   <Bond from="3" to="7"/>
-   <Bond from="4" to="6"/>
-   <Bond from="4" to="11"/>
-   <Bond from="4" to="13"/>
-   <Bond from="5" to="6"/>
-   <Bond from="5" to="8"/>
-   <Bond from="7" to="10"/>
-  </Residue>
-  <Residue name="UNK-5">
-   <Atom name="O1" type="UNK-5-O1"/>
-   <Atom name="O2" type="UNK-5-O2"/>
-   <Atom name="N3" type="UNK-5-N3"/>
-   <Atom name="N4" type="UNK-5-N4"/>
-   <Atom name="N5" type="UNK-5-N5"/>
-   <Atom name="C6" type="UNK-5-C6"/>
-   <Atom name="C7" type="UNK-5-C7"/>
-   <Atom name="C8" type="UNK-5-C8"/>
-   <Atom name="C9" type="UNK-5-C9"/>
-   <Atom name="H10" type="UNK-5-H10"/>
-   <Atom name="H11" type="UNK-5-H11"/>
-   <Atom name="H12" type="UNK-5-H12"/>
-   <Atom name="H13" type="UNK-5-H13"/>
-   <Atom name="H16" type="UNK-5-H16"/>
-   <Bond from="0" to="8"/>
-   <Bond from="1" to="8"/>
-   <Bond from="2" to="5"/>
-   <Bond from="2" to="7"/>
-   <Bond from="2" to="9"/>
-   <Bond from="3" to="6"/>
-   <Bond from="3" to="7"/>
-   <Bond from="4" to="6"/>
-   <Bond from="4" to="11"/>
-   <Bond from="4" to="12"/>
-   <Bond from="4" to="13"/>
-   <Bond from="5" to="6"/>
-   <Bond from="5" to="8"/>
-   <Bond from="7" to="10"/>
-  </Residue>
-  <Residue name="UNK-6">
-   <Atom name="O1" type="UNK-6-O1"/>
-   <Atom name="O2" type="UNK-6-O2"/>
-   <Atom name="N3" type="UNK-6-N3"/>
-   <Atom name="N4" type="UNK-6-N4"/>
-   <Atom name="N5" type="UNK-6-N5"/>
-   <Atom name="C6" type="UNK-6-C6"/>
-   <Atom name="C7" type="UNK-6-C7"/>
-   <Atom name="C8" type="UNK-6-C8"/>
-   <Atom name="C9" type="UNK-6-C9"/>
-   <Atom name="H11" type="UNK-6-H11"/>
-   <Atom name="H12" type="UNK-6-H12"/>
-   <Atom name="H13" type="UNK-6-H13"/>
-   <Atom name="H15" type="UNK-6-H15"/>
-   <Atom name="H16" type="UNK-6-H16"/>
-   <Bond from="0" to="8"/>
-   <Bond from="1" to="8"/>
-   <Bond from="2" to="5"/>
-   <Bond from="2" to="7"/>
-   <Bond from="3" to="6"/>
-   <Bond from="3" to="7"/>
-   <Bond from="3" to="12"/>
-   <Bond from="4" to="6"/>
-   <Bond from="4" to="10"/>
-   <Bond from="4" to="11"/>
-   <Bond from="4" to="13"/>
-   <Bond from="5" to="6"/>
-   <Bond from="5" to="8"/>
-   <Bond from="7" to="9"/>
-  </Residue>
-  <Residue name="UNK-7">
-   <Atom name="O1" type="UNK-7-O1"/>
-   <Atom name="O2" type="UNK-7-O2"/>
-   <Atom name="N3" type="UNK-7-N3"/>
-   <Atom name="N4" type="UNK-7-N4"/>
-   <Atom name="N5" type="UNK-7-N5"/>
-   <Atom name="C6" type="UNK-7-C6"/>
-   <Atom name="C7" type="UNK-7-C7"/>
-   <Atom name="C8" type="UNK-7-C8"/>
-   <Atom name="C9" type="UNK-7-C9"/>
-   <Atom name="H11" type="UNK-7-H11"/>
-   <Atom name="H13" type="UNK-7-H13"/>
-   <Atom name="H15" type="UNK-7-H15"/>
-   <Atom name="H16" type="UNK-7-H16"/>
-   <Bond from="0" to="8"/>
-   <Bond from="1" to="8"/>
-   <Bond from="2" to="5"/>
-   <Bond from="2" to="7"/>
-   <Bond from="3" to="6"/>
-   <Bond from="3" to="7"/>
-   <Bond from="3" to="11"/>
-   <Bond from="4" to="6"/>
-   <Bond from="4" to="10"/>
-   <Bond from="4" to="12"/>
-   <Bond from="5" to="6"/>
-   <Bond from="5" to="8"/>
-   <Bond from="7" to="9"/>
-  </Residue>
-  <Residue name="UNK-8">
-   <Atom name="O1" type="UNK-8-O1"/>
-   <Atom name="O2" type="UNK-8-O2"/>
-   <Atom name="N3" type="UNK-8-N3"/>
-   <Atom name="N4" type="UNK-8-N4"/>
-   <Atom name="N5" type="UNK-8-N5"/>
-   <Atom name="C6" type="UNK-8-C6"/>
-   <Atom name="C7" type="UNK-8-C7"/>
-   <Atom name="C8" type="UNK-8-C8"/>
-   <Atom name="C9" type="UNK-8-C9"/>
-   <Atom name="H10" type="UNK-8-H10"/>
-   <Atom name="H11" type="UNK-8-H11"/>
-   <Atom name="H13" type="UNK-8-H13"/>
-   <Atom name="H14" type="UNK-8-H14"/>
-   <Atom name="H15" type="UNK-8-H15"/>
-   <Atom name="H16" type="UNK-8-H16"/>
    <Bond from="0" to="8"/>
    <Bond from="0" to="12"/>
    <Bond from="1" to="8"/>
@@ -401,6 +284,124 @@
    <Bond from="5" to="6"/>
    <Bond from="5" to="8"/>
    <Bond from="7" to="10"/>
+  </Residue>
+  <Residue name="UNK-5">
+   <Atom name="O1" type="UNK-5-O1"/>
+   <Atom name="O2" type="UNK-5-O2"/>
+   <Atom name="N3" type="UNK-5-N3"/>
+   <Atom name="N4" type="UNK-5-N4"/>
+   <Atom name="N5" type="UNK-5-N5"/>
+   <Atom name="C6" type="UNK-5-C6"/>
+   <Atom name="C7" type="UNK-5-C7"/>
+   <Atom name="C8" type="UNK-5-C8"/>
+   <Atom name="C9" type="UNK-5-C9"/>
+   <Atom name="H11" type="UNK-5-H11"/>
+   <Atom name="H12" type="UNK-5-H12"/>
+   <Atom name="H13" type="UNK-5-H13"/>
+   <Atom name="H15" type="UNK-5-H15"/>
+   <Atom name="H16" type="UNK-5-H16"/>
+   <Bond from="0" to="8"/>
+   <Bond from="1" to="8"/>
+   <Bond from="2" to="5"/>
+   <Bond from="2" to="7"/>
+   <Bond from="3" to="6"/>
+   <Bond from="3" to="7"/>
+   <Bond from="3" to="12"/>
+   <Bond from="4" to="6"/>
+   <Bond from="4" to="10"/>
+   <Bond from="4" to="11"/>
+   <Bond from="4" to="13"/>
+   <Bond from="5" to="6"/>
+   <Bond from="5" to="8"/>
+   <Bond from="7" to="9"/>
+  </Residue>
+  <Residue name="UNK-6">
+   <Atom name="O1" type="UNK-6-O1"/>
+   <Atom name="O2" type="UNK-6-O2"/>
+   <Atom name="N3" type="UNK-6-N3"/>
+   <Atom name="N4" type="UNK-6-N4"/>
+   <Atom name="N5" type="UNK-6-N5"/>
+   <Atom name="C6" type="UNK-6-C6"/>
+   <Atom name="C7" type="UNK-6-C7"/>
+   <Atom name="C8" type="UNK-6-C8"/>
+   <Atom name="C9" type="UNK-6-C9"/>
+   <Atom name="H11" type="UNK-6-H11"/>
+   <Atom name="H13" type="UNK-6-H13"/>
+   <Atom name="H15" type="UNK-6-H15"/>
+   <Atom name="H16" type="UNK-6-H16"/>
+   <Bond from="0" to="8"/>
+   <Bond from="1" to="8"/>
+   <Bond from="2" to="5"/>
+   <Bond from="2" to="7"/>
+   <Bond from="3" to="6"/>
+   <Bond from="3" to="7"/>
+   <Bond from="3" to="11"/>
+   <Bond from="4" to="6"/>
+   <Bond from="4" to="10"/>
+   <Bond from="4" to="12"/>
+   <Bond from="5" to="6"/>
+   <Bond from="5" to="8"/>
+   <Bond from="7" to="9"/>
+  </Residue>
+  <Residue name="UNK-7">
+   <Atom name="O1" type="UNK-7-O1"/>
+   <Atom name="O2" type="UNK-7-O2"/>
+   <Atom name="N3" type="UNK-7-N3"/>
+   <Atom name="N4" type="UNK-7-N4"/>
+   <Atom name="N5" type="UNK-7-N5"/>
+   <Atom name="C6" type="UNK-7-C6"/>
+   <Atom name="C7" type="UNK-7-C7"/>
+   <Atom name="C8" type="UNK-7-C8"/>
+   <Atom name="C9" type="UNK-7-C9"/>
+   <Atom name="H10" type="UNK-7-H10"/>
+   <Atom name="H11" type="UNK-7-H11"/>
+   <Atom name="H12" type="UNK-7-H12"/>
+   <Atom name="H13" type="UNK-7-H13"/>
+   <Atom name="H16" type="UNK-7-H16"/>
+   <Bond from="0" to="8"/>
+   <Bond from="1" to="8"/>
+   <Bond from="2" to="5"/>
+   <Bond from="2" to="7"/>
+   <Bond from="2" to="9"/>
+   <Bond from="3" to="6"/>
+   <Bond from="3" to="7"/>
+   <Bond from="4" to="6"/>
+   <Bond from="4" to="11"/>
+   <Bond from="4" to="12"/>
+   <Bond from="4" to="13"/>
+   <Bond from="5" to="6"/>
+   <Bond from="5" to="8"/>
+   <Bond from="7" to="10"/>
+  </Residue>
+  <Residue name="UNK-8">
+   <Atom name="O1" type="UNK-8-O1"/>
+   <Atom name="O2" type="UNK-8-O2"/>
+   <Atom name="N3" type="UNK-8-N3"/>
+   <Atom name="N4" type="UNK-8-N4"/>
+   <Atom name="N5" type="UNK-8-N5"/>
+   <Atom name="C6" type="UNK-8-C6"/>
+   <Atom name="C7" type="UNK-8-C7"/>
+   <Atom name="C8" type="UNK-8-C8"/>
+   <Atom name="C9" type="UNK-8-C9"/>
+   <Atom name="H11" type="UNK-8-H11"/>
+   <Atom name="H13" type="UNK-8-H13"/>
+   <Atom name="H14" type="UNK-8-H14"/>
+   <Atom name="H15" type="UNK-8-H15"/>
+   <Atom name="H16" type="UNK-8-H16"/>
+   <Bond from="0" to="8"/>
+   <Bond from="0" to="11"/>
+   <Bond from="1" to="8"/>
+   <Bond from="2" to="5"/>
+   <Bond from="2" to="7"/>
+   <Bond from="3" to="6"/>
+   <Bond from="3" to="7"/>
+   <Bond from="3" to="12"/>
+   <Bond from="4" to="6"/>
+   <Bond from="4" to="10"/>
+   <Bond from="4" to="13"/>
+   <Bond from="5" to="6"/>
+   <Bond from="5" to="8"/>
+   <Bond from="7" to="9"/>
   </Residue>
  </Residues>
  <HarmonicBondForce>
@@ -5463,19 +5464,19 @@
   <Angle class1="n3" class2="sy" class3="nf" angle="1.7872171540421935" k="555.30048"/>
   <Angle class1="c" class2="cc" class3="na" angle="2.069349627627077" k="567.30856"/>
   <Angle class1="na" class2="cc" class3="na" angle="2.0416861589829667" k="606.0942400000001"/>
+  <Angle class1="c" class2="cd" class3="na" angle="2.069349627627077" k="567.30856"/>
   <Angle class1="n4" class2="cd" class3="na" angle="2.0416861589829667" k="606.0942400000001"/>
   <Angle class1="cc" class2="cd" class3="n4" angle="1.9097392675321954" k="610.11088"/>
   <Angle class1="cd" class2="n4" class3="hn" angle="1.8940313042642465" k="397.81472"/>
-  <Angle class1="c" class2="cd" class3="na" angle="2.069349627627077" k="567.30856"/>
   <Angle class1="n4" class2="cc" class3="nc" angle="2.122669436275504" k="591.7849600000001"/>
   <Angle class1="cd" class2="cc" class3="n4" angle="1.9097392675321954" k="610.11088"/>
   <Angle class1="cc" class2="n4" class3="hn" angle="1.8940313042642465" k="397.81472"/>
  </HarmonicAngleForce>
  <PeriodicTorsionForce>
-  <Proper class1="cc" class2="cd" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
-  <Proper class1="na" class2="cd" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
   <Proper class1="cd" class2="cc" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
   <Proper class1="nc" class2="cc" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
+  <Proper class1="cc" class2="cd" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
+  <Proper class1="na" class2="cd" class3="n4" class4="hn" periodicity1="3" phase1="3.141592653589793" k1="0.0"/>
   <Proper class1="hc" class2="c3" class3="c3" class4="br" periodicity1="3" phase1="0.0" k1="0.0" periodicity2="1" phase2="0.0" k2="2.3012"/>
   <Proper class1="hc" class2="c3" class3="c3" class4="cl" periodicity1="3" phase1="0.0" k1="0.0" periodicity2="1" phase2="0.0" k2="1.046"/>
   <Proper class1="hc" class2="c3" class3="c3" class4="f" periodicity1="3" phase1="0.0" k1="0.0" periodicity2="1" phase2="0.0" k2="0.79496"/>
@@ -6117,24 +6118,24 @@
   <Proper class1="" class2="c" class3="cg" class4="" periodicity1="2" phase1="3.141592653589793" k1="0.0"/>
   <Proper class1="" class2="c" class3="c1" class4="" periodicity1="2" phase1="3.141592653589793" k1="0.0"/>
   <Proper class1="" class2="c" class3="c" class4="" periodicity1="2" phase1="3.141592653589793" k1="1.2552"/>
-  <Improper class1="c" class2="cd" class3="o" class4="oh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="c" class2="cd" class3="o" class4="o" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="cd" class2="h5" class3="na" class4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="cc" class2="cd" class3="nc" class4="nh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="cc" class2="cd" class3="n4" class4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="cd" class2="c" class3="cc" class4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="nh" class2="cc" class3="hn" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="na" class2="cd" class3="cd" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="c" class2="cc" class3="o" class4="o" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="cd" class2="cc" class3="n4" class4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="cc" class2="c" class3="cd" class4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="c" class2="cd" class3="o" class4="o" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="cc" class2="cd" class3="n4" class4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
-  <Improper class1="c" class2="cc" class3="o" class4="oh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="cd" class2="cc" class3="na" class4="nh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="cc" class2="c" class3="cd" class4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="nh" class2="cd" class3="hn" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="cd" class2="cc" class3="n4" class4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="c" class2="cd" class3="o" class4="oh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="cc" class2="cd" class3="nc" class4="nh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="nh" class2="cc" class3="hn" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="cc" class2="h5" class3="na" class4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="cc" class2="c" class3="cd" class4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="na" class2="cc" class3="cd" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="na" class2="cc" class3="cc" class4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  <Improper class1="c" class2="cc" class3="o" class4="oh" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="ca" class2="na" class3="n2" class4="n2" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="ca" class2="n2" class3="ca" class4="n2" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   <Improper class1="ca" class2="n2" class3="c2" class4="n2" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
@@ -6175,20 +6176,20 @@
   <Improper class1="c" class2="" class3="o" class4="o" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
  </PeriodicTorsionForce>
  <NonbondedForce coulomb14scale="0.833333" lj14scale="0.5">
-  <Atom type="UNK-0-O1" charge="-0.7578" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-0-O2" charge="-0.7578" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-0-N3" charge="-0.0781" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-0-N4" charge="-0.1621" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-0-N5" charge="-0.7792" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-0-C6" charge="-0.1739" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-0-C7" charge="0.0963" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-0-C8" charge="-0.1206" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-0-C9" charge="0.9622" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-0-H10" charge="0.3597" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-0-H11" charge="0.229" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-0-H13" charge="0.4268" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-0-H15" charge="0.3297" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-0-H16" charge="0.4268" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-0-O1" charge="-0.5781" sigma="0.3066473387839048" epsilon="0.8803136"/>
+  <Atom type="UNK-0-O2" charge="-0.525" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-0-N3" charge="-0.3149" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-0-N4" charge="-0.723" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-0-N5" charge="-0.9275" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-0-C6" charge="-0.4322" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-0-C7" charge="0.6642" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-0-C8" charge="0.4744" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-0-C9" charge="0.6917" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-0-H10" charge="0.3027" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-0-H11" charge="0.0671" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-0-H13" charge="0.4428" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-0-H14" charge="0.416" sigma="0.0" epsilon="0.0"/>
+  <Atom type="UNK-0-H16" charge="0.4428" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
   <Atom type="UNK-1-O1" charge="-0.6803" sigma="0.2959921901149464" epsilon="0.87864"/>
   <Atom type="UNK-1-O2" charge="-0.6803" sigma="0.2959921901149464" epsilon="0.87864"/>
   <Atom type="UNK-1-N3" charge="-0.1141" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
@@ -6207,7 +6208,7 @@
   <Atom type="UNK-2-O1" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
   <Atom type="UNK-2-O2" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
   <Atom type="UNK-2-N3" charge="-0.2869" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-2-N4" charge="-0.706" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-2-N4" charge="-0.707" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
   <Atom type="UNK-2-N5" charge="-0.8745" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
   <Atom type="UNK-2-C6" charge="-0.2752" sigma="0.3399669508423535" epsilon="0.359824"/>
   <Atom type="UNK-2-C7" charge="0.4542" sigma="0.3399669508423535" epsilon="0.359824"/>
@@ -6217,89 +6218,101 @@
   <Atom type="UNK-2-H11" charge="0.0291" sigma="0.24214627159054425" epsilon="0.06276"/>
   <Atom type="UNK-2-H13" charge="0.3728" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
   <Atom type="UNK-2-H16" charge="0.3728" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-3-O1" charge="-0.5691" sigma="0.3066473387839048" epsilon="0.8803136"/>
-  <Atom type="UNK-3-O2" charge="-0.55" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-3-N3" charge="-0.63" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-3-N4" charge="-0.3559" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-3-N5" charge="-0.8062" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-3-C6" charge="0.1228" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-3-C7" charge="0.117" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-3-C8" charge="0.3974" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-3-C9" charge="0.5916" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-3-H11" charge="0.0691" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-3-H13" charge="0.4293" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-3-H14" charge="0.446" sigma="0.0" epsilon="0.0"/>
-  <Atom type="UNK-3-H15" charge="0.3097" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-3-H16" charge="0.4293" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-4-O1" charge="-0.5781" sigma="0.3066473387839048" epsilon="0.8803136"/>
-  <Atom type="UNK-4-O2" charge="-0.525" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-4-N3" charge="-0.3149" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-4-N4" charge="-0.723" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-4-N5" charge="-0.9275" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-4-C6" charge="-0.4322" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-4-C7" charge="0.6642" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-4-C8" charge="0.4744" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-4-C9" charge="0.6917" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-4-H10" charge="0.3027" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-4-H11" charge="0.0671" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-4-H13" charge="0.4428" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-4-H14" charge="0.416" sigma="0.0" epsilon="0.0"/>
-  <Atom type="UNK-4-H16" charge="0.4428" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-5-O1" charge="-0.7628" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-5-O2" charge="-0.7628" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-5-N3" charge="-0.2739" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-5-N4" charge="-0.653" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-5-N5" charge="-0.7933" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-5-C6" charge="-0.1502" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-5-C7" charge="0.2512" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-5-C8" charge="0.3974" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-5-C9" charge="0.9462" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-5-H10" charge="0.3367" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-5-H11" charge="0.0741" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-5-H12" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-5-H13" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-5-H16" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-6-O1" charge="-0.5588" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-6-O2" charge="-0.5588" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-6-N3" charge="-0.586" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-6-N4" charge="-0.3419" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-6-N5" charge="-0.997" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-6-C6" charge="0.1578" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-6-C7" charge="0.042" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-6-C8" charge="0.3874" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-6-C9" charge="0.8271" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-6-H11" charge="0.0711" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-6-H12" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-6-H13" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-6-H15" charge="0.3087" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-6-H16" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-7-O1" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-7-O2" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-7-N3" charge="-0.632" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-7-N4" charge="-0.3399" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-7-N5" charge="-0.7752" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-7-C6" charge="0.2598" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-7-C7" charge="-0.067" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-7-C8" charge="0.3204" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-7-C9" charge="0.8351" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-7-H11" charge="0.0291" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-7-H13" charge="0.3773" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-7-H15" charge="0.2777" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-7-H16" charge="0.3773" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-8-O1" charge="-0.5191" sigma="0.3066473387839048" epsilon="0.8803136"/>
-  <Atom type="UNK-8-O2" charge="-0.47" sigma="0.2959921901149464" epsilon="0.87864"/>
-  <Atom type="UNK-8-N3" charge="-0.0791" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-8-N4" charge="-0.2111" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-8-N5" charge="-0.8042" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
-  <Atom type="UNK-8-C6" charge="-0.3299" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-8-C7" charge="0.2993" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-8-C8" charge="0.0164" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-8-C9" charge="0.6897" sigma="0.3399669508423535" epsilon="0.359824"/>
-  <Atom type="UNK-8-H10" charge="0.3587" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-8-H11" charge="0.267" sigma="0.24214627159054425" epsilon="0.06276"/>
-  <Atom type="UNK-8-H13" charge="0.4958" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-8-H14" charge="0.427" sigma="0.0" epsilon="0.0"/>
-  <Atom type="UNK-8-H15" charge="0.3617" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
-  <Atom type="UNK-8-H16" charge="0.4958" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-3-O1" charge="-0.7578" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-3-O2" charge="-0.7578" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-3-N3" charge="-0.0781" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-3-N4" charge="-0.1621" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-3-N5" charge="-0.7792" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-3-C6" charge="-0.1739" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-3-C7" charge="0.0963" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-3-C8" charge="-0.1206" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-3-C9" charge="0.9622" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-3-H10" charge="0.3597" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-3-H11" charge="0.229" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-3-H13" charge="0.4268" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-3-H15" charge="0.3297" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-3-H16" charge="0.4268" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-4-O1" charge="-0.5191" sigma="0.3066473387839048" epsilon="0.8803136"/>
+  <Atom type="UNK-4-O2" charge="-0.47" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-4-N3" charge="-0.0791" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-4-N4" charge="-0.2111" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-4-N5" charge="-0.8042" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-4-C6" charge="-0.3299" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-4-C7" charge="0.2993" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-4-C8" charge="0.0164" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-4-C9" charge="0.6897" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-4-H10" charge="0.3587" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-4-H11" charge="0.267" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-4-H13" charge="0.4958" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-4-H14" charge="0.427" sigma="0.0" epsilon="0.0"/>
+  <Atom type="UNK-4-H15" charge="0.3617" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-4-H16" charge="0.4958" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-5-O1" charge="-0.5588" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-5-O2" charge="-0.5588" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-5-N3" charge="-0.586" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-5-N4" charge="-0.3419" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-5-N5" charge="-0.997" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-5-C6" charge="0.1578" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-5-C7" charge="0.042" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-5-C8" charge="0.3874" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-5-C9" charge="0.8271" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-5-H11" charge="0.0711" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-5-H12" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-5-H13" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-5-H15" charge="0.3087" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-5-H16" charge="0.416133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-6-O1" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-6-O2" charge="-0.8313" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-6-N3" charge="-0.632" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-6-N4" charge="-0.3399" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-6-N5" charge="-0.7752" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-6-C6" charge="0.2598" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-6-C7" charge="-0.067" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-6-C8" charge="0.3204" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-6-C9" charge="0.8351" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-6-H11" charge="0.0291" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-6-H13" charge="0.3773" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-6-H15" charge="0.2777" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-6-H16" charge="0.3773" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-7-O1" charge="-0.7628" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-7-O2" charge="-0.7628" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-7-N3" charge="-0.2739" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-7-N4" charge="-0.653" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-7-N5" charge="-0.7933" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-7-C6" charge="-0.1502" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-7-C7" charge="0.2512" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-7-C8" charge="0.3974" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-7-C9" charge="0.9462" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-7-H10" charge="0.3367" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-7-H11" charge="0.0741" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-7-H12" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-7-H13" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-7-H16" charge="0.463133" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-8-O1" charge="-0.5691" sigma="0.3066473387839048" epsilon="0.8803136"/>
+  <Atom type="UNK-8-O2" charge="-0.55" sigma="0.2959921901149464" epsilon="0.87864"/>
+  <Atom type="UNK-8-N3" charge="-0.63" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-8-N4" charge="-0.3559" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-8-N5" charge="-0.8062" sigma="0.3249998523775958" epsilon="0.7112800000000001"/>
+  <Atom type="UNK-8-C6" charge="0.1228" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-8-C7" charge="0.117" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-8-C8" charge="0.3974" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-8-C9" charge="0.5916" sigma="0.3399669508423535" epsilon="0.359824"/>
+  <Atom type="UNK-8-H11" charge="0.0691" sigma="0.24214627159054425" epsilon="0.06276"/>
+  <Atom type="UNK-8-H13" charge="0.4293" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-8-H14" charge="0.446" sigma="0.0" epsilon="0.0"/>
+  <Atom type="UNK-8-H15" charge="0.3097" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
+  <Atom type="UNK-8-H16" charge="0.4293" sigma="0.10690784617684072" epsilon="0.06568879999999999"/>
  </NonbondedForce>
 </ForceField>
+<IsomerData>
+  <IsomericState index="1" Population="0.9012533078189037" NetCharge="0"/>
+  <IsomericState index="2" Population="0.04074509118054879" NetCharge="0"/>
+  <IsomericState index="3" Population="0.02307026047440941" NetCharge="-1"/>
+  <IsomericState index="4" Population="0.015748771882719163" NetCharge="0"/>
+  <IsomericState index="5" Population="0.013354636507235588" NetCharge="-1"/>
+  <IsomericState index="6" Population="0.0039276240185227886" NetCharge="1"/>
+  <IsomericState index="7" Population="0.0012104085710984021" NetCharge="1"/>
+  <IsomericState index="8" Population="0.00041739979211051617" NetCharge="0"/>
+  <IsomericState index="9" Population="0.0002138268392339772" NetCharge="0"/>
+</IsomerData>
+</TitratableResidue>

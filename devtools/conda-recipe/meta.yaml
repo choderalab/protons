@@ -17,6 +17,7 @@ requirements:
     - scipy >=0.17.0
     - openmmtools ==0.7.5
     - pymbar
+    - parmed ==2.5.1
     - openmoltools ==0.7.0
     - ambermini
     - joblib
@@ -29,6 +30,7 @@ requirements:
     - scipy >=0.17.0
     - openmmtools ==0.7.5
     - pymbar
+    - parmed ==2.5.1
     - openmoltools ==0.7.0
     - ambermini
     - joblib

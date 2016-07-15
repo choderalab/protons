@@ -1,4 +1,4 @@
-from constph.ligutils import parametrize_ligand, MultiIsomerResidue
+from constph.ligutils import parametrize_ligand, _TitratableForceFieldCompiler
 from . import get_data
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from openmoltools.amber import find_gaff_dat
@@ -19,6 +19,8 @@ class LigandXmlTestCase(TestCase):
         """
         Run epik on a ligand and parametrize its isomers
         """
+        import sys
+
         parametrize_ligand(get_data("ligand_allH.mol2", "testsystems"), "/tmp/ligand-isomers.xml", pH=4.5)
 
     def test_xml_compilation(self):
@@ -26,5 +28,5 @@ class LigandXmlTestCase(TestCase):
         Compile an xml file for the isomers
         """
         xmlfile = get_data("isomers.xml", "testsystems/ligand_xml")
-        m = MultiIsomerResidue(xmlfile)
+        m = _TitratableForceFieldCompiler(xmlfile)
         m.write('/tmp/isomers.cph.xml')
