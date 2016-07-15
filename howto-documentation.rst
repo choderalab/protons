@@ -1,7 +1,7 @@
 How to set up the documentation
 -------------------------------
 
-Part one of this procedure sets up a documentation framework using Sphinx. Part two explains how you can use read the docs to build your documentation automnatically, and how to use conda to install the dependencies.
+Part one of this procedure sets up a documentation framework using Sphinx. Part two explains how you can use readthedocs.org to build your documentation automatically, and how to use conda to install the dependencies on the readthedocs server.
 
 Set up sphinx
 =============
