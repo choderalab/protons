@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from .constph import MonteCarloTitration
+from .constph import TitrationDriver
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
@@ -17,7 +17,7 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
-class SelfAdjustedMixtureSampling(MonteCarloTitration):
+class SelfAdjustedMixtureSampling(TitrationDriver):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues or ligands.
 
     Attributes
@@ -226,13 +226,13 @@ class SelfAdjustedMixtureSampling(MonteCarloTitration):
         update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
         # delta(Lt)
         delta = np.zeros_like(update)
-        delta[self.getTitrationState(group_index)] = 1
+        delta[self._get_titration_state(group_index)] = 1
         update *= delta
         update = np.dot(self._gain_factor(b=b, stage=stage, group_index=group_index, end_of_burnin=end_of_burnin), update)
 
         # Update count of current state weights.
         group_index = 0
-        current_state = self.getTitrationState(group_index)
+        current_state = self._get_titration_state(group_index)
         #  Use sqrt to make recent states count more
         self.state_counts[current_state] += np.sqrt(self.n_adaptations)
 
@@ -546,12 +546,12 @@ class CalibrationSystem(object):
     def sams_till_converged(self, threshold=1.e-5, mc_every=500, gk_every=1, check_frequency=100, window=200,
                             max_iter=None, min_iter=1, **kwargs):
         """
-        Calibrate the amino acid ucind SAMS,  until converged to below the gradient threshold.
+        Calibrate the amino acid using SAMS,  until converged to below the gradient threshold.
 
         Parameters
         ----------
         threshold : float, optional (default: 1.e-7)
-            Maximum absolute gradient to assume convergence.
+            Maximum absolute gradient in gk to assume convergence.
         mc_every : int, optional (default: 100)
             Update titration state every `mc_every` dynamics steps.
         gk_every : int, optional (default: 1)

@@ -5,7 +5,7 @@ from simtk.openmm import app
 from constph import get_data
 
 from constph.logger import logger
-from constph.constph import MonteCarloTitration
+from constph.constph import TitrationDriver
 from constph.calibration import Histidine
 import numpy as np
 import openmmtools
@@ -30,7 +30,7 @@ cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
 # integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
 integrator = openmmtools.integrators.VelocityVerletIntegrator(timestep)
-mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
+mc_titration = TitrationDriver(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
 if platform_name:
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
@@ -41,7 +41,7 @@ context.setPositions(positions)
 context.setVelocitiesToTemperature(temperature)
 
 logger.info("Calibrating")
-logger.info("Restypes by index %s", mc_titration.detect_residues()[0])
+logger.info("Restypes by index %s", mc_titration._detect_residues()[0])
 mc_titration.calibrate(platform_name=platform_name)
 
 # Example of how to read in pre-equilibrated values.
@@ -57,7 +57,7 @@ for iteration in range(1, niter):
         print(100* iteration/niter, "%")
     integrator.step(mc_freq)
     mc_titration.update(context)  # protonation
-    counts[mc_titration.getTitrationState(0)] += 1
+    counts[mc_titration._get_titration_state(0)] += 1
 
 totcounts = sum(counts.values())
 for key in counts.keys():

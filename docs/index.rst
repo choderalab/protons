@@ -1,55 +1,52 @@
-.. Constant-pH for OpenMM documentation master file, created by
-   sphinx-quickstart on Wed Jul 13 14:24:11 2016.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
 
-Welcome to Constant-pH for OpenMM's documentation!
-==================================================
+constph-OpenMM: Protonation states and tautomers for OpenMM
+***********************************************************
 
-Constant pH dynamics in OpenMM.
+.. Note::
 
-Description
------------
+    This is module is undergoing heavy development. None of the API calls are final.
 
-This module implements a pure python constant pH functionality in OpenMM.
+.. image:: _static/images/logo.png
+   :alt: constph-OpenMM: **Protonation states and Tautomers**
+   :class: floatingflask
 
-Notes
------
+Introduction
+============
 
-This is still in development.
+This python module implements a sampler for amino acid and small molecule protonation states and tautomers in OpenMM.
 
-References
-----------
+It has the following requirements:
 
-.. [1] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-  http://dx.doi.org/10.1002/jcc.20139
+* python 2.7, 3.4 or 3.5
+* openmm 7.0rc1
+* numpy >=1.10
+* scipy >=0.17.0
+* openmmtools 0.7.5
+* pymbar
+* openmoltools 0.7.0
+* ambermini
+* joblib
+* lxml
 
-.. [2] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-  http://link.aip.org/link/doi/10.1063/1.2731781
 
-.. [3] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-  http://dx.doi.org/10.1073/pnas.1106094108
-
-Examples
---------
-
-Coming soon to an interpreter near you!
-
-TODO
-----
-
-    * Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
-    * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-      - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-    * Allow specification of probabilities for selecting N residues to change protonation state at once.
-    * Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
-    * Add automatic tuning of switching times for optimal acceptance.
-    * Extend to handle systems set up via OpenMM app Forcefield class.
-
-Contents:
+Table of contents
+-----------------
 
 .. toctree::
+   :name: mastertoc
    :maxdepth: 2
+
+   modules/constph
+   modules/cnstphgbforces
+   modules/calibration
+   modules/ligutils
+   modules/logger
+   modules/generate_calibration_systems
+   modules/tests
+
+
+
+
 
 
 Indices and tables
@@ -58,16 +55,6 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
-
-Classes
-=======
-
-.. autoclass:: constph.constph.MonteCarloTitration
-
-    :members:
-
-    .. automethod:: constph.constph.MonteCarloTitration.__init__
 
 
 

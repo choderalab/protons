@@ -16,6 +16,7 @@
 import sys
 import os
 import shlex
+import alabaster
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -35,7 +36,8 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'alabaster'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -53,7 +55,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'Constant-pH for OpenMM'
+project = 'PACKAGENAME'
 copyright = '2016, Bas Rustenburg, Greg Ross, John Chodera et al.'
 author = 'Bas Rustenburg, Greg Ross, John Chodera et al.'
 
@@ -99,7 +101,7 @@ exclude_patterns = ['_build']
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'manni'
+pygments_style = 'paraiso-dark'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -110,20 +112,36 @@ pygments_style = 'manni'
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
-
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'bizstyle'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'logo' : 'images/logo.png',
+    "logo_name": 'true',
+    'page_width': 'auto',
+    'github_button': 'true',
+    'github_user': 'choderalab',
+    'github_repo': 'constph-openmm',
+    'github_banner': 'true',
+    'travis_button': 'true',
+    'show_powered_by' :'true',
+    'font_family': 'calibri, helvetica, sans-serif',
+    'head_font_family': 'cambria, tahoma, serif',
+    'description' : 'Protonation states and tautomers in OpenMM',
+    'pre_bg': '#41323f', # color used for syntax highlight
+    'body_text': "#41323f",
+    "pink_1": "peachpuff"
+
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = []
+html_theme_path = [alabaster.get_path()]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -160,7 +178,15 @@ html_static_path = ['_static']
 #html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-#html_sidebars = {}
+html_sidebars = {
+    '**': [
+        'about.html',
+        'navigation.html',
+        'relations.html',
+        'searchbox.html',
+        'donate.html',
+    ]
+}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
