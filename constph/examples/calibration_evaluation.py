@@ -5,7 +5,7 @@ from simtk.openmm import app
 from constph import get_data
 
 from constph.logger import logger
-from constph.constph import TitrationDriver
+from constph.constph import ProtonDrive
 from constph.calibration import Histidine
 import numpy as np
 import openmmtools
@@ -30,7 +30,7 @@ cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
 # integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
 integrator = openmmtools.integrators.VelocityVerletIntegrator(timestep)
-mc_titration = TitrationDriver(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
+mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
 if platform_name:
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)

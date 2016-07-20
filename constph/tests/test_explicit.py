@@ -1,7 +1,7 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import TitrationDriver
+from constph.constph import ProtonDrive
 from constph.calibration import SelfAdjustedMixtureSampling, CalibrationSystem
 from unittest import TestCase, skip, skipIf
 from . import get_data
@@ -30,8 +30,8 @@ class TyrosineExplicitTestCase(TestCase):
         Run tyrosine in explicit solvent with an instanteneous state switch
         """
         integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
-        mc_titration = TitrationDriver(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
-                                       pressure=self.pressure, ncmc_steps_per_trial=0, implicit=False)
+        mc_titration = ProtonDrive(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
+                                   pressure=self.pressure, ncmc_steps_per_trial=0, implicit=False)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
@@ -80,8 +80,8 @@ class TyrosineExplicitTestCase(TestCase):
         Run tyrosine in explicit solvent with an ncmc state switch
         """
         integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
-        mc_titration = TitrationDriver(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
-                                       pressure=self.pressure, ncmc_steps_per_trial=10, implicit=False)
+        mc_titration = ProtonDrive(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename, integrator, debug=False,
+                                   pressure=self.pressure, ncmc_steps_per_trial=10, implicit=False)
         platform = openmm.Platform.getPlatformByName('CPU')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)
         context.setPositions(self.positions)  # set to minimized positions
@@ -188,9 +188,9 @@ class PeptideExplicitTestCase(TestCase):
         """
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(self.timestep)
-        mc_titration = TitrationDriver(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
-                                       integrator, debug=False,
-                                       pressure=self.pressure, ncmc_steps_per_trial=1, implicit=False)
+        mc_titration = ProtonDrive(self.system, self.temperature, self.pH, self.prmtop, self.cpin_filename,
+                                   integrator, debug=False,
+                                   pressure=self.pressure, ncmc_steps_per_trial=1, implicit=False)
         mc_titration.calibrate(max_iter=1, platform_name="CUDA")
         platform = openmm.Platform.getPlatformByName('CUDA')
         context = openmm.Context(self.system, mc_titration.compound_integrator, platform)

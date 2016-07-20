@@ -44,10 +44,11 @@ def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_wit
         return quant
 
 
-class TitrationDriver(object):
+class ProtonDrive(object):
     """
-    Monte Carlo titration driver for constant-pH dynamics.
-    This move type implements the constant-pH dynamics of Mongan and Case [Mongan2004]_, Stern [Stern2007]_ and Nilmeier [Nilmeier2011]_.
+    The ProtonDrive is a Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
+
+    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_.
 
     References
     ----------
@@ -70,6 +71,7 @@ class TitrationDriver(object):
       * Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
       * Add automatic tuning of switching times for optimal acceptance.
       * Extend to handle systems set up via OpenMM app Forcefield class.
+      * Make integrator optional if not using NCMC
 
     """
 
@@ -938,7 +940,7 @@ class TitrationDriver(object):
 
         Notes
         -----
-        The titration state actually present in the given context is not checked; it is assumed the TitrationDriver internal state is correct.
+        The titration state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
 
         """
 
@@ -1077,7 +1079,7 @@ class TitrationDriver(object):
 
         Notes
         -----
-        The titration state actually present in the given context is not checked; it is assumed the TitrationDriver internal state is correct.
+        The titration state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
 
         """
 

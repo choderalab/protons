@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from .constph import TitrationDriver
+from .constph import ProtonDrive
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
@@ -17,7 +17,7 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
-class SelfAdjustedMixtureSampling(TitrationDriver):
+class SelfAdjustedMixtureSampling(ProtonDrive):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues or ligands.
 
     Attributes

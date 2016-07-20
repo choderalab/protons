@@ -123,10 +123,10 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    from constph.constph import TitrationDriver
-    mc_titration = TitrationDriver(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
+    from constph.constph import ProtonDrive
+    mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
 
-    # Create Context (using compound integrator from TitrationDriver).
+    # Create Context (using compound integrator from ProtonDrive).
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
     context.setPositions(positions)

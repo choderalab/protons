@@ -134,7 +134,7 @@ html_theme_options = {
     'font_family': 'calibri, helvetica, sans-serif',
     'head_font_family': 'cambria, tahoma, serif',
     'description' : 'Protonation states and tautomers in OpenMM',
-    'pre_bg': '#41323f', # color used for syntax highlight
+    'pre_bg': '#41323f', # color used for syntax block
     'body_text': "#41323f",
     "pink_1": "peachpuff"
 
