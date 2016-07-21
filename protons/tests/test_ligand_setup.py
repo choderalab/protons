@@ -1,4 +1,4 @@
-from constph.ligutils import parametrize_ligand, MultiIsomerResidue
+from protons.ligutils import parametrize_ligand, MultiIsomerResidue
 from . import get_data
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from openmoltools.amber import find_gaff_dat

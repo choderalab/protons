@@ -25,7 +25,7 @@ env:
      
   global:
     - ORGNAME="omnia"
-    - PACKAGENAME="constph"
+    - PACKAGENAME="protons"
         
 after_success:
   - echo "after_success"

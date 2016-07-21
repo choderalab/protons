@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from .constph import MonteCarloTitration
+from protons import ProtonDrive
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
-from .logger import logger
+from .logger import log
 import abc
 from . import get_data
 from scipy.misc import logsumexp
@@ -17,7 +17,7 @@ kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
-class SelfAdjustedMixtureSampling(MonteCarloTitration):
+class SelfAdjustedMixtureSampling(ProtonDrive):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues or ligands.
 
     Attributes
@@ -108,7 +108,7 @@ class SelfAdjustedMixtureSampling(MonteCarloTitration):
         group_index = 0
         nstates = len(self.titrationGroups[group_index]['titration_states'])
         self.state_counts = np.zeros(nstates, np.float64)
-        logger.info('There are %d titration states' % nstates)
+        log.info('There are %d titration states' % nstates)
 
     def adapt_zetas(self, context, scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0, group_index=0):
         """
@@ -157,7 +157,7 @@ class SelfAdjustedMixtureSampling(MonteCarloTitration):
         Nk = self.state_counts / self.state_counts.sum()
         target = self._get_target_weights(group_index)
         target_deviation = sum(abs(target - Nk))
-        logger.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation* 100))
+        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation * 100))
         return target_deviation
 
     def set_gk(self, zetas, group_index=0):
@@ -226,13 +226,13 @@ class SelfAdjustedMixtureSampling(MonteCarloTitration):
         update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
         # delta(Lt)
         delta = np.zeros_like(update)
-        delta[self.getTitrationState(group_index)] = 1
+        delta[self._get_titration_state(group_index)] = 1
         update *= delta
         update = np.dot(self._gain_factor(b=b, stage=stage, group_index=group_index, end_of_burnin=end_of_burnin), update)
 
         # Update count of current state weights.
         group_index = 0
-        current_state = self.getTitrationState(group_index)
+        current_state = self._get_titration_state(group_index)
         #  Use sqrt to make recent states count more
         self.state_counts[current_state] += np.sqrt(self.n_adaptations)
 
@@ -546,12 +546,12 @@ class CalibrationSystem(object):
     def sams_till_converged(self, threshold=1.e-5, mc_every=500, gk_every=1, check_frequency=100, window=200,
                             max_iter=None, min_iter=1, **kwargs):
         """
-        Calibrate the amino acid ucind SAMS,  until converged to below the gradient threshold.
+        Calibrate the amino acid using SAMS,  until converged to below the gradient threshold.
 
         Parameters
         ----------
         threshold : float, optional (default: 1.e-7)
-            Maximum absolute gradient to assume convergence.
+            Maximum absolute gradient in gk to assume convergence.
         mc_every : int, optional (default: 100)
             Update titration state every `mc_every` dynamics steps.
         gk_every : int, optional (default: 1)
@@ -594,7 +594,7 @@ class CalibrationSystem(object):
         gk_deque = deque(maxlen=window)
         stage = "burn-in"
         end_of_burnin = None
-        logger.info("Starting calibration burn-in phase.")
+        log.info("Starting calibration burn-in phase.")
 
         while True:
 
@@ -612,7 +612,7 @@ class CalibrationSystem(object):
 
                 # Once we're within 20 percent of the target, switch to slow stage
                 if target_deviation < 0.2 and end_of_burnin is None and iteration >= min_iter:
-                    logger.info("Burn-in complete in %d iterations! Switching to calibration slow-gain phase."%iteration)
+                    log.info("Burn-in complete in %d iterations! Switching to calibration slow-gain phase." % iteration)
                     end_of_burnin = iteration
                     stage="slow-gain"
 
@@ -628,14 +628,14 @@ class CalibrationSystem(object):
 
                 if gk_updates % check_frequency == 0 and end_of_burnin is not None:
                     grad = np.average(np.gradient(gk_deque, 10), axis=1)[0]  # average gradient for each state
-                    logger.info("Gradient magnitude: {}".format([ "{:.3f}".format(np.log10(abs(g))) for g in grad]))
+                    log.info("Gradient magnitude: {}".format(["{:.3f}".format(np.log10(abs(g))) for g in grad]))
                     # Absolute gradient of all states is equal/below threshold
                     if (abs(grad) <= threshold).all() and gk_updates >= min_iter + window:
                         break
 
             # Quit the loop if we exceed the max number of iterations
             if max_iter is not None and iteration == max_iter:
-                logger.warning("Calibration reached maximum number of iterations without converging.")
+                log.warning("Calibration reached maximum number of iterations without converging.")
                 break
 
     @staticmethod
@@ -649,8 +649,8 @@ class CalibrationSystem(object):
         platform = openmm.Platform.getPlatformByName(platform_name)
         context = openmm.Context(system, integrator, platform)
         context.setPositions(positions)
-        logger.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        log.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
-        logger.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        log.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         return context, positions

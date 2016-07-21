@@ -123,10 +123,11 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    from constph.constph import MonteCarloTitration
-    mc_titration = MonteCarloTitration(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
+    from protons import ProtonDrive
 
-    # Create Context (using compound integrator from MonteCarloTitration).
+    mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
+
+    # Create Context (using compound integrator from ProtonDrive).
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
     context.setPositions(positions)
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     # Run dynamics.
     state = context.getState(getEnergy=True)
     potential_energy = state.getPotentialEnergy()
-    print("Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration.getTitrationStates()), potential_energy / unit.kilocalories_per_mole))
+    print("Initial protonation states: %s   %12.3f kcal/mol" % (str(mc_titration._get_titration_states()), potential_energy / unit.kilocalories_per_mole))
     for iteration in range(niterations):
         # Run some dynamics.
         initial_time = time.time()
@@ -156,10 +157,10 @@ if __name__ == "__main__":
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
-        print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration.getNumAttemptsPerUpdate()))
+        print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration._get_num_attempts_per_update()))
         # Show titration states.
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
         print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
-        iteration, niterations, str(mc_titration.getTitrationStates()), potential_energy / unit.kilocalories_per_mole,
-        mc_titration.naccepted, mc_titration.nattempted))
+            iteration, niterations, str(mc_titration._get_titration_states()), potential_energy / unit.kilocalories_per_mole,
+            mc_titration.naccepted, mc_titration.nattempted))
