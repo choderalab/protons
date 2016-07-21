@@ -1,5 +1,5 @@
 package:
-  name: openmm-constph
+  name: protons
   version: !!str 0.0.0
 
 source:
@@ -42,7 +42,7 @@ test:
     - python-coveralls
 
   imports:
-    - constph
+    - protons
 
 about:
-  home: https://github.com/choderalab/openmm-constph
+  home: https://github.com/choderalab/constph-openmm
