@@ -1,16 +1,20 @@
 API documentation
 *****************
 
+protons module
+==============
 
-ProtonDrive
-===========
+.. py:currentmodule:: protons
 
 
-.. autoclass:: constph.constph.ProtonDrive
+ProtonDrive class
+-----------------
+
+.. autoclass:: protons.ProtonDrive
 
     :members:
 
-    .. automethod:: constph.constph.ProtonDrive.__init__
-    .. automethod:: constph.constph.ProtonDrive.update
-    .. automethod:: constph.constph.ProtonDrive.calibrate
-    .. automethod:: constph.constph.ProtonDrive.import_gk_values
+    .. automethod:: protons.ProtonDrive.__init__
+    .. automethod:: protons.ProtonDrive.update
+    .. automethod:: protons.ProtonDrive.calibrate
+    .. automethod:: protons.ProtonDrive.import_gk_values

@@ -3,8 +3,8 @@
 Advanced calibration options
 ****************************
 
-Keyword arguments supplied to the :py:meth:`constph.constph.ProtonDrive` class can be used to tweak the calibration settings.
+Keyword arguments supplied to the :py:meth:`protons.ProtonDrive` class can be used to tweak the calibration settings.
 This feature is recommended for experts only. The calibration settings are passed to this function:
 
-.. automethod::  constph.calibration.CalibrationSystem.sams_till_converged
+.. automethod::  protons.calibration.CalibrationSystem.sams_till_converged
 

@@ -2,11 +2,11 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph import get_data
+from protons import get_data, ProtonDrive
 
-from constph.logger import logger
-from constph.constph import ProtonDrive
-from constph.calibration import Histidine
+from protons.logger import logger
+from protons import ProtonDrive
+from protons.calibration import Histidine
 import numpy as np
 import openmmtools
 import logging

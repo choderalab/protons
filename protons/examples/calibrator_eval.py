@@ -1,9 +1,9 @@
 """Script to run the calibrator"""
 from __future__ import print_function
 from simtk import unit, openmm
-from constph.calibration import CalibrationSystem
+from protons.calibration import CalibrationSystem
 import logging
-from constph.constph import logger
+from protons import logger
 import numpy as np
 
 logger.setLevel(logging.INFO)
@@ -30,7 +30,7 @@ for i,x in enumerate(aac.sams_till_converged(threshold=1.e-6, mc_every=100, gk_e
 
 print(aac.titration.naccepted / aac.titration.nattempted)
 
-from constph.diagnostics import plot_sams_trace
+from protons.diagnostics import plot_sams_trace
 
 plot_sams_trace(datapoints["HID"], title="His-Delta Tautomer", ylabel="beta * zeta_2", window=window, filename="hid-calibrated.png")
 plot_sams_trace(datapoints["HIE"], window=window,title="His-Eps Tautomer", ylabel="beta * zeta_3", filename="hie-calibrated.png")

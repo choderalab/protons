@@ -1,7 +1,7 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from constph.constph import *
+from protons import *
 import logging
 
 

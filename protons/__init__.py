@@ -2,22 +2,27 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import copy
+import logging
+import math
+import os
+import random
 import re
 import sys
-import math
-import random
-import copy
 import numpy as np
-import logging
 import simtk
-import simtk.openmm as openmm
-import simtk.unit as units
-from .logger import logger
 from openmmtools.integrators import VelocityVerletIntegrator
+from simtk import unit as units, openmm
+from protons import logger
+from protons.logger import logger
 
 # Module constants
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
-kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
+PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
+kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
+
+
+def get_data(path,folder):
+    return os.path.join(PACKAGE_ROOT, folder, path)
 
 
 def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
@@ -1084,6 +1089,7 @@ class ProtonDrive(object):
         """
 
         if nattempts is None:
+            # Use default (picked at initialization)
             nattempts = self.nattempts_per_update
 
         # Perform a number of protonation state update trials.

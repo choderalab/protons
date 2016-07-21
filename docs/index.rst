@@ -1,21 +1,38 @@
-
-constph-OpenMM: Protonation states and tautomers for OpenMM
-***********************************************************
+Protons: Protonation states and tautomers for OpenMM
+****************************************************
 
 .. Note::
 
     This is module is undergoing heavy development. None of the API calls are final.
 
-.. image:: _static/images/logo.png
-   :alt: constph-OpenMM: **Protonation states and Tautomers**
-   :class: floatingflask
-
 Introduction
 ============
 
-This python module implements a sampler for amino acid and small molecule protonation states and tautomers in OpenMM.
+This python module implements a constant-pH MD scheme for sampling protonation states and tautomers of amino acids and small molecules in OpenMM.
 
-It has the following requirements:
+
+Installation
+------------
+
+Use the command
+
+.. code-block:: bash
+
+    python setup.py install
+
+to install the package. The installation does not automatically check for requirements.
+
+To test the installation, run
+
+.. code-block:: bash
+
+    nosetests protons
+
+
+Requirements
+~~~~~~~~~~~~
+
+The ``protons`` package has the following requirements:
 
 * python 2.7, 3.4 or 3.5
 * openmm 7.0rc1
@@ -36,17 +53,10 @@ Table of contents
    :name: mastertoc
    :maxdepth: 2
 
-   modules/constph
-   modules/cnstphgbforces
+   modules/protons
    modules/calibration
    modules/ligutils
-   modules/logger
-   modules/generate_calibration_systems
-   modules/tests
    api
-
-
-
 
 
 Indices and tables

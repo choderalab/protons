@@ -1,19 +1,18 @@
-Running a simulation with protonation states and tautomers
-==========================================================
+Setting up a constant-pH MD simulation
+**************************************
 
-.. automodule:: constph.constph
+.. automodule:: protons
 
-The :py:mod:`constph.constph` module extends OpenMM with the capability to change the properties of protons in simulation. 
+The :py:mod:`protons` package extends OpenMM with the capability to alter the configuration of protons in simulation.
 This allows for sampling over multiple protonation states and prototropic tautomers of amino acid residues and small molcules.
 These effects have been shown as important in multiple biological systems [1]_, and now you can include them in OpenMM simulations.
 
 
 Setting up the :py:class:`ProtonDrive` class
---------------------------------------------
-
+============================================
 
 In order to run a simulation containing multiple protonation states and tautomers, you can use :py:class:`ProtonDrive`.
-It is responsible for keeping track of the current system state, and updates the OpenMM context with the correct parameters.
+This object is responsible for keeping track of the current system state, and updates the OpenMM context with the correct parameters.
 It uses an instantaneous Monte Carlo sampling method [2]_ to update implicit solvent systems.
 Explicit solvent systems are treated using NCMC [3]_, [4]_.
 The driver maintains a dictionary of all possible protonation states and tautomers of each residue in the simulation system, in terms of their parameters.
@@ -26,25 +25,33 @@ The implementation of NCMC uses a Velocity Verlet integrator, so make sure that 
 
 .. code-block:: python
     :linenos:
-    :emphasize-lines: 11
+    :emphasize-lines: 11,20
+
+    from protons import ProtonDrive
+    from simtk import unit, openmm
+    from simtk.openmm import app
+    from openmmtools.integrators import VelocityVerletIntegrator
 
     # Load a protein system
     prmtop = app.AmberPrmtopFile('protein.prmtop')
     cpin_filename = 'protein.cpin'
 
-    # Define an integrator for the system
-    integrator = openmmtools.integrators.VelocityVerletIntegrator(1.0 * unit.femtoseconds)
+    # System settings
+    pH = 7.4
+    temperature = 300.0 * unit.kelvin
 
-    # Create a system from the AMBER prmtop file
+    # Define an integrator for the system
+    integrator = VelocityVerletIntegrator(1.0 * unit.femtoseconds)
+
+    # Create an implicit solvent system from the AMBER prmtop file
     system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     # Create the driver that will track the state of the simulation and provides the updating API
-    driver = ProtonDrive(system, 300. * unit.Kelvin, 7.4, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=0, implicit=True)
+    driver = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
     # Create a simulation object using the correct integrator
     simulation = app.Simulation(prmtop.topology, system, driver.compound_integrator, platform)
 
 Next, you will need to provide reference free energies for each residue in solvent.
-
 
 
 Solvent reference state calibrations
@@ -118,15 +125,15 @@ If you store these results, you can reload them in a subsequent run.
 
 For more in depth explanation of the calibration procedure, please see :ref:`advanced_calibration`.
 
-Now that `g_k` values have been calibrated, you are ready to run a simulation.
+Now that :math:`g_k` values have been calibrated, you are ready to run a simulation.
 
-Sampling states
----------------
+Running the simulation
+======================
 
 After calibration, you can start running a simulation. The residue states are updated using the :py:meth:`ProtonDrive.update` method.
 This method modifies the parameters in your simulation context.
 
-Decide on the number of timesteps, and the frequency of updating the residue states. To propagate in regular dynamics, just use ``simulation.step`.
+Decide on the number of timesteps, and the frequency of updating the residue states. To propagate in regular dynamics, just use ``simulation.step``.
 
 .. code-block:: python
     :linenos:
@@ -140,13 +147,13 @@ Decide on the number of timesteps, and the frequency of updating the residue sta
 This means that every 6000 steps of molecular dynamics, the residue states are driven once for a total of 10000 iteration.
 
 Tracking the simulation
------------------------
+=======================
 
-This section still needs to be written.
+This section and the API still need to be written.
 
 
 References
-----------
+==========
 
 .. [1]  Czodrowski, Paul; Sotriffer, Christoph A.; Klebe, Gerhard (2007a): Atypical protonation states in the active site of HIV-1 protease: a computational study. In Journal of chemical information and modeling 47 (4), pp. 1590–1598. DOI: 10.1021/ci600522c.
 
@@ -176,15 +183,11 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
 .. code-block:: python
     :linenos:
 
-    """Run the complete API using precalibrated reference states"""
-      from __future__ import print_function
       from simtk import unit, openmm
       from simtk.openmm import app
-      from constph import get_data
-      from constph.logger import logger
-      from constph.constph import MonteCarloTitration
+      from protons import ProtonDrive
       import numpy as np
-      import openmmtools
+      from openmmtools.integrators import VelocityVerletIntegrator
       import logging
       from sys import stdout
 
@@ -201,7 +204,7 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
       positions = inpcrd.getPositions()
       topology = prmtop.topology
       cpin_filename = 'complex.cpin'
-      integrator = openmmtools.integrators.VelocityVerletIntegrator(timestep)
+      integrator = VelocityVerletIntegrator(timestep)
 
       # Create a system from the AMBER prmtop file
       system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)

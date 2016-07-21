@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Constant-pH for OpenMM documentation build configuration file, created by
+# Protons for OpenMM documentation build configuration file, created by
 # sphinx-quickstart on Wed Jul 13 14:24:11 2016.
 #
 # This file is execfile()d with the current directory set to its
@@ -55,7 +55,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'PACKAGENAME'
+project = 'Protons'
 copyright = '2016, Bas Rustenburg, Greg Ross, John Chodera et al.'
 author = 'Bas Rustenburg, Greg Ross, John Chodera et al.'
 
@@ -133,7 +133,7 @@ html_theme_options = {
     'show_powered_by' :'true',
     'font_family': 'calibri, helvetica, sans-serif',
     'head_font_family': 'cambria, tahoma, serif',
-    'description' : 'Protonation states and tautomers in OpenMM',
+    'description' : 'Protonation states and tautomers for OpenMM',
     'pre_bg': '#41323f', # color used for syntax block
     'body_text': "#41323f",
     "pink_1": "peachpuff"
@@ -233,7 +233,7 @@ html_sidebars = {
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'Constant-pHforOpenMMdoc'
+htmlhelp_basename = 'Protons-for-OpenMMdoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -255,7 +255,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'Constant-pHforOpenMM.tex', 'Constant-pH for OpenMM Documentation',
+  (master_doc, 'Protons-for-OpenMM.tex', 'Protons for OpenMM Documentation',
    'Bas Rustenburg, Greg Ross, John Chodera et al.', 'manual'),
 ]
 
@@ -285,7 +285,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'constant-phforopenmm', 'Constant-pH for OpenMM Documentation',
+    (master_doc, 'Protons-for-OpenMMdoc', 'Protons for OpenMM Documentation',
      [author], 1)
 ]
 
@@ -299,8 +299,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'Constant-pHforOpenMM', 'Constant-pH for OpenMM Documentation',
-   author, 'Constant-pHforOpenMM', 'One line description of project.',
+  (master_doc, 'Protons-for-OpenMMdoc', 'Protons for OpenMM Documentation',
+   author, 'Protons-for-OpenMM', 'One line description of project.',
    'Miscellaneous'),
 ]
 

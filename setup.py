@@ -59,7 +59,7 @@ Programming Language :: Python :: 3.5
 extensions = []
 
 setup(
-    name='constph',
+    name='protons',
     author='Bas Rustenburg',
     author_email='bas.rustenburg@choderalab.org',
     description=DOCLINES[0],
@@ -67,25 +67,25 @@ setup(
         DOCLINES[
             2:]),
     version=__version__,
-    url='https://github.com/choderalab/openmm-constph',
+    url='https://github.com/choderalab/constph-openmm',
     platforms=[
         'Linux',
         'Mac OS-X',
         'Unix'],
     classifiers=CLASSIFIERS.splitlines(),
     packages=[
-        'constph',
-        'constph.tests'],
+        'protons',
+        'protons.tests'],
     package_data={
-        'constph': find_package_data(
-            'constph/examples',
-            'constph') +
+        'protons': find_package_data(
+            'protons/examples',
+            'protons') +
         find_package_data(
-            'constph/tests/testsystems',
-            'constph') +
+            'protons/tests/testsystems',
+            'protons') +
         find_package_data(
-            'constph/calibration-systems',
-            'constph')} ,
+            'protons/calibration-systems',
+            'protons')} ,
     zip_safe=False,
     ext_modules=extensions,
     test_suite='nose.collector',
