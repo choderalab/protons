@@ -4,14 +4,14 @@ from simtk import unit, openmm
 from simtk.openmm import app
 from protons import get_data, ProtonDrive
 
-from protons.logger import logger
+from protons.logger import log
 from protons import ProtonDrive
 from protons.calibration import Histidine
 import numpy as np
 import openmmtools
 import logging
 
-logger.setLevel(logging.INFO)
+log.setLevel(logging.INFO)
 
 # Import one of the standard systems.
 temperature = 300.0 * unit.kelvin
@@ -40,8 +40,8 @@ else:
 context.setPositions(positions)
 context.setVelocitiesToTemperature(temperature)
 
-logger.info("Calibrating")
-logger.info("Restypes by index %s", mc_titration._detect_residues()[0])
+log.info("Calibrating")
+log.info("Restypes by index %s", mc_titration._detect_residues()[0])
 mc_titration.calibrate(platform_name=platform_name)
 
 # Example of how to read in pre-equilibrated values.

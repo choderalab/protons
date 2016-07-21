@@ -5,7 +5,7 @@ from protons import ProtonDrive
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
-from .logger import logger
+from .logger import log
 import abc
 from . import get_data
 from scipy.misc import logsumexp
@@ -108,7 +108,7 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         group_index = 0
         nstates = len(self.titrationGroups[group_index]['titration_states'])
         self.state_counts = np.zeros(nstates, np.float64)
-        logger.info('There are %d titration states' % nstates)
+        log.info('There are %d titration states' % nstates)
 
     def adapt_zetas(self, context, scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0, group_index=0):
         """
@@ -157,7 +157,7 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         Nk = self.state_counts / self.state_counts.sum()
         target = self._get_target_weights(group_index)
         target_deviation = sum(abs(target - Nk))
-        logger.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation* 100))
+        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation * 100))
         return target_deviation
 
     def set_gk(self, zetas, group_index=0):
@@ -594,7 +594,7 @@ class CalibrationSystem(object):
         gk_deque = deque(maxlen=window)
         stage = "burn-in"
         end_of_burnin = None
-        logger.info("Starting calibration burn-in phase.")
+        log.info("Starting calibration burn-in phase.")
 
         while True:
 
@@ -612,7 +612,7 @@ class CalibrationSystem(object):
 
                 # Once we're within 20 percent of the target, switch to slow stage
                 if target_deviation < 0.2 and end_of_burnin is None and iteration >= min_iter:
-                    logger.info("Burn-in complete in %d iterations! Switching to calibration slow-gain phase."%iteration)
+                    log.info("Burn-in complete in %d iterations! Switching to calibration slow-gain phase." % iteration)
                     end_of_burnin = iteration
                     stage="slow-gain"
 
@@ -628,14 +628,14 @@ class CalibrationSystem(object):
 
                 if gk_updates % check_frequency == 0 and end_of_burnin is not None:
                     grad = np.average(np.gradient(gk_deque, 10), axis=1)[0]  # average gradient for each state
-                    logger.info("Gradient magnitude: {}".format([ "{:.3f}".format(np.log10(abs(g))) for g in grad]))
+                    log.info("Gradient magnitude: {}".format(["{:.3f}".format(np.log10(abs(g))) for g in grad]))
                     # Absolute gradient of all states is equal/below threshold
                     if (abs(grad) <= threshold).all() and gk_updates >= min_iter + window:
                         break
 
             # Quit the loop if we exceed the max number of iterations
             if max_iter is not None and iteration == max_iter:
-                logger.warning("Calibration reached maximum number of iterations without converging.")
+                log.warning("Calibration reached maximum number of iterations without converging.")
                 break
 
     @staticmethod
@@ -649,8 +649,8 @@ class CalibrationSystem(object):
         platform = openmm.Platform.getPlatformByName(platform_name)
         context = openmm.Context(system, integrator, platform)
         context.setPositions(positions)
-        logger.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        log.info("Initial energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         openmm.LocalEnergyMinimizer.minimize(context, 1.0, nsteps)
-        logger.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
+        log.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
         positions = context.getState(getPositions=True).getPositions(asNumpy=True)
         return context, positions

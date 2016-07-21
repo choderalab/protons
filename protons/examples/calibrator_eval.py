@@ -3,10 +3,10 @@ from __future__ import print_function
 from simtk import unit, openmm
 from protons.calibration import CalibrationSystem
 import logging
-from protons import logger
+from protons import log
 import numpy as np
 
-logger.setLevel(logging.INFO)
+log.setLevel(logging.INFO)
 
 settings = dict()
 settings["temperature"] = 300.0 * unit.kelvin

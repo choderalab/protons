@@ -13,8 +13,7 @@ import numpy as np
 import simtk
 from openmmtools.integrators import VelocityVerletIntegrator
 from simtk import unit as units, openmm
-from protons import logger
-from protons.logger import logger
+from .logger import log
 
 # Module constants
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -959,7 +958,7 @@ class ProtonDrive(object):
         # Compute initial probability of this protonation state.
         log_P_initial, pot1, kin1 = self._compute_log_probability(context)
 
-        logger.debug("   initial %s   %12.3f kcal/mol" % (str(self._get_titration_states()), pot1 / units.kilocalories_per_mole))
+        log.debug("   initial %s   %12.3f kcal/mol" % (str(self._get_titration_states()), pot1 / units.kilocalories_per_mole))
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
@@ -1022,8 +1021,8 @@ class ProtonDrive(object):
             # Accept or reject with Metropolis criteria.
             log_P_accept = -work
 
-            logger.debug("LOGP" + str(log_P_accept))
-            logger.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+            log.debug("LOGP" + str(log_P_accept))
+            log.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
 
             self.nattempted += 1
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
@@ -1161,7 +1160,7 @@ class ProtonDrive(object):
             for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
                 self.titrationGroups[group_index]['titration_states'][state_index]['g_k'] = g_k[resname_per_index[group_index]][state_index]
 
-        logger.debug("Calibration results %s", g_k)
+        log.debug("Calibration results %s", g_k)
         return g_k
 
     def import_gk_values(self, gk_dict):
@@ -1265,14 +1264,14 @@ class ProtonDrive(object):
         if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = context.getState().getPeriodicBoxVolume()
-            logger.debug('beta = %s, pressure = %s, volume = %s, multiple = %s' , str(self.beta), str(self.pressure), str(volume), str(-self.beta*self.pressure*volume*units.AVOGADRO_CONSTANT_NA))
+            log.debug('beta = %s, pressure = %s, volume = %s, multiple = %s', str(self.beta), str(self.pressure), str(volume), str(-self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA))
             log_P -= self.beta * self.pressure * volume * units.AVOGADRO_CONSTANT_NA
 
         # Add reference free energy contributions.
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
             g_k = titration_state['g_k']
-            logger.debug("g_k: %.2f",  g_k)
+            log.debug("g_k: %.2f", g_k)
             log_P -= g_k
 
         # Return the log probability.
