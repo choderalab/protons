@@ -1,8 +1,8 @@
 API documentation
 *****************
 
-protons module
-==============
+The Protons module
+==================
 
 .. py:currentmodule:: protons
 
