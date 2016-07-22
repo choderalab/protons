@@ -130,10 +130,10 @@ Now that :math:`g_k` values have been calibrated, you are ready to run a simulat
 Running the simulation
 ======================
 
-After calibration, you can start running a simulation. The residue states are updated using the :py:meth:`ProtonDrive.update` method.
-This method modifies the parameters in your simulation context.
-
+After calibration, you can start running a simulation.
 Decide on the number of timesteps, and the frequency of updating the residue states. To propagate in regular dynamics, just use ``simulation.step``.
+The residue states are updated using the :py:meth:`ProtonDrive.update` method.
+This method selects new states using a Monte Carlo procedure, and modifies the parameters in your simulation context to reflect the selected states.
 
 .. code-block:: python
     :linenos:
@@ -144,7 +144,8 @@ Decide on the number of timesteps, and the frequency of updating the residue sta
         simulation.step(mc_frequency) # MD
         driver.update(simulation.context)  # protonation
 
-This means that every 6000 steps of molecular dynamics, the residue states are driven once for a total of 10000 iteration.
+In this example, every 6000 steps of molecular dynamics, the residue states are driven once.
+This gets repeated for a total of 10000 iteration.
 
 Tracking the simulation
 =======================
@@ -188,7 +189,6 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
       from protons import ProtonDrive
       import numpy as np
       from openmmtools.integrators import VelocityVerletIntegrator
-      import logging
       from sys import stdout
 
 
@@ -212,7 +212,7 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
       driver = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
       # Create an OpenMM simulation object as one normally would.
-      simulation = app.Simulation(topology, system, integrator, platform)
+      simulation = app.Simulation(topology, system, driver.compound_integrator, platform)
       simulation.context.setPositions(positions)
       simulation.context.setVelocitiesToTemperature(temperature)
 
@@ -235,10 +235,10 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
       driver.import_gk_values(calibration_results)
 
       # 60 ns, 10000 state updates
-      niter, mc_freq = 10000, 6000
+      niter, mc_frequency = 10000, 6000
       simulation.reporters.append(app.DCDReporter('trajectory.dcd', mc_freq))
 
       for iteration in range(1, niter):
-          simulation.step(mc_freq) # MD
+          simulation.step(mc_frequency) # MD
           driver.update(simulation.context)  # protonation
 
