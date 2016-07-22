@@ -2,7 +2,8 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
-from protons import get_data, ProtonDrive
+from protons import get_data
+from protons.driver import ProtonDrive
 
 from protons.logger import log
 from protons import ProtonDrive
