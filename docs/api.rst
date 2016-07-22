@@ -4,17 +4,17 @@ API documentation
 The Protons module
 ==================
 
-.. py:currentmodule:: protons
+.. py:currentmodule:: protons.driver
 
 
 ProtonDrive class
 -----------------
 
-.. autoclass:: protons.ProtonDrive
+.. autoclass:: protons.driver.ProtonDrive
 
     :members:
 
-    .. automethod:: protons.ProtonDrive.__init__
-    .. automethod:: protons.ProtonDrive.update
-    .. automethod:: protons.ProtonDrive.calibrate
-    .. automethod:: protons.ProtonDrive.import_gk_values
+    .. automethod:: ProtonDrive.__init__
+    .. automethod:: ProtonDrive.update
+    .. automethod:: ProtonDrive.calibrate
+    .. automethod:: ProtonDrive.import_gk_values

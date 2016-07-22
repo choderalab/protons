@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     # Initialize Monte Carlo titration.
     print("Initializing Monte Carlo titration...")
-    from protons import ProtonDrive
+    from protons.driver import ProtonDrive
 
     mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
 

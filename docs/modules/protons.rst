@@ -1,7 +1,7 @@
 Setting up a constant-pH MD simulation
 **************************************
 
-.. automodule:: protons
+.. py:currentmodule:: protons.driver
 
 The :py:mod:`protons` package extends OpenMM with the capability to alter the configuration of protons in simulation.
 This allows for sampling over multiple protonation states and prototropic tautomers of amino acid residues and small molcules.

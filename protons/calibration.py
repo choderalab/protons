@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from protons import ProtonDrive
+from protons.driver import ProtonDrive
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
@@ -12,9 +12,7 @@ from scipy.misc import logsumexp
 from collections import deque
 import openmmtools
 
-# MODULE CONSTANTS
-kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
-kB = kB.in_units_of(units.kilocalories_per_mole / units.kelvin)
+kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
 class SelfAdjustedMixtureSampling(ProtonDrive):
