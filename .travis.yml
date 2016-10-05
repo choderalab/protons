@@ -11,10 +11,17 @@ install:
   - export PATH=$HOME/miniconda3/bin:$PATH
 
 script:
+
+  # Create an environment for testing
+  - conda create --yes -n test python=$python
+  - source activate test
   - conda config --add channels $ORGNAME
+  
   - conda build devtools/conda-recipe
-  - source activate _test
-  - conda install --yes --quiet nose nose-timer
+  - conda install --yes --use-local ${PACKAGENAME}-dev
+  # Install testing dependencies
+  - conda install --yes --quiet pytest pytest-cov
+  # Test the package
   - cd devtools && py.test ${PACKAGENAME} --cov=${PACKAGENAME} && cd ..
   
 env:
