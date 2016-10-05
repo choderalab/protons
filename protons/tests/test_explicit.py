@@ -161,14 +161,14 @@ class TestAminoAcidsExplicitCalibration(object):
         """
         self.calibrate("lys")
 
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_cys_calibration(self):
         """
         Calibrate a single cysteine in explicit solvent
         """
         self.calibrate("cys")
 
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_tyr_calibration(self):
         """
         Calibrate a single tyrosine in explicit solvent
@@ -176,7 +176,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         self.calibrate("tyr")
 
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_as4_calibration(self):
         """
         Calibrate a single aspartic acid in explicit solvent
@@ -184,7 +184,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         self.calibrate("as4")
 
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_gl4_calibration(self):
         """
         Calibrate a single glutamic acid in explicit solvent
@@ -192,7 +192,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
         self.calibrate("gl4")
 
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_hip_calibration(self):
         """
         Calibrate a single histidine in explicit solvent
@@ -204,7 +204,7 @@ class TestAminoAcidsExplicitCalibration(object):
         aac.sams_till_converged(max_iter=10, platform_name=self.settings["platform_name"])
 
 
-@pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', "Skip slow test on travis.")
+@pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
 class PeptideExplicitTestCase(object):
 
     default_platform = 'CUDA'
@@ -226,7 +226,7 @@ class PeptideExplicitTestCase(object):
 
         return peptide_explicit_system
 
-    @pytest.mark.skipif(hasCUDA == False, "Test depends on CUDA. Make sure the right version is installed.")
+    @pytest.mark.skipif(hasCUDA == False, reason="Test depends on CUDA. Make sure the right version is installed.")
     def test_peptide_ncmc_calibrated(self):
         """
         Run edchky peptide in explicit solvent with an ncmc state switch and calibration
