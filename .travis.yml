@@ -16,13 +16,13 @@ script:
   - conda create --yes -n test python=$python
   - source activate test
   - conda config --add channels $ORGNAME
-  
+
   - conda build devtools/conda-recipe
   - conda install --yes --use-local ${PACKAGENAME}-dev
   # Install testing dependencies
   - conda install --yes --quiet pytest pytest-cov
   # Test the package
-  - cd devtools && py.test ${PACKAGENAME} --cov=${PACKAGENAME} && cd ..
+  - cd devtools && py.test --pyargs ${PACKAGENAME} --cov=${PACKAGENAME} && cd ..
   
 env:
   matrix:
