@@ -5,6 +5,17 @@ from protons import *
 import logging
 
 
+try:
+    openmm.Platform.getPlatformByName('CUDA')
+    hasCUDA = True
+except Exception:
+    logging.info("CUDA unavailable on this system.")
+    hasCUDA = False
+
+class SystemSetup:
+    """Empty class for storing systems and relevant attributes"""
+    pass
+
 def make_method(func, input):
     # http://blog.kevinastone.com/generate-your-tests.html
     def test_input(self):
