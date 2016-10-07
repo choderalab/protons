@@ -17,7 +17,7 @@ bash $MINICONDA -b -p $MINICONDA_HOME
 export PIP_ARGS="-U"
 export PATH=$MINICONDA_HOME/bin:$PATH
 conda update --yes conda
-conda install -c https://conda.anaconda.org/omnia --yes conda-build=2.0.2 jinja2 anaconda-client pip python-coveralls
+conda install -c https://conda.anaconda.org/omnia --yes conda-build>=2.0.4 jinja2 anaconda-client pip python-coveralls
 
 # Restore original directory
 popd
