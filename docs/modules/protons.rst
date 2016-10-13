@@ -242,7 +242,7 @@ Below is a basic example of how to run a simulation using the ProtonDrive withou
 
       # 60 ns, 10000 state updates
       niter, mc_frequency = 10000, 6000
-      simulation.reporters.append(app.DCDReporter('trajectory.dcd', mc_freq))
+      simulation.reporters.append(app.DCDReporter('trajectory.dcd', mc_frequency))
 
       for iteration in range(1, niter):
           simulation.step(mc_frequency) # MD
