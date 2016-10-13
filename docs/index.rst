@@ -53,6 +53,7 @@ Table of contents
    :name: mastertoc
    :maxdepth: 2
 
+   modules/system prep
    modules/protons
    modules/calibration
    modules/ligutils

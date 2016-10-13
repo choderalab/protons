@@ -37,3 +37,6 @@ nosetests.xml
 
 # Old benchmark data
 benchmarks/
+
+# Sphinx documentation
+_build
