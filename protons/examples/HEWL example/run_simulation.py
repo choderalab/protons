@@ -43,13 +43,13 @@ try:
     with open("calibration.pickle", "rb") as precalibrated:
         calibration_results = pickle.load(precalibrated)
         log.info("Found precalibrated results. ")
-except IOError:
+except:
     log.info("Calibrating")
-    calibration_results = driver.calibrate()
-    pickle.dump(calibration_results, open("calibration.pickle", "wb"))
+    #calibration_results = driver.calibrate()
+    #pickle.dump(calibration_results, open("calibration.pickle", "wb"))
     log.info("Finished calibration")
 
-driver.import_gk_values(calibration_results)
+#driver.import_gk_values(calibration_results)
 
 # 60 ns, 10000 state updates
 log.info("Entering main md loop")
@@ -65,7 +65,8 @@ try:
             log.info("%.1f", float(iteration) / float(niter))
 
 except:
+    crashtime = time.strftime("%Y%m%d%H%M%S")
     log.error("Your simulation has crashed, writing out error files")
-    simulation.saveState(time.strftime('crash.xml@%X_%x'))
-    pickle.dump(driver, open(time.strftime("protondrive.pickle@%X_%x"), "wb"))
+    simulation.saveState(open('crash.xml@%s'%crashtime, 'w'))
+    pickle.dump(driver, open("protondrive.pickle@%s"%crashtime, "wb"))
     raise
