@@ -1,5 +1,8 @@
 pdbfile="input.pdb"
 
+# All cysteines in this file are involved in disulfide bonds
+sed -i 's/CYS/CYX/g' ${pdbfile}
+
 # Rename to constph residues
 sed -i 's/HIE/HIP/g' ${pdbfile}
 sed -i 's/HID/HIP/g' ${pdbfile}
