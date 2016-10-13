@@ -1,0 +1,20 @@
+# Load constant ph parameters
+source leaprc.constph
+
+# Load the PDB file, rename it to your input file
+protein = loadPDB input.pdb
+
+# Validate the input
+check protein
+
+# Calculate the total charge, for logging purposes
+charge protein
+
+# Write parameters.
+saveAmberParm protein complex.prmtop complex.inpcrd
+
+# Write PDB files, optional
+savepdb protein complex.pdb
+
+# Exit, make sure not to forget this part
+quit

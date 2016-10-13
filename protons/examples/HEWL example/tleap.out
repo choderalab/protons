@@ -1,0 +1,112 @@
+-I: Adding /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/prep to search path.
+-I: Adding /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib to search path.
+-I: Adding /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/parm to search path.
+-I: Adding /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/cmd to search path.
+-f: Source tleap.in.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./tleap.in
+----- Source: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/cmd/leaprc.constph
+----- Source of /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/cmd/leaprc.constph done
+----- Source: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/cmd/oldff/leaprc.ff10
+----- Source of /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/cmd/oldff/leaprc.ff10 done
+Log file: ./leap.log
+Loading parameters: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/amino10.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/aminoct10.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/aminont10.lib
+Could not open file phosphoaa10.lib: not found
+Could not open database: phosphoaa10.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/nucleic10.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/atomic_ions.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/solvents.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/constph.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/all_prot_nucleic10.lib
+Loading library: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/lib/cph_nucleic_caps.lib
+Loading parameters: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/parm/frcmod.constph
+Reading force field modification type file (frcmod)
+Reading title:
+Force field modifcations for titrations
+Loading parameters: /cbio/jclab/home/rustenburg/miniconda3/bin/../dat/leap/parm/frcmod.protonated_nucleic
+Reading force field modification type file (frcmod)
+Reading title:
+Force field modifications for protonated nucleic acids
+Using H(N)-modified Bondi radii
+Loading PDB file: ./input.pdb
+-- residue 1: duplicate [ CE] atoms (total 2)
+-- residue 1: duplicate [ NZ] atoms (total 2)
+-- residue 24: duplicate [ CB] atoms (total 2)
+-- residue 24: duplicate [ OG] atoms (total 2)
+-- residue 43: duplicate [ CB] atoms (total 2)
+-- residue 43: duplicate [ CG2] atoms (total 2)
+-- residue 43: duplicate [ OG1] atoms (total 2)
+-- residue 50: duplicate [ CB] atoms (total 2)
+-- residue 50: duplicate [ OG] atoms (total 2)
+-- residue 85: duplicate [ CB] atoms (total 2)
+-- residue 85: duplicate [ OG] atoms (total 2)
+-- residue 86: duplicate [ CB] atoms (total 2)
+-- residue 86: duplicate [ OG] atoms (total 2)
+-- residue 89: duplicate [ CB] atoms (total 2)
+-- residue 89: duplicate [ CG2] atoms (total 2)
+-- residue 89: duplicate [ OG1] atoms (total 2)
+-- residue 109: duplicate [ CB] atoms (total 2)
+-- residue 109: duplicate [ CG1] atoms (total 2)
+-- residue 109: duplicate [ CG2] atoms (total 2)
+
+   Warning: Atom names in each residue should be unique.
+     (Same-name atoms are handled by using the first
+      occurrence and by ignoring the rest.
+      Frequently duplicate atom names stem from alternate
+      conformations in the PDB file.)
+
+  total atoms in file: 1020
+  Leap added 996 missing atoms according to residue templates:
+       996 H / lone pairs
+Checking 'protein'....
+WARNING: The unperturbed charge of the unit: 9.000000 is not zero.
+Warning: Close contact of 1.334904 angstroms between .R<GL4 7>.A<HE12 19> and .R<GL4 7>.A<H 2>
+Warning: Close contact of 1.451745 angstroms between .R<AS4 18>.A<HD12 19> and .R<LEU 25>.A<H 2>
+Warning: Close contact of 1.418591 angstroms between .R<AS4 52>.A<HD11 18> and .R<ASN 59>.A<HD22 12>
+Warning: Close contact of 1.385317 angstroms between .R<AS4 87>.A<HD11 18> and .R<THR 89>.A<HG23 10>
+Warning: Close contact of 1.243934 angstroms between .R<AS4 87>.A<HD21 11> and .R<THR 89>.A<HG21 8>
+Warning: Close contact of 1.391481 angstroms between .R<AS4 119>.A<HD21 11> and .R<ARG 125>.A<HH22 22>
+Warning: Close contact of 1.415220 angstroms between .R<ARG 128>.A<HE 15> and .R<ARG 128>.A<CD 11>
+Checking parameters for unit 'protein'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Warnings: 8
+Unit is OK.
+Total unperturbed charge:   9.000000
+Total perturbed charge:     9.000000
+Checking Unit.
+WARNING: The unperturbed charge of the unit: 9.000000 is not zero.
+
+ -- ignoring the warning.
+
+Building topology.
+Building atom parameters.
+Building bond parameters.
+Building angle parameters.
+Building proper torsion parameters.
+Building improper torsion parameters.
+ total 445 improper torsions applied
+Building H-Bond parameters.
+Incorporating Non-Bonded adjustments.
+Not Marking per-residue atom chain types.
+Marking per-residue atom chain types.
+  (Residues lacking connect0/connect1 - 
+   these don't have chain types marked:
+
+	res	total affected
+
+	CLEU	1
+	NLYS	1
+  )
+ (no restraints)
+Writing pdb file: complex.pdb
+ Converting N-terminal residue name to PDB format: NLYS -> LYS
+ Converting C-terminal residue name to PDB format: CLEU -> LEU
+	Quit
