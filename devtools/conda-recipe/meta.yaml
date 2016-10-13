@@ -1,5 +1,5 @@
 package:
-  name: protons
+  name: protons-dev
   version: !!str 0.0.0
 
 source:
@@ -12,33 +12,32 @@ build:
 requirements:
   build:
     - python
-    - openmm ==7.0rc1
+    - openmm >=7.0.1
     - numpy >=1.10
     - scipy >=0.17.0
-    - openmmtools ==0.7.5
+    - openmmtools >=0.7.5
     - pymbar
-    - openmoltools ==0.7.0
+    - openmoltools >=0.7.0
     - ambermini
     - joblib
     - lxml
 
   run:
     - python
-    - openmm ==7.0rc1
+    - openmm >=7.0.1
     - numpy >=1.10
     - scipy >=0.17.0
-    - openmmtools ==0.7.5
+    - openmmtools >=0.7.5
     - pymbar
-    - openmoltools ==0.7.0
+    - openmoltools >=0.7.0
     - ambermini
     - joblib
     - lxml
 
 test:
   requires:
-    - nose
-    - coverage
-    - numpy
+    - pytest
+    - pytest-cov
     - python-coveralls
 
   imports:

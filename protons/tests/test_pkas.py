@@ -2,25 +2,25 @@
 from __future__ import print_function
 
 from protons.calibration import Histidine, Lysine, Tyrosine, Aspartic4, Cysteine, Glutamic4
-from unittest import TestCase
 from numpy import linspace
+from pytest import approx
 
 
-class HistidineTestCase(TestCase):
+class TestHistidine(object):
 
     def test_pKa_delta(self):
         """
         Weights for histidine at pH == pKa_delta
         """
         weights = Histidine(Histidine.pKa_d).populations()
-        self.assertAlmostEqual(weights[0], weights[1])
+        approx(weights[0], weights[1])
 
     def test_pKa_eps(self):
         """
         Weights for histidine at pH == pKa_eps
         """
         weights = Histidine(Histidine.pKa_e).populations()
-        self.assertAlmostEqual(weights[0], weights[2])
+        approx(weights[0], weights[2])
 
     def test_totals(self):
         """
@@ -28,17 +28,17 @@ class HistidineTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Histidine(pH).populations()))
+            approx(1.0, sum(Histidine(pH).populations()))
 
 
-class LysineTestCase(TestCase):
+class TestLysine(object):
 
     def test_pH_eq_pKa(self):
         """
         Weights for lysine at pH == pKa
         """
         weights = Lysine(Lysine.pKa).populations()
-        self.assertAlmostEqual(weights[0], weights[1])
+        approx(weights[0], weights[1])
 
     def test_pH_greater_than_pKa(self):
         """
@@ -46,7 +46,7 @@ class LysineTestCase(TestCase):
         """
 
         weights = Lysine(Lysine.pKa + 1).populations()
-        self.assertAlmostEqual(10.0 * weights[0], weights[1])
+        approx(10.0 * weights[0], weights[1])
 
     def test_pH_less_than_pKa(self):
         """
@@ -54,24 +54,24 @@ class LysineTestCase(TestCase):
         """
 
         weights = Lysine(Lysine.pKa - 1).populations()
-        self.assertAlmostEqual(weights[0], 10.0 * weights[1])
+        approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
         Fractional concentrations of lysine should always sum to 1.0
         """
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Lysine(pH).populations()))
+            approx(1.0, sum(Lysine(pH).populations()))
 
 
-class TyrosineTestCase(TestCase):
+class TyrosineTestCase(object):
 
     def test_pKa(self):
         """
         Weights for tyrosine at pH == pKa
         """
         weights = Tyrosine(Tyrosine.pKa).populations()
-        self.assertAlmostEqual(weights[0], weights[1])
+        approx(weights[0], weights[1])
 
     def test_pH_greater_than_pKa(self):
         """
@@ -79,7 +79,7 @@ class TyrosineTestCase(TestCase):
         """
 
         weights = Tyrosine(Tyrosine.pKa + 1).populations()
-        self.assertAlmostEqual(10.0 * weights[0], weights[1])
+        approx(10.0 * weights[0], weights[1])
 
     def test_pH_less_than_pKa(self):
         """
@@ -87,7 +87,7 @@ class TyrosineTestCase(TestCase):
         """
 
         weights = Tyrosine(Tyrosine.pKa - 1).populations()
-        self.assertAlmostEqual(weights[0], 10.0 * weights[1])
+        approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
@@ -95,17 +95,17 @@ class TyrosineTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Tyrosine(pH).populations()))
+            approx(1.0, sum(Tyrosine(pH).populations()))
 
 
-class CysteineTestCase(TestCase):
+class CysteineTestCase(object):
 
     def test_pKa(self):
         """
         Weights for cysteine at pH == pKa
         """
         weights = Cysteine(Cysteine.pKa).populations()
-        self.assertAlmostEqual(weights[0], weights[1])
+        approx(weights[0], weights[1])
 
     def test_pH_greater_than_pKa(self):
         """
@@ -113,7 +113,7 @@ class CysteineTestCase(TestCase):
         """
 
         weights = Cysteine(Cysteine.pKa + 1).populations()
-        self.assertAlmostEqual(10.0 * weights[0], weights[1])
+        approx(10.0 * weights[0], weights[1])
 
     def test_pH_less_than_pKa(self):
         """
@@ -121,7 +121,7 @@ class CysteineTestCase(TestCase):
         """
 
         weights = Cysteine(Cysteine.pKa - 1).populations()
-        self.assertAlmostEqual(weights[0], 10.0 * weights[1])
+        approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
@@ -129,10 +129,10 @@ class CysteineTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Cysteine(pH).populations()))
+            approx(1.0, sum(Cysteine(pH).populations()))
 
 
-class GlutamicAcidTestCase(TestCase):
+class GlutamicAcidTestCase(object):
 
     def test_pKa(self):
         """
@@ -141,10 +141,10 @@ class GlutamicAcidTestCase(TestCase):
         weights = Glutamic4(Glutamic4.pKa).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(weights[0], weights[1]*4)
-        self.assertAlmostEqual(weights[0], weights[2]*4)
-        self.assertAlmostEqual(weights[0], weights[3]*4)
-        self.assertAlmostEqual(weights[0], weights[4]*4)
+        approx(weights[0], weights[1]*4)
+        approx(weights[0], weights[2]*4)
+        approx(weights[0], weights[3]*4)
+        approx(weights[0], weights[4]*4)
 
     def test_pH_greater_than_pKa(self):
         """
@@ -154,10 +154,10 @@ class GlutamicAcidTestCase(TestCase):
         weights = Glutamic4(Glutamic4.pKa + 1).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(weights[0], 10.0 * weights[1]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[2]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[3]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[4]*4)
+        approx(weights[0], 10.0 * weights[1]*4)
+        approx(weights[0], 10.0 * weights[2]*4)
+        approx(weights[0], 10.0 * weights[3]*4)
+        approx(weights[0], 10.0 * weights[4]*4)
 
     def test_pH_less_than_pKa(self):
         """
@@ -167,10 +167,10 @@ class GlutamicAcidTestCase(TestCase):
         weights = Glutamic4(Glutamic4.pKa - 1).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[1])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[2])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[3])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[4])
+        approx(10.0 * weights[0], 4.0 * weights[1])
+        approx(10.0 * weights[0], 4.0 * weights[2])
+        approx(10.0 * weights[0], 4.0 * weights[3])
+        approx(10.0 * weights[0], 4.0 * weights[4])
 
     def test_totals(self):
         """
@@ -178,10 +178,10 @@ class GlutamicAcidTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Glutamic4(pH).populations()))
+            approx(1.0, sum(Glutamic4(pH).populations()))
 
 
-class AsparticAcidTestCase(TestCase):
+class AsparticAcidTestCase(object):
 
     def test_pKa(self):
         """
@@ -190,10 +190,10 @@ class AsparticAcidTestCase(TestCase):
         weights = Aspartic4(Aspartic4.pKa).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(weights[0], weights[1]*4)
-        self.assertAlmostEqual(weights[0], weights[2]*4)
-        self.assertAlmostEqual(weights[0], weights[3]*4)
-        self.assertAlmostEqual(weights[0], weights[4]*4)
+        approx(weights[0], weights[1]*4)
+        approx(weights[0], weights[2]*4)
+        approx(weights[0], weights[3]*4)
+        approx(weights[0], weights[4]*4)
 
     def test_pH_greater_than_pKa(self):
         """
@@ -203,10 +203,10 @@ class AsparticAcidTestCase(TestCase):
         weights = Aspartic4(Aspartic4.pKa + 1).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(weights[0], 10.0 * weights[1]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[2]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[3]*4)
-        self.assertAlmostEqual(weights[0], 10.0 * weights[4]*4)
+        approx(weights[0], 10.0 * weights[1]*4)
+        approx(weights[0], 10.0 * weights[2]*4)
+        approx(weights[0], 10.0 * weights[3]*4)
+        approx(weights[0], 10.0 * weights[4]*4)
 
     def test_pH_less_than_pKa(self):
         """
@@ -216,10 +216,10 @@ class AsparticAcidTestCase(TestCase):
         weights = Aspartic4(Aspartic4.pKa - 1).populations()
 
         # 4 protonated forms of the same state
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[1])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[2])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[3])
-        self.assertAlmostEqual(10.0 * weights[0], 4.0 * weights[4])
+        approx(10.0 * weights[0], 4.0 * weights[1])
+        approx(10.0 * weights[0], 4.0 * weights[2])
+        approx(10.0 * weights[0], 4.0 * weights[3])
+        approx(10.0 * weights[0], 4.0 * weights[4])
 
     def test_totals(self):
         """
@@ -227,4 +227,4 @@ class AsparticAcidTestCase(TestCase):
         """
 
         for pH in linspace(-1, 15, 50):
-            self.assertAlmostEqual(1.0, sum(Aspartic4(pH).populations()))
+            approx(1.0, sum(Aspartic4(pH).populations()))
