@@ -58,6 +58,11 @@ The shortlist for PDB residues that our code supports is as follows:
  * Lysine (LYS)
  * Arginine (ARG)
 
+ .. Note::
+   You may also need to rename any cysteine residues involved in disulfide bonds from
+   CYS -> CYX, for further processing steps.
+
+
 Dealing with hydrogens
 ----------------------
 
