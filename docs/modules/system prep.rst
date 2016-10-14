@@ -256,10 +256,10 @@ Here is an example leap script.
     complex = combine { protein ligand }
 
     # Validate the input
-    check protein
+    check complex
 
     # Calculate the total charge, for logging purposes
-    charge protein
+    charge complex
 
     # Write parameters.
     saveAmberParm  complex  complex.prmtop complex.inpcrd
