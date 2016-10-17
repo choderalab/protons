@@ -5,7 +5,7 @@ Running a constant-pH MD simulation
 
 The :py:mod:`protons` package extends OpenMM with the capability to alter the configuration of protons in simulation.
 This allows for sampling over multiple protonation states and prototropic tautomers of amino acid residues and small molcules.
-These effects have been shown as important in multiple biological systems [1]_, and now you can include them in OpenMM simulations.
+These effects have been shown as important in multiple biological systems ([Czodrowski2007a]_, [Czodrowski2007b]_, [Steuber2007]_, [Neeb2014]_), and now you can include them in OpenMM simulations.
 
 
 
@@ -15,9 +15,9 @@ Setting up the :py:class:`ProtonDrive` class
 
 In order to run a simulation containing multiple protonation states and tautomers, you can use :py:class:`ProtonDrive`.
 This object is responsible for keeping track of the current system state, and updates the OpenMM context with the correct parameters.
-It uses an instantaneous Monte Carlo sampling method [2]_ to update implicit solvent systems.
-Explicit solvent systems can be updated using NCMC [3]_, [4]_.
-The driver maintains a dictionary of all possible protonation states and tautomers of each residue in the simulation system, and their parameters in the AMBER99 constant-pH force field [2]_.
+It uses an instantaneous Monte Carlo sampling method [Mongan2004]_ to update implicit solvent systems.
+Explicit solvent systems can be updated using NCMC [Stern2007]_, [Nilmeier2011]_.
+The driver maintains a dictionary of all possible protonation states and tautomers of each residue in the simulation system, and their parameters in the AMBER99 constant-pH force field [Mongan2004]_.
 
 To instantiate the :py:class:`ProtonDrive`, you need a prmtop file (loaded using :py:class:`simtk.openmm.app.AmberPrmtopFile`),
 and an OpenMM system (:py:class:`simtk.openmm.openmm.System`).
@@ -157,10 +157,6 @@ Tracking the simulation
 =======================
 
 This section and the API still need to be written.
-
-
-
-
 
 
 Basic example
