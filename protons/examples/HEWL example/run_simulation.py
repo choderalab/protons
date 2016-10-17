@@ -1,11 +1,10 @@
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import ProtonDrive
-import numpy as np
 from openmmtools.integrators import VelocityVerletIntegrator
 from protons import log
 import pickle
-import time
+
 
 # Import one of the standard systems.
 temperature = 300.0 * unit.kelvin
@@ -45,28 +44,22 @@ try:
         log.info("Found precalibrated results. ")
 except:
     log.info("Calibrating")
-    #calibration_results = driver.calibrate()
-    #pickle.dump(calibration_results, open("calibration.pickle", "wb"))
+    calibration_results = driver.calibrate()
+    pickle.dump(calibration_results, open("calibration.pickle", "wb"))
     log.info("Finished calibration")
 
-#driver.import_gk_values(calibration_results)
+driver.import_gk_values(calibration_results)
 
 # 60 ns, 10000 state updates
 log.info("Entering main md loop")
 niter, mc_frequency = 10000, 6000
 simulation.reporters.append(app.DCDReporter('trajectory.dcd', mc_frequency))
 
-try:
-    for iteration in range(1, niter):
-        simulation.step(mc_frequency)  # MD
-        simulation.saveState('running.xml')
-        driver.update(simulation.context)  # protonation
-        if iteration % 10 == 0:
-            log.info("%.1f", float(iteration) / float(niter))
 
-except:
-    crashtime = time.strftime("%Y%m%d%H%M%S")
-    log.error("Your simulation has crashed, writing out error files")
-    simulation.saveState(open('crash.xml@%s'%crashtime, 'w'))
-    pickle.dump(driver, open("protondrive.pickle@%s"%crashtime, "wb"))
-    raise
+for iteration in range(1, niter):
+    simulation.step(mc_frequency)  # MD
+    driver.update(simulation.context)  # protonation
+    if iteration % 10 == 0:
+        log.info("%.1f", float(iteration) / float(niter))
+
+log.info("Simulation completed.")
