@@ -3,6 +3,8 @@
 Preparing systems for constant-pH simulation
 ********************************************
 
+Several steps are necessary to prepare a simulation system for simulation using ``protons``.
+In
 Most of ``protons`` relies on the OpenMM API for Amber files, which is documented here
 
 http://docs.openmm.org/7.0.0/userguide/application.html#using-amber-files
@@ -14,8 +16,8 @@ These instructions assume that you have a ``.pdb`` file of your system that has 
 If you need help adding missing residues, atoms, or other features to your system, we provide some general `Tips and Tricks`_.
 Using the examples shown below, this input file can be modified to be suitable for constant-pH simulation.
 
-Step 0. Obtaining and using Ambertools
-======================================
+Obtaining and using Ambertools
+==============================
 
 Ambertools provides a series of command-line utilities that aid in setting up simulation systems.
 We will be using these for the manipulation of ``.pdb`` and ``.mol2`` files, and for generating parameters for small
@@ -40,8 +42,8 @@ and if you're planning to use small molecules:
 We will be using these to prepare systems for constant-pH simulation in OpenMM.
 
 
-Step 1. Fixing residue names and atoms
-======================================
+Fixing residue names and atoms
+==============================
 
 Several modifications will need to be made to your input file, in order to rename residues, and prevent issues with preexisting hydrogen atoms.
 
@@ -94,8 +96,8 @@ though I recommend that you verify the output manually afterwards.
     awk '$3 !~ /^ *H/' ${pdbfile} > tmp && mv tmp ${pdbfile}
 
 
-Step 2. Writing out topology and parameter files using Leap
-===========================================================
+Writing out topology and parameter files using Leap
+===================================================
 
 The next step is to generate files containing the topology and the parameters of all atoms.
 This can be done using the command-line utility ``tleap``, which is available as part of ambertools.
@@ -209,8 +211,8 @@ You will be needing these to run your OpenMM script.
 
 .. _PyMOL: http://pymol.org/
 
-Step 2½. Including ligands in your system
-=========================================
+Including ligands in your system
+================================
 
 .. warning::
 
@@ -276,9 +278,8 @@ Here is an example leap script.
 
 
 
-
-Step 3. Generating parameters for amino acid protonation states
-===============================================================
+Generating parameters for amino acid protonation states
+=======================================================
 
 The last step to generate input for the constant-pH simulation is to generate a ``.cpin`` file for your protein.
 This file contains the parameters for the different protonation states of the amino acids in the system.
