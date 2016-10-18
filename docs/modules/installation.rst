@@ -76,11 +76,9 @@ The following example commands create a new conda environment called "protons", 
     # Point conda to the omnia channel as package source
     conda config --add channels omnia
     # Create a new environment called "protons", with all dependencies included
-    conda create --name protons openmm=7.0.1 numpy=1.10 scipy=0.17.0 openmmtools=0.7.5 pymbar openmoltools=0.7.0 ambermini joblib lxml
+    conda create --name protons openmm=7.0.1 numpy=1.10 scipy=0.17.0 openmmtools=0.7.5 pymbar openmoltools ambermini joblib lxml
     # Switch to the new environment
     source activate protons
-
-
 
 .. _ambermini: https://github.com/choderalab/ambermini
 .. _joblib: https://pythonhosted.org/joblib/

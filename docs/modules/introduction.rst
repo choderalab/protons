@@ -44,6 +44,8 @@ At the moment, we only support updating the protonation states of the sidechains
 * Cysteine, (pKa=8.5)
 * Lysine, (pKa=10.4)
 
+The pKa values used originate from [Mongan2004]_.
+
 
 Small molecule support
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -59,6 +61,6 @@ Explicit solvent
 Explicit solvent is supported by the code, but it is not feature complete.
 The current version of the software only features a working implementation of instantaneous Monte Carlo.
 This will likely lead to low acceptance rates for protonation state switching.
-We are in the process of developing an approach that uses NCMC [Nilmeier2011]_, but the implementation is not finished.
+We are in the process of developing an approach that uses NCMC [Nilmeier2011]_, [Chen2015]_ but the implementation is not finished.
 
 

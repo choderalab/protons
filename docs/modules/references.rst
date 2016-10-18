@@ -33,3 +33,5 @@ References
     http://ambermd.org/
 
 .. [Wang2004] Wang, Junmei, et al. "Development and testing of a general amber force field." Journal of computational chemistry 25.9 (2004): 1157-1174.
+
+.. [Chen2015] Chen, Yunjie, and Benoît Roux. "Constant-pH hybrid nonequilibrium molecular dynamics–monte carlo simulation method." Journal of chemical theory and computation 11.8 (2015): 3919-3931.

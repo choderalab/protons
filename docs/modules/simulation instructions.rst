@@ -16,7 +16,7 @@ Setting up the :py:class:`ProtonDrive` class
 In order to run a simulation containing multiple protonation states and tautomers, you can use :py:class:`ProtonDrive`.
 This object is responsible for keeping track of the current system state, and updates the OpenMM context with the correct parameters.
 It uses an instantaneous Monte Carlo sampling method [Mongan2004]_ to update implicit solvent systems.
-Explicit solvent systems can be updated using NCMC [Stern2007]_, [Nilmeier2011]_.
+Explicit solvent systems can be updated using NCMC [Stern2007]_, [Nilmeier2011]_, [Chen2015]_.
 The driver maintains a dictionary of all possible protonation states and tautomers of each residue in the simulation system, and their parameters in the AMBER99 constant-pH force field [Mongan2004]_.
 
 To instantiate the :py:class:`ProtonDrive`, you need a prmtop file (loaded using :py:class:`simtk.openmm.app.AmberPrmtopFile`),
