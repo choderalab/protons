@@ -1,10 +1,10 @@
 Protons
 =======
 
-[![Build Status](https://travis-ci.org/choderalab/constph-openmm.svg?branch=master)](https://travis-ci.org/choderalab/constph-openmm)
-[![Code Health](https://landscape.io/github/choderalab/constph-openmm/master/landscape.svg?style=flat)](https://landscape.io/github/choderalab/constph-openmm/master)
-[![Coverage Status](https://coveralls.io/repos/github/choderalab/openmm-constph/badge.svg?branch=master)](https://coveralls.io/github/choderalab/openmm-constph?branch=master)
-[![Documentation Status](https://readthedocs.org/projects/constph-openmm/badge/?version=latest)](http://constph-openmm.readthedocs.io/en/latest/?badge=latest)
+[![Build Status](https://travis-ci.org/choderalab/protons.svg?branch=master)](https://travis-ci.org/choderalab/protons)
+[![Code Issues](https://www.quantifiedcode.com/api/v1/project/b852925afabc4ff3aa41d94b4b2623dc/badge.svg)](https://www.quantifiedcode.com/app/project/b852925afabc4ff3aa41d94b4b2623dc)
+[![Documentation Status](https://readthedocs.org/projects/protons/badge/?version=latest)](http://protons.readthedocs.io/en/latest/?badge=latest)
+
 
 Testbed for constant-pH methodologies using OpenMM.
 
