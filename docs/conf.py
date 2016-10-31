@@ -127,7 +127,7 @@ html_theme_options = {
     'page_width': 'auto',
     'github_button': 'true',
     'github_user': 'choderalab',
-    'github_repo': 'constph-openmm',
+    'github_repo': 'protons',
     'github_banner': 'true',
     'travis_button': 'true',
     'show_powered_by' :'true',
