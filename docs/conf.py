@@ -256,7 +256,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   (master_doc, 'Protons-for-OpenMM.tex', 'Protons for OpenMM Documentation',
-   'Bas Rustenburg, Greg Ross, John Chodera et al.', 'manual'),
+   'Bas Rustenburg, Greg Ross, John Chodera et al ', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

@@ -1,62 +1,38 @@
 Protons: Protonation states and tautomers for OpenMM
 ****************************************************
 
-.. Note::
+.. caution::
 
     This is module is undergoing heavy development. None of the API calls are final.
+    This software is provided without any guarantees of correctness, you will likely encounter bugs.
 
-Introduction
-============
+    If you are interested in this code, please wait for the official release to use it.
+    In the mean time, to stay informed of development progress you are encouraged to:
 
-This python module implements a constant-pH MD scheme for sampling protonation states and tautomers of amino acids and small molecules in OpenMM.
+    * Follow `this feed`_ for updates on releases.
+    * Check out the `github repository`_ .
 
-
-Installation
-------------
-
-Use the command
-
-.. code-block:: bash
-
-    python setup.py install
-
-to install the package. The installation does not automatically check for requirements.
-
-To test the installation, run
-
-.. code-block:: bash
-
-    nosetests protons
-
-
-Requirements
-~~~~~~~~~~~~
-
-The ``protons`` package has the following requirements:
-
-* python 2.7, 3.4 or 3.5
-* openmm 7.0rc1
-* numpy >=1.10
-* scipy >=0.17.0
-* openmmtools 0.7.5
-* pymbar
-* openmoltools 0.7.0
-* ambermini
-* joblib
-* lxml
-
+.. _this feed: https://github.com/choderalab/constph-openmm/releases.atom
+.. _github repository: https://github.com/choderalab/constph-openmm
 
 Table of contents
------------------
+=================
 
 .. toctree::
    :name: mastertoc
    :maxdepth: 2
+   :numbered:
 
-   modules/protons
+
+   modules/introduction
+   modules/roadmap
+   modules/installation
+   modules/system preparation
+   modules/simulation instructions
    modules/calibration
    modules/ligutils
    api
+   modules/references
 
 
 Indices and tables
