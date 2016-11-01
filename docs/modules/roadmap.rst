@@ -1,3 +1,6 @@
+.. _roadmap:
+
+
 Feature Roadmap
 ===============
 
