@@ -25,6 +25,7 @@ Table of contents
 
 
    modules/introduction
+   modules/roadmap
    modules/installation
    modules/system preparation
    modules/simulation instructions
