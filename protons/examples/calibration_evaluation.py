@@ -3,8 +3,6 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import get_data
-from protons.driver import AmberProtonDrive
-
 from protons.logger import log
 from protons import AmberProtonDrive
 from protons.calibration import Histidine
