@@ -43,7 +43,7 @@ if __name__ == "__main__":
     #
 
     # Parameters.
-    niterations = 5000 # number of dynamics/titration cycles to run
+    niterations = 5000 # number of dynamics/sams_sampler cycles to run
     nsteps = 500  # number of timesteps of dynamics per iteration
     temperature = 300.0 * unit.kelvin
     pressure = 1.0 * unit.atmospheres
@@ -121,13 +121,13 @@ if __name__ == "__main__":
     CONSTRAINT_TOLERANCE = 1.0e-5 # can't go tighter than this or LocalEnergyMinimizer will fail.
     integrator.setConstraintTolerance(CONSTRAINT_TOLERANCE)
 
-    # Initialize Monte Carlo titration.
-    print("Initializing Monte Carlo titration...")
-    from protons.driver import ProtonDrive
+    # Initialize Monte Carlo sams_sampler.
+    print("Initializing Monte Carlo sams_sampler...")
+    from protons.driver import AmberProtonDrive
 
-    mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
+    mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=True, pressure=pressure, ncmc_steps_per_trial=10, implicit=running_implicit)
 
-    # Create Context (using compound integrator from ProtonDrive).
+    # Create Context (using compound integrator from AmberProtonDrive).
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)
     context.setPositions(positions)
@@ -157,8 +157,8 @@ if __name__ == "__main__":
         state = context.getState(getEnergy=True)
         final_time = time.time()
         elapsed_time = final_time - initial_time
-        print("  %.3f s elapsed for %d titration trials" % (elapsed_time, mc_titration._get_num_attempts_per_update()))
-        # Show titration states.
+        print("  %.3f s elapsed for %d sams_sampler trials" % (elapsed_time, mc_titration._get_num_attempts_per_update()))
+        # Show sams_sampler states.
         state = context.getState(getEnergy=True)
         potential_energy = state.getPotentialEnergy()
         print("Iteration %5d / %5d:    %s   %12.3f kcal/mol (%d / %d accepted)" % (
