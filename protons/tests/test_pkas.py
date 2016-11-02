@@ -28,21 +28,21 @@ class TestHistidine(object):
         Fractional concentrations should always sum to 1.0
         """
 
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Histidine(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Histidine(ph).populations()))
 
 
 class TestLysine(object):
     """Test the titration curve of lysine"""
 
-    def test_pH_eq_pka(self):
+    def test_ph_eq_pka(self):
         """
         Weights for lysine at pH == pKa
         """
         weights = Lysine(Lysine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pka(self):
+    def test_ph_greater_than_pka(self):
         """
         Weights for lysine at pH == pKa + 1
         """
@@ -50,7 +50,7 @@ class TestLysine(object):
         weights = Lysine(Lysine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pka(self):
+    def test_ph_less_than_pka(self):
         """
         Weights for lysine at pH == pKa - 1
         """
@@ -62,8 +62,8 @@ class TestLysine(object):
         """
         Fractional concentrations of lysine should always sum to 1.0
         """
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Lysine(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Lysine(ph).populations()))
 
 
 class TestTyrosine(object):
@@ -76,7 +76,7 @@ class TestTyrosine(object):
         weights = Tyrosine(Tyrosine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pka(self):
+    def test_ph_greater_than_pka(self):
         """
         Weights for tyrosine at pH == pKa + 1
         """
@@ -84,7 +84,7 @@ class TestTyrosine(object):
         weights = Tyrosine(Tyrosine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pka(self):
+    def test_ph_less_than_pka(self):
         """
         Weights for tyrosine at pH == pKa - 1
         """
@@ -97,8 +97,8 @@ class TestTyrosine(object):
         Fractional concentrations of tyrosine should always sum to 1.0
         """
 
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Tyrosine(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Tyrosine(ph).populations()))
 
 
 class TestCysteine(object):
@@ -111,7 +111,7 @@ class TestCysteine(object):
         weights = Cysteine(Cysteine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pka(self):
+    def test_ph_greater_than_pka(self):
         """
         Weights for cysteine at pH == pKa + 1
         """
@@ -119,7 +119,7 @@ class TestCysteine(object):
         weights = Cysteine(Cysteine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pka(self):
+    def test_ph_less_than_pka(self):
         """
         Weights for cysteine at pH == pKa - 1
         """
@@ -132,8 +132,8 @@ class TestCysteine(object):
         Fractional concentrations of cysteine should always sum to 1.0
         """
 
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Cysteine(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Cysteine(ph).populations()))
 
 
 class TestGlutamicAcid(object):
@@ -151,7 +151,7 @@ class TestGlutamicAcid(object):
         approx(weights[0], weights[3]*4)
         approx(weights[0], weights[4]*4)
 
-    def test_pH_greater_than_pka(self):
+    def test_ph_greater_than_pka(self):
         """
         Weights for glutamic acid at pH == pka + 1
         """
@@ -164,7 +164,7 @@ class TestGlutamicAcid(object):
         approx(weights[0], 10.0 * weights[3]*4)
         approx(weights[0], 10.0 * weights[4]*4)
 
-    def test_pH_less_than_pka(self):
+    def test_ph_less_than_pka(self):
         """
         Weights for glutamic acid at pH == pKa - 1
         """
@@ -182,8 +182,8 @@ class TestGlutamicAcid(object):
         Fractional concentrations of glutamic acid should always sum to 1.0
         """
 
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Glutamic4(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Glutamic4(ph).populations()))
 
 
 class TestAsparticAcid(object):
@@ -200,7 +200,7 @@ class TestAsparticAcid(object):
         approx(weights[0], weights[3]*4)
         approx(weights[0], weights[4]*4)
 
-    def test_pH_greater_than_pka(self):
+    def test_ph_greater_than_pka(self):
         """
         Weights for aspartic acid at pH == pKa + 1
         """
@@ -213,7 +213,7 @@ class TestAsparticAcid(object):
         approx(weights[0], 10.0 * weights[3]*4)
         approx(weights[0], 10.0 * weights[4]*4)
 
-    def test_pH_less_than_pka(self):
+    def test_ph_less_than_pka(self):
         """
         Weights for aspartic acid at pH == pKa - 1
         """
@@ -231,5 +231,5 @@ class TestAsparticAcid(object):
         Fractional concentrations of aspartic acid should always sum to 1.0
         """
 
-        for pH in linspace(-1, 15, 50):
-            approx(1.0, sum(Aspartic4(pH).populations()))
+        for ph in linspace(-1, 15, 50):
+            approx(1.0, sum(Aspartic4(ph).populations()))
