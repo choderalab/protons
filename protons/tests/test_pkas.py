@@ -7,19 +7,20 @@ from pytest import approx
 
 
 class TestHistidine(object):
+    """Test the titration curve of histidine"""
 
-    def test_pKa_delta(self):
+    def test_pka_delta(self):
         """
         Weights for histidine at pH == pKa_delta
         """
-        weights = Histidine(Histidine.pKa_d).populations()
+        weights = Histidine(Histidine.pka_d).populations()
         approx(weights[0], weights[1])
 
-    def test_pKa_eps(self):
+    def test_pka_eps(self):
         """
         Weights for histidine at pH == pKa_eps
         """
-        weights = Histidine(Histidine.pKa_e).populations()
+        weights = Histidine(Histidine.pka_e).populations()
         approx(weights[0], weights[2])
 
     def test_totals(self):
@@ -32,28 +33,29 @@ class TestHistidine(object):
 
 
 class TestLysine(object):
+    """Test the titration curve of lysine"""
 
-    def test_pH_eq_pKa(self):
+    def test_pH_eq_pka(self):
         """
         Weights for lysine at pH == pKa
         """
-        weights = Lysine(Lysine.pKa).populations()
+        weights = Lysine(Lysine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pKa(self):
+    def test_pH_greater_than_pka(self):
         """
         Weights for lysine at pH == pKa + 1
         """
 
-        weights = Lysine(Lysine.pKa + 1).populations()
+        weights = Lysine(Lysine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pKa(self):
+    def test_pH_less_than_pka(self):
         """
         Weights for lysine at pH == pKa - 1
         """
 
-        weights = Lysine(Lysine.pKa - 1).populations()
+        weights = Lysine(Lysine.pka - 1).populations()
         approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
@@ -65,28 +67,29 @@ class TestLysine(object):
 
 
 class TestTyrosine(object):
+    """Test the titration curve of tyrosine"""
 
-    def test_pKa(self):
+    def test_pka(self):
         """
         Weights for tyrosine at pH == pKa
         """
-        weights = Tyrosine(Tyrosine.pKa).populations()
+        weights = Tyrosine(Tyrosine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pKa(self):
+    def test_pH_greater_than_pka(self):
         """
         Weights for tyrosine at pH == pKa + 1
         """
 
-        weights = Tyrosine(Tyrosine.pKa + 1).populations()
+        weights = Tyrosine(Tyrosine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pKa(self):
+    def test_pH_less_than_pka(self):
         """
         Weights for tyrosine at pH == pKa - 1
         """
 
-        weights = Tyrosine(Tyrosine.pKa - 1).populations()
+        weights = Tyrosine(Tyrosine.pka - 1).populations()
         approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
@@ -99,28 +102,29 @@ class TestTyrosine(object):
 
 
 class TestCysteine(object):
+    """Test the titration curve of cysteine"""
 
-    def test_pKa(self):
+    def test_pka(self):
         """
-        Weights for cysteine at pH == pKa
+        Weights for cysteine at pH == pka
         """
-        weights = Cysteine(Cysteine.pKa).populations()
+        weights = Cysteine(Cysteine.pka).populations()
         approx(weights[0], weights[1])
 
-    def test_pH_greater_than_pKa(self):
+    def test_pH_greater_than_pka(self):
         """
         Weights for cysteine at pH == pKa + 1
         """
 
-        weights = Cysteine(Cysteine.pKa + 1).populations()
+        weights = Cysteine(Cysteine.pka + 1).populations()
         approx(10.0 * weights[0], weights[1])
 
-    def test_pH_less_than_pKa(self):
+    def test_pH_less_than_pka(self):
         """
         Weights for cysteine at pH == pKa - 1
         """
 
-        weights = Cysteine(Cysteine.pKa - 1).populations()
+        weights = Cysteine(Cysteine.pka - 1).populations()
         approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
@@ -133,12 +137,13 @@ class TestCysteine(object):
 
 
 class TestGlutamicAcid(object):
+    """Test the titration curve of glutamic acid"""
 
-    def test_pKa(self):
+    def test_pka(self):
         """
         Weights for glutamic acid at pH == pKa
         """
-        weights = Glutamic4(Glutamic4.pKa).populations()
+        weights = Glutamic4(Glutamic4.pka).populations()
 
         # 4 protonated forms of the same state
         approx(weights[0], weights[1]*4)
@@ -146,12 +151,12 @@ class TestGlutamicAcid(object):
         approx(weights[0], weights[3]*4)
         approx(weights[0], weights[4]*4)
 
-    def test_pH_greater_than_pKa(self):
+    def test_pH_greater_than_pka(self):
         """
-        Weights for glutamic acid at pH == pKa + 1
+        Weights for glutamic acid at pH == pka + 1
         """
 
-        weights = Glutamic4(Glutamic4.pKa + 1).populations()
+        weights = Glutamic4(Glutamic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
         approx(weights[0], 10.0 * weights[1]*4)
@@ -159,12 +164,12 @@ class TestGlutamicAcid(object):
         approx(weights[0], 10.0 * weights[3]*4)
         approx(weights[0], 10.0 * weights[4]*4)
 
-    def test_pH_less_than_pKa(self):
+    def test_pH_less_than_pka(self):
         """
         Weights for glutamic acid at pH == pKa - 1
         """
 
-        weights = Glutamic4(Glutamic4.pKa - 1).populations()
+        weights = Glutamic4(Glutamic4.pka - 1).populations()
 
         # 4 protonated forms of the same state
         approx(10.0 * weights[0], 4.0 * weights[1])
@@ -182,12 +187,12 @@ class TestGlutamicAcid(object):
 
 
 class TestAsparticAcid(object):
-
-    def test_pKa(self):
+    """Test titration curve of aspartic acid"""
+    def test_pka(self):
         """
         Weights for aspartic acid at pH == pKa
         """
-        weights = Aspartic4(Aspartic4.pKa).populations()
+        weights = Aspartic4(Aspartic4.pka).populations()
 
         # 4 protonated forms of the same state
         approx(weights[0], weights[1]*4)
@@ -195,12 +200,12 @@ class TestAsparticAcid(object):
         approx(weights[0], weights[3]*4)
         approx(weights[0], weights[4]*4)
 
-    def test_pH_greater_than_pKa(self):
+    def test_pH_greater_than_pka(self):
         """
         Weights for aspartic acid at pH == pKa + 1
         """
 
-        weights = Aspartic4(Aspartic4.pKa + 1).populations()
+        weights = Aspartic4(Aspartic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
         approx(weights[0], 10.0 * weights[1]*4)
@@ -208,12 +213,12 @@ class TestAsparticAcid(object):
         approx(weights[0], 10.0 * weights[3]*4)
         approx(weights[0], 10.0 * weights[4]*4)
 
-    def test_pH_less_than_pKa(self):
+    def test_pH_less_than_pka(self):
         """
         Weights for aspartic acid at pH == pKa - 1
         """
 
-        weights = Aspartic4(Aspartic4.pKa - 1).populations()
+        weights = Aspartic4(Aspartic4.pka - 1).populations()
 
         # 4 protonated forms of the same state
         approx(10.0 * weights[0], 4.0 * weights[1])

@@ -284,12 +284,12 @@ class Histidine(PopulationCalculator):
     """
     Amber constant-pH HIP residue state weights at given pH
     """
-    pKa_d = 6.5
-    pKa_e = 7.1
+    pka_d = 6.5
+    pka_e = 7.1
 
     def __init__(self, pH):
-        self.kd = pow(10.0, pH - Histidine.pKa_d)
-        self.ke = pow(10.0, pH - Histidine.pKa_e)
+        self.kd = pow(10.0, pH - Histidine.pka_d)
+        self.ke = pow(10.0, pH - Histidine.pka_e)
 
     def hip_concentration(self):
         """
@@ -322,10 +322,10 @@ class Aspartic4(PopulationCalculator):
     """
     Amber constant-pH AS4 residue state weights at given pH
     """
-    pKa = 4.0
+    pka = 4.0
 
     def __init__(self, pH):
-        self.k = pow(10.0, pH - self.pKa)
+        self.k = pow(10.0, pH - self.pka)
 
     def protonated_concentration(self):
         """
@@ -353,14 +353,14 @@ class Glutamic4(Aspartic4):
     """
     Amber constant-pH GL4 residue state weights at given pH
     """
-    pKa = 4.4
+    pka = 4.4
 
 
 class Lysine(Aspartic4):
     """
     Amber constant-pH LYS residue state weights at given pH
     """
-    pKa = 10.4
+    pka = 10.4
 
     def populations(self):
         return [self.protonated_concentration(), self.deprotonated_concenration()]
@@ -370,14 +370,14 @@ class Tyrosine(Lysine):
     """
     Amber constant-pH TYR residue state weights at given pH
     """
-    pKa = 9.6
+    pka = 9.6
 
 
 class Cysteine(Lysine):
     """
     Amber constant-pH CYS residue state weights at given pH
     """
-    pKa = 8.5
+    pka = 8.5
 
 
 class AmberCalibrationSystem(object):
