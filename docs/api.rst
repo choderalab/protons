@@ -1,20 +1,20 @@
 API documentation
 *****************
 
-The Protons module
+The protons module
 ==================
 
-.. py:currentmodule:: protons.driver
+.. py:currentmodule:: protons
 
 
-ProtonDrive class
------------------
+AmberProtonDrive class
+----------------------
 
-.. autoclass:: protons.driver.ProtonDrive
+.. autoclass:: protons.driver.AmberProtonDrive
 
     :members:
 
-    .. automethod:: ProtonDrive.__init__
-    .. automethod:: ProtonDrive.update
-    .. automethod:: ProtonDrive.calibrate
-    .. automethod:: ProtonDrive.import_gk_values
+    .. automethod:: AmberProtonDrive.__init__
+    .. automethod:: AmberProtonDrive.update
+    .. automethod:: AmberProtonDrive.calibrate
+    .. automethod:: AmberProtonDrive.import_gk_values

@@ -3,10 +3,10 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import get_data
-from protons.driver import ProtonDrive
+from protons.driver import AmberProtonDrive
 
 from protons.logger import log
-from protons import ProtonDrive
+from protons import AmberProtonDrive
 from protons.calibration import Histidine
 import numpy as np
 import openmmtools
@@ -31,7 +31,7 @@ cpin_filename = '{}/hip-implicit.cpin'.format(testsystems)
 
 # integrator = openmmtools.integrators.VVVRIntegrator(temperature, collision_rate, timestep)
 integrator = openmmtools.integrators.VelocityVerletIntegrator(timestep)
-mc_titration = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
+mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, debug=False, pressure=pressure, ncmc_steps_per_trial=0, implicit=True)
 if platform_name:
     platform = openmm.Platform.getPlatformByName(platform_name)
     context = openmm.Context(system, mc_titration.compound_integrator, platform)

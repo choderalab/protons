@@ -1,7 +1,7 @@
 """Script to run the calibrator"""
 from __future__ import print_function
 from simtk import unit, openmm
-from protons.calibration import CalibrationSystem
+from protons.calibration import AmberCalibrationSystem
 import logging
 from protons import log
 import numpy as np
@@ -18,7 +18,7 @@ settings["solvent"] = "implicit"
 settings["nsteps_per_trial"] = 0
 settings["platform_name"] = "CUDA"
 datapoints = dict(HIP=[], HID=[], HIE=[],idx=[])
-aac = CalibrationSystem("hip", settings, minimize=True, guess_free_energy=[0.0, 0.0, 0.0])
+aac = AmberCalibrationSystem("hip", settings, minimize=True, guess_free_energy=[0.0, 0.0, 0.0])
 print(aac.target_weights)
 
 window = 1000
@@ -28,7 +28,7 @@ for i,x in enumerate(aac.sams_till_converged(threshold=1.e-6, mc_every=100, gk_e
     datapoints['HIE'].append(x[2])
     datapoints['idx'].append(i)
 
-print(aac.titration.naccepted / aac.titration.nattempted)
+print(aac.sams_sampler.naccepted / aac.sams_sampler.nattempted)
 
 from protons.diagnostics import plot_sams_trace
 

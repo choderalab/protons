@@ -64,7 +64,7 @@ class TestLysine(object):
             approx(1.0, sum(Lysine(pH).populations()))
 
 
-class TyrosineTestCase(object):
+class TestTyrosine(object):
 
     def test_pKa(self):
         """
@@ -98,7 +98,7 @@ class TyrosineTestCase(object):
             approx(1.0, sum(Tyrosine(pH).populations()))
 
 
-class CysteineTestCase(object):
+class TestCysteine(object):
 
     def test_pKa(self):
         """
@@ -132,7 +132,7 @@ class CysteineTestCase(object):
             approx(1.0, sum(Cysteine(pH).populations()))
 
 
-class GlutamicAcidTestCase(object):
+class TestGlutamicAcid(object):
 
     def test_pKa(self):
         """
@@ -181,7 +181,7 @@ class GlutamicAcidTestCase(object):
             approx(1.0, sum(Glutamic4(pH).populations()))
 
 
-class AsparticAcidTestCase(object):
+class TestAsparticAcid(object):
 
     def test_pKa(self):
         """
