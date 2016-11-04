@@ -18,9 +18,10 @@ requirements:
     - openmmtools >=0.7.5
     - pymbar
     - openmoltools >=0.7.0
-    - ambermini
+    - ambermini <=15.0.4
     - joblib
     - lxml
+    - parmed
 
   run:
     - python
@@ -30,15 +31,15 @@ requirements:
     - openmmtools >=0.7.5
     - pymbar
     - openmoltools >=0.7.0
-    - ambermini
+    - ambermini <=15.0.4
     - joblib
     - lxml
+    - parmed
 
 test:
   requires:
     - pytest
     - pytest-cov
-    - python-coveralls
 
   imports:
     - protons

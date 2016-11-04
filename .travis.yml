@@ -21,8 +21,8 @@ script:
   - conda install --yes --use-local ${PACKAGENAME}-dev
   # Install testing dependencies
   - conda install --yes --quiet pytest pytest-cov
-  # Test the package
-  - cd devtools && py.test --cov=${PACKAGENAME} --verbose --pyargs ${PACKAGENAME}  && cd ..
+  # Test the package, measure coverage, verbose output,  include summaries of skipped and failed tests.
+  - cd devtools && py.test --cov=${PACKAGENAME} --verbose -rxs --pyargs ${PACKAGENAME}  && cd ..
   
 env:
   matrix:

@@ -1,21 +1,35 @@
 from __future__ import print_function
+
+import openmmtools
+import pytest
+from openmoltools.amber import find_gaff_dat
+from openmoltools.schrodinger import is_schrodinger_suite_installed
 from simtk import unit, openmm
 from simtk.openmm import app
+
 from protons import ProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling, CalibrationSystem
+from protons.ligands import parametrize_ligand, _TitratableForceFieldCompiler
 from . import get_data
 from .helper_func import SystemSetup
-import openmmtools
+
+try:
+    find_gaff_dat()
+    found_gaff = True
+except ValueError:
+    found_gaff = False
+
+found_schrodinger = is_schrodinger_suite_installed()
 
 
 class TestTyrosineImplicit(object):
+    """Simulating a tyrosine in implicit solvent"""
     default_platform = 'Reference'
 
     @staticmethod
     def setup_tyrosine_implicit():
         """
         Set up a tyrosine in implicit solvent
-
         """
         tyr_system = SystemSetup()
         tyr_system.temperature = 300.0 * unit.kelvin
@@ -208,7 +222,7 @@ class TestAminoAcidsImplicitCalibration(object):
 
 
 class TestPeptideImplicit(object):
-
+    """Implicit solvent tests for a peptide with the sequence EDYCHK"""
     default_platform = 'Reference'
 
     @staticmethod
@@ -245,3 +259,69 @@ class TestPeptideImplicit(object):
         context.setVelocitiesToTemperature(testsystem.temperature)
         integrator.step(10)  # MD
         mc_titration.update(context)  # protonation
+
+
+class TestLigandParameterizationImplicit(object):
+    """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
+    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff,
+                        reason="This test requires Schrodinger's suite and gaff")
+    def test_ligand_cphxml(self):
+        """
+        Run epik on a ligand and parametrize its isomers using antechamber
+        """
+
+        parametrize_ligand(get_data("imidazole.mol2", "testsystems/imidazole_implicit"), "/tmp/ligand-isomers-implicit.xml",
+                           pH=7.0)
+
+    def test_xml_compilation(self):
+        """
+        Compile an xml file for the isomers and read it in OpenMM
+        """
+        xmlfile = get_data("intermediate.xml", "testsystems/imidazole_implicit")
+        m = _TitratableForceFieldCompiler(xmlfile)
+        output_xml = '/tmp/isomers-implicit.cph.xml'
+        m.write(output_xml)
+        forcefield = app.ForceField(output_xml)
+
+    def test_reading_validated_xml_file_using_forcefield(self):
+        """
+        Read the xmlfile using app.ForceField
+
+        Notes
+        -----
+        Using a pregenerated, manually validated xml file.
+        This can detect failure because of changes to OpenMM ForceField.
+        """
+        xmlfile = get_data("imidazole.xml", "testsystems/imidazole_implicit")
+        forcefield = app.ForceField(xmlfile)
+
+
+class TestImidazoleImplicit(object):
+    """Tests for imidazole in implicit solvent"""
+
+    def test_creating_ligand_system(self):
+        """Create an OpenMM system using a pdbfile, and a ligand force field"""
+        xmlfile = get_data("imidazole.xml", "testsystems/imidazole_implicit")
+        forcefield = app.ForceField(xmlfile)
+        pdb = app.PDBFile(get_data("imidazole.pdb", "testsystems/imidazole_implicit"))
+        system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+
+    @pytest.mark.xfail(raises=NotImplementedError, reason="Test not finished")
+    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff, reason="This test requires Schrodinger's suite and gaff")
+    def test_full_procedure(self):
+        """
+        Run through an entire parametrization procedure and start a simulation
+
+        """
+        xml_output_file = "/tmp/full-proceduretest-implicit.xml"
+        parametrize_ligand(get_data("imidazole.mol2", "testsystems/imidazole_implicit"), xml_output_file, pH=7.0)
+
+        forcefield = app.ForceField(xml_output_file)
+        pdb = app.PDBFile(get_data("imidazole.pdb", "testsystems/imidazole_implicit"))
+        system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+
+        raise NotImplementedError("This test is unfinished.")
+
+        # Need to implement the API for reading FFXML and use it here.
+
+
