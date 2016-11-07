@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from protons.driver import ProtonDrive
+from protons.driver import _BaseProtonDrive, AmberProtonDrive
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
@@ -15,7 +15,7 @@ import openmmtools
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
-class SelfAdjustedMixtureSampling(ProtonDrive):
+class SelfAdjustedMixtureSampling(object):
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues or ligands.
 
     Attributes
@@ -33,84 +33,33 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None,
-                 nattempts_per_update=None, simultaneous_proposal_probability=0.1,
-                 ncmc_steps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
-                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False, debug=False):
+    def __init__(self, driver):
         """
-        Initialize a Monte Carlo titration driver for constant pH simulation.
-
-        Parameters
-        ----------
-        system : simtk.openmm.System
-            System to be titrated, containing all possible protonation sites.
-        temperature : simtk.unit.Quantity compatible with kelvin
-            Temperature to be simulated.
-        pH : float
-            The pH to be simulated.
-        prmtop : simtk.openmm.app.Prmtop
-            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions
-        cpin_filename : string
-            AMBER 'cpin' file defining protonation charge states and energies
-        integrator : simtk.openmm.integrator
-            The integrator used for dynamics
-        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
-            For explicit solvent simulations, the pressure.
-        nattempts_per_update : int, optional, default=None
-            Number of protonation state change attempts per update call;
-            if None, set automatically based on number of titratible groups (default: None)
-        simultaneous_proposal_probability : float, optional, default=0.1
-            Probability of simultaneously proposing two updates
-        debug : bool, optional, default=False
-            Turn debug information on/off.
-        ncmc_steps_per_trial : int, optional, default=0
-            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
-        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
-            Timestep to use for NCMC switching
-        maintainChargeNeutrality : bool, optional, default=True
-            If True, waters will be converted to monovalent counterions and vice-versa.
-        cationName : str, optional, default='Na+'
-            Name of cation residue from which parameters are to be taken.
-        anionName : str, optional, default='Cl-'
-            Name of anion residue from which parameters are to be taken.
-        implicit: bool, optional, default=False
-            Flag for implicit simulation. Skips ion parameter lookup.
-
-        Other Parameters
-        ----------------
-        debug : bool, optional
-            turn debug information on/off
-
+        Initialize a Self-adjusted mixture sampling (SAMS) simulation engine for a given
+        ProtonDrive object.
         """
 
-        super(SelfAdjustedMixtureSampling, self).__init__(system, temperature, pH, prmtop, cpin_filename, integrator,
-                                                          nattempts_per_update=nattempts_per_update,
-                                                          simultaneous_proposal_probability=simultaneous_proposal_probability,
-                                                          pressure=pressure,
-                                                          ncmc_steps_per_trial=ncmc_steps_per_trial, ncmc_timestep=ncmc_timestep,
-                                                          maintainChargeNeutrality=maintainChargeNeutrality,
-                                                          cationName=cationName, anionName=anionName,
-                                                          implicit=implicit,
-                                                          debug=debug)
-
+        # Check if driver is of the right type.
+        assert issubclass(type(driver), _BaseProtonDrive)
+        self.driver = driver
         self.n_adaptations = 0
 
         target_weights = None
-        for i, group in enumerate(self.titrationGroups):
-            for j, state in enumerate(self.titrationGroups[i]['titration_states']):
+        for i, group in enumerate(self.driver.titrationGroups):
+            for j, state in enumerate(self.driver.titrationGroups[i]['titration_states']):
                 if target_weights is not None:
-                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
+                    self.driver.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
                 else:
-                    self.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.titrationGroups[i]['titration_states'])
+                    self.driver.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.driver.titrationGroups[i]['titration_states'])
 
         group_index = 0
-        nstates = len(self.titrationGroups[group_index]['titration_states'])
+        nstates = len(self.driver.titrationGroups[group_index]['titration_states'])
         self.state_counts = np.zeros(nstates, np.float64)
-        log.info('There are %d titration states' % nstates)
+        log.info('There are %d sams_sampler states' % nstates)
 
     def adapt_zetas(self, context, scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0, group_index=0):
         """
-        Update the relative free energy of titration states of the specified titratable group
+        Update the relative free energy of sams_sampler states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
         Parameters
         ----------
@@ -164,14 +113,14 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         Parameters
         ----------
         zetas : list of float
-            Zeta values for each titration state
+            Zeta values for each sams_sampler state
         group_index : int, optional
             Index of the group that needs updating, defaults to 0
         """
 
         for i, titr_state_zeta in enumerate(zetas):
             # Zeta has opposite sign of relative energies
-            self.titrationGroups[group_index]['titration_states'][i]['g_k'] = titr_state_zeta
+            self.driver.titrationGroups[group_index]['titration_states'][i]['g_k'] = titr_state_zeta
 
     def get_gk(self, group_index=0):
         """Retrieve g_k/zeta for specified titratable group.
@@ -185,7 +134,7 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         -------
         np.ndarray - zeta of states
         """
-        zeta = np.asarray(list(map(lambda x: x['g_k'], self.titrationGroups[group_index]['titration_states'][:])))
+        zeta = np.asarray(list(map(lambda x: x['g_k'], self.driver.titrationGroups[group_index]['titration_states'][:])))
         return zeta
 
     def _get_target_weights(self, group_index=0):
@@ -200,7 +149,7 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         np.ndarray - target population of the states.
 
         """
-        return np.asarray(list(map(lambda x: x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
+        return np.asarray(list(map(lambda x: x['target_weight'], self.driver.titrationGroups[group_index]['titration_states'][:])))
 
     def _binary_update(self, group_index=0, b=1.0, stage="slow-gain", end_of_burnin=0):
         """
@@ -221,16 +170,16 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         np.ndarray - free energy updates
         """
         # [1/pi_1...1/pi_i]
-        update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.titrationGroups[group_index]['titration_states'][:])))
+        update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.driver.titrationGroups[group_index]['titration_states'][:])))
         # delta(Lt)
         delta = np.zeros_like(update)
-        delta[self._get_titration_state(group_index)] = 1
+        delta[self.driver._get_titration_state(group_index)] = 1
         update *= delta
         update = np.dot(self._gain_factor(b=b, stage=stage, group_index=group_index, end_of_burnin=end_of_burnin), update)
 
         # Update count of current state weights.
         group_index = 0
-        current_state = self._get_titration_state(group_index)
+        current_state = self.driver._get_titration_state(group_index)
         #  Use sqrt to make recent states count more
         self.state_counts[current_state] += np.sqrt(self.n_adaptations)
 
@@ -263,7 +212,7 @@ class SelfAdjustedMixtureSampling(ProtonDrive):
         pi_j = self._get_target_weights(group_index)
         # [1/pi_1...1/pi_i]
         update = 1.0 / pi_j
-        ub_j = self._get_reduced_potentials(context, group_index)
+        ub_j = self.driver._get_reduced_potentials(context, group_index)
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
         log_w_j -= logsumexp(log_w_j)
@@ -335,12 +284,12 @@ class Histidine(PopulationCalculator):
     """
     Amber constant-pH HIP residue state weights at given pH
     """
-    pKa_d = 6.5
-    pKa_e = 7.1
+    pka_d = 6.5
+    pka_e = 7.1
 
     def __init__(self, pH):
-        self.kd = pow(10.0, pH - Histidine.pKa_d)
-        self.ke = pow(10.0, pH - Histidine.pKa_e)
+        self.kd = pow(10.0, pH - Histidine.pka_d)
+        self.ke = pow(10.0, pH - Histidine.pka_e)
 
     def hip_concentration(self):
         """
@@ -373,10 +322,10 @@ class Aspartic4(PopulationCalculator):
     """
     Amber constant-pH AS4 residue state weights at given pH
     """
-    pKa = 4.0
+    pka = 4.0
 
     def __init__(self, pH):
-        self.k = pow(10.0, pH - self.pKa)
+        self.k = pow(10.0, pH - self.pka)
 
     def protonated_concentration(self):
         """
@@ -404,14 +353,14 @@ class Glutamic4(Aspartic4):
     """
     Amber constant-pH GL4 residue state weights at given pH
     """
-    pKa = 4.4
+    pka = 4.4
 
 
 class Lysine(Aspartic4):
     """
     Amber constant-pH LYS residue state weights at given pH
     """
-    pKa = 10.4
+    pka = 10.4
 
     def populations(self):
         return [self.protonated_concentration(), self.deprotonated_concenration()]
@@ -421,17 +370,17 @@ class Tyrosine(Lysine):
     """
     Amber constant-pH TYR residue state weights at given pH
     """
-    pKa = 9.6
+    pka = 9.6
 
 
 class Cysteine(Lysine):
     """
     Amber constant-pH CYS residue state weights at given pH
     """
-    pKa = 8.5
+    pka = 8.5
 
 
-class CalibrationSystem(object):
+class AmberCalibrationSystem(object):
     """
     Set up the reference system for one of the AMBER supported amino acids and provide an interface for calibration.
     """
@@ -508,25 +457,27 @@ class CalibrationSystem(object):
 
         # TODO pick integrators automatically based on montecarlotitration object?
         integrator = openmmtools.integrators.VelocityVerletIntegrator(integrator_timestep)
-        self.log_state_probabilities = np.log(np.array(CalibrationSystem.supported_aminoacids[residue_name](pH).populations()))
+        self.log_state_probabilities = np.log(np.array(AmberCalibrationSystem.supported_aminoacids[residue_name](pH).populations()))
 
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
-            mc_titration = SelfAdjustedMixtureSampling(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=pressure, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=False)
+            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=pressure, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=False)
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-            mc_titration = SelfAdjustedMixtureSampling(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=True)
+            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=True)
         else:
             raise ValueError("Solvent not recognized")
 
+        sams_sampler = SelfAdjustedMixtureSampling(mc_titration)
+
         if guess_free_energy is not None:
-            mc_titration.set_gk(guess_free_energy)
+            sams_sampler.set_gk(guess_free_energy)
         if platform_name:
             platform = openmm.Platform.getPlatformByName(platform_name)
-            context = openmm.Context(system, mc_titration.compound_integrator, platform)
+            context = openmm.Context(system, sams_sampler.driver.compound_integrator, platform)
         else:
-            context = openmm.Context(system, mc_titration.compound_integrator)
+            context = openmm.Context(system, sams_sampler.driver.compound_integrator)
 
         if minimize:
             minimized_context, positions = self._minimizer(platform_name, system, positions)
@@ -538,7 +489,7 @@ class CalibrationSystem(object):
         self.integrator = integrator
         self.integrator.step(1)
         self.system = system
-        self.titration = mc_titration
+        self.sams_sampler = sams_sampler
         self.settings = settings
 
     def sams_till_converged(self, threshold=1.e-5, mc_every=500, gk_every=1, check_frequency=100, window=200,
@@ -551,9 +502,9 @@ class CalibrationSystem(object):
         threshold : float, optional (default: 1.e-7)
             Maximum absolute gradient in gk to assume convergence.
         mc_every : int, optional (default: 100)
-            Update titration state every `mc_every` dynamics steps.
+            Update sams_sampler state every `mc_every` dynamics steps.
         gk_every : int, optional (default: 1)
-            Adapt the gk values every `gk_every` titration state updates
+            Adapt the gk values every `gk_every` sams_sampler state updates
         check_frequency: int, optional (default: 100)
             Check for convergence for this amount of gk updates
         window : int, optional (default: 200)
@@ -601,12 +552,12 @@ class CalibrationSystem(object):
             iteration += 1
 
             # Attempt changing the protonation/tautomer state
-            self.titration.update(self.context)
+            self.sams_sampler.driver.update(self.context)
 
             # Update gk using SAMS
             if iteration % gk_every == 0:
                 gk_updates += 1
-                target_deviation = self.titration.adapt_zetas(self.context, stage=stage, end_of_burnin=end_of_burnin, b=b, scheme=scheme)
+                target_deviation = self.sams_sampler.adapt_zetas(self.context, stage=stage, end_of_burnin=end_of_burnin, b=b, scheme=scheme)
 
                 # Once we're within 20 percent of the target, switch to slow stage
                 if target_deviation < 0.2 and end_of_burnin is None and iteration >= min_iter:
@@ -615,7 +566,7 @@ class CalibrationSystem(object):
                     stage="slow-gain"
 
                 # We sample uniformly with SAMS, so we need to subtract log pi_j's from the g_k to get our targets.
-                g_k_uniform = self.titration.get_gk()
+                g_k_uniform = self.sams_sampler.get_gk()
                 g_k = g_k_uniform - self.log_state_probabilities
                 gk_deque.append(g_k)
 

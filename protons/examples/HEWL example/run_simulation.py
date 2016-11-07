@@ -1,6 +1,6 @@
 from simtk import unit, openmm
 from simtk.openmm import app
-from protons import ProtonDrive
+from protons import AmberProtonDrive
 from openmmtools.integrators import VelocityVerletIntegrator
 from protons import log
 import pickle
@@ -27,8 +27,8 @@ system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCut
 log.info("Done creating system")
 # Create the driver that will track the state of the simulation and provides the updating API
 log.info("Creating protondrive")
-driver = ProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=0,
-                     implicit=True)
+driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=0,
+                          implicit=True)
 log.info("Finished drive setup")
 
 # Create an OpenMM simulation object as one normally would.
