@@ -10,6 +10,7 @@ from openmmtools.integrators import VelocityVerletIntegrator
 from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
+from integrators import GHMCIntegrator
 
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
@@ -660,10 +661,6 @@ class _BaseProtonDrive(_BaseDrive):
                     force.setExceptionParameters(
                         exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
 
-            # Update parameters in Context, if specified.
-            if context and hasattr(force, 'updateParametersInContext'):
-                force.updateParametersInContext(context)
-
     def _cache_force(self, titration_group_index, titration_state_index):
         """
         Cache the force parameters for a single sams_sampler state.
@@ -754,6 +751,63 @@ class _BaseProtonDrive(_BaseDrive):
 
         self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
+    def _ncmc_ghmc(self, context, titration_group_indices, initial_titration_states, final_titration_states):
+        """
+        Non equilibrium candidate Monte Carlo (NCMC) with a generalized Hamiltonian Monte Carlo (GHMC) propagator.
+
+        Notes
+        -----
+        The GHMC integrator is an simtk.openmm.CustomIntegrator object that calculates the protocol work internally.
+        Although it appears to only take one propagation step per perturbation step (i.e. ghmc.step(1)), multiple
+        propagation steps can be made depending on how the GHMC integrator was initialized.
+
+        To ensure the NCMC protocol is time symmetric, it has the form
+            propagation --> perturbation --> propagation
+
+        Parameters
+        ----------
+        context : simtk.openmm.Context
+            The context in which NCMC will be performed.
+
+        titration_group_indices :
+            The indices of the titratable groups that will be perturbed
+
+        initial_titration_states :
+            The initial protonation state of the titration groups
+
+        final_titration_states :
+            The final protonation state of the titration groups
+
+        Returns
+        -------
+        work : float
+          the protocol work of the NCMC procedure in multiples of kT.
+        """
+        ghmc = self.compound_integrator.getIntegrator(1)
+        ghmc.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
+        ghmc.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
+
+        # PROPAGATION
+        ghmc.step(1)
+
+        for step in range(self.nsteps_per_trial ):
+            # Get the fractional stage of the the protocol
+            titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
+
+            # PERTURBATION
+            for titration_group_index in titration_group_indices:
+                self._update_forces(titration_group_index, final_titration_states[titration_group_index],
+                                    initial_titration_state_index=initial_titration_states[titration_group_index],
+                                    fractional_titration_state=titration_lambda, context=context)
+            for force_index, force in enumerate(self.forces_to_update):
+                force.updateParametersInContext(context)
+
+            # PROPAGATION
+            ghmc.step(1)
+
+        # Extract the internally calculated work from the integrator
+        return ghmc.getGlobalVariableByName('work') * self.beta_unitless
+
     def _attempt_state_change(self, context, reject_on_nan=False):
         """
         Attempt a single Monte Carlo protonation state change.
@@ -779,7 +833,8 @@ class _BaseProtonDrive(_BaseDrive):
         if self.nsteps_per_trial > 0:
             initial_positions = context.getState(getPositions=True).getPositions(asNumpy=True)
 
-        # Compute initial probability of this protonation state.
+        # Compute initial probability of this protonation state. Used in the acceptance test for instantaneous
+        # attempts, and to record potential and kinetic energy.
         log_P_initial, pot1, kin1 = self._compute_log_probability(context)
 
         log.debug("   initial %s   %12.3f kcal/mol" % (str(self._get_titration_states()), pot1 / units.kilocalories_per_mole))
@@ -811,43 +866,38 @@ class _BaseProtonDrive(_BaseDrive):
             # Compute work for switching to new protonation states.
             if self.nsteps_per_trial == 0:
                 # Use instantaneous switching.
+                log_P_final, pot2, kin2 = self._compute_log_probability(context)
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], context)
+                work = - (log_P_final - log_P_initial)
             else:
                 # Run NCMC integration.
-                for step in range(self.nsteps_per_trial):
-                    # Take a Verlet integrator step.
-                    self.ncmc_propagation_integrator.step(1)
-                    # Update the sams_sampler state.
-                    titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-                    # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
-                    # since parameter update would occur in the middle of a velocity Verlet step.
-                    # TODO: This could be optimized by only calling
-                    # context.updateParametersInContext once rather than after every sams_sampler
-                    # state update.
-                    for titration_group_index in titration_group_indices:
-                        self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
-                                            titration_group_index], fractional_titration_state=titration_lambda, context=context)
-                        # TODO: Optimize where integrator.step() is called
-                    self.ncmc_propagation_integrator.step(1)
+                work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
 
-                # Update sams_sampler states so that log state penalties are accurately reflected.
+                # Update titrationStates so that log state penalties are accurately reflected. This is automatically
+                # done for instantaneous switches.
                 for titration_group_index in titration_group_indices:
                     self.titrationStates[titration_group_index] = titration_state_index
 
-            # Compute final probability of this protonation state.
-            log_P_final, pot2, kin2 = self._compute_log_probability(context)
+                # Save the kinetic and potential energy
+                log_P, pot2, kin2 = self._compute_log_probability(context)
 
-            # Compute work and store work history.
-            work = - (log_P_final - log_P_initial)
+            #TODO: remove when certain velocity Verlet won't be used as the NCMC propagator
+            # BEGIN old code
+            ## Compute final probability of this protonation state.
+            #log_P_final, pot2, kin2 = self._compute_log_probability(context)
+            ## Compute work and store work history.
+            #work = - (log_P_final - log_P_initial)
+            #log_P_accept = -work
+            #log.debug("LOGP" + str(log_P_accept))
+            #log.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
+            # End old code
+
+            # Store work history and potential and kinetic energy.
             self.work_history.append((initial_titration_states, final_titration_states, work))
-
-            # Accept or reject with Metropolis criteria.
             log_P_accept = -work
 
-            log.debug("LOGP" + str(log_P_accept))
-            log.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-
+            # Accept or reject with Metropolis criteria.
             self.nattempted += 1
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
@@ -1230,7 +1280,7 @@ class AmberProtonDrive(_BaseProtonDrive):
     """
 
     def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
-                 ncmc_steps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
+                 ncmc_steps_per_trial=0, ncmc_prop_per_step=1, ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
         Initialize a Monte Carlo sams_sampler driver for simulation of protonation states and tautomers.
@@ -1259,7 +1309,9 @@ class AmberProtonDrive(_BaseProtonDrive):
         debug : bool, optional, default=False
             Turn debug information on/off.
         ncmc_steps_per_trial : int, optional, default=0
-            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+            Number of perturbation steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_prop_per_step: int, optional, default=1
+            Number of propagation steps for each NCMC perturbation step, unused if ncmc_steps_per_trial = 0
         ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
             Timestep to use for NCMC switching
         maintainChargeNeutrality : bool, optional, default=True
@@ -1287,22 +1339,24 @@ class AmberProtonDrive(_BaseProtonDrive):
         self.temperature = temperature
         kT = kB * temperature  # thermal energy
         self.beta = 1.0 / kT  # inverse temperature
+        self.beta_unitless = strip_in_unit_system(self.beta)   # For more efficient calculation of the work (in multiples of KT) during NCMC
         self.pressure = pressure
         self.pH = pH
         self.cpin_filename = cpin_filename
         self.debug = debug
         self.nsteps_per_trial = ncmc_steps_per_trial
+        self.ncmc_prop_per_step = ncmc_prop_per_step
         if implicit:
             self.solvent = "implicit"
         else:
             self.solvent = "explicit"
-        # Create a Verlet integrator to handle NCMC integration
+        # Create a GHMC integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
-        self.ncmc_propagation_integrator = VelocityVerletIntegrator(ncmc_timestep)
+
+        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1/units.picosecond, ncmc_timestep, nsteps=self.ncmc_prop_per_step)
         self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
         self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
-
         # Set constraint tolerance.
         self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
