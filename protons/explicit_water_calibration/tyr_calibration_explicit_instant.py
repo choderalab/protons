@@ -8,7 +8,7 @@ from time import time
 
 # Create system
 directory = '/cbio/jclab/home/rossg/protons/protons/tests/testsystems/tyr_explicit/'
-filename = 'sams_explicit_ncmc.pickle'
+filename = 'sams_explicit_instant.pickle'
 
 def load_tyrosine_implicit(directory, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
     temperature = 300.0*unit.kelvin
