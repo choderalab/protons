@@ -866,14 +866,15 @@ class _BaseProtonDrive(_BaseDrive):
             # Compute work for switching to new protonation states.
             if self.nsteps_per_trial == 0:
                 # Use instantaneous switching.
-                log_P_final, pot2, kin2 = self._compute_log_probability(context)
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], context)
+                for force_index, force in enumerate(self.forces_to_update):
+                    force.updateParametersInContext(context)
+                log_P_final, pot2, kin2 = self._compute_log_probability(context)
                 work = - (log_P_final - log_P_initial)
             else:
                 # Run NCMC integration.
                 work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
-
                 # Update titrationStates so that log state penalties are accurately reflected. This is automatically
                 # done for instantaneous switches.
                 for titration_group_index in titration_group_indices:
