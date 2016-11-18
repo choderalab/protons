@@ -1,6 +1,7 @@
 from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
+import openmmtools
 from protons import AmberProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling
 import pickle
@@ -40,15 +41,20 @@ def prepare_system(prmtop, inpcrd, cpin, pH = 7.0, platform='CPU', nsteps=0, imp
     integrator:  simtk.openmm.integrator
         Integrator for sampling the configuration of the system
     """
+    # Loading system and initializing driver
     temperature = 300.0*unit.kelvin
     prmtop = app.AmberPrmtopFile(prmtop)
     inpcrd = app.AmberInpcrdFile(inpcrd)
     positions = inpcrd.getPositions()
     topology = prmtop.topology
     # Create system
-    system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    if implicit == True:
+        system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
+    else:
+        system = prmtop.createSystem(nonbondedMethod=app.PME, constraints=app.HBonds)
+        system.addForce(openmm.MonteCarloBarostat(1*unit.atmospheres, temperature, 25))
     # Create protons integrator
-    integrator = openmm.LangevinIntegrator(temperature, 1.0/unit.picoseconds, 2.0*unit.femtoseconds)
+    integrator = openmmtools.integrators.GHMCIntegrator(temperature, 1.0/unit.picoseconds, 2.0*unit.femtoseconds)
     # Create protons proton driver
     driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin, integrator, debug=False,
                               pressure=None, ncmc_steps_per_trial=nsteps, implicit=implicit)
@@ -72,13 +78,19 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--inpcrd', type=str, help="AMBER inpcrd file")
     parser.add_argument('-c', '--cpin', type=str, help="AMBER cpin file")
     parser.add_argument('-o', '--out', type=str, help="the naming scheme of the output files, default='out'", default='out.pickle')
+    parser.add_argument("--explicit",action='store_true',help="whether the simulation is of explicit water, default=False",default=False)
     parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=100000", default=100000)
     parser.add_argument('--md_steps', type=int, help="the number of MD steps at each iteration, default=1000", default=1000)
     parser.add_argument('--ncmc_steps', type=int, help="the number of NCMC steps at each iteration, default=0", default=0)
     parser.add_argument('--platform', type=str, choices = ['CPU','OpenCL'], help="the platform where the simulation will be run, default=CPU", default='CPU')
     args = parser.parse_args()
 
-    simulation, driver, sams_sampler, integrator = prepare_system(args.prmtop, args.inpcrd, args.cpin, platform=args.platform, nsteps=args.ncmc_steps)
+    if args.explicit == True:
+        implicit = False
+    else:
+        implicit = True
+
+    simulation, driver, sams_sampler, integrator = prepare_system(args.prmtop, args.inpcrd, args.cpin, platform=args.platform, nsteps=args.ncmc_steps, implicit=implicit)
     simulation.minimizeEnergy(maxIterations=1000)
 
     deviation = []    # The deviation between the target weight and actual counts
@@ -96,14 +108,14 @@ if __name__ == "__main__":
         t0 = time()
         integrator.step(args.md_steps)
         sams_sampler.driver.update(simulation.context)  # protonation
-        deviation.append(sams_sampler.adapt_zetas(simulation.context, 'binary', end_of_burnin=N/2))
+        deviation.append(sams_sampler.adapt_zetas(simulation.context, 'binary', end_of_burnin=int(N/1.5)))
         delta_t.append(time() - t0)
         weights.append(sams_sampler.get_gk())
         if i % 5 == 0:
-            shutil.copyfile(filename, 'prev_'.format(i) + filename)
+            shutil.copyfile(filename, 'prev_'+ filename)
             f = open(filename, "wb")
             pickle.dump((deviation, weights, delta_t), open(filename, "wb"))
             f.close()
 
-    shutil.copyfile(filename, 'prev_'.format(i) + filename)
+    shutil.copyfile(filename, 'prev_' + filename)
     pickle.dump((deviation, weights, delta_t), open(filename, "wb"))

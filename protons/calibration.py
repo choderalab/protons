@@ -446,7 +446,7 @@ class AmberCalibrationSystem(object):
         pressure = settings["pressure"]
         pH = settings["pH"]
         if not "collision_rate" in settings:
-            integrator_collision_rate = 9.1 / units.picoseconds
+            integrator_collision_rate = 1.0 / units.picoseconds
         else:
             integrator_collision_rate = settings["collision_rate"]
 
