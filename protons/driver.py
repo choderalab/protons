@@ -783,16 +783,33 @@ class _BaseProtonDrive(_BaseDrive):
         work : float
           the protocol work of the NCMC procedure in multiples of kT.
         """
+        # Turn the barostat and center of mass remover off, otherwise they contribute to the work
+        if self.barostat is not None:
+            self.barostat.setFrequency(0)
+        if self.cm_remover is not None:
+            self.cm_remover.setFrequency(0)
+
+        #TODO: remove explicit calculation of work with `getEnergy`
         ghmc = self.compound_integrator.getIntegrator(1)
         ghmc.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
         ghmc.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
 
+        # The "work" in the acceptance test has a contribution from the titratable group weights.
+        g_initial = 0
+        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+            titration_state = titration_group['titration_states'][titration_state_index]
+            g_initial += titration_state['g_k']
+
         # PROPAGATION
         ghmc.step(1)
+        work = 0.0
+        for step in range(self.nsteps_per_trial):
 
-        for step in range(self.nsteps_per_trial ):
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
+
+            # The slow way to calculate the work
+            nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
 
             # PERTURBATION
             for titration_group_index in titration_group_indices:
@@ -801,12 +818,39 @@ class _BaseProtonDrive(_BaseDrive):
                                     fractional_titration_state=titration_lambda, context=context)
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(context)
+            self.titrationStates[titration_group_index] = titration_state_index
+
+            # The slow way to calculate the work
+            nrg_final = context.getState(getEnergy=True).getPotentialEnergy()
+            work += (nrg_final - nrg_initial) * self.beta
 
             # PROPAGATION
             ghmc.step(1)
 
         # Extract the internally calculated work from the integrator
-        return ghmc.getGlobalVariableByName('work') * self.beta_unitless
+        #work = ghmc.getGlobalVariableByName('work') * self.beta_unitless
+
+        # Setting the titratable group to the final state so that the appropriate weight can be extracted
+        for titration_group_index in titration_group_indices:
+            self.titrationStates[titration_group_index] = final_titration_states[titration_group_index]
+
+        # Extracting the final states weigth.
+        g_final = 0
+        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+            titration_state = titration_group['titration_states'][titration_state_index]
+            g_final += titration_state['g_k']
+
+        # Extract the internally calculated work from the integrator
+        work += (g_final - g_initial)
+
+        # Turn the barostat on again
+        if self.barostat is not None:
+            self.barostat.setFrequency(self.barofrequency)
+        if self.cm_remover is not None:
+            self.cm_remover.setFrequency(self.cm_remover_freq)
+
+        return work
+
 
     def _attempt_state_change(self, context, reject_on_nan=False):
         """
@@ -825,9 +869,6 @@ class _BaseProtonDrive(_BaseDrive):
         The sams_sampler state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
 
         """
-
-        # Activate velocity Verlet integrator
-        self.compound_integrator.setCurrentIntegrator(1)
 
         # If using NCMC, store initial positions.
         if self.nsteps_per_trial > 0:
@@ -882,7 +923,7 @@ class _BaseProtonDrive(_BaseDrive):
 
                 # Save the kinetic and potential energy
                 log_P, pot2, kin2 = self._compute_log_probability(context)
-
+                #work = - (log_P - log_P_initial)
             #TODO: remove when certain velocity Verlet won't be used as the NCMC propagator
             # BEGIN old code
             ## Compute final probability of this protonation state.
@@ -1361,11 +1402,27 @@ class AmberProtonDrive(_BaseProtonDrive):
         # Set constraint tolerance.
         self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
-        # Check that system has MonteCarloBarostat if pressure is specified.
+        # Record the forces that need to be swicthed off for NCMC
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+        # Control center mass remover
+        if 'CMMotionRemover' in forces:
+            self.cm_remover = forces['CMMotionRemover']
+            self.cm_remover_freq = self.cm_remover.getFrequency()
+        else:
+            self.cm_remover = None
+            self.cm_remover_freq = None
+        # Check that system has MonteCarloBarostat if pressure is specified
         if pressure is not None:
-            forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
             if 'MonteCarloBarostat' not in forces:
                 raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
+            else:
+                self.barostat = forces['MonteCarloBarostat']
+                self.barofreq = self.barostat.getFrequency()
+        else:
+            self.barostat = None
+            self.barofreq = None
+
 
         # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
         self.maintainChargeNeutrality = maintainChargeNeutrality
