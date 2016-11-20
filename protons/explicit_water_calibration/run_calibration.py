@@ -7,6 +7,7 @@ from protons.calibration import SelfAdjustedMixtureSampling
 import pickle
 import shutil
 from time import time
+from simtk.openmm.app import PDBFile
 
 def prepare_system(prmtop, inpcrd, cpin, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
     """
@@ -100,22 +101,33 @@ if __name__ == "__main__":
     # Open file ready for saving data
     filename = args.out
     f = open(filename, "wb")
-    pickle.dump((deviation, weights, delta_t), open(filename, "wb"))
+    pickle.dump((deviation, weights, delta_t), f)
     f.close()
+
+    pdbfile = open('calibration_output.pdb', 'w')
+    PDBFile.writeHeader(simulation.topology, file=pdbfile)
+    positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+    PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=0)
 
     N = args.iterations
     for i in range(N):
         t0 = time()
         integrator.step(args.md_steps)
         sams_sampler.driver.update(simulation.context)  # protonation
-        deviation.append(sams_sampler.adapt_zetas(simulation.context, 'binary', end_of_burnin=int(N/1.5)))
+        deviation.append(sams_sampler.adapt_zetas(simulation.context, 'binary', stage='burn-in', b=0.5,
+                                                  end_of_burnin=int(N/1.5)))
         delta_t.append(time() - t0)
         weights.append(sams_sampler.get_gk())
         if i % 5 == 0:
             shutil.copyfile(filename, 'prev_'+ filename)
             f = open(filename, "wb")
-            pickle.dump((deviation, weights, delta_t), open(filename, "wb"))
+            pickle.dump((deviation, weights, delta_t), f)
             f.close()
+        if i % 1000 == 0:
+            positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+            PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=0)
 
     shutil.copyfile(filename, 'prev_' + filename)
-    pickle.dump((deviation, weights, delta_t), open(filename, "wb"))
+    f = open(filename, "wb")
+    pickle.dump((deviation, weights, delta_t), f)
+    f.close()
