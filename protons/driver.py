@@ -802,14 +802,17 @@ class _BaseProtonDrive(_BaseDrive):
 
         # PROPAGATION
         ghmc.step(1)
-        work = 0.0
+
+        # The slow way to calculate the work
+        #work = 0.0
+
         for step in range(self.nsteps_per_trial):
 
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
 
             # The slow way to calculate the work
-            nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
+            #nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
 
             # PERTURBATION
             for titration_group_index in titration_group_indices:
@@ -821,14 +824,14 @@ class _BaseProtonDrive(_BaseDrive):
             self.titrationStates[titration_group_index] = titration_state_index
 
             # The slow way to calculate the work
-            nrg_final = context.getState(getEnergy=True).getPotentialEnergy()
-            work += (nrg_final - nrg_initial) * self.beta
+            #nrg_final = context.getState(getEnergy=True).getPotentialEnergy()
+            #work += (nrg_final - nrg_initial) * self.beta
 
             # PROPAGATION
             ghmc.step(1)
 
         # Extract the internally calculated work from the integrator
-        #work = ghmc.getGlobalVariableByName('work') * self.beta_unitless
+        work = ghmc.getGlobalVariableByName('work') * self.beta_unitless
 
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:
@@ -916,14 +919,10 @@ class _BaseProtonDrive(_BaseDrive):
             else:
                 # Run NCMC integration.
                 work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
-                # Update titrationStates so that log state penalties are accurately reflected. This is automatically
-                # done for instantaneous switches.
-                for titration_group_index in titration_group_indices:
-                    self.titrationStates[titration_group_index] = titration_state_index
 
-                # Save the kinetic and potential energy
+                # Save the kinetic and potential energy for records
                 log_P, pot2, kin2 = self._compute_log_probability(context)
-                #work = - (log_P - log_P_initial)
+
             #TODO: remove when certain velocity Verlet won't be used as the NCMC propagator
             # BEGIN old code
             ## Compute final probability of this protonation state.
