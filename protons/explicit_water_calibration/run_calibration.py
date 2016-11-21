@@ -9,7 +9,7 @@ import shutil
 from time import time
 from simtk.openmm.app import PDBFile
 
-def prepare_system(prmtop, inpcrd, cpin, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
+def prepare_system(prmtop, cpin, inpcrd=None, xml=None, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
     """
     Function to prepare a system specified by AMBER topology files for a constant-ph calibration simulation with protons.
     Calibration is performed with self adjusted mixture sampling (SAMS).
@@ -20,6 +20,8 @@ def prepare_system(prmtop, inpcrd, cpin, pH = 7.0, platform='CPU', nsteps=0, imp
         the name of the AMBER prmtop file
     inpcrd: str
         the name of the AMBER inpcrd file
+    xml: str
+        the name of the XML file that contains the positions of the system
     cpin: str
         the name of the AMBER cpin file
     pH: float
@@ -44,23 +46,38 @@ def prepare_system(prmtop, inpcrd, cpin, pH = 7.0, platform='CPU', nsteps=0, imp
     """
     # Loading system and initializing driver
     temperature = 300.0*unit.kelvin
+
+    # Loading the system and forcefield
     prmtop = app.AmberPrmtopFile(prmtop)
-    inpcrd = app.AmberInpcrdFile(inpcrd)
-    positions = inpcrd.getPositions()
     topology = prmtop.topology
+
+    # Loading the positions
+    if inpcrd is not None:
+        inpcrd = app.AmberInpcrdFile(inpcrd)
+        positions = inpcrd.getPositions()
+    elif xml is not None:
+        lines = open(xml, 'r').read()
+        state = openmm.openmm.XmlSerializer.deserialize(lines)
+        positions = state.getPositions()
+    else:
+        raise ('Please input either an inpcrd or xml that contains the system coordinates')
+
     # Create system
     if implicit == True:
         system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
     else:
         system = prmtop.createSystem(nonbondedMethod=app.PME, constraints=app.HBonds)
         system.addForce(openmm.MonteCarloBarostat(1*unit.atmospheres, temperature, 25))
+
     # Create protons integrator
     integrator = openmmtools.integrators.GHMCIntegrator(temperature, 1.0/unit.picoseconds, 2.0*unit.femtoseconds)
+
     # Create protons proton driver
     driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin, integrator, debug=False,
                               pressure=None, ncmc_steps_per_trial=nsteps, implicit=implicit)
     # Create SAMS sampler
     sams_sampler = SelfAdjustedMixtureSampling(driver)
+
     # Create simulation
     if platform == 'OpenCL':
         platform = openmm.Platform.getPlatformByName('OpenCL')
@@ -76,9 +93,10 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run a calibration simulation with protons from AMBER topology files")
     parser.add_argument('-p', '--prmtop',type=str, help="AMBER prmtop file")
-    parser.add_argument('-i', '--inpcrd', type=str, help="AMBER inpcrd file")
+    parser.add_argument('-i', '--inpcrd', type=str, help="AMBER inpcrd file, default=None", default=None)
+    parser.add_argument('-x', '--xml', type=str, help="xml file containing the system state, default=None", default=None)
     parser.add_argument('-c', '--cpin', type=str, help="AMBER cpin file")
-    parser.add_argument('-o', '--out', type=str, help="the naming scheme of the output files, default='out'", default='out.pickle')
+    parser.add_argument('-o', '--out', type=str, help="the naming scheme of the output files, default='out'", default='out')
     parser.add_argument("--explicit",action='store_true',help="whether the simulation is of explicit water, default=False",default=False)
     parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=100000", default=100000)
     parser.add_argument('--md_steps', type=int, help="the number of MD steps at each iteration, default=1000", default=1000)
@@ -91,24 +109,28 @@ if __name__ == "__main__":
     else:
         implicit = True
 
-    simulation, driver, sams_sampler, integrator = prepare_system(args.prmtop, args.inpcrd, args.cpin, platform=args.platform, nsteps=args.ncmc_steps, implicit=implicit)
+    simulation, driver, sams_sampler, integrator = prepare_system(args.prmtop, args.cpin, inpcrd=args.inpcrd,
+                                                                  xml=args.xml, platform=args.platform,
+                                                                  nsteps=args.ncmc_steps, implicit=implicit)
+    # Minimization
     simulation.minimizeEnergy(maxIterations=1000)
 
+    # Pre-assignment
     deviation = []    # The deviation between the target weight and actual counts
     weights = []      # The bias applied by SAMS to reach target weight
     delta_t = []      # To record the time (in seconds) for each iteration
 
-    # Open file ready for saving data
-    filename = args.out
-    f = open(filename, "wb")
+    # Naming the output files
+    out_pdb = args.out + '.pdb'
+    out_pickle = args.out + '.pickle'
+    prev_pickle = 'prev_' + args.out + '.pickle'
+
+    # Initialize pickle for saving data
+    f = open(out_pickle, "wb")
     pickle.dump((deviation, weights, delta_t), f)
     f.close()
 
-    pdbfile = open('calibration_output.pdb', 'w')
-    PDBFile.writeHeader(simulation.topology, file=pdbfile)
-    positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-    PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=0)
-
+    # Run SAMS for a specified number of iterations
     N = args.iterations
     for i in range(N):
         t0 = time()
@@ -119,15 +141,17 @@ if __name__ == "__main__":
         delta_t.append(time() - t0)
         weights.append(sams_sampler.get_gk())
         if i % 5 == 0:
-            shutil.copyfile(filename, 'prev_'+ filename)
-            f = open(filename, "wb")
-            pickle.dump((deviation, weights, delta_t), f)
+            shutil.copyfile(out_pickle, prev_pickle)
+            f = open(out_pdb, "wb")
+            pickle.dump((deviation, weights, driver.work_history, delta_t), f)
             f.close()
         if i % 1000 == 0:
-            positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
-            PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=0)
+            pdbfile = open(out_pdb, 'a')
+            positions = simulation.context.getState(getPositions=True).getPositions()
+            PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=i)
+            pdbfile.close()
 
-    shutil.copyfile(filename, 'prev_' + filename)
-    f = open(filename, "wb")
-    pickle.dump((deviation, weights, delta_t), f)
+    shutil.copyfile(out_pickle, prev_pickle)
+    f = open(out_pickle, "wb")
+    pickle.dump((deviation, weights, driver.work_history, delta_t), f)
     f.close()
