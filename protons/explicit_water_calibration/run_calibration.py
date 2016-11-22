@@ -130,6 +130,11 @@ if __name__ == "__main__":
     pickle.dump((deviation, weights, delta_t), f)
     f.close()
 
+    pdbfile = open(out_pdb, 'w')
+    positions = simulation.context.getState(getPositions=True).getPositions()
+    PDBFile.writeModel(simulation.topology, positions, file=pdbfile, modelIndex=0)
+    pdbfile.close()
+
     # Run SAMS for a specified number of iterations
     N = args.iterations
     for i in range(N):
@@ -142,7 +147,7 @@ if __name__ == "__main__":
         weights.append(sams_sampler.get_gk())
         if i % 5 == 0:
             shutil.copyfile(out_pickle, prev_pickle)
-            f = open(out_pdb, "wb")
+            f = open(out_pickle, "wb")
             pickle.dump((deviation, weights, driver.work_history, delta_t), f)
             f.close()
         if i % 1000 == 0:
