@@ -588,6 +588,10 @@ class _BaseProtonDrive(_BaseDrive):
                             (titration_state_index, self._get_num_titration_states(titration_group_index)))
 
         self._update_forces(titration_group_index, titration_state_index, context=context)
+        # Update paramters in context
+        if context is not None:
+            for force_index, force in enumerate(self.forces_to_update):
+                force.updateParametersInContext(context)
         self.titrationStates[titration_group_index] = titration_state_index
 
         return
@@ -912,14 +916,16 @@ class _BaseProtonDrive(_BaseDrive):
                 # Use instantaneous switching.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], context)
-                for force_index, force in enumerate(self.forces_to_update):
-                    force.updateParametersInContext(context)
+
                 log_P_final, pot2, kin2 = self._compute_log_probability(context)
                 work = - (log_P_final - log_P_initial)
             else:
-                # Run NCMC integration.
-                work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
-
+                # Only perform NCMC when the proposed state is different from the current state
+                if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
+                    # Run NCMC integration.
+                    work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
+                else:
+                    work = 0.0
                 # Save the kinetic and potential energy for records
                 log_P, pot2, kin2 = self._compute_log_probability(context)
 
@@ -935,6 +941,7 @@ class _BaseProtonDrive(_BaseDrive):
             # End old code
 
             # Store work history and potential and kinetic energy.
+
             self.work_history.append((initial_titration_states, final_titration_states, work))
             log_P_accept = -work
 
