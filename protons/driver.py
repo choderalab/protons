@@ -945,11 +945,14 @@ class _BaseProtonDrive(_BaseDrive):
             self.work_history.append((initial_titration_states, final_titration_states, work))
             log_P_accept = -work
 
+            # Only record acceptance statistics for exchanges to different protonation states
+            if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
+                self.nattempted += 1
             # Accept or reject with Metropolis criteria.
-            self.nattempted += 1
             if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
                 # Accept.
-                self.naccepted += 1
+                if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
+                    self.naccepted += 1
                 self.pot_energies.append(pot2)
                 self.kin_energies.append(kin2)
                 # Update sams_sampler states.
@@ -960,7 +963,8 @@ class _BaseProtonDrive(_BaseDrive):
                     context.setVelocities(-context.getState(getVelocities=True).getVelocities(asNumpy=True))
             else:
                 # Reject.
-                self.nrejected += 1
+                if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
+                    self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
                 # Restore sams_sampler states.
@@ -974,7 +978,8 @@ class _BaseProtonDrive(_BaseDrive):
             if str(err) == 'Particle coordinate is nan' and reject_on_nan:
                 logging.warning("NaN during NCMC move, rejecting")
                 # Reject.
-                self.nrejected += 1
+                if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
+                    self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
                 # Restore sams_sampler states.
