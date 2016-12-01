@@ -4,14 +4,19 @@ import openmmtools
 import pytest
 from openmoltools.amber import find_gaff_dat
 from openmoltools.schrodinger import is_schrodinger_suite_installed
+import openeye
+import openmoltools as omt
+from openmoltools import forcefield_generators as omtff
+from lxml import etree
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import AmberProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling, AmberCalibrationSystem
-from protons.ligands import parametrize_ligand, _TitratableForceFieldCompiler
+from protons.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler
 
-from . import get_data
-from .helper_func import SystemSetup
+from . import get_test_data
+from .helper_func import SystemSetup, hasOpenEye
+from collections import OrderedDict
 
 try:
     find_gaff_dat()
@@ -38,7 +43,7 @@ class TestTyrosineImplicit(object):
         tyr_system.timestep = 1.0 * unit.femtoseconds
         tyr_system.collision_rate = 9.1 / unit.picoseconds
         tyr_system.pH = 9.6
-        testsystems = get_data('tyr_implicit', 'testsystems')
+        testsystems = get_test_data('tyr_implicit', 'testsystems')
         tyr_system.positions = openmm.XmlSerializer.deserialize(open('{}/tyr.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
         tyr_system.system = openmm.XmlSerializer.deserialize(open('{}/tyr.sys.xml'.format(testsystems)).read())
         tyr_system.prmtop = app.AmberPrmtopFile('{}/tyr.prmtop'.format(testsystems))
@@ -242,7 +247,7 @@ class TestPeptideImplicit(object):
         edchky_peptide_system.timestep = 1.0 * unit.femtoseconds
         edchky_peptide_system.collision_rate = 9.1 / unit.picoseconds
         edchky_peptide_system.pH = 7.4
-        testsystems = get_data('edchky_implicit', 'testsystems')
+        testsystems = get_test_data('edchky_implicit', 'testsystems')
         edchky_peptide_system.positions = openmm.XmlSerializer.deserialize(
             open('{}/edchky-implicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
         edchky_peptide_system.system = openmm.XmlSerializer.deserialize(open('{}/edchky-implicit.sys.xml'.format(testsystems)).read())
@@ -269,26 +274,69 @@ class TestPeptideImplicit(object):
         mc_titration.update(context)  # protonation
 
 
+@pytest.mark.skip(reason="Currently not supporting implicit solvent until we can add GB parameters for gaff types.")
 class TestLigandParameterizationImplicit(object):
     """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
-    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff,
-                        reason="This test requires Schrodinger's suite and gaff")
+    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
+                        reason="This test requires Schrodinger's suite, OpenEye, and gaff")
     def test_ligand_cphxml(self):
         """
         Run epik on a ligand and parametrize its isomers using antechamber
         """
 
-        parametrize_ligand(get_data("imidazole.mol2", "testsystems/imidazole_implicit"), "/tmp/ligand-isomers-implicit.xml",
-                           pH=7.0)
+        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_implicit"), "/tmp/protons-imidazole-parameterization-test-implicit.xml",
+                               pH=7.0)
 
+    @pytest.mark.skipif(not hasOpenEye, reason="This test requires OpenEye.")
     def test_xml_compilation(self):
         """
         Compile an xml file for the isomers and read it in OpenMM
         """
-        xmlfile = get_data("intermediate.xml", "testsystems/imidazole_implicit")
-        m = _TitratableForceFieldCompiler(xmlfile)
-        output_xml = '/tmp/isomers-implicit.cph.xml'
-        m.write(output_xml)
+        from openeye import oechem
+        isomers = OrderedDict()
+        isomer_index = 0
+        store = False
+
+        for line in open(get_test_data("epik.sdf", "testsystems/imidazole_implicit"), 'r'):
+            # for line in open('/tmp/tmp3qp7lep7/epik.sdf', 'r'):
+            if store:
+                epik_penalty = line.strip()
+
+                if store == "log_population":
+                    isomers[isomer_index]['epik_penalty'] = epik_penalty
+                    epik_penalty = float(epik_penalty)
+                    # Epik reports -RT ln p
+                    # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
+                    isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
+
+                # NOTE: relies on state penalty coming before charge
+                if store == "net_charge":
+                    isomers[isomer_index]['net_charge'] = int(epik_penalty)
+                    isomer_index += 1
+
+                store = ""
+
+            elif "r_epik_State_Penalty" in line:
+                # Next line contains epik state penalty
+                store = "log_population"
+                isomers[isomer_index] = dict()
+
+            elif "i_epik_Tot_Q" in line:
+                # Next line contains charge
+                store = "net_charge"
+
+        ifs = oechem.oemolistream()
+        ifs.open(get_test_data("epik.mol2", "testsystems/imidazole_implicit"))
+
+        xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
+        for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
+            # generateForceFieldFromMolecules takes a list
+            ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+            isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
+
+        compiler = _TitratableForceFieldCompiler(isomers)
+        output_xml = '/tmp/imidazole-implicit.cph.xml'
+        compiler.write(output_xml)
         forcefield = app.ForceField(output_xml)
 
     def test_reading_validated_xml_file_using_forcefield(self):
@@ -300,7 +348,7 @@ class TestLigandParameterizationImplicit(object):
         Using a pregenerated, manually validated xml file.
         This can detect failure because of changes to OpenMM ForceField.
         """
-        xmlfile = get_data("imidazole.xml", "testsystems/imidazole_implicit")
+        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
         forcefield = app.ForceField(xmlfile)
 
 
@@ -309,9 +357,9 @@ class TestImidazoleImplicit(object):
 
     def test_creating_ligand_system(self):
         """Create an OpenMM system using a pdbfile, and a ligand force field"""
-        xmlfile = get_data("imidazole.xml", "testsystems/imidazole_implicit")
+        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
         forcefield = app.ForceField(xmlfile)
-        pdb = app.PDBFile(get_data("imidazole.pdb", "testsystems/imidazole_implicit"))
+        pdb = app.PDBFile(get_test_data("imidazole.pdb", "testsystems/imidazole_implicit"))
         system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
 
     @pytest.mark.xfail(raises=NotImplementedError, reason="Test not finished")
@@ -322,10 +370,10 @@ class TestImidazoleImplicit(object):
 
         """
         xml_output_file = "/tmp/full-proceduretest-implicit.xml"
-        parametrize_ligand(get_data("imidazole.mol2", "testsystems/imidazole_implicit"), xml_output_file, pH=7.0)
+        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_implicit"), xml_output_file, pH=7.0)
 
         forcefield = app.ForceField(xml_output_file)
-        pdb = app.PDBFile(get_data("imidazole.pdb", "testsystems/imidazole_implicit"))
+        pdb = app.PDBFile(get_test_data("imidazole.pdb", "testsystems/imidazole_implicit"))
         system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
 
         raise NotImplementedError("This test is unfinished.")

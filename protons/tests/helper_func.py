@@ -12,6 +12,21 @@ except Exception:
     logging.info("CUDA unavailable on this system.")
     hasCUDA = False
 
+try:
+    from openeye import oechem
+    if not oechem.OEChemIsLicensed(): raise(ImportError("Need License for OEChem!"))
+    from openeye import oequacpac
+    if not oequacpac.OEQuacPacIsLicensed(): raise(ImportError("Need License for oequacpac!"))
+    from openeye import oeiupac
+    if not oeiupac.OEIUPACIsLicensed(): raise(ImportError("Need License for OEOmega!"))
+    from openeye import oeomega
+    if not oeomega.OEOmegaIsLicensed(): raise(ImportError("Need License for OEOmega!"))
+    hasOpenEye = True
+    openeye_exception_message = str()
+except Exception as e:
+    hasOpenEye = False
+    openeye_exception_message = str(e)
+
 
 class SystemSetup:
     """Empty class for storing systems and relevant attributes"""

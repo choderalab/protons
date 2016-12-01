@@ -1,66 +1,58 @@
+# coding=utf-8
+"""
+Library for parametrizing small molecules for simulation
+"""
+
 from __future__ import print_function
 
-import logging
 import os
-import random
-import re
 import shutil
 import tempfile
 from collections import OrderedDict
-from copy import deepcopy
-from glob import glob
-from math import exp
 
 import openmoltools as omt
-import parmed
-from joblib import Parallel, delayed
 from lxml import etree, objectify
-from six.moves import input
+from openeye import oechem
+from openmoltools import forcefield_generators as omtff
 
+from protons import get_data
 from protons.logger import log
 
 
-def _make_xml_root(root_name):
+class _Atom(object):
     """
-    Create a new xml root object with a given root name
-
-    Parameters
-    ----------
-    root_name - str
-        The name of the xml root.
-
-    Returns
-    -------
-        Xml tree
+    Private class representing GAFF parameters for a single atom
     """
-    xml = '<{0}></{0}>'.format(root_name)
-    root = objectify.fromstring(xml)
-    return root
+    def __init__(self, name, atom_type, charge):
+        """
+        Parameters
+        ----------
+        name : str
+            Name of the atom
+        atom_type : str
+            Gaff LJ type of the atom, or "dummy"
+        charge : str
+            point charge of the atom
 
+        """
+        self.name = name
+        self.atom_type = atom_type
+        self.charge = charge
 
-def _make_cph_xml():
-    """
-    Returns an empty xml file template for constant-pH simulation
-    """
+    def __str__(self):
+        return '<Atom name="{name}" type="{atom_type}" charge="{charge}"/>'.format(**self.__dict__)
 
-    forcefield_block = _make_xml_root("ForceField")
-    isomerdata_block = _make_xml_root("IsomerData")
-    atomtypes_block = _make_xml_root("AtomTypes")
-    residues_block = _make_xml_root("Residues")
-    residue_block = _make_xml_root("Residue")
-    harmonicbondforce_block = _make_xml_root("HarmonicBondForce")
-    harmonicangleforce_block = _make_xml_root("HarmonicAngleForce")
-    periodictorsionforce_block = _make_xml_root("PeriodicTorsionForce")
-    # Blocks for NonbondedForce and GBSAOBC forces are generated elsewhere on the fly
+    def __eq__(self, other):
+        """
+        Check that all attributes are the same, EXCEPT for charge
+        """
+        name_eq = self.name == other.name
+        type_eq = self.atom_type == other.atom_type
+        return name_eq and type_eq
 
-    residue_block.append(isomerdata_block)
-    residues_block.append(residue_block)
-    forcefield_block.append(atomtypes_block)
-    forcefield_block.append(residues_block)
-    forcefield_block.append(harmonicbondforce_block)
-    forcefield_block.append(harmonicangleforce_block)
-    forcefield_block.append(periodictorsionforce_block)
-    return forcefield_block
+    def is_dummy(self):
+        """Check if this atom is a dummy atom."""
+        return self.atom_type == "dummy"
 
 
 class _Bond(object):
@@ -68,640 +60,595 @@ class _Bond(object):
     Private class representing a bond between two atoms. Supports comparisons.
     """
     def __init__(self, atom1, atom2):
-        atom1 = int(atom1)
-        atom2 = int(atom2)
-        if atom1 < atom2:
-            self.from_atom = atom1
-            self.to_atom = atom2
-        elif atom2 < atom1:
-            self.from_atom = atom2
-            self.to_atom = atom1
-        else:
+        if atom1 == atom2:
             raise ValueError("Can't define a bond from one atom to itself!")
+        else:
+            # Ensure that bonds between two atoms are always in the same order
+            # The exact order does not matter
+            atoms = sorted([atom1, atom2])
+            self.atomName1 = atoms[0]
+            self.atomName2 = atoms[1]
 
     def __eq__(self, other):
+        """Two bonds are the same if all their attributes are the same."""
         return self.__dict__ == other.__dict__
 
-    def __gt__(self, other):
-        if self.from_atom > other.from_atom:
-            return True
-        elif self.from_atom == other.from_atom and self.to_atom > other.to_atom:
-            return True
-        else:
-            return False
+    def __repr__(self):
+        """FFXML representation of the bond"""
+        return '<Bond atomName1="{atomName1}" atomName2="{atomName2}"/>'.format(**self.__dict__)
 
-    def __lt__(self, other):
-        if self.from_atom < other.from_atom:
-            return True
-        elif self.from_atom == other.from_atom and self.to_atom < other.to_atom:
-            return True
-        else:
-            return False
+    __str__ = __repr__
 
-    def __le__(self, other):
-        if self.from_atom < other.from_atom:
-            return True
-        elif self.from_atom == other.from_atom and self.to_atom <= other.to_atom:
-            return True
-        else:
-            return False
-
-    def __ge__(self, other):
-        if self.from_atom > other.from_atom:
-            return True
-        elif self.from_atom == other.from_atom and self.to_atom >= other.to_atom:
-            return True
-        else:
-            return False
-
-    def __str__(self):
-        return '<Bond from="{from_atom}" to="{to_atom}"/>'.format(**self.__dict__)
-
-    __repr__ = __str__
-
-
-class _Atom(object):
-    """
-    Private class representing an atom that is part of a single residue
-    """
-
-    def __init__(self, resname, name, number=None):
+    def has_atom(self, atomname):
         """
+        Check if a particular atom is part of this bond.
 
         Parameters
         ----------
-        resname - str, name of the residue that the atom is in
-        name - name of the atom
-        number - str or int,
-            optional, the atomic number
-        """
-        self.resname = resname
-        self.name = name
-
-        #  If number not supplied, guess by looking for a number at the end of the atom name
-        # numerical component in name. NOT equivalent to index in Residue block
-        if number is None:
-            self.number = int(re.findall(r"\d+", name)[-1])
-        else:
-            self.number = number
-        self.type = "{}-{}".format(resname,name)
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def _same_res(self, other):
-        """Compare resnames"""
-        return self.resname == other.resname
-
-    def __int__(self):
-        """Convert atom to integer."""
-        return int(self.number) - 1
-
-    def __gt__(self, other):
-        if not self._same_res(other):
-            raise ValueError("Cannot compare atoms between residues.")
-        if self.number > other.number:
-            return True
-        else:
-            return False
-
-    def __lt__(self, other):
-        if not self._same_res(other):
-            raise ValueError("Cannot compare atoms between residues.")
-        if self.number < other.number:
-            return True
-        else:
-            return False
-
-    def __le__(self, other):
-        if not self._same_res(other):
-            raise ValueError("Cannot compare atoms between residues.")
-        if self.number <= other.number:
-            return True
-        else:
-            return False
-
-    def __ge__(self, other):
-        if not self._same_res(other):
-            raise ValueError("Cannot compare atoms between residues.")
-        if self.number >= other.number:
-            return True
-        else:
-            return False
-
-    def __str__(self):
-        return '<Atom name="{name}" type="{type}"/>'.format(**self.__dict__)
-
-    def __repr__ (self):
-        self.__str__() + str(self.number)
-
-
-class _AtomType(object):
-    """Private class representing an atomtype"""
-    def __init__(self, resname, atomname, aclass, element, mass):
-        """
-
-        Parameters
-        ----------
-        resname - str
-            name of the residue that the Atom belongs to
         atomname - str
-            Name of the atom that the type refers to
-        aclass - str
-            Class of the atom type
-        element - str
-            Element of the atom type
-        mass - str or float
-            Mass of the atom type
+            Name of the atom
+
+        Returns
+        -------
+        bool - True if the atom is part of the bond
         """
-
-        self.name = "{}-{}".format(resname, atomname)
-        self.aclass = aclass
-        self.element = element
-        self.mass = float(mass)
-        self.number = int(re.findall(r"\d+", atomname)[-1])
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def __str__(self):
-        return '<Type name="{name}" class="{aclass}" element="{element}" mass="{mass}"/>'.format(**self.__dict__)
-
-    __repr__ = __str__
+        return atomname in (self.atomName1, self.atomName2)
 
 
-class _NonbondedForce(object):
+class _State(object):
+    """Private class representing a template of a single isomeric state of the molecule.
     """
-    Private class representing the parameters for a nonbonded atom type
-    """
-    def __init__(self, resname, state, atomname, epsilon, sigma, charge):
-        """
-
-        Parameters
-        ----------
-        resname - str
-            Name of the residue
-        state - int
-            Index of the isomer state
-        atomname - str
-            Name of the atom that the Nonbonded force points to
-        epsilon - str
-            Value of epsilon LJ parameter
-        sigma - str
-            Value of sigma LJ parameter
-        charge - str
-            Value of partial charge parameter
-        """
-        self.resname = resname
-        self.state = state
-        self.atomname = atomname
-        self.epsilon = epsilon
-        self.sigma = sigma
-        self.charge = charge
-        self.type = self.resname + "-" + self.atomname
-
-    def __eq__(self, other):
-        if not self.type == other.type:
-            raise ValueError("Can only compare identical-atom types.")
-
-        return self.sigma == other.sigma and self.epsilon == other.epsilon
-
-    def __str__(self):
-        return '<Atom type="{type}" charge="{charge}" sigma="{sigma}" epsilon="{epsilon}"/>'.format(**self.__dict__)
-
-    __repr__ = __str__
-
-
-class _GBSAOBCForce(object):
-    """
-    Private class representing the parameters of a GBSAOBCForce type
-    """
-    def __init__(self, resname, state, atomname, charge, radius, scale):
-        """
-
-        Parameters
-        ----------
-        Parameters
-        ----------
-        resname - str
-            Name of the residue
-        state - int
-            Index of the isomer state
-        atomname - str
-            Name of the atom that the Nonbonded force points to
-        charge - str
-            Value of partial charge parameter
-        radius - str
-            Value of the GBSA radius parameter
-        scale - str
-            Value of the GBSA scale parameter
-
-        """
-        self.resname = resname
-        self.state = state
-        self.atomname = atomname
-        self.radius = radius
-        self.scale = scale
-        self.charge = charge
-        self.type = self.resname + "-" + self.atomname
-
-    def __eq__(self, other):
-        if not self.type == other.type:
-            raise ValueError("Can only compare identical-atom types.")
-
-        return self.radius == other.radius and self.scale == other.scale and self.charge == other.charge
-
-    def __str__(self):
-        return '<Atom type="{type}" charge="{charge}" radius="{radius}" scale="{scale}"/>'.format(**self.__dict__)
-
-    __repr__ = __str__
-
-
-class _Isomer(object):
-    """Private class representing a single isomeric state of the molecule.
-    """
-    def __init__(self, index, population, charge, coulomb14scale, lj14scale):
+    def __init__(self, index, log_population, epik_penalty, net_charge, atom_list):
         """
 
         Parameters
         ----------
         index - int
             Index of the isomeric state
-        population - str
+        log_population - str
             Solvent population of the isomeric state
-        charge - str
+        epik_penalty - str
+            The penalty returned from Epik (kcal/mol)
+        net_charge - str
             Net charge of the isomeric state
-        coulomb14scale - str
-            1-4 interaction scaling factor for Coulomb interactions
-        lj14scale - str
-            1-4 interaction scaling factor for LJ interactions
+        atom_list - list of str
+            Atoms that need to be included in this isomer
+
         """
         self.index = index
-        self.population = population
-        self.charge = charge
-        self.nonbondedtypes = OrderedDict()
-        self.gbsaobctypes = OrderedDict()
-        self.coulomb14sale = coulomb14scale
-        self.lj14scale = lj14scale
+        self.log_population = log_population
+        self.epik_penalty = epik_penalty
+        self.net_charge = net_charge
+        self.atoms=OrderedDict()
+        for atom in atom_list:
+            self.atoms[atom] = None
+
+    def validate(self):
+        """
+        Checks to see if the isomeric state is valid.
+
+        Raises
+        ------
+        ValueError
+            If any atom has not been instantiated, or is instantiated wrongly.
+
+        """
+        issues = "The following issues need to be resolved:\r\n"
+
+        for atom in self.atoms.values():
+
+            if atom is None:
+                issues += "Atom '{}' has not been instantiated.\r\n".format(atom.name)
+            elif not isinstance(atom, _Atom):
+                issues += "Invalid atom found '{}'.\r\n".format(atom.name)
+            elif atom.is_dummy():
+                issues += "Atom is a dummy, please assign proper types."
+            elif hasattr(atom, 'half_life'):
+                issues += "Atom '{}' is radioactive.\r\n".format(atom.name)
+
+        raise ValueError(issues)
+
+    def get_dummies(self):
+        """
+        Return the list of atoms that currently are None
+        """
+
+        dummies = list()
+
+        for name, atom in self.atoms.items():
+            if atom is None:
+                dummies.append(name)
+            elif atom.is_dummy():
+                dummies.append(name)
+
+        return dummies
+
+    def set_atom(self, atom):
+        """Set the parameters for a single atom
+
+        Parameters
+        ----------
+        atom : _Atom
+            The parameters of the atom
+        """
+        if not isinstance(atom, _Atom):
+            raise ValueError("Input needs to be an instance of class '_Atom'.")
+
+        if atom.name not in self.atoms.keys():
+            raise ValueError("Atom '{}' could not be found".format(atom.name))
+        self.atoms[atom.name] = atom
 
     def __str__(self):
-        return '<IsomericState index="{index}" population="{population}" netcharge="{charge}"/>'.format(**self.__dict__)
-
-    def __len__(self):
-        return len(self.nonbondedtypes)
-
-    def to_xml(self, gb_params):
-        """
-        Generate the IsomericState blocks for the output file.
-        """
-
-        xml = etree.fromstring(str(self))
-        nonbondblock = _make_xml_root("NonbondedForce")
-        if gb_params:
-            gbsaobc_block = _make_xml_root("GBSAOBCForce")
-
-        nonbondblock.attrib['coulomb14scale'] = self.coulomb14sale
-        nonbondblock.attrib['lj14scale'] = self.lj14scale
-
-        for nonbondtype in self.nonbondedtypes.values():
-            nonbondblock.append(etree.fromstring(str(nonbondtype)))
-
-        if gb_params:
-            for gbsaobc_type in self.gbsaobctypes.values():
-                gbsaobc_block.append(etree.fromstring(str(gbsaobc_type)))
-
-        xml.append(nonbondblock)
-        if gb_params:
-            xml.append(gbsaobc_block)
-
-        return xml
+        return '<State index="{index}" ' \
+               'log_population="{log_population}"' \
+               ' epik_penalty="{epik_penalty}"' \
+               ' net_charge="{net_charge}"/>'.format(**self.__dict__)
 
     __repr__ = __str__
-
-    def to_placeholder_xml(self):
-        """
-        Dummy placeholders for Nonbonded and GBSAOBC forces xml file
-        """
-        nonbond_block = _make_xml_root("NonbondedForce")
-        nonbond_block.attrib['coulomb14scale'] = self.coulomb14sale
-        nonbond_block.attrib['lj14scale'] = self.lj14scale
-
-        for nonbondtype in self.nonbondedtypes.values():
-            dummytype = deepcopy(nonbondtype)
-            dummytype.charge = 0.0
-            dummytype.epsilon = 1.0
-            dummytype.sigma = 1.0
-            nonbond_block.append(etree.fromstring(str(dummytype)))
-
-        gbsaobc_block = _make_xml_root("GBSAOBCForce")
-
-        for gbsaobc_type in self.gbsaobctypes.values():
-            dummytype = deepcopy(gbsaobc_type)
-            dummytype.charge = 0.0
-            dummytype.radius = 0.0
-            dummytype.scale = 1.0
-            gbsaobc_block.append(etree.fromstring(str(dummytype)))
-
-        return nonbond_block, gbsaobc_block
 
 
 class _TitratableForceFieldCompiler(object):
     """
-    Compiles an intermediate xml file to the final constant-ph ffxml file.
+    Compiles intermediate ffxml data to the final constant-ph ffxml file.
     """
-    # format of atomtype name
-    # Groups 1: resname, 2: isomer number, 3: atom letter, 4 atom number
-    typename_format = re.compile(r"^(\w+)-(\d+)-(\D+)(\d+)$")
-
-    def __init__(self, xmlfile, autoresolve=1, write_gb_params=True):
+    def __init__(self, input_state_data, gaff_xml=None, residue_name="LIG"):
         """
-        Compliles the intermediate ffxml files into a constant-pH compatible ffxml file.
+        Compiles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
         Parameters
         ----------
-        xmlfile - str
-            Path of the intermediate xml file.
-        autoresolve - int, optional
-            Automatically resolve any type conflicts by picking the entry numbered. Unpredictable.
-            Choose 0 unless you know exactly what you are doing.
-            0 leads to an interactive resolution of conflicts (recommended!).
-        write_gb_params - bool, optional
-            Write GB parameters into output xml file.
+        input_state_data : OrderedDict
+            Contains the ffxml of the Epik isomers, net charge, and population
+        gaff_xml : string, optional
+            File location of a gaff.xml file. If specified, read gaff parameters from here.
+            Otherwise, gaff parameters are taken from protons/forcefields/gaff.xml
+        residue_name : str, optional, default = "LIG"
+            name of the residue in the output template
 
         """
-        self._atoms = OrderedDict()
+        self._input_state_data = input_state_data
+        self._atom_names = list()
         self._bonds = list()
-        self._atom_types = list()
-        self._isomeric_states = OrderedDict()
-        xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-        self._input_tree = etree.parse(xmlfile, parser=xmlparser)
-        self._make_output_tree(autoresolve, write_gb_params)
+        self._state_templates = list()
+        self.ffxml = _generate_xml_template(residue_name=residue_name)
 
-    def _make_output_tree(self, autoresolve, write_gb_params):
+        # including gaff file that is included with this package
+        if gaff_xml is None:
+            gaff_xml = get_data("gaff.xml", "forcefields")
+
+        # list of all xml files containing relevant parameters that may be used to construct template,
+        self._xml_parameter_trees = [etree.parse(gaff_xml,
+                                                 etree.XMLParser(remove_blank_text=True, remove_comments=True)
+                                                 )
+                                     ]
+        for state in self._input_state_data.values():
+            self._xml_parameter_trees.append(state['ffxml'])
+
+        # Compile all information into the output structure
+        self._make_output_tree()
+
+    def _make_output_tree(self):
         """
         Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
+        """
 
-        autoresolve - int
-            Automatically pick all parameters from the numbered entery.
-            Use 0 for interactive picking (recommended.)
+        # Obtain information about all the atoms
+        self._complete_atom_registry()
+        # Obtain information about all the bonds
+        self._complete_bond_registry()
+        # Register the states
+        self._complete_state_registry()
+        # Interpolate differing atom types between states to create a single template state.
+        self._create_hybrid_template()
+        # Set the initial state of the template that is read by OpenMM
+        self._initialize_forcefield_template()
+        # Add isomer specific information
+        self._add_isomers()
+        # Append extra parameters from frcmod
+        self._append_extra_gaff_types()
+        # Remove empty blocks, and unnecessary information in the ffxml tree
+        self._sanitize_ffxml()
 
-        write_gb_params - bool
-            Include GB parameters in output.
+        return
+
+    def _initialize_forcefield_template(self):
+        """
+        Set up the residue template using the first state of the molecule
+        """
+
+        residue = self.ffxml.xpath('/ForceField/Residues/Residue')[0]
+        for atom in self._state_templates[0].atoms.values():
+            residue.append(etree.fromstring(str(atom)))
+        for bond in self._bonds:
+            residue.append(etree.fromstring(str(bond)))
+
+    def _add_isomers(self):
+        """
+        Add all the isomer specific data to the xml template
+        Returns
+        -------
 
         """
-        self._resname = None
-        # Create a registry of atom names in self._atoms and atom types in self._atom_types
-        self._complete_atom_registry(autoresolve=autoresolve)
-        self._output_tree = _make_cph_xml()
 
-        # Add missing atoms to shift indices of atoms in bonds correctly, then register bonds
-        self._complete_bond_registry()
+        for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
+            protonsdata = etree.fromstring("<Protons/>")
+            protonsdata.attrib['number_of_states'] = str(len(self._state_templates))
+            for isomer_index, isomer in enumerate(self._state_templates):
+                isomer_str = str(isomer)
+                isomer_xml = etree.fromstring(isomer_str)
+                for atom in isomer.atoms.values():
+                    isomer_xml.append(etree.fromstring(str(atom)))
+                protonsdata.append(isomer_xml)
+            residue.append(protonsdata)
 
-        # Register the isomeric states (without nonbonded parameters)
-        self._complete_state_registry()
+    def _append_extra_gaff_types(self):
+        """
+        Add additional parameters generated by antechamber/parmchk for the individual isomers
+        """
 
-        # Add nonbonded terms for each state
-        self._complete_nonbonded_registry(autoresolve=autoresolve)
+        added_parameters = list()  # for bookkeeping of duplicates
 
-        # Add GB parameters if applicable
-        if write_gb_params: self._complete_gbparams_registry()
+        # All xml sources except the entire gaff.xml
+        for xmltree in self._xml_parameter_trees[1:]:
+            # Match the type of the atom in the AtomTypes block
+            for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
+                items = set(atomtype.items())
+                type_element = tuple(["AtomTypes", "Type", items])
+                # Make sure the type wasn't already added by a previous state
+                if type_element not in added_parameters:
+                    added_parameters.append(type_element)
+                    self._add_to_output(atomtype, "/ForceField/AtomTypes")
 
-        self._sort_bonds()
-        self._sort_atypes()
+            # Match the bonds of the atom in the HarmonicBondForce block
+            for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
+                items = set(bond.items())
+                bond_element = tuple(["HarmonicBondForce", "Bond", items])
+                # Make sure the force wasn't already added by a previous state
+                if bond_element not in added_parameters:
+                    added_parameters.append(bond_element)
+                    self._add_to_output(bond, "/Forcefield/HarmonicBondForce")
 
-        # Add atoms and bonds to the output
-        for residue in self._output_tree.xpath('/ForceField/Residues/Residue'):
-            residue.attrib["name"] = self._resname
+            # Match the angles of the atom in the HarmonicAngleForce block
+            for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
+                items = set(angle.items())
+                angle_element = tuple(["HarmonicAngleForce", "Angle", items])
+                # Make sure the force wasn't already added by a previous state
+                if angle_element not in added_parameters:
+                    added_parameters.append(angle_element)
+                    self._add_to_output(angle, "/Forcefield/HarmonicAngleForce")
 
-            for atom in self._atoms.values():
-                residue.append(etree.fromstring(str(atom)))
+            # Match proper dihedral of the atom in PeriodicTorsionForce block
+            for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+                items = set(proper.items())
+                proper_element = tuple(["PeriodicTorsionForce", "Proper", items])
+                # Make sure the force wasn't already added by a previous state
+                if proper_element not in added_parameters:
+                    added_parameters.append(proper_element)
+                    self._add_to_output(proper, "/ForceField/PeriodicTorsionForce")
 
-            for bond in self._bonds:
-                residue.append(etree.fromstring(str(bond)))
+            # Match improper dihedral of the atom in PeriodicTorsionForce block
+            for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
+                items = set(improper.items())
+                improper_element = tuple(["PeriodicTorsionForce", "Improper", items])
+                # Make sure the force wasn't already added by a previous state
+                if improper_element not in added_parameters:
+                    added_parameters.append(improper_element)
+                    self._add_to_output(improper, "/ForceField/PeriodicTorsionForce")
 
-        # Add atomtypes to the output
-        for atypes in self._output_tree.xpath('/ForceField/AtomTypes'):
-            for atype in self._atom_types:
-                atypes.append(etree.fromstring(str(atype)))
+            # Match nonbonded type of the atom in NonbondedForce block
+            for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
+                items = set(nonbond.items())
+                nb_element = tuple(["NonbondedForce", "Atom", items])
+                # Make sure the force wasn't already added by a previous state
+                if nb_element not in added_parameters:
+                    added_parameters.append(nb_element)
+                    self._add_to_output(nonbond, "/ForceField/NonbondedForce")
 
-        # Copy bonded definitions from input directly to output
-        for hbfblock in self._output_tree.xpath('/ForceField/HarmonicBondForce'):
-            for harmonicbondforce in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/HarmonicBondForce/Bond'):
-                hbfblock.append(harmonicbondforce)
+    def _add_to_output(self, element, xpath):
+        """
+        Insert elements into the output tree at a location specified using XPATH
 
-        for hafblock in self._output_tree.xpath('/ForceField/HarmonicAngleForce'):
-            for harmonicangleforce in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/HarmonicAngleForce/Angle'):
-                hafblock.append(harmonicangleforce)
+        Parameters
+        ----------
+        element - the element to append
+        xpath - XPATH specification of the location to append the element
 
-        for pdtblock in self._output_tree.xpath('/ForceField/PeriodicTorsionForce'):
-            for propertorsionforce in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/PeriodicTorsionForce/Proper'):
-                pdtblock.append(propertorsionforce)
-            for impropertorsionforce in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/PeriodicTorsionForce/Improper'):
-                pdtblock.append(impropertorsionforce)
+        Returns
+        -------
 
-        # Fill in nonbonded  and gbsaobc atomtype placeholders
-        for forcefieldblock in self._output_tree.xpath('/ForceField'):
-            nonbondplaceholder, gbsaobcplaceholder = self._isomeric_states[1].to_placeholder_xml()
+        """
+        for item in self.ffxml.xpath(xpath):
+            item.append(element)
+        return
 
-            forcefieldblock.append(nonbondplaceholder)
-            if write_gb_params:
-                forcefieldblock.append(gbsaobcplaceholder)
+    def _validate_states(self):
+        """
+        Check the validity of all states.
+        """
+        for state in self._state_templates:
+            state.validate()
 
-        # Fill in isomer specific nonbonded and gbsaobctypes
-        for isodatablock in self._output_tree.xpath('/ForceField/Residues/Residue/IsomerData'):
-            for isoindex, isostate in self._isomeric_states.items():
-                isodatablock.append(isostate.to_xml(write_gb_params))
+    def _create_hybrid_template(self):
+        """
+        Interpolate differing atom types to create a single template state that has proper bonded terms for all atoms.
+        """
+
+        possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
+        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
+
+        # Collect all possible types by looping through states
+        for atomname in self._atom_names:
+            possible_types_per_atom[atomname] = list()
+            for state in self._state_templates:
+                if state.atoms[atomname] is not None:
+                    # Store the atomtype for this state as a possible pick
+                    possible_types_per_atom[atomname].append(state.atoms[atomname].atom_type)
+                else:
+                    # add missing atoms, using the placeholder type "dummy' for now and a net charge of 0.0
+                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
+
+            # look up the parameters for the encountered atom types from all available parameter sources
+            for atom_type in possible_types_per_atom[atomname]:
+                if atom_type not in available_parameters_per_type.keys():
+                    available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
+
+        # The final, uniform set of atomtypes that will be used
+        final_types = dict()
+
+        # Keep looping until all types have been assigned
+        number_of_attempts = 0
+        while len(final_types) != len(self._atom_names):
+
+            # TODO : if there is more than one unique solution to the entire thing, this may result in an infinite loop
+            # It is not completely obvious what would be the right thing to do in such a case.
+            # Could write code to systematically select atoms from the possibilities until all have been resolved
+            # This is just a heuristic cutoff to detect whether something is wrong.
+            if number_of_attempts > 10 * len(self._atom_names):
+                raise RuntimeError("Can't seem to resolve atom types, there might be more than 1 unique solution.")
+            number_of_attempts += 1
+
+            # For those that need to be resolved
+            for atomname, possible_types_for_this_atom in possible_types_per_atom.items():
+
+                # Already assigned this atom, skip it.
+                if atomname in final_types:
+                    continue
+                # If all are the same as the first one
+                elif all(x == possible_types_for_this_atom[0] for x in possible_types_for_this_atom):
+                    final_types[atomname] = possible_types_for_this_atom[0]
+                # Not in te list of final assignments, and still has more than one option
+                else:
+                    # Dictionary of all the bonds that could/would have to be available when picking an atom type
+                    bonded_to = self._find_all_bond_types_to_atom(atomname, final_types, possible_types_per_atom)
+                    # The atom types that could be compatible with at least one of the possible atom types for each atom
+                    solutions = self._resolve_types(bonded_to, available_parameters_per_type,
+                                                    possible_types_for_this_atom)
+
+                    # If there is only one solution, that is the final solution
+                    if len(solutions) == 1:
+                        final_types[atomname] = list(solutions.keys())[0]
+                    elif len(solutions) == 0:
+                        # If this happens, you may manually need to assign atomtypes. The available types won't do.
+                        raise ValueError(
+                            "Cannot come up with a single set of atom types that describes all states in bonded form.")
+
+                    else:
+                        # Some partner atoms might still be variable
+                        # kick out invalid ones, and repeat procedure afterwards
+                        for partner_name in bonded_to.keys():
+                            for partner_type in possible_types_per_atom[partner_name]:
+                                # if an atomtype in the current list of options did not match
+                                # any of the possible combinations with our potential solutions for the current atom
+                                if not any(partner_type in valid_match[partner_name] for valid_match in
+                                           solutions.values()):
+                                    # kick it out of the options
+                                    possible_types_per_atom[partner_name].remove(partner_type)
+
+        log.debug("Final atom types have been selected.")
+
+        # Assign the final atom types to each state
+        for state_index in range(len(self._state_templates)):
+            for atomname in self._atom_names:
+                self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
+
+        return
+
+    def _find_all_bond_types_to_atom(self, atomname, final_types, types):
+        """ Find all the atoms it is bonded to, and collect their types
+
+        Parameters
+        ----------
+        atomname : str
+            Name of the atom
+        final_types : dict
+            dictionary by atom name of the types that have already been determined
+        types : dict
+            dictionary by atom name of the types that could be chosen as the final solution
+
+        Returns
+        -------
+        bonded_to : dict
+            The atoms that this atom is bonded to, and the types/potential type of the bond partners
+
+        """
+        bonded_to = dict()
+        for bond in self._bonds:
+            if bond.has_atom(atomname):
+                atomname1 = bond.atomName1
+                atomname2 = bond.atomName2
+                if atomname1 == atomname:
+                    if atomname2 in final_types:
+                        bonded_to[atomname2] = [final_types[atomname2]]
+                    else:
+                        bonded_to[atomname2] = types[atomname2]
+                else:
+                    if atomname1 in final_types:
+                        bonded_to[atomname1] = [final_types[atomname1]]
+                    else:
+                        bonded_to[atomname1] = types[atomname1]
+        return bonded_to
+
+    @staticmethod
+    def _resolve_types(bonded_to, params, type_list):
+        """
+
+        Parameters
+        ----------
+        bonded_to - dictionary of the atoms its bonded to, and their potential types
+        params - gaff parameters for all atomtypes
+        type_list - all possible types for this atom
+
+        Returns
+        -------
+
+        solutions : a
+        """
+        # After collecting the necessary bonded types, loop through possible types
+        # for the current atom, and pick the first one that has a bond for all of them.
+
+        # dictionary of atom_types that have bonded parameters for binding to at least one of the potential atom
+        # types of its bond partners
+        solutions = dict()
+        for atom_type in type_list:
+            bond_params = params[atom_type]['bonds']
+
+            valid_match = dict()
+            have_found_valid_type = True
+
+            # The partner atoms that the current atom is bonded to, and a list of potential atom types for each partner
+            for bonded_atom, types_of_bonded_atom in bonded_to.items():
+                matched_this_atom = False
+                # The bonded atom could have several types, go through all of them
+                for type_of_bonded_atom in types_of_bonded_atom:
+
+                    # Go through the list of bonds and try to find if there is a bond for the current two types
+                    for bond_param in bond_params:
+                        bond_param_atoms = set()
+                        bond_param_atoms.add(bond_param.attrib['type1'])
+                        bond_param_atoms.add(bond_param.attrib['type2'])
+
+                        # If there is a bond that describes binding between the proposed atom type, and
+                        # one of the candidates of its bonding partner, store which atom type the
+                        # partner has, so we can potentially reduce the list of atom types for the
+                        # partner at a later stage
+                        if atom_type in bond_param_atoms and type_of_bonded_atom in bond_param_atoms:
+                            matched_this_atom = True
+                            if bonded_atom in valid_match:
+                                valid_match[bonded_atom].append(type_of_bonded_atom)
+                            else:
+                                valid_match[bonded_atom] = [type_of_bonded_atom]
+
+                # Could not detect bonds parameters between this atom type, and the types of atoms that
+                # it needs to be bonded to
+                if not matched_this_atom:
+                    have_found_valid_type = False
+                    valid_match = dict()
+                    break
+
+            if have_found_valid_type:
+                # Store the information on the potential atom types of the bond partners
+                # This can help narrow down which types these atoms can take on in the final solution
+                solutions[atom_type] = valid_match
+
+        return solutions
+
+    def _retrieve_atom_type_parameters(self, atom_type_name):
+        """ Look through FFXML files and find all parameters pertaining to the supplied atom type.
+        Returns
+        -------
+        params : dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
+            Dictionary of lists by force type
+        """
+
+        # Storing all the detected parameters here
+        params = dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
+
+        if atom_type_name is None:
+            return params
+
+        # Loop through different sources of parameters
+        for xmltree in self._xml_parameter_trees:
+            # Match the type of the atom in the AtomTypes block
+            for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
+                if atomtype.attrib['name'] == atom_type_name:
+                    params['atomtypes'].append(atomtype)
+
+            # Match the bonds of the atom in the HarmonicBondForce block
+            for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
+                if atom_type_name in (bond.attrib['type1'], bond.attrib['type2']):
+                    params['bonds'].append(bond)
+
+            # Match the angles of the atom in the HarmonicAngleForce block
+            for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
+                if atom_type_name in (angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']):
+                    params['angles'].append(angle)
+
+            # Match proper dihedral of the atom in PeriodicTorsionForce block
+            for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+                if atom_type_name in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']):
+                    params['propers'].append(proper)
+
+            # Match improper dihedral of the atom in PeriodicTorsionForce block
+            for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
+                if atom_type_name in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']):
+                    params['impropers'].append(improper)
+
+            # Match nonbonded type of the atom in NonbondedForce block
+            for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
+                if nonbond.attrib['type'] == atom_type_name:
+                    params['nonbonds'].append(nonbond)
+
+        return params
 
     def _complete_bond_registry(self):
         """
         Register all bonds.
         """
 
-        for residue in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/Residues/Residue'):
-            per_state_index = OrderedDict()
-            for aix, atom in enumerate(residue.xpath('Atom')):
-
-                per_state_index[aix] = atom.attrib["name"]
-
-            for bond in residue.xpath('Bond'):
-                atomnames = list(self._atoms.keys())
-                from_atom = per_state_index[int(bond.attrib["from"])]
-                to_atom = per_state_index[int(bond.attrib["to"])]
-
-                self._bonds.append(_Bond(atomnames.index(from_atom), atomnames.index(to_atom)))
-
+        for state in self._input_state_data.values():
+            for bond in state['ffxml'].xpath('/ForceField/Residues/Residue/Bond'):
+                self._bonds.append(_Bond(bond.attrib['atomName1'], bond.attrib['atomName2']))
         self._unique_bonds()
 
-    def write(self, filename=None, moleculename="LIG"):
-        """Generate the output xml."""
-
+    def _sanitize_ffxml(self):
+        """
+        Clean up the structure of the ffxml file by removing unnecessary blocks and information.
+        """
         # Get rid of extra junk information that is added to the xml files.
-        objectify.deannotate(self._output_tree)
-        etree.cleanup_namespaces(self._output_tree)
+        objectify.deannotate(self.ffxml)
+        etree.cleanup_namespaces(self.ffxml)
+        # Get rid of empty blocks directly under ForceField
+        for empty_block in self.ffxml.xpath('/ForceField/*[count(child::*) = 0]'):
+            empty_block.getparent().remove(empty_block)
 
-        # Generate the string version. Replace ligand name that comes out of antechamber/tleap
-        xmlstring = etree.tostring(self._output_tree, encoding="utf-8", pretty_print=True, xml_declaration=False)
-        xmlstring = xmlstring.decode("utf-8")
-        xmlstring = xmlstring.replace("isom-", "{}-".format(moleculename))
-        xmlstring = xmlstring.replace('name="isom"', 'name="{}"'.format(moleculename))
-
-        if filename is not None:
-            with open(filename, 'w') as fstream:
-                fstream.write(xmlstring)
-
-        return xmlstring
-
-    def _complete_atom_registry(self, autoresolve):
+    def _complete_atom_registry(self):
         """
-        Registers unique atom names. Store in self._atomnames from atom type list.
+        Registers unique atom names. Store in self._atom_names from Residue
         """
-        for atype in self._input_tree.xpath('/IntermediateResidueTemplate/ForceField/AtomTypes/Type'):
-            matched_names = _TitratableForceFieldCompiler.typename_format.search(atype.attrib['name'])
-            if self._resname is None:
-                self._resname = matched_names.group(1)
-            atomname = matched_names.group(3, 4)
-            atomname = ''.join(atomname)
-            if atomname not in self._atoms:
-                self._atoms[atomname] = _Atom(self._resname, atomname)
-            self._atom_types.append(_AtomType(self._resname, atomname, atype.attrib['class'], atype.attrib['element'], atype.attrib['mass']))
+        for state in self._input_state_data.values():
+            for atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
+                atom_name = atom.attrib['name']
+                if atom_name not in self._atom_names:
+                    self._atom_names.append(atom_name)
 
-        self._unique_atom_types(autoresolve=autoresolve)
-        self._sort_atoms()
+        return
 
     def _complete_state_registry(self):
-
-        # Default scale in case we can't find it.
-        coulomb14scale = 1.0
-        lj14scale = 1.0
-
-        for nonbondblock in self._input_tree.xpath("/IntermediateResidueTemplate/ForceField/NonbondedForce"):
-            coulomb14scale = nonbondblock.attrib['coulomb14scale']
-            lj14scale = nonbondblock.attrib['lj14scale']
-
-        # Create new states for each proto/tautomer
-        for isostate in self._input_tree.xpath('/IntermediateResidueTemplate/IsomerData/IsomericState'):
-            isomer = _Isomer(int(isostate.attrib["index"]), isostate.attrib["population"], isostate.attrib["netcharge"], coulomb14scale, lj14scale)
-            self._isomeric_states[int(isostate.attrib["index"])] = isomer
-
-    def _complete_nonbonded_registry(self, autoresolve):
         """
-        Register the non_bonded interactions for all states.
+        Store all the properties that are specific to each state
         """
+        for index, state in self._input_state_data.items():
+            template = _State(index,
+                            state['log_population'],
+                            state['epik_penalty'],
+                            state['net_charge'],
+                            self._atom_names
+                            )
+            for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
+                template.set_atom(_Atom(xml_atom.attrib['name'], xml_atom.attrib['type'], xml_atom.attrib['charge']))
 
-        for isomer_state_index, isomer_state in self._isomeric_states.items():
-            # Keep track of atoms that haven't been observed for this state, so we can add dummies later.
-            unmatched_atoms = list(self._atoms.keys())
-
-            # Atom types are pulled from the NonbondedForce block in the intermediate xml file
-            for nonbond_atom in self._input_tree.xpath("/IntermediateResidueTemplate/ForceField/NonbondedForce/Atom"):
-                matched_names = _TitratableForceFieldCompiler.typename_format.search(nonbond_atom.attrib['type'])
-                atomname = matched_names.group(3, 4)
-                atomname = ''.join(atomname)
-                # atom types have the isomer in them, also, converting zero to one based
-                state_index_nonbonded_atom = int(matched_names.group(2)) + 1
-
-                # If the isomer matches the state that the atom type belongs to, store it as part of the state.
-                if state_index_nonbonded_atom == isomer_state_index:
-                    unmatched_atoms.remove(atomname)
-                    self._isomeric_states[isomer_state_index].nonbondedtypes[atomname] = _NonbondedForce(self._resname, isomer_state_index, atomname, nonbond_atom.attrib['epsilon'], nonbond_atom.attrib['sigma'], nonbond_atom.attrib['charge'])
-
-            # Add dummies for any atom undetected in the entire nonbonded block
-            for unmatched in unmatched_atoms:
-                self._isomeric_states[isomer_state_index].nonbondedtypes[unmatched] = _NonbondedForce(self._resname,
-                                                                                                      isomer_state_index,
-                                                                                                      unmatched, "0.0",
-                                                                                                      "0.0",
-                                                                                                      "0.0")
-
-        # We need to resolve LJ types so they don't change between atoms, and fill in LJ for dummies.
-        for atom in self._atoms.values():
-            self._resolve_lj_params(atom, autoresolve=autoresolve)
-
-    def _complete_gbparams_registry(self):
-        """
-        Register the GBSAOBC parameters for each isomeric state.
-        """
-
-        for isomeric_state_index, isomeric_state in self._isomeric_states.items():
-            unmatched_atoms = list(self._atoms.keys())
-            # Keep track of atoms that haven't been observed for this state, so we can add dummies later.
-            for gbsaobcatom in self._input_tree.xpath("/IntermediateResidueTemplate/GBSAOBCForce/Atom"):
-
-                matched_names = _TitratableForceFieldCompiler.typename_format.search(gbsaobcatom.attrib['type'])
-                atomname = matched_names.group(3, 4)
-                atomname = ''.join(atomname)
-                # atom types have the isomer encoded in them, also, converting zero to one based
-                state_index_gbsa_atom = int(matched_names.group(2)) + 1
-                if state_index_gbsa_atom == isomeric_state_index:
-                    unmatched_atoms.remove(atomname)
-
-                    # If the isomer matches the state that the atom type belongs to, store it as part of the state.
-                    # Ensure charge is same as nonbonded type charge.
-                    self._isomeric_states[isomeric_state_index].gbsaobctypes[atomname] = _GBSAOBCForce(self._resname, isomeric_state_index, atomname,
-                                                                                           self._isomeric_states[isomeric_state_index].nonbondedtypes[atomname].charge,
-                                                                                           gbsaobcatom.attrib['radius'],
-                                                                                           gbsaobcatom.attrib['scale'])
-
-            # Add dummies for any atom undetected in the entire GBSAOBC block
-            for unmatched in unmatched_atoms:
-                # charge should be 0, but this also checks if we already knew about the atom from nonbonded forces,
-                # in case there is a discrepancy.
-                self._isomeric_states[isomeric_state_index].gbsaobctypes[unmatched] = _GBSAOBCForce(self._resname,
-                                                                                                    isomeric_state_index,
-                                                                                                    unmatched,
-                                                                                                    self._isomeric_states[
-                                                                                                        isomeric_state_index].nonbondedtypes[
-                                                                                                        unmatched].charge,
-                                                                                                    0.0,
-                                                                                                    1.0)
-
-    def _resolve_lj_params(self, atom, autoresolve):
-        typelist = OrderedDict()
-        for isomeric_state_index, isomeric_state in self._isomeric_states.items():
-            nbtype = isomeric_state.nonbondedtypes[atom.name]
-            # Assume zero values for all are newly added dummy atoms, and should not be suggested as types.
-            if (float(nbtype.epsilon) > 0.0 and float(nbtype.sigma) > 0.0) or abs(float(nbtype.charge)) > 0.0:
-               typelist[isomeric_state_index] = nbtype
-
-        # Select an arbitrary type to compare all to
-        randomindex = random.choice(list(typelist.keys()))
-        first_state_type = typelist[randomindex]
-        # Check if all remaining types have the same LJ parameters
-        if all(atype == first_state_type for atype in typelist.values()):
-            log.debug("All types shared for {}".format(atom))
-            # Still need to standardize the dummies.
-            self._standardize_lj_params(atom, randomindex)
-        elif autoresolve:
-            if autoresolve not in typelist.keys():
-                raise UserWarning("Nonbonded type reference provided a dummy atom, this is probably a bad idea.")
-            for key, value in typelist.items():
-                log.debug("{}:{}".format(key, value))
-            self._standardize_lj_params(atom, autoresolve)
-        else:
-            self._manual_lj_params(atom, typelist)
-
-    def _standardize_lj_params(self, atom, reference_state_index):
-        """
-        Set the epsilon and sigma for the atom to that of the reference state, for all other states.
-        """
-        epsilon = self._isomeric_states[reference_state_index].nonbondedtypes[atom.name].epsilon
-        sigma = self._isomeric_states[reference_state_index].nonbondedtypes[atom.name].sigma
-        log.info("Setting epsilon/sigma for {} to {} / {}".format(atom.name, epsilon, sigma))
-        for isoindex in self._isomeric_states.keys():
-            self._isomeric_states[isoindex].nonbondedtypes[atom.name].epsilon = epsilon
-            self._isomeric_states[isoindex].nonbondedtypes[atom.name].sigma = sigma
-
-    def _manual_lj_params(self, atom, typelist):
-        """Interactive choice between LJ parameter types."""
-        print("Atom types for {}".format(atom.name))
-        for isoindex, atype in typelist.items():
-            print("{}), {}".format(isoindex, atype))
-        choice = -1
-        while choice not in typelist.keys():
-            print("Please pick a number from the list:")
-            choice = int(input("Which sigma/epsilon would you like to keep?").strip())
-
-        self._standardize_lj_params(atom, choice)
+            self._state_templates.append(template)
+        return
 
     def _unique_bonds(self):
         """Ensure only unique bonds are kept."""
@@ -712,165 +659,95 @@ class _TitratableForceFieldCompiler(object):
 
         self._bonds = bonds
 
-    def _unique_atom_types(self, autoresolve):
-        """Ensure only unique atomtypes are kept. Provide conflict resolution."""
-        atypes = list()
-        for atype in self._atom_types:
-            if atype not in atypes:
-                atypes.append(atype)
-        self._atom_types = atypes
-
-        # Atomtypes might be different between isomers. We can only support one type at the moment
-        while len(self._atom_types) != len(self._atoms):
-            for atype1 in self._atom_types:
-                conflicts = [atype1]
-                for atype2 in self._atom_types:
-                    if atype1 == atype2:
-                        continue
-                    elif atype1.name == atype2.name:
-                        conflicts.append(atype2)
-
-                    if len(conflicts) > 1:
-                        self._resolve_type_conflict(conflicts, autoresolve=autoresolve)
-
-    def _resolve_type_conflict(self, conflicts, autoresolve):
-        """Keep all but one of the conflicting bonded atom types.
-
-        Parameters
-        ----------
-        conflicts - list
-            Conflicting atom types
-        autoresolve - int
-            one based index of the type to keep in each case.
-            If not provided, interactive choice will be provided.
-
-        Notes
-        -----
-        If the autoresolve index is out of bounds, will fallback to interactive mode.
-        """
-        if autoresolve:
-            try:
-                log.info("Using atomtype {}".format(conflicts[autoresolve-1]))
-                conflicts.remove(conflicts[autoresolve-1])
-                log.debug("Deleting atomtypes {}".format(conflicts))
-                for conf in conflicts:
-                    self._atom_types.remove(conf)
-            except IndexError:
-                log.warning("Automatic type resolution failure (out of bounds.) Switching to manual.")
-                self._manual_type_resolution(conflicts)
-        else:
-            self._manual_type_resolution(conflicts)
-
-    def _manual_type_resolution(self, conflicts):
-        while True:
-            for c, conf in enumerate(conflicts, start=1):
-                print("Type {}) : {}".format(c,conf))
-            keep = int(input("Which type do you want to keep? (1/2)").strip())
-            if keep not in range(1, len(conflicts)+1):
-                print("Please pick a number from the list.")
-            else:
-                log.info("Using atomtype {}".format(conflicts[keep-1]))
-                conflicts.remove(conflicts[keep-1])
-                log.debug("Deleting atomtypes {}".format(conflicts))
-                for conf in conflicts:
-                    self._atom_types.remove(conf)
-                break
-
-    def _sort_atoms(self):
-        self._atoms = OrderedDict(sorted(self._atoms.items(), key=lambda t: t[1]))  # Sort by atom number
-
     def _sort_bonds(self):
         self._bonds = sorted(self._bonds)  # Sort by first, then second atom in bond
 
-    def _sort_atypes(self):
-        self._atom_types = sorted(self._atom_types, key=lambda at: at.number)
 
-
-def _param_isomer(isomer, tmpdir, q, gb_params, shortname="LIG"):
+def _make_xml_object(root_name, **attributes):
     """
-    Run a single ligand isomer through antechamber and tleap
+    Create a new xml root object with a given root name, and attributes
 
     Parameters
     ----------
-    isomer - int
-        Isomer state index ( will be used to find filenames)
-    tmpdir - str
-        Working directory
-    q - int
-        Net charge of molecule
-    shortname - str
-        Short (3 character ) name for ligand to use in output files.
-    """
-
-    # TODO hardcoded using gasteiger charges for debugging speed
-    molecule_name = 'isomer_{}'.format(isomer)
-    omt.amber.run_antechamber(molecule_name, '{}/{}.mol2'.format(tmpdir, isomer), charge_method="gas", net_charge=q, resname=shortname)
-    omt.utils.run_tleap(molecule_name, "{}.gaff.mol2".format(molecule_name), "{}.frcmod".format(molecule_name), prmtop_filename=None, inpcrd_filename=None, log_debug_output=False)
-    if gb_params: _extract_gbparms(isomer, "{}.prmtop".format(molecule_name))
-    logging.info("Parametrized isomer{}".format(isomer))
-
-
-def _extract_gbparms(isomer, prmtop_filename=None):
-    """
-    Extract GB parameters from a prmtop file and return xml string containing them.
-
-    Parameters
-    ----------
-    isomer - int
-        Index of the isomer from which to fetch the prmtop file
-    prmtop_filename - str
-        override the prmtop filename
+    root_name - str
+        The name of the xml root.
+    attributes - dict
+        Dictionary of attributes and values (as strings) for the xml file
 
     Returns
     -------
-    str - Name of xml file containing parameters
-
+    ObjectifiedElement
 
     """
+    xml = '<{0}></{0}>'.format(root_name)
+    root = objectify.fromstring(xml)
+    for attribute, value in attributes.items():
+        root.set(attribute, value)
 
-    # Go for the standard filename
-    if prmtop_filename is None:
-        prmtop_filename = "isomer_{}.prmtop".format(isomer)
-
-    prmtop = parmed.load_file(prmtop_filename)
-
-    # TODO is there an official way to extract information from a prmtop using parmed?
-    atoms = prmtop.parm_data['ATOM_NAME']
-    # TODO do these match the other charges in the mol2 files?
-    charges = prmtop.parm_data['CHARGE']
-    radii = [ x / 10.0 for x in prmtop.parm_data['RADII'] ]  # nanometers for the openmm god
-    scale = prmtop.parm_data['SCREEN']
-
-    # Compile data into an xml format
-    combined = zip(atoms, charges, radii, scale)
-    template = '  <Atom type="isom-{0}-{1}" charge="{2}" radius="{3}" scale="{4}"/>\n'
-    block = '<GBSAOBCForce id="{}">\n'.format(isomer)
-    for atom in combined:
-        block += template.format(isomer -1, *atom) # zero based isomer index for intermediate files
-    block += '</GBSAOBCForce>\n'
-
-    # Write xml to intermediate files
-    xml_output = "isomer_{}.gbparams.xml".format(isomer)
-    xml_parameters = open(xml_output, 'w')
-    xml_parameters.write(block)
-    xml_parameters.close()
-
-    # Return the file name for convenience
-    return xml_output
+    return root
 
 
-def line_prepender(filename, line):
-    """Prepend a line to a file.
-    http://stackoverflow.com/a/5917395
+def _generate_xml_template(residue_name="LIG"):
+    """
+    Generate an empty template xml file in the constph format.
+
+    Parameters
+    ----------
+    residue_name : str
+        Name attribute of the residue
+
+    Returns
+    -------
+    An xml tree  object
+    """
+    forcefield = _make_xml_object("ForceField")
+    residues = _make_xml_object("Residues")
+    residue = _make_xml_object("Residue")
+    atomtypes = _make_xml_object("AtomTypes")
+    hbondforce = _make_xml_object("HarmonicBondForce")
+    hangleforce = _make_xml_object("HarmonicAngleForce")
+    pertorsionforce = _make_xml_object("PeriodicTorsionForce")
+    nonbondforce = _make_xml_object("NonbondedForce", coulomb14scale="0.833333333333", lj14scale="0.5")
+
+    residue.attrib["name"] = residue_name
+    residues.append(residue)
+    forcefield.append(residues)
+    forcefield.append(atomtypes)
+    forcefield.append(hbondforce)
+    forcefield.append(hangleforce)
+    forcefield.append(pertorsionforce)
+    forcefield.append(nonbondforce)
+
+    return forcefield
+
+
+def write_ffxml(xml_compiler, filename=None):
+    """Generate an ffxml file from a compiler object.
+
+    Parameters
+    ----------
+    xml_compiler : _TitratableForceFieldCompiler
+        The object that contains all the ffxml template data
+    filename : str, optional
+        Location and name of the file to save. If not supplied, returns the ffxml template as a string.
+
+    Returns
+    -------
+    str or None
     """
 
-    with open(filename, 'r+') as f:
-        content = f.read() # current content of the file
-        f.seek(0, 0)
-        f.write(line.rstrip('\r\n') + '\n' + content) # add new line before the current content
+    # Generate the string version.
+    xmlstring = etree.tostring(xml_compiler.ffxml, encoding="utf-8", pretty_print=True, xml_declaration=False)
+    xmlstring = xmlstring.decode("utf-8")
+
+    if filename is not None:
+        with open(filename, 'w') as fstream:
+            fstream.write(xmlstring)
+    else:
+        return xmlstring
 
 
-def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, write_gb_params=True, tmpdir=None, remove_temp_files=False, pH=7.4, resname="LIG"):
+def generate_protons_ffxml(inputmol2, outputffxml, tmpdir=None, remove_temp_files=True, pH=7.4, resname="LIG"):
     """
     Parametrize a ligand for constant-pH simulation using Epik.
 
@@ -884,16 +761,11 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, write_gb_para
     Other Parameters
     ----------------
     pH : float
-        The pH that Epik should use
-    max_antechambers : int, optional (default : 1)
-        Maximal number of concurrent antechamber processes.
-    write_gb_params : bool (default : True)
-        If true, add GB params to the xml files.
+        The pH that Epik should use to detect states
     tmpdir : str, optional
         Temporary directory for storing intermediate files.
     remove_temp_files : bool, optional (default : True)
         Remove temporary files when done.
-
     resname : str, optional (default : "LIG")
         Residue name in output files.
 
@@ -901,20 +773,15 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, write_gb_para
     -----
     The supplied mol2 file needs to have ALL possible atoms included, with unique names.
     This could be non-physical, also don't worry about bond order.
-    If you're not sure, better to overprotonate. Epik doesn't retain the input protonation if it's non-physical.
-
-    Todo
-    ----
-
-    * Currently hardcoded to use Gasteiger charges for debugging purposes.
-        See  _param_isomer
+    If you're not sure which protons to add, better to overprotonate.
+    Epik doesn't retain the input protonation if it's non-physical.
 
     Returns
     -------
     str : The absolute path of the outputfile
 
     """
-    log.setLevel(logging.DEBUG)
+
     log.info("Running Epik to detect protomers and tautomers...")
     inputmol2 = os.path.abspath(inputmol2)
     outputffxml = os.path.abspath(outputffxml)
@@ -924,93 +791,62 @@ def parametrize_ligand(inputmol2, outputffxml, max_antechambers=1, write_gb_para
     os.chdir(tmpdir)
     log.debug("Running in {}".format(tmpdir))
 
-    # Using very tolerant settings, since we can't predict probability from just ref states.
+    # Using very tolerant settings
     omt.schrodinger.run_epik(inputmol2, "epik.mae", ph=pH, min_probability=0.00001, ph_tolerance=5.0)
     omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
     omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
-    log.info("Done with Epik run!")
+    log.info("Epik run completed.")
 
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")
-    epikxml = _make_xml_root("IsomerData")
+    isomers = OrderedDict()
     isomer_index = 0
     store = False
-    charges = dict()
     for line in open('epik.sdf', 'r'):
         if store:
-            value = line.strip()
+            epik_penalty = line.strip()
 
-            if store == "population":
-                value = float(value)
-                value /= 298.15 * 1.9872036e-3 # / RT in kcal/mol/K at 25 Celsius (Epik default)
-                value = exp(-value)
-
-            obj.set(store, str(value))
+            if store == "log_population":
+                isomers[isomer_index]['epik_penalty'] = epik_penalty
+                epik_penalty = float(epik_penalty)
+                # Epik reports -RT ln p
+                # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
+                isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
 
             # NOTE: relies on state penalty coming before charge
-            if store == "netcharge":
-                epikxml.append(obj)
-                charges[isomer_index] = int(value)
-                del(obj)
+            if store == "net_charge":
+                isomers[isomer_index]['net_charge'] = int(epik_penalty)
+                isomer_index += 1
 
             store = ""
 
         elif "r_epik_State_Penalty" in line:
             # Next line contains epik state penalty
-            store = "population"
-            isomer_index += 1
-            obj = objectify.Element("IsomericState")
-            obj.set("index", str(isomer_index))
+            store = "log_population"
+            isomers[isomer_index] = dict()
 
         elif "i_epik_Tot_Q" in line:
             # Next line contains charge
-            store = "netcharge"
+            store = "net_charge"
 
-    # remove lxml annotation
-    objectify.deannotate(epikxml)
-    etree.cleanup_namespaces(epikxml)
-    epikxmlstring = etree.tostring(epikxml, pretty_print=True, xml_declaration=False)
+    log.info("Parametrizing the isomers...")
+    xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
-    # Make new mol2 file for each isomer
-    with open('epik.mol2', 'r') as molfile:
-        isomer_index = 0
-        out = None
-        for line in molfile:
-            if line.strip() =='@<TRIPOS>MOLECULE':
-                if out:
-                    out.close()
-                isomer_index += 1
-                out = open('{}.mol2'.format(isomer_index), 'w')
-            out.write(line)
-        out.close()
-    log.info("Done! Processed {} isomers.".format(isomer_index))
-    log.info("Calculating isomer parameters {} processes at a time... (This may take a while!)".format(max_antechambers))
-    Parallel(n_jobs=max_antechambers)(delayed(_param_isomer)(i, tmpdir, charges[i], write_gb_params) for i in range(1, isomer_index + 1))
-    log.info("Done!")
-    log.info("Combining isomers into one XML file.")
+    # Open the Epik output into OEMols
+    ifs = oechem.oemolistream()
+    ifs.open("epik.mol2")
 
-    omt.utils.create_ffxml_file(glob("isomer*.mol2"), glob("isomer*.frcmod"), ffxml_filename="intermediate.xml")
+    for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
+        # generateForceFieldFromMolecules needs a list
+        # Make new ffxml for each isomer
+        ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+        isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
 
-    # Look for the xml files containing gbparameters
-    if write_gb_params:
-        gb_xml_files = glob("isomer_*.gbparams.xml")
-    else:
-        gb_xml_files = []
-
-    # Append epik information to the end of the file
-    with open("intermediate.xml", mode='ab') as outfile:
-        outfile.write(epikxmlstring)
-        for gb_xml_file in gb_xml_files:
-            gb_xml_contents = open(gb_xml_file, 'rb').read()
-            outfile.write(gb_xml_contents)
-
-        # Wrap in new root tag
-        outfile.write(b"</IntermediateResidueTemplate>")
-    line_prepender("intermediate.xml", "<IntermediateResidueTemplate>")
-
-    _TitratableForceFieldCompiler("intermediate.xml", write_gb_params=write_gb_params).write(outputffxml, moleculename=resname)
-    log.info("Done, your result is located here: {}!".format(outputffxml))
+    compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
+    write_ffxml(compiler, outputffxml)
+    log.info("Done!  Your result is located here: {}".format(outputffxml))
     if remove_temp_files:
         shutil.rmtree(tmpdir)
     os.chdir(oldwd)
+
     return outputffxml
