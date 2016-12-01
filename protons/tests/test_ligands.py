@@ -101,6 +101,7 @@ class TestLigandParameterizationImplicit(object):
         forcefield = app.ForceField(xmlfile)
 
 
+@pytest.mark.skip(reason="Currently not supporting implicit solvent until we can add GB parameters for gaff types.")
 class TestImidazoleImplicit(object):
     """Tests for imidazole in implicit solvent"""
 
