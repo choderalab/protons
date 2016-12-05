@@ -45,4 +45,4 @@ setenv PYTHONPATH /cbio/jclab/home/rossg/salt/saltswap
 module load cuda
 
 # Launch GPU job.
-python ../run_calibration.py -p ../../calibration-systems/as4-explicit.prmtop -x ../../calibration-systems/as4-explicit.state.xml -c ../../calibration-systems/as4-explicit.cpin --iterations 100000 --md_steps 500 --ncmc_steps 10000 --explicit --platform OpenCL
+python ../run_calibration.py -o out3 -p ../../calibration-systems/as4-explicit.prmtop -x ../../calibration-systems/as4-explicit.state.xml -c ../../calibration-systems/as4-explicit.cpin --iterations 4000 --md_steps 500 --ncmc_steps 10000 --explicit --platform OpenCL
