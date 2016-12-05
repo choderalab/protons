@@ -8,6 +8,7 @@ import pickle
 import shutil
 from time import time
 from simtk.openmm.app import PDBFile
+import numpy as np
 
 def prepare_system(prmtop, cpin, inpcrd=None, xml=None, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
     """
@@ -98,7 +99,8 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--cpin', type=str, help="AMBER cpin file")
     parser.add_argument('-o', '--out', type=str, help="the naming scheme of the output files, default='out'", default='out')
     parser.add_argument("--explicit",action='store_true',help="whether the simulation is of explicit water, default=False",default=False)
-    parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=100000", default=100000)
+    parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=4000", default=4000)
+    parser.add_argument('--burnin', type=float, help="the fraction of iterations that are in the burn-in phase, default=0.5", default=0.5)
     parser.add_argument('--md_steps', type=int, help="the number of MD steps at each iteration, default=1000", default=1000)
     parser.add_argument('--ncmc_steps', type=int, help="the number of NCMC steps at each iteration, default=0", default=0)
     parser.add_argument('--platform', type=str, choices = ['CPU','OpenCL'], help="the platform where the simulation will be run, default=CPU", default='CPU')
@@ -119,6 +121,15 @@ if __name__ == "__main__":
     deviation = []    # The deviation between the target weight and actual counts
     weights = []      # The bias applied by SAMS to reach target weight
     delta_t = []      # To record the time (in seconds) for each iteration
+
+    # Initializing the weights using the last values from previous simulations
+    g_initial = {'lys': [0.0, -6.94177861],
+                 'tyr': [0.0, 113.80143471],
+                 'as4': [0.0, -56.35949002, -56.90458235, -53.66854317, -58.70386813],
+                 'gl4': [0.0, -30.89810794, -31.58412605, -33.78753743, -31.04032087],
+                 'hip': [0.0, 26.66488525, 32.07581],
+                 'cys': [0.0, 136.00398956]}
+    driver.import_gk_values(g_initial)
 
     # Naming the output files
     out_pdb = args.out + '.pdb'
@@ -142,7 +153,7 @@ if __name__ == "__main__":
         integrator.step(args.md_steps)
         sams_sampler.driver.update(simulation.context)  # protonation
         deviation.append(sams_sampler.adapt_zetas(simulation.context, 'binary', stage='burn-in', b=0.5,
-                                                  end_of_burnin=int(N/1.5)))
+                                                  end_of_burnin=int(N * args.burnin)))
         delta_t.append(time() - t0)
         weights.append(sams_sampler.get_gk())
         if i % 5 == 0:
@@ -150,6 +161,7 @@ if __name__ == "__main__":
             f = open(out_pickle, "wb")
             pickle.dump((deviation, weights, driver.work_history, delta_t), f)
             f.close()
+            np.savetxt(fname='weights.txt', X=sams_sampler.get_gk())
         if i % 1000 == 0:
             pdbfile = open(out_pdb, 'a')
             positions = simulation.context.getState(getPositions=True).getPositions()
@@ -160,3 +172,5 @@ if __name__ == "__main__":
     f = open(out_pickle, "wb")
     pickle.dump((deviation, weights, driver.work_history, delta_t), f)
     f.close()
+    np.savetxt(fname='weights.txt', X=sams_sampler.get_gk())
+    

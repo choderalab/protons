@@ -4,10 +4,8 @@ from simtk.openmm import app
 import openmmtools
 from protons import AmberProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling
-import pickle
-import shutil
 from time import time
-from simtk.openmm.app import PDBFile
+import numpy as np
 
 def prepare_system(prmtop, cpin, inpcrd=None, xml=None, pH = 7.0, platform='CPU', nsteps=0, implicit=True):
     """
@@ -98,13 +96,13 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--cpin', type=str, help="AMBER cpin file")
     parser.add_argument('-o', '--out', type=str, help="the naming scheme of the output files, default='out'", default='out')
     parser.add_argument("--explicit",action='store_true',help="whether the simulation is of explicit water, default=False",default=False)
-    parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=100000", default=500)
-    parser.add_argument('--md_steps', type=int, help="the number of MD steps at each iteration, default=1000", default=500)
+    parser.add_argument('--iterations', type=int, help="the number of iterations of MD and proton moves, default=500", default=500)
+    parser.add_argument('--md_steps', type=int, help="the number of MD steps at each iteration, default=500", default=500)
     parser.add_argument('--ncmc_steps', type=int, help="the number of NCMC steps at each iteration, default=0", default=0)
     parser.add_argument('--platform', type=str, choices = ['CPU','OpenCL'], help="the platform where the simulation will be run, default=CPU", default='CPU')
     args = parser.parse_args()
 
-    if args.explicit == True:
+    if args.explicit:
         implicit = False
     else:
         implicit = True
@@ -143,9 +141,15 @@ if __name__ == "__main__":
     t0 = time()
     for i in range(args.iterations):
         integrator.step(args.md_steps)
-        driver.update(simulation.context)  # protonation
+        driver.update(simulation.context, nattempts=1)  # protonation
         if i % 20 == 0:
+            try:
+                accprob = driver._get_acceptance_probability()
+            except ZeroDivisionError:
+                accprob = 0.0
             f = open(out_text, "a")
-            s = "{:7}     {:3}       {:0.2f}     {:8.1f}\n".format(i, driver.work_history[i][1][0], driver._get_acceptance_probability(), time() - t0)
+            s = "{:7}     {:3}       {:0.2f}     {:8.1f}\n".format(i, driver.work_history[i][0][0], accprob, time() - t0)
             f.write(s)
             f.close()
+            work = [wrk[2] for wrk in driver.work_history]
+            np.savetxt(fname=args.out +'_work.txt', X=work)
