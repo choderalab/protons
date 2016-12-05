@@ -12,6 +12,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
     here https://github.com/choderalab/openmmtools. Multiple steps can be taken per integrator.step() in order to save
     the potential energy before the steps were made.
 
+    Authors: John Chodera and Gregory Ross
     """
 
     def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=1.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):

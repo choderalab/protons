@@ -6,7 +6,6 @@ import re
 import sys
 import numpy as np
 import simtk
-from openmmtools.integrators import VelocityVerletIntegrator
 from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
@@ -598,7 +597,12 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0, context=None):
         """
-        Update the force parameters to a new sams_sampler state by reading them from the cache
+        Update the force parameters to a new sams_sampler state by reading them from the cache.
+
+        Notes
+        -----
+        * Please ensure that the context is updated after calling this function, by using
+        `force.updateParametersInContext(context)` for each force that has been updated.
 
         Parameters
         ----------
@@ -757,7 +761,11 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _ncmc_ghmc(self, context, titration_group_indices, initial_titration_states, final_titration_states):
         """
-        Non equilibrium candidate Monte Carlo (NCMC) with a generalized Hamiltonian Monte Carlo (GHMC) propagator.
+        Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from an initial protonation
+        state to a final protonation state. This functions changes the system's state and returns the work for the
+        transformation. Currently, parameters are linearly interpolated between the initial and final states.
+
+        Propagation is performed with a generalized Hamiltonian Monte Carlo (GHMC) integrator.
 
         Notes
         -----
@@ -793,7 +801,6 @@ class _BaseProtonDrive(_BaseDrive):
         if self.cm_remover is not None:
             self.cm_remover.setFrequency(0)
 
-        #TODO: remove explicit calculation of work with `getEnergy`
         ghmc = self.compound_integrator.getIntegrator(1)
         ghmc.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
         ghmc.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
@@ -815,6 +822,7 @@ class _BaseProtonDrive(_BaseDrive):
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
 
+            # TODO: remove 'slow way' when certain of the final state of the code
             # The slow way to calculate the work
             #nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
 
@@ -841,7 +849,7 @@ class _BaseProtonDrive(_BaseDrive):
         for titration_group_index in titration_group_indices:
             self.titrationStates[titration_group_index] = final_titration_states[titration_group_index]
 
-        # Extracting the final states weigth.
+        # Extracting the final state's weight.
         g_final = 0
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group['titration_states'][titration_state_index]
@@ -929,19 +937,7 @@ class _BaseProtonDrive(_BaseDrive):
                 # Save the kinetic and potential energy for records
                 log_P, pot2, kin2 = self._compute_log_probability(context)
 
-            #TODO: remove when certain velocity Verlet won't be used as the NCMC propagator
-            # BEGIN old code
-            ## Compute final probability of this protonation state.
-            #log_P_final, pot2, kin2 = self._compute_log_probability(context)
-            ## Compute work and store work history.
-            #work = - (log_P_final - log_P_initial)
-            #log_P_accept = -work
-            #log.debug("LOGP" + str(log_P_accept))
-            #log.debug("   proposed log probability change: %f -> %f | work %f\n" % (log_P_initial, log_P_final, work))
-            # End old code
-
             # Store work history and potential and kinetic energy.
-
             self.work_history.append((initial_titration_states, final_titration_states, work))
             log_P_accept = -work
 
@@ -1413,7 +1409,7 @@ class AmberProtonDrive(_BaseProtonDrive):
         # Set constraint tolerance.
         self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
-        # Record the forces that need to be swicthed off for NCMC
+        # Record the forces that need to be switched off for NCMC
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
                   range(system.getNumForces())}
         # Control center mass remover
