@@ -71,8 +71,13 @@ def prepare_system(prmtop, cpin, inpcrd=None, xml=None, pH = 7.0, platform='CPU'
     integrator = openmmtools.integrators.GHMCIntegrator(temperature, 1.0/unit.picoseconds, 2.0*unit.femtoseconds)
 
     # Create protons proton driver
-    driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin, integrator, debug=False,
+    if implicit == True:
+        driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin, integrator, debug=False,
                               pressure=None, ncmc_steps_per_trial=nsteps, implicit=implicit)
+    else:
+        driver = AmberProtonDrive(system, temperature, pH, prmtop, cpin, integrator, debug=False,
+                              pressure=1*unit.atmospheres, ncmc_steps_per_trial=nsteps, implicit=implicit)
+
     # Create SAMS sampler
     sams_sampler = SelfAdjustedMixtureSampling(driver)
 
@@ -118,12 +123,12 @@ if __name__ == "__main__":
     weights = []      # The bias applied by SAMS to reach target weight
     delta_t = []      # To record the time (in seconds) for each iteration
 
-    g_initial = {'lys': [0.0, -6.94177861],
-                 'tyr': [0.0, 113.80143471],
-                 'as4': [0.0, -56.35949002, -56.90458235, -53.66854317, -58.70386813],
-                 'gl4': [0.0, -30.89810794, -31.58412605, -33.78753743, -31.04032087],
-                 'hip': [0.0, 26.66488525, 32.07581],
-                 'cys': [0.0, 136.00398956]}
+    g_initial = {'lys': [0.0, -6.8],
+                 'tyr': [0.0, 126.7],
+                 'as4': [0.0, -63.2, -65.1, -63.1, -69.5],
+                 'gl4': [0.0, -33.8, -39.7, -36.1, -38.5],
+                 'hip': [0.0, 27.5, 29.6],
+                 'cys': [0.0, 154.4]}
     driver.import_gk_values(g_initial)
 
     # Naming the output file
