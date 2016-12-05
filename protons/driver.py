@@ -852,7 +852,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         # Turn the barostat on again
         if self.barostat is not None:
-            self.barostat.setFrequency(self.barofrequency)
+            self.barostat.setFrequency(self.barofreq)
         if self.cm_remover is not None:
             self.cm_remover.setFrequency(self.cm_remover_freq)
 
