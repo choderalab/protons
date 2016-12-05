@@ -4,7 +4,7 @@
 from __future__ import print_function
 import os
 
-from .driver import AmberProtonDrive
+from .driver import AmberProtonDrive, ForceFieldProtonDrive
 from .logger import log
 
 # Module constants

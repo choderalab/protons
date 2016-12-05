@@ -14,6 +14,7 @@ import openmoltools as omt
 from lxml import etree, objectify
 from openeye import oechem
 from openmoltools import forcefield_generators as omtff
+from numpy import inf
 
 from protons import get_data
 from protons.logger import log
@@ -98,7 +99,7 @@ class _Bond(object):
 class _State(object):
     """Private class representing a template of a single isomeric state of the molecule.
     """
-    def __init__(self, index, log_population, epik_penalty, net_charge, atom_list):
+    def __init__(self, index, log_population, g_k, net_charge, atom_list):
         """
 
         Parameters
@@ -107,8 +108,8 @@ class _State(object):
             Index of the isomeric state
         log_population - str
             Solvent population of the isomeric state
-        epik_penalty - str
-            The penalty returned from Epik (kcal/mol)
+        g_k - str
+            The penalty for this state( i.e. returned from Epik (kcal/mol))
         net_charge - str
             Net charge of the isomeric state
         atom_list - list of str
@@ -117,9 +118,10 @@ class _State(object):
         """
         self.index = index
         self.log_population = log_population
-        self.epik_penalty = epik_penalty
+        self.g_k = g_k
         self.net_charge = net_charge
         self.atoms=OrderedDict()
+        self.proton_count = -1
         for atom in atom_list:
             self.atoms[atom] = None
 
@@ -145,6 +147,9 @@ class _State(object):
                 issues += "Atom is a dummy, please assign proper types."
             elif hasattr(atom, 'half_life'):
                 issues += "Atom '{}' is radioactive.\r\n".format(atom.name)
+
+        if self.proton_count < 0:
+            issues += "Invalid number of acidic protons: {}.".format(self.proton_count)
 
         raise ValueError(issues)
 
@@ -178,11 +183,20 @@ class _State(object):
             raise ValueError("Atom '{}' could not be found".format(atom.name))
         self.atoms[atom.name] = atom
 
+    def set_number_of_protons(self, min_charge):
+        """Set the number of acidic protons for this state
+        Parameters
+        ----------
+        min_charge - int
+            The net charge of the least protonated state.
+        """
+        self.proton_count = int(self.net_charge) - min_charge
+
     def __str__(self):
         return '<State index="{index}" ' \
                'log_population="{log_population}"' \
-               ' epik_penalty="{epik_penalty}"' \
-               ' net_charge="{net_charge}"/>'.format(**self.__dict__)
+               ' g_k="{g_k}"' \
+               ' proton_count="{proton_count}"/>'.format(**self.__dict__)
 
     __repr__ = __str__
 
@@ -637,17 +651,25 @@ class _TitratableForceFieldCompiler(object):
         """
         Store all the properties that are specific to each state
         """
+        charges = list()
         for index, state in self._input_state_data.items():
+            net_charge = state['net_charge']
+            charges.append(int(net_charge))
             template = _State(index,
-                            state['log_population'],
-                            state['epik_penalty'],
-                            state['net_charge'],
-                            self._atom_names
-                            )
+                              state['log_population'],
+                              state['epik_penalty'],
+                              net_charge,
+                              self._atom_names
+                              )
             for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
                 template.set_atom(_Atom(xml_atom.attrib['name'], xml_atom.attrib['type'], xml_atom.attrib['charge']))
 
             self._state_templates.append(template)
+
+        min_charge = min(charges)
+        for state in self._state_templates:
+            state.set_number_of_protons(min_charge)
+
         return
 
     def _unique_bonds(self):

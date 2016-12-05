@@ -4,26 +4,18 @@ import os
 
 import openmmtools
 import pytest
-from openmoltools.amber import find_gaff_dat
+
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from simtk import unit, openmm
 from simtk.openmm import app
 
-from protons import AmberProtonDrive
+from protons import AmberProtonDrive, ForceFieldProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling, AmberCalibrationSystem
 from . import get_test_data
-from .helper_func import hasCUDA, SystemSetup
-
-try:
-    find_gaff_dat()
-    found_gaff = True
-except ValueError:
-    found_gaff = False
-
-found_schrodinger = is_schrodinger_suite_installed()
+from .utilities import hasCUDA, SystemSetup
 
 
-class TestTyrosineExplicit(object):
+class TestAmberTyrosineExplicit(object):
     """
     Simulating a tyrosine in explicit solvent
     """
@@ -54,15 +46,15 @@ class TestTyrosineExplicit(object):
         """
         testsystem = self.setup_tyrosine_explicit()
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
-        context = openmm.Context(testsystem.system, mc_titration.compound_integrator, platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
 
         integrator.step(10)  # MD
-        mc_titration.update(context)  # protonation
+        driver.update(context)  # protonation
 
     def test_tyrosine_sams_instantaneous_binary(self):
         """
@@ -71,10 +63,10 @@ class TestTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False)
-        sams_sampler = SelfAdjustedMixtureSampling(mc_titration)
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, sams_sampler.driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -91,11 +83,11 @@ class TestTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False)
-        sams_sampler = SelfAdjustedMixtureSampling(mc_titration)
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, sams_sampler.driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -112,15 +104,15 @@ class TestTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
-        context = openmm.Context(testsystem.system, mc_titration.compound_integrator, platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
 
         integrator.step(10)  # MD
-        mc_titration.update(context)  # protonation
+        driver.update(context)  # protonation
 
     def test_tyrosine_sams_ncmc_binary(self):
         """
@@ -129,18 +121,19 @@ class TestTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False)
-        sams_sampler = SelfAdjustedMixtureSampling(mc_titration)
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
-        context = openmm.Context(testsystem.system, mc_titration.compound_integrator, platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
         integrator.step(10)  # MD
         sams_sampler.driver.update(context)  # protonation
         sams_sampler.adapt_zetas(context, 'binary')
 
+    @pytest.mark.skip(reason="NCMC global scheme is invalid without NCMC sams.")
     def test_tyrosine_sams_ncmc_global(self):
         """
         Run SAMS (global update) tyrosine in explicit solvent with an ncmc state switch
@@ -148,13 +141,13 @@ class TestTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
 
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False)
-        sams_sampler = SelfAdjustedMixtureSampling(mc_titration)
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
-        context = openmm.Context(testsystem.system, mc_titration.compound_integrator, platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
         integrator.step(10)  # MD
@@ -162,7 +155,7 @@ class TestTyrosineExplicit(object):
         sams_sampler.adapt_zetas(context, 'global')
 
 
-class TestAminoAcidsExplicitCalibration(object):
+class TestAmberAminoAcidsExplicitCalibration(object):
     """Testing of the AmberCalibrationSystem API for explicit solvent systems"""
     @classmethod
     def setup(cls):
@@ -230,7 +223,7 @@ class TestAminoAcidsExplicitCalibration(object):
 
 
 @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
-class TestPeptideExplicit(object):
+class TestAmberPeptideExplicit(object):
     """Explicit solvent tests for a peptide with the sequence EDYCHK"""
     default_platform = 'CUDA'
 
@@ -259,15 +252,146 @@ class TestPeptideExplicit(object):
 
         testsystem = self.setup_peptide_explicit_system()
         integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
-        mc_titration = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=testsystem.pressure, ncmc_steps_per_trial=1, implicit=False)
-        mc_titration.calibrate(max_iter=1, platform_name=self.default_platform)
+        driver.calibrate(max_iter=1, platform_name=self.default_platform)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
-        context = openmm.Context(testsystem.system, mc_titration.compound_integrator, platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
         integrator.step(10)  # MD
-        mc_titration.update(context)  # protonation
+        driver.update(context)  # protonation
 
 
+class TestForceFieldImidazoleExplicit(object):
+    """Tests for imidazole in explict solvent (TIP3P)"""
+
+    default_platform = 'CPU'
+
+    @staticmethod
+    def setup_imidazole_explicit():
+        """
+        Set up a tyrosine in explicit solvent
+        """
+        imidazole_explicit_system = SystemSetup()
+        imidazole_explicit_system.temperature = 300.0 * unit.kelvin
+        imidazole_explicit_system.pressure = 1.0 * unit.atmospheres
+        imidazole_explicit_system.timestep = 1.0 * unit.femtoseconds
+        imidazole_explicit_system.collision_rate = 9.1 / unit.picoseconds
+        imidazole_explicit_system.pH = 9.6
+        testsystems = get_test_data('imidazole_explicit', 'testsystems')
+        imidazole_explicit_system.positions = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
+        imidazole_explicit_system.system = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
+        imidazole_explicit_system.ffxml_filename = '{}/protons-imidazole.xml'.format(testsystems)
+        imidazole_explicit_system.gaff = get_test_data("gaff.xml", "../forcefields/")
+        imidazole_explicit_system.pdbfile = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
+        imidazole_explicit_system.topology = imidazole_explicit_system.pdbfile.topology
+        return imidazole_explicit_system
+
+    def test_imidazole_instantaneous(self):
+        """
+        Run imidazole in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
+
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, [testsystem.ffxml_filename],
+                                  testsystem.topology, integrator, debug=False,
+                                  pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False, residues_by_name=['LIG'])
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        integrator.step(10)  # MD
+        driver.update(context)  # protonation
+
+    def test_imidazole_ncmc(self):
+        """
+        Run imidazole in explicit solvent with an NCMC state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
+
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
+                                       [testsystem.ffxml_filename],
+                                       testsystem.topology, integrator, debug=False,
+                                       pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False,
+                                       residues_by_name=['LIG'])
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        integrator.step(10)  # MD
+        driver.update(context)  # protonation
+
+    def test_imidazole_sams_instantaneous_binary(self):
+        """
+        Run SAMS (binary update) imidazole in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
+                                       [testsystem.ffxml_filename],
+                                       testsystem.topology, integrator, debug=False,
+                                       pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
+                                       residues_by_name=['LIG'])
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, sams_sampler.driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        integrator.step(10)  # MD
+        sams_sampler.driver.update(context)  # protonation
+        sams_sampler.adapt_zetas(context, 'binary')
+
+    def test_imidazole_sams_instantaneous_global(self):
+        """
+        Run SAMS (global update) imidazole in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
+                                       [testsystem.ffxml_filename],
+                                       testsystem.topology, integrator, debug=False,
+                                       pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
+                                       residues_by_name=['LIG'])
+
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, sams_sampler.driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        integrator.step(10)  # MD
+        sams_sampler.driver.update(context)  # protonation
+        sams_sampler.adapt_zetas(context, 'global')
+
+    def test_imidazole_sams_ncmc_binary(self):
+        """
+        Run SAMS (binary update) imidazole in explicit solvent with an ncmc state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+        integrator = openmmtools.integrators.VelocityVerletIntegrator(testsystem.timestep)
+
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
+                                       [testsystem.ffxml_filename],
+                                       testsystem.topology, integrator, debug=False,
+                                       pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False,
+                                       residues_by_name=['LIG'])
+
+        sams_sampler = SelfAdjustedMixtureSampling(driver)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        integrator.step(10)  # MD
+        sams_sampler.driver.update(context)  # protonation
+        sams_sampler.adapt_zetas(context, 'binary')

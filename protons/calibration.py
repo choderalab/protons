@@ -55,11 +55,11 @@ class SelfAdjustedMixtureSampling(object):
         group_index = 0
         nstates = len(self.driver.titrationGroups[group_index]['titration_states'])
         self.state_counts = np.zeros(nstates, np.float64)
-        log.info('There are %d sams_sampler states' % nstates)
+        log.info('There are %d titration states' % nstates)
 
     def adapt_zetas(self, context, scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0, group_index=0):
         """
-        Update the relative free energy of sams_sampler states of the specified titratable group
+        Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
         Parameters
         ----------
@@ -113,7 +113,7 @@ class SelfAdjustedMixtureSampling(object):
         Parameters
         ----------
         zetas : list of float
-            Zeta values for each sams_sampler state
+            Zeta values for each titration state
         group_index : int, optional
             Index of the group that needs updating, defaults to 0
         """
@@ -502,9 +502,9 @@ class AmberCalibrationSystem(object):
         threshold : float, optional (default: 1.e-7)
             Maximum absolute gradient in gk to assume convergence.
         mc_every : int, optional (default: 100)
-            Update sams_sampler state every `mc_every` dynamics steps.
+            Update titration state every `mc_every` dynamics steps.
         gk_every : int, optional (default: 1)
-            Adapt the gk values every `gk_every` sams_sampler state updates
+            Adapt the gk values every `gk_every` titration state updates
         check_frequency: int, optional (default: 100)
             Check for convergence for this amount of gk updates
         window : int, optional (default: 200)

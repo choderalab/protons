@@ -4,6 +4,7 @@ import pytest
 from lxml import etree
 from openmoltools import forcefield_generators as omtff
 from openmoltools.schrodinger import is_schrodinger_suite_installed
+from openmoltools.amber import find_gaff_dat
 from simtk import unit
 from simtk.openmm import app
 
@@ -13,10 +14,17 @@ try:
 except ImportError:
     ligands_success = False
 
+from protons import ForceFieldProtonDrive
 from protons.tests import get_test_data
-from protons.tests.helper_func import hasOpenEye
-from protons.tests.test_explicit import found_gaff
-from protons.tests.test_implicit import found_gaff
+from protons.tests.utilities import hasOpenEye, SystemSetup
+
+try:
+    find_gaff_dat()
+    found_gaff = True
+except ValueError:
+    found_gaff = False
+
+
 import os
 
 # Ligands module import will fail if OpenEye not present, but this should be optional for pass/failing the code
@@ -101,36 +109,6 @@ class TestLigandParameterizationImplicit(object):
         forcefield = app.ForceField(xmlfile)
 
 
-@pytest.mark.skip(reason="Currently not supporting implicit solvent until we can add GB parameters for gaff types.")
-class TestImidazoleImplicit(object):
-    """Tests for imidazole in implicit solvent"""
-
-    def test_creating_ligand_system(self):
-        """Create an OpenMM system using a pdbfile, and a ligand force field"""
-        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
-        forcefield = app.ForceField(xmlfile)
-        pdb = app.PDBFile(get_test_data("imidazole.pdb", "testsystems/imidazole_implicit"))
-        system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-
-    @pytest.mark.xfail(raises=NotImplementedError, reason="Test not finished")
-    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff, reason="This test requires Schrodinger's suite and gaff")
-    def test_full_procedure(self):
-        """
-        Run through an entire parametrization procedure and start a simulation
-
-        """
-        xml_output_file = "/tmp/full-proceduretest-implicit.xml"
-        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_implicit"), xml_output_file, pH=7.0)
-
-        forcefield = app.ForceField(xml_output_file)
-        pdb = app.PDBFile(get_test_data("imidazole.pdb", "testsystems/imidazole_implicit"))
-        system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-
-        raise NotImplementedError("This test is unfinished.")
-
-        # Need to implement the API for reading FFXML and use it here.
-
-
 class TestLigandParameterizationExplicit(object):
     """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
 
@@ -210,38 +188,16 @@ class TestLigandParameterizationExplicit(object):
         gaff = get_test_data("gaff.xml", "../forcefields/")
         forcefield = app.ForceField(gaff, xmlfile)
 
-
-class TestImidazoleExplicit(object):
-    """Tests for imidazole in explict solvent (TIP3P)"""
-
     def test_creating_ligand_system(self):
         """Create an OpenMM system using a pdbfile, and a ligand force field"""
-        gaff = get_test_data("gaff.xml", "../forcefields/")
         xmlfile = get_test_data("protons-imidazole.xml", "testsystems/imidazole_explicit")
-        pdbfile = get_test_data("imidazole_solvated.pdb", "testsystems/imidazole_explicit")
-        forcefield = app.ForceField(gaff, xmlfile, 'amber99sbildn.xml', 'tip3p.xml')
-        pdb = app.PDBFile(pdbfile)
-        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.Ewald,
-                    nonbondedCutoff=1.0*unit.nanometers, constraints=app.HBonds, rigidWater=False,
-                    ewaldErrorTolerance=0.0005)
-
-    @pytest.mark.xfail(raises=NotImplementedError, reason="Test not finished")
-    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff,
-                        reason="This test requires Schrodinger's suite and gaff")
-    def test_full_procedure(self):
-        """
-        Run through an entire parametrization procedure and start a simulation
-
-        """
         gaff = get_test_data("gaff.xml", "../forcefields/")
-        xml_output_file = "/tmp/full-proceduretest-explicit.xml"
-        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_explicit"), xml_output_file, pH=7.0)
 
-        forcefield = app.ForceField(gaff, xml_output_file, 'amber99sbildn.xml', 'tip3p.xml')
-        pdb = app.PDBFile(get_test_data("imidazole_solvated.pdb", "testsystems/imidazole_explicit"))
-        system = forcefield.createSystem(pdb.topology, implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff,
-                                         constraints=app.HBonds)
+        forcefield = app.ForceField(gaff, xmlfile, 'amber99sbildn.xml', 'tip3p.xml')
+        pdb = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
+        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.Ewald,
+                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds,
+                                         rigidWater=False,
+                                         ewaldErrorTolerance=0.0005)
 
-        raise NotImplementedError("This test is unfinished.")
 
-        # Need to implement the API for reading FFXML and use it here.

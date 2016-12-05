@@ -1,3 +1,4 @@
+# coding=utf-8
 import copy
 import logging
 import math
@@ -10,6 +11,7 @@ from openmmtools.integrators import VelocityVerletIntegrator
 from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
+from lxml import etree
 
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
@@ -49,7 +51,7 @@ class _BaseDrive(object):
     @abstractmethod
     def reset_statistics(self):
         """
-        Reset statistics of sams_sampler state tracking.
+        Reset statistics of titration state tracking.
         """
         pass
 
@@ -177,7 +179,9 @@ class _BaseProtonDrive(_BaseDrive):
             [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
             [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
             [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
-            if (abs(charge1 / units.elementary_charge) > 0) and (abs(charge2 / units.elementary_charge) > 0):
+            # Using 1.e-15 as necessary precision for establishing greater than 0
+            # Needs to be slightly larger than sys.float_info.epsilon to prevent numerical errors.
+            if (abs(charge1 / (units.elementary_charge)) > 1.e-15) and (abs(charge2 / units.elementary_charge) > 1.e-15) and (abs(chargeProd/(units.elementary_charge ** 2)) > 1.e-15):
                 coulomb14scale = chargeProd / (charge1 * charge2)
                 return coulomb14scale
 
@@ -232,9 +236,33 @@ class _BaseProtonDrive(_BaseDrive):
 
         return exception_indices
 
+    def _set14exceptions(self, system):
+        """
+        Collect all the NonbondedForce exceptions that pertain to 1-4 interactions.
+
+        Parameters
+        ----------
+        system - OpenMM System object
+
+        Returns
+        -------
+
+        """
+        for force in system.getForces():
+            if force.__class__.__name__ == "NonbondedForce":
+                for index in range(force.getNumExceptions()):
+                    [atom1, atom2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+                    unitless_chargeProd = chargeProd / (units.elementary_charge ** 2)
+                    unitless_epsilon = epsilon / units.kilojoule_per_mole
+                    # 1-2 and 1-3 should be 0 for both c.
+                    if abs(unitless_chargeProd) > 1.e-12 or abs(unitless_epsilon) > 1.e-12:
+                        self.atomExceptions[atom1].append(atom2)
+                        self.atomExceptions[atom2].append(atom1)
+        return
+
     def reset_statistics(self):
         """
-        Reset statistics of sams_sampler state tracking.
+        Reset statistics of titration state tracking.
 
         Todo
         ----
@@ -381,7 +409,7 @@ class _BaseProtonDrive(_BaseDrive):
         ----------
 
         atom_indices : list of int
-            the atom indices defining the sams_sampler group
+            the atom indices defining the titration group
 
         Other Parameters
         ----------------
@@ -391,13 +419,13 @@ class _BaseProtonDrive(_BaseDrive):
         Notes
         -----
 
-        No two sams_sampler groups may share atoms.
+        No two titration groups may share atoms.
 
         """
-        # Check to make sure the requested group does not share atoms with any existing sams_sampler group.
+        # Check to make sure the requested group does not share atoms with any existing titration group.
         for group in self.titrationGroups:
             if set(group['atom_indices']).intersection(atom_indices):
-                raise Exception("Titration groups cannot share atoms.  The requested atoms of new sams_sampler group (%s) share atoms with another group (%s)." % (
+                raise Exception("Titration groups cannot share atoms.  The requested atoms of new titration group (%s) share atoms with another group (%s)." % (
                     str(atom_indices), str(group['atom_indices'])))
 
         # Define the new group.
@@ -408,31 +436,31 @@ class _BaseProtonDrive(_BaseDrive):
         group['index'] = group_index
         group['name'] = name
         group['nstates'] = 0
-        # NonbondedForce exceptions associated with this sams_sampler state
+        # NonbondedForce exceptions associated with this titration state
         group['exception_indices'] = self._get14exceptions(self.system, atom_indices)
 
         self.titrationGroups.append(group)
 
-        # Note that we haven't yet defined any sams_sampler states, so current state is set to None.
+        # Note that we haven't yet defined any titration states, so current state is set to None.
         self.titrationStates.append(None)
 
         return group_index
 
     def _get_num_titration_states(self, titration_group_index):
         """
-        Return the number of sams_sampler states defined for the specified titratable group.
+        Return the number of titration states defined for the specified titratable group.
 
         Parameters
         ----------
 
         titration_group_index : int
-            the sams_sampler group to be queried
+            the titration group to be queried
 
         Returns
         -------
 
         nstates : int
-            the number of sams_sampler states defined for the specified sams_sampler group
+            the number of titration states defined for the specified titration group
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
@@ -443,31 +471,31 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _add_titration_state(self, titration_group_index, pKref, relative_energy, charges, proton_count):
         """
-        Add a sams_sampler state to a titratable group.
+        Add a titration state to a titratable group.
 
         Parameters
         ----------
 
         titration_group_index : int
-            the index of the sams_sampler group to which a new sams_sampler state is to be added
+            the index of the titration group to which a new titration state is to be added
         pKref : float
             the pKa for the reference compound used in calibration
         relative_energy : simtk.unit.Quantity with units compatible with simtk.unit.kilojoules_per_mole
             the relative energy of this protonation state
         charges : list or numpy array of simtk.unit.Quantity with units compatible with simtk.unit.elementary_charge
-            the atomic charges for this sams_sampler state
+            the atomic charges for this titration state
         proton_count : int
-            number of protons in this sams_sampler state
+            number of protons in this titration state
 
         Notes
         -----
 
-        The relative free energy of a sams_sampler state is computed as
+        The relative free energy of a titration state is computed as
 
         relative_energy + kT * proton_count * ln (10^(pH - pKa))
         = relative_energy + kT * proton_count * (pH - pKa) * ln 10
 
-        The number of charges specified must match the number (and order) of atoms in the defined sams_sampler group.
+        The number of charges specified must match the number (and order) of atoms in the defined titration group.
 
         """
 
@@ -476,7 +504,7 @@ class _BaseProtonDrive(_BaseDrive):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
                             (titration_group_index, self._get_num_titratable_groups()))
         if len(charges) != len(self.titrationGroups[titration_group_index]['atom_indices']):
-            raise Exception('The number of charges must match the number (and order) of atoms in the defined sams_sampler group.')
+            raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
         state = dict()
         state['pKref'] = pKref
@@ -485,7 +513,7 @@ class _BaseProtonDrive(_BaseDrive):
         state['proton_count'] = proton_count
         self.titrationGroups[titration_group_index]['titration_states'].append(state)
 
-        # Increment count of sams_sampler states and set current state to last defined state.
+        # Increment count of titration states and set current state to last defined state.
         self.titrationStates[titration_group_index] = self.titrationGroups[titration_group_index]['nstates']
         self.titrationGroups[titration_group_index]['nstates'] += 1
 
@@ -493,19 +521,19 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _get_titration_state(self, titration_group_index):
         """
-        Return the current sams_sampler state for the specified titratable group.
+        Return the current titration state for the specified titratable group.
 
         Parameters
         ----------
 
         titration_group_index : int
-            the sams_sampler group to be queried
+            the titration group to be queried
 
         Returns
         -------
 
         state : int
-            the sams_sampler state for the specified sams_sampler group
+            the titration state for the specified titration group
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
@@ -516,42 +544,42 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _get_titration_states(self):
         """
-        Return the current sams_sampler states for all titratable groups.
+        Return the current titration states for all titratable groups.
 
         Returns
         -------
 
         states : list of int
-            the sams_sampler states for all titratable groups
+            the titration states for all titratable groups
 
         """
         return list(self.titrationStates)  # deep copy
 
     def _get_titration_state_total_charge(self, titration_group_index, titration_state_index):
         """
-        Return the total charge for the specified sams_sampler state.
+        Return the total charge for the specified titration state.
 
         Parameters
         ----------
 
         titration_group_index : int
-            the sams_sampler group to be queried
+            the titration group to be queried
 
         titration_state_index : int
-            the sams_sampler state to be queried
+            the titration state to be queried
 
         Returns
         -------
 
         charge : simtk.openmm.Quantity compatible with simtk.unit.elementary_charge
-            total charge for the specified sams_sampler state
+            total charge for the specified titration state
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
                             (titration_group_index, self._get_num_titratable_groups()))
         if titration_state_index not in range(self._get_num_titration_states(titration_group_index)):
-            raise Exception("Invalid sams_sampler state requested.  Requested %d, valid states are in range(%d)." %
+            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." %
                             (titration_state_index, self._get_num_titration_states(titration_group_index)))
 
         charges = self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['charges'][:]
@@ -559,15 +587,15 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _set_titration_state(self, titration_group_index, titration_state_index, context=None, debug=False):
         """
-        Change the sams_sampler state of the designated group for the provided state.
+        Change the titration state of the designated group for the provided state.
 
         Parameters
         ----------
 
         titration_group_index : int
-            the index of the titratable group whose sams_sampler state should be updated
+            the index of the titratable group whose titration state should be updated
         titration_state_index : int
-            the sams_sampler state to set as active
+            the titration state to set as active
 
         Other Parameters
         ----------------
@@ -583,7 +611,7 @@ class _BaseProtonDrive(_BaseDrive):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
                             (titration_group_index, self._get_num_titratable_groups()))
         if titration_state_index not in range(self._get_num_titration_states(titration_group_index)):
-            raise Exception("Invalid sams_sampler state requested.  Requested %d, valid states are in range(%d)." %
+            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." %
                             (titration_state_index, self._get_num_titration_states(titration_group_index)))
 
         self._update_forces(titration_group_index, titration_state_index, context=context)
@@ -593,7 +621,7 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0, context=None):
         """
-        Update the force parameters to a new sams_sampler state by reading them from the cache
+        Update the force parameters to a new titration state by reading them from the cache
 
         Parameters
         ----------
@@ -602,7 +630,7 @@ class _BaseProtonDrive(_BaseDrive):
         titration_state_index : int
             Index of the state of the chosen residue
         initial_titration_state_index : int, optional, default=None
-            If blending two sams_sampler states, the initial sams_sampler state to blend.
+            If blending two titration states, the initial titration state to blend.
             If `None`, set to `titration_state_index`
         fractional_titration_state : float, optional, default=1.0
             Fraction of `titration_state_index` to be blended with `initial_titration_state_index`.
@@ -612,7 +640,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         Notes
         -----
-        * Every sams_sampler state has a list called forces, which stores parameters for all forces that need updating.
+        * Every titration state has a list called forces, which stores parameters for all forces that need updating.
         * Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
         * NonbondedForces also have an entry called `exceptions`, containing exception parameters.
 
@@ -621,7 +649,7 @@ class _BaseProtonDrive(_BaseDrive):
         if initial_titration_state_index is None:
             initial_titration_state_index = final_titration_state_index
 
-        # Retrieve cached force parameters fro this sams_sampler state.
+        # Retrieve cached force parameters fro this titration state.
         cache_initial = self.titrationGroups[titration_group_index]['titration_states'][initial_titration_state_index]['forces']
         cache_final = self.titrationGroups[titration_group_index]['titration_states'][final_titration_state_index]['forces']
 
@@ -666,20 +694,20 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _cache_force(self, titration_group_index, titration_state_index):
         """
-        Cache the force parameters for a single sams_sampler state.
+        Cache the force parameters for a single titration state.
 
         Parameters
         ----------
         titration_group_index : int
             Index of the group
         titration_state_index : int
-            Index of the sams_sampler state of the group
+            Index of the titration state of the group
 
         Notes
         -----
 
-        Call this function to set up the 'forces' information for a single sams_sampler state.
-        Every sams_sampler state has a list called forces, which stores parameters for all forces that need updating.
+        Call this function to set up the 'forces' information for a single titration state.
+        Every titration state has a list called forces, which stores parameters for all forces that need updating.
         Inside each list entry is a dictionary that always contains an entry called `atoms`, with single atom parameters by name.
         NonbondedForces also have an entry called `exceptions`, containing exception parameters.
 
@@ -768,7 +796,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         Notes
         -----
-        The sams_sampler state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
+        The titration state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
 
         """
 
@@ -784,10 +812,10 @@ class _BaseProtonDrive(_BaseDrive):
 
         log.debug("   initial %s   %12.3f kcal/mol" % (str(self._get_titration_states()), pot1 / units.kilocalories_per_mole))
 
-        # Store current sams_sampler state indices.
+        # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
 
-        # Select new sams_sampler states.
+        # Select new titration states.
         final_titration_states = copy.deepcopy(self.titrationStates)  # deep copy
         # Choose how many titratable groups to simultaneously attempt to update.
         # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
@@ -796,9 +824,9 @@ class _BaseProtonDrive(_BaseDrive):
             ndraw = 2
         # Select which titratible residues to update.
         titration_group_indices = random.sample(range(self._get_num_titratable_groups()), ndraw)
-        # Select new sams_sampler states.
+        # Select new titration states.
         for titration_group_index in titration_group_indices:
-            # Choose a sams_sampler state with uniform probability (even if it is the same as the current state).
+            # Choose a titration state with uniform probability (even if it is the same as the current state).
             titration_state_index = random.choice(range(self._get_num_titration_states(titration_group_index)))
             final_titration_states[titration_group_index] = titration_state_index
         # TODO: Always accept self transitions, or avoid them altogether.
@@ -818,12 +846,12 @@ class _BaseProtonDrive(_BaseDrive):
                 for step in range(self.nsteps_per_trial):
                     # Take a Verlet integrator step.
                     self.ncmc_propagation_integrator.step(1)
-                    # Update the sams_sampler state.
+                    # Update the titration state.
                     titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
                     # TODO: Using a VerletIntegrator together with half-kicks on either side would save one force evaluation per iteration,
                     # since parameter update would occur in the middle of a velocity Verlet step.
                     # TODO: This could be optimized by only calling
-                    # context.updateParametersInContext once rather than after every sams_sampler
+                    # context.updateParametersInContext once rather than after every titration
                     # state update.
                     for titration_group_index in titration_group_indices:
                         self._update_forces(titration_group_index, final_titration_states[titration_group_index], initial_titration_state_index=initial_titration_states[
@@ -831,7 +859,7 @@ class _BaseProtonDrive(_BaseDrive):
                         # TODO: Optimize where integrator.step() is called
                     self.ncmc_propagation_integrator.step(1)
 
-                # Update sams_sampler states so that log state penalties are accurately reflected.
+                # Update titration states so that log state penalties are accurately reflected.
                 for titration_group_index in titration_group_indices:
                     self.titrationStates[titration_group_index] = titration_state_index
 
@@ -854,7 +882,7 @@ class _BaseProtonDrive(_BaseDrive):
                 self.naccepted += 1
                 self.pot_energies.append(pot2)
                 self.kin_energies.append(kin2)
-                # Update sams_sampler states.
+                # Update titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], context)
                 # If using NCMC, flip velocities to satisfy super-detailed balance.
@@ -865,7 +893,7 @@ class _BaseProtonDrive(_BaseDrive):
                 self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
-                # Restore sams_sampler states.
+                # Restore titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], context)
                 # If using NCMC, restore coordinates and flip velocities.
@@ -879,7 +907,7 @@ class _BaseProtonDrive(_BaseDrive):
                 self.nrejected += 1
                 self.pot_energies.append(pot1)
                 self.kin_energies.append(kin1)
-                # Restore sams_sampler states.
+                # Restore titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], context)
                 # If using NCMC, restore coordinates and flip velocities.
@@ -907,7 +935,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         Notes
         -----
-        The sams_sampler state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
+        The titration state actually present in the given context is not checked; it is assumed the ProtonDrive internal state is correct.
 
         """
 
@@ -1037,7 +1065,7 @@ class _BaseProtonDrive(_BaseDrive):
                     resname_per_index[group_index] = resn
                     break
             if not supported:
-                raise ValueError("Unsupported residue/ligand found in sams_sampler groups: {}".format(group_name))
+                raise ValueError("Unsupported residue/ligand found in titration groups: {}".format(group_name))
 
         return resname_per_index, unique_residuenames
 
@@ -1103,7 +1131,7 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _get_num_attempts_per_update(self):
         """
-        Get the number of Monte Carlo sams_sampler state change attempts per call to update().
+        Get the number of Monte Carlo titration state change attempts per call to update().
 
         Returns
         -------
@@ -1116,7 +1144,7 @@ class _BaseProtonDrive(_BaseDrive):
 
     def _set_num_attempts_per_update(self, nattempts=None):
         """
-        Set the number of Monte Carlo sams_sampler state change attempts per call to update().
+        Set the number of Monte Carlo titration state change attempts per call to update().
 
         Parameters
         ----------
@@ -1128,7 +1156,7 @@ class _BaseProtonDrive(_BaseDrive):
         """
         self.nattempts_per_update = nattempts
         if nattempts is None:
-            # TODO: Perform enough sams_sampler attempts to ensure thorough mixing without taking too long per update.
+            # TODO: Perform enough titration attempts to ensure thorough mixing without taking too long per update.
             # TODO: Cache already-visited states to avoid recomputing?
             self.nattempts_per_update = self._get_num_titratable_groups()
 
@@ -1233,7 +1261,7 @@ class AmberProtonDrive(_BaseProtonDrive):
                  ncmc_steps_per_trial=0, ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
-        Initialize a Monte Carlo sams_sampler driver for simulation of protonation states and tautomers.
+        Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
 
         Parameters
         ----------
@@ -1324,7 +1352,7 @@ class AmberProtonDrive(_BaseProtonDrive):
         if implicit and maintainChargeNeutrality:
             raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
 
-        # Initialize sams_sampler group records.
+        # Initialize titration group records.
         self.titrationGroups = list()
         self.titrationStates = list()
 
@@ -1341,10 +1369,8 @@ class AmberProtonDrive(_BaseProtonDrive):
         self.coulomb14scale = self._get14scaling(system)
 
         # Store list of exceptions that may need to be modified.
-        self.atomExceptions = [list() for index in range(prmtop._prmtop.getNumAtoms())]
-        for (atom1, atom2, chargeProd, rMin, epsilon, iScee, iScnb) in prmtop._prmtop.get14Interactions():
-            self.atomExceptions[atom1].append(atom2)
-            self.atomExceptions[atom2].append(atom1)
+        self.atomExceptions = [list() for index in range(prmtop.topology.getNumAtoms())]
+        self._set14exceptions(system)
 
         # Store force object pointers.
         # TODO: Add Custom forces.
@@ -1370,9 +1396,9 @@ class AmberProtonDrive(_BaseProtonDrive):
             # Extract number of titratable groups.
             self.ngroups = len(namelist['RESSTATE'])
 
-            # Define titratable groups and sams_sampler states.
+            # Define titratable groups and titration states.
             for group_index in range(self.ngroups):
-                # Extract information about this sams_sampler group.
+                # Extract information about this titration group.
                 name = namelist['RESNAME'][group_index + 1]
                 first_atom = namelist['STATEINF(%d)%%FIRST_ATOM' % group_index] - 1
                 first_charge = namelist['STATEINF(%d)%%FIRST_CHARGE' % group_index]
@@ -1384,20 +1410,20 @@ class AmberProtonDrive(_BaseProtonDrive):
                 atom_indices = range(first_atom, first_atom + num_atoms)
                 self._add_titratable_group(atom_indices, name=name)
 
-                # Define sams_sampler states.
+                # Define titration states.
                 for titration_state in range(num_states):
-                    # Extract charges for this sams_sampler state.
+                    # Extract charges for this titration state.
                     # is defined in elementary_charge units
                     charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
 
-                    # Extract relative energy for this sams_sampler state.
+                    # Extract relative energy for this titration state.
                     # relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
                     relative_energy = 0.0 * units.kilocalories_per_mole
                     # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
                     pKref = 0.0
                     # Get proton count.
                     proton_count = namelist['PROTCNT'][first_state + titration_state]
-                    # Create sams_sampler state.
+                    # Create titration state.
                     self._add_titration_state(group_index, pKref, relative_energy, charges, proton_count)
                     self._cache_force(group_index, titration_state)
                 # Set default state for this group.
@@ -1407,6 +1433,284 @@ class AmberProtonDrive(_BaseProtonDrive):
         self._set_num_attempts_per_update(nattempts_per_update)
 
         # Reset statistics.
+        self.reset_statistics()
+
+        return
+
+
+class ForceFieldProtonDrive(_BaseProtonDrive):
+    """
+    The ForceFieldProtonDrive is a Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
+    It relies on ffxml files to set up a simulation system.
+
+    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_ and Chen and Roux [Chen2015]_ .
+
+    References
+    ----------
+
+    .. [Mongan2004] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
+        http://dx.doi.org/10.1002/jcc.20139
+
+    .. [Stern2007] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
+        http://link.aip.org/link/doi/10.1063/1.2731781
+
+    .. [Nilmeier2011] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
+        http://dx.doi.org/10.1073/pnas.1106094108
+
+    .. [Chen2015] Chen, Yunjie, and Benoît Roux. "Constant-pH hybrid nonequilibrium molecular dynamics–monte carlo simulation method." Journal of chemical theory and computation 11.8 (2015): 3919-3931.
+
+    .. todo::
+
+      * Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
+      * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
+        - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
+      * Allow specification of probabilities for selecting N residues to change protonation state at once.
+      * Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
+      * Add automatic tuning of switching times for optimal acceptance.
+      * Extend to handle systems set up via OpenMM app Forcefield class.
+      * Make integrator optional if not using NCMC
+
+    """
+
+    def __init__(self, system,
+                 temperature,
+                 pH,
+                 ffxml_files,
+                 topology,
+                 integrator,
+                 pressure=None,
+                 nattempts_per_update=None,
+                 simultaneous_proposal_probability=0.1,
+                 debug=False,
+                 ncmc_steps_per_trial=0,
+                 ncmc_timestep=1.0 * units.femtoseconds,
+                 maintainChargeNeutrality=False,
+                 cationName='NA', anionName='CL',
+                 implicit=False,
+                 residues_by_name=None,
+                 residues_by_index=None):
+
+
+        """
+        Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
+
+        Parameters
+        ----------
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature at which the system is to be simulated.
+        pH : float
+            The pH at which the system is to be simulated.
+        ffxml_files : str or list of str
+            Single ffxml filename, or list of ffxml filenames containing protons information.
+        topology : simtk.openmm.app.Topology
+            Topology of the system
+        integrator : simtk.openmm.integrator
+            The integrator used for dynamics
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
+            For explicit solvent simulations, the pressure.
+        nattempts_per_update : int, optional, default=None
+            Number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float, optional, default=0.1
+            Probability of simultaneously proposing two updates
+        debug : bool, optional, default=False
+            Turn debug information on/off.
+        ncmc_steps_per_trial : int, optional, default=0
+            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
+            Timestep to use for NCMC switching
+        maintainChargeNeutrality : bool, optional, default=True
+            If True, waters will be converted to monovalent counterions and vice-versa.
+        cationName : str, optional, default='Na+'
+            Name of cation residue from which parameters are to be taken.
+        anionName : str, optional, default='Cl-'
+            Name of anion residue from which parameters are to be taken.
+        implicit: bool, optional, default=False
+            Flag for implicit simulation. Skips ion parameter lookup.
+        residues_by_index : list of int
+            The index of the residues (0 based) that should be treated. Matches the index in the topology.
+        residues_by_name : list of str
+            All residues with the supplied names will be treated.
+
+        Todo
+        ----
+        * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?
+        """
+        # Input validation
+        if residues_by_name is not None:
+            if not isinstance(residues_by_name, list):
+                raise ValueError("residues_by_name needs to be a list")
+
+        if residues_by_index is not None:
+            if not isinstance(residues_by_index, list):
+                raise ValueError("residues_by_index needs to be a list")
+
+        if implicit and maintainChargeNeutrality:
+            raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
+
+        if isinstance(ffxml_files, str):
+            ffxml_files = [ffxml_files]
+
+        # probability of proposing two simultaneous protonation state changes
+        self.simultaneous_proposal_probability = simultaneous_proposal_probability
+
+        # Store parameters.
+        self.system = system
+        self.temperature = temperature
+        kT = kB * temperature  # thermal energy
+        self.beta = 1.0 / kT  # inverse temperature
+        self.pressure = pressure
+        self.pH = pH
+        self.debug = debug
+        self.nsteps_per_trial = ncmc_steps_per_trial
+        if implicit:
+            self.solvent = "implicit"
+        else:
+            self.solvent = "explicit"
+        # Create a Verlet integrator to handle NCMC integration
+        self.compound_integrator = openmm.CompoundIntegrator()
+        self.compound_integrator.addIntegrator(integrator)
+        self.ncmc_propagation_integrator = VelocityVerletIntegrator(ncmc_timestep)
+        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
+        self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
+
+        # Set constraint tolerance.
+        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
+
+        # Check that system has MonteCarloBarostat if pressure is specified.
+        if pressure is not None:
+            forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                      range(system.getNumForces())}
+            if 'MonteCarloBarostat' not in forces:
+                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
+
+        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
+        self.maintainChargeNeutrality = maintainChargeNeutrality
+        if not implicit:
+            # water molecules that can be converted to ions
+            self.water_residues = self._identify_water_residues(topology)
+            # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
+            self.anion_parameters = self._retrieve_ion_parameters(topology, system, anionName)
+            # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
+            self.cation_parameters = self._retrieve_ion_parameters(topology, system, cationName)
+            self.anion_residues = list()  # water molecules that have been converted to anions
+            self.cation_residues = list()  # water molecules that have been converted to cations
+
+
+        # Initialize titration group records.
+        self.titrationGroups = list()
+        self.titrationStates = list()
+
+        # Keep track of forces and whether they're cached.
+        self.precached_forces = False
+
+        # Track simulation state
+        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)
+        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
+        self.states_per_update = list()
+
+        # Determine 14 Coulomb and Lennard-Jones scaling from system.
+        # TODO : Does one 1-4 scale fit all?
+        self.coulomb14scale = self._get14scaling(system)
+
+        # Store list of exceptions that may need to be modified.
+        self.atomExceptions = [list() for index in range(topology.getNumAtoms())]
+        self._set14exceptions(system)
+
+        # Store force object pointers.
+        # TODO: Add Custom forces.
+        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce']
+        self.forces_to_update = list()
+        for force_index in range(self.system.getNumForces()):
+            force = self.system.getForce(force_index)
+            if force.__class__.__name__ in force_classes_to_update:
+                self.forces_to_update.append(force)
+
+
+        # Collect xml parameters from provided input files
+
+        self.xmltrees = [etree.parse(filename) for filename in ffxml_files]
+        compatible_residues = dict()
+        for xmltree in self.xmltrees:
+            # All residues that contain a protons block
+            for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
+                xml_resname = xml_residue.get("name")
+                if not xml_resname in compatible_residues:
+                    # Store the protons block of the residue
+                    compatible_residues[xml_resname] = xml_residue
+                else:
+                    raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+
+        # Collect all of the residues that need to be treated
+        all_residues = list(topology.residues())
+        selected_residue_indices = list()
+
+        # Validate user specified indices
+        if residues_by_index is not None:
+            for residue_index in residues_by_index:
+                residue = all_residues[residue_index]
+                if residue.name not in compatible_residues:
+                    raise ValueError("Residue '{}:{}' is not treatable using protons. Please provide parameters, or deselect it.".format(residue.name, residue.index))
+            selected_residue_indices.extend(residues_by_index)
+
+        # Validate user specified residue names
+        if residues_by_name is not None:
+            for residue_name in residues_by_name:
+                if residue_name not in compatible_residues:
+                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide parameters, or deselect it.")
+
+            for residue in all_residues:
+                if residue.name in compatible_residues:
+                    selected_residue_indices.append(residue.index)
+
+        # Remove duplicate indices and sort
+        selected_residue_indices = sorted(list(set(selected_residue_indices)))
+
+        # Extract number of titratable groups.
+        self.ngroups = len(selected_residue_indices)
+
+        # Define titratable groups and titration states.
+        for group_index in range(self.ngroups):
+            # Extract information about this titration group.
+            residue_index = selected_residue_indices[group_index]
+            residue = all_residues[residue_index]
+
+            # Define titratable group.
+            atom_indices = [atom.index for atom in residue.atoms()]
+            self._add_titratable_group(atom_indices, name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
+
+            # Define titration states.
+            protons_block = compatible_residues[residue.name].xpath('Protons')[0]
+            for state_block in protons_block.xpath("State"):
+                # Extract charges for this titration state.
+                # is defined in elementary_charge units
+                state_index = int(state_block.get("index"))
+                charges = [float(atom.get("charge")) for atom in state_block.xpath("Atom")]
+
+                # Extract relative energy for this titration state.
+                relative_energy = float(state_block.get("g_k")) * units.kilocalories_per_mole
+                # Don't use pKref
+                # TODO get rid of pKref altogether
+                pKref = 0.0
+                # Get proton count.
+                proton_count = int(state_block.get("proton_count"))
+                # Create titration state.
+                self._add_titration_state(group_index, pKref, relative_energy, charges, proton_count)
+                self._cache_force(group_index, state_index)
+
+            # Set default state for this group.
+            self._set_titration_state(group_index, 0)
+
+        # If number of attempts not specified, number of attempts is set equal to the number of titratable groups
+        self._set_num_attempts_per_update(nattempts_per_update)
+
+        # Reset statistics.
+        # nattempted = 0
+        # naccepted = 0
+        # nrejected = 0
+        # work_history = list()
         self.reset_statistics()
 
         return
