@@ -795,9 +795,7 @@ class _BaseProtonDrive(_BaseDrive):
         work : float
           the protocol work of the NCMC procedure in multiples of kT.
         """
-        # Turn the barostat and center of mass remover off, otherwise they contribute to the work
-        if self.barostat is not None:
-            self.barostat.setFrequency(0)
+        # Turn the center of mass remover off, otherwise it contributes to the work
         if self.cm_remover is not None:
             self.cm_remover.setFrequency(0)
 
@@ -858,9 +856,7 @@ class _BaseProtonDrive(_BaseDrive):
         # Extract the internally calculated work from the integrator
         work += (g_final - g_initial)
 
-        # Turn the barostat on again
-        if self.barostat is not None:
-            self.barostat.setFrequency(self.barofreq)
+        # Turn center of mass remover on again
         if self.cm_remover is not None:
             self.cm_remover.setFrequency(self.cm_remover_freq)
 
@@ -1412,6 +1408,7 @@ class AmberProtonDrive(_BaseProtonDrive):
         # Record the forces that need to be switched off for NCMC
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
                   range(system.getNumForces())}
+
         # Control center mass remover
         if 'CMMotionRemover' in forces:
             self.cm_remover = forces['CMMotionRemover']
@@ -1419,17 +1416,11 @@ class AmberProtonDrive(_BaseProtonDrive):
         else:
             self.cm_remover = None
             self.cm_remover_freq = None
+
         # Check that system has MonteCarloBarostat if pressure is specified
         if pressure is not None:
             if 'MonteCarloBarostat' not in forces:
                 raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
-            else:
-                self.barostat = forces['MonteCarloBarostat']
-                self.barofreq = self.barostat.getFrequency()
-        else:
-            self.barostat = None
-            self.barofreq = None
-
 
         # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
         self.maintainChargeNeutrality = maintainChargeNeutrality
