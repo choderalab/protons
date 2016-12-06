@@ -1428,7 +1428,7 @@ class AmberProtonDrive(_BaseProtonDrive):
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
 
-        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1/units.picosecond, ncmc_timestep, nsteps=self.ncmc_prop_per_step)
+        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 /units.picosecond, ncmc_timestep, nsteps=self.ncmc_prop_per_step)
         self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
         self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
         # Set constraint tolerance.
@@ -1594,6 +1594,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                  simultaneous_proposal_probability=0.1,
                  debug=False,
                  ncmc_steps_per_trial=0,
+                 ncmc_prop_per_step=1,
                  ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False,
                  cationName='NA', anionName='CL',
@@ -1630,6 +1631,8 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             Turn debug information on/off.
         ncmc_steps_per_trial : int, optional, default=0
             Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_prop_per_step: int, optional, default=1
+            Number of propagation steps for each NCMC perturbation step, unused if ncmc_steps_per_trial = 0
         ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
             Timestep to use for NCMC switching
         maintainChargeNeutrality : bool, optional, default=True
@@ -1677,28 +1680,44 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         self.temperature = temperature
         kT = kB * temperature  # thermal energy
         self.beta = 1.0 / kT  # inverse temperature
+        self.beta_unitless = strip_in_unit_system(
+            self.beta)  # For more efficient calculation of the work (in multiples of KT) during NCMC
         self.pressure = pressure
         self.pH = pH
         self.debug = debug
         self.nsteps_per_trial = ncmc_steps_per_trial
+        self.ncmc_prop_per_step = ncmc_prop_per_step
+
         if implicit:
             self.solvent = "implicit"
         else:
             self.solvent = "explicit"
-        # Create a Verlet integrator to handle NCMC integration
+
+        # Create a GHMC integrator to handle NCMC integration
         self.compound_integrator = openmm.CompoundIntegrator()
         self.compound_integrator.addIntegrator(integrator)
-        self.ncmc_propagation_integrator = VelocityVerletIntegrator(ncmc_timestep)
+
+        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 / units.picosecond, ncmc_timestep,
+                                                          nsteps=self.ncmc_prop_per_step)
         self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
         self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
-
         # Set constraint tolerance.
         self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
 
-        # Check that system has MonteCarloBarostat if pressure is specified.
+        # Record the forces that need to be switched off for NCMC
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+
+        # Control center mass remover
+        if 'CMMotionRemover' in forces:
+            self.cm_remover = forces['CMMotionRemover']
+            self.cm_remover_freq = self.cm_remover.getFrequency()
+        else:
+            self.cm_remover = None
+            self.cm_remover_freq = None
+
+        # Check that system has MonteCarloBarostat if pressure is specified
         if pressure is not None:
-            forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
-                      range(system.getNumForces())}
             if 'MonteCarloBarostat' not in forces:
                 raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
 

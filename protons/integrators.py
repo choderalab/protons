@@ -4,6 +4,7 @@ import simtk.unit as units
 import simtk.openmm as mm
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 
+
 class GHMCIntegrator(mm.CustomIntegrator):
 
     """
