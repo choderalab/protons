@@ -446,7 +446,7 @@ class AmberCalibrationSystem(object):
         pressure = settings["pressure"]
         pH = settings["pH"]
         if not "collision_rate" in settings:
-            integrator_collision_rate = 9.1 / units.picoseconds
+            integrator_collision_rate = 1.0 / units.picoseconds
         else:
             integrator_collision_rate = settings["collision_rate"]
 
@@ -455,8 +455,8 @@ class AmberCalibrationSystem(object):
         # TODO detect platforms automatically?
         platform_name = settings["platform_name"]
 
-        # TODO pick integrators automatically based on montecarlotitration object?
-        integrator = openmmtools.integrators.VelocityVerletIntegrator(integrator_timestep)
+        # TODO Confirm choice of GHMC integrator
+        integrator = openmmtools.integrators.GHMCIntegrator(temperature=temperature, collision_rate=integrator_collision_rate, timestep=integrator_timestep)
         self.log_state_probabilities = np.log(np.array(AmberCalibrationSystem.supported_aminoacids[residue_name](pH).populations()))
 
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
