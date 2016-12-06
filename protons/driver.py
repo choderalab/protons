@@ -11,7 +11,7 @@ from .logger import log
 from abc import ABCMeta, abstractmethod
 from .integrators import GHMCIntegrator
 
-kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
+kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilojoules_per_mole / units.kelvin)
 
 
 class _BaseDrive(object):
