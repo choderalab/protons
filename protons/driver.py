@@ -252,10 +252,11 @@ class _BaseProtonDrive(_BaseDrive):
             if force.__class__.__name__ == "NonbondedForce":
                 for index in range(force.getNumExceptions()):
                     [atom1, atom2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
-                    unitless_chargeProd = chargeProd / (units.elementary_charge ** 2)
                     unitless_epsilon = epsilon / units.kilojoule_per_mole
-                    # 1-2 and 1-3 should be 0 for both c.
-                    if abs(unitless_chargeProd) > 1.e-12 or abs(unitless_epsilon) > 1.e-12:
+                    # 1-2 and 1-3 should be 0 for both chargeProd and episilon, whereas a 1-4 interaction is scaled.
+                    # Potentially, chargeProd is 0, but epsilon should never be 0.
+                    # Using > 1.e-15 as a reasonable float precision for being greater than 0
+                    if abs(unitless_epsilon) > 1.e-15:
                         self.atomExceptions[atom1].append(atom2)
                         self.atomExceptions[atom2].append(atom1)
         return
@@ -1534,6 +1535,11 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         residues_by_name : list of str
             All residues with the supplied names will be treated.
 
+        Notes
+        -----
+        If neither residues_by_index, or residues_by_name are specified, all possible residues with Protons parameters
+        will be treated.
+
         Todo
         ----
         * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?
@@ -1662,8 +1668,15 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                     raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide parameters, or deselect it.")
 
             for residue in all_residues:
+                if residue.name in residues_by_name:
+                    selected_residue_indices.append(residue.index)
+
+        # If no names or indices are specified, make all compatible residues titratable
+        if residues_by_name is None and residues_by_index is None:
+            for residue in all_residues:
                 if residue.name in compatible_residues:
                     selected_residue_indices.append(residue.index)
+
 
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
