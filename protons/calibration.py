@@ -10,8 +10,7 @@ import abc
 from . import get_data
 from scipy.misc import logsumexp
 from collections import deque
-import openmmtools
-
+from protons.integrators import GHMCIntegrator
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
@@ -456,7 +455,7 @@ class AmberCalibrationSystem(object):
         platform_name = settings["platform_name"]
 
         # TODO Confirm choice of GHMC integrator
-        integrator = openmmtools.integrators.GHMCIntegrator(temperature=temperature, collision_rate=integrator_collision_rate, timestep=integrator_timestep)
+        integrator = GHMCIntegrator(temperature=temperature, collision_rate=integrator_collision_rate, timestep=integrator_timestep)
         self.log_state_probabilities = np.log(np.array(AmberCalibrationSystem.supported_aminoacids[residue_name](pH).populations()))
 
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
