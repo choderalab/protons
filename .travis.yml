@@ -16,6 +16,8 @@ script:
   - conda create --yes -n test python=$python
   - source activate test
   - conda config --add channels $ORGNAME
+  # Add dev channels
+  - conda config --add channels ${ORGNAME}/label/dev
 
   - conda build devtools/conda-recipe
   - conda install --yes --use-local ${PACKAGENAME}-dev
