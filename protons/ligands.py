@@ -97,7 +97,8 @@ class _Bond(object):
 
 
 class _State(object):
-    """Private class representing a template of a single isomeric state of the molecule.
+    """
+    Private class representing a template of a single isomeric state of the molecule.
     """
     def __init__(self, index, log_population, g_k, net_charge, atom_list):
         """
@@ -169,7 +170,8 @@ class _State(object):
         return dummies
 
     def set_atom(self, atom):
-        """Set the parameters for a single atom
+        """
+        Set the parameters for a single atom
 
         Parameters
         ----------
@@ -184,7 +186,9 @@ class _State(object):
         self.atoms[atom.name] = atom
 
     def set_number_of_protons(self, min_charge):
-        """Set the number of acidic protons for this state
+        """
+        Set the number of acidic protons for this state
+
         Parameters
         ----------
         min_charge - int
@@ -515,7 +519,10 @@ class _TitratableForceFieldCompiler(object):
         Returns
         -------
 
-        solutions : a
+        solutions : dict
+            keys in the dictionary are atom_types that have bonded parameters for binding to at least one of the potential atom
+            types of its bond partners
+
         """
         # After collecting the necessary bonded types, loop through possible types
         # for the current atom, and pick the first one that has a bond for all of them.

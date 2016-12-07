@@ -1,4 +1,7 @@
 # coding=utf-8
+"""
+Drivers for Monte Carlo sampling of chemical states, such as tautomers and protomers.
+"""
 import copy
 import logging
 import math
@@ -1763,9 +1766,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             if force.__class__.__name__ in force_classes_to_update:
                 self.forces_to_update.append(force)
 
-
         # Collect xml parameters from provided input files
-
         self.xmltrees = [etree.parse(filename) for filename in ffxml_files]
         compatible_residues = dict()
         for xmltree in self.xmltrees:
@@ -1848,11 +1849,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         # If number of attempts not specified, number of attempts is set equal to the number of titratable groups
         self._set_num_attempts_per_update(nattempts_per_update)
 
-        # Reset statistics.
-        # nattempted = 0
-        # naccepted = 0
-        # nrejected = 0
-        # work_history = list()
+        # Set nattempted, naccepted, nrejected, and work_history before initializing
         self.reset_statistics()
 
         return
