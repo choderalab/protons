@@ -396,11 +396,11 @@ class _TitratableForceFieldCompiler(object):
 
         # Collect all possible types by looping through states
         for atomname in self._atom_names:
-            possible_types_per_atom[atomname] = list()
+            possible_types_per_atom[atomname] = set()
             for state in self._state_templates:
                 if state.atoms[atomname] is not None:
                     # Store the atomtype for this state as a possible pick
-                    possible_types_per_atom[atomname].append(state.atoms[atomname].atom_type)
+                    possible_types_per_atom[atomname].add(state.atoms[atomname].atom_type)
                 else:
                     # add missing atoms, using the placeholder type "dummy' for now and a net charge of 0.0
                     state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
@@ -417,50 +417,58 @@ class _TitratableForceFieldCompiler(object):
         number_of_attempts = 0
         while len(final_types) != len(self._atom_names):
 
-            # TODO : if there is more than one unique solution to the entire thing, this may result in an infinite loop
-            # It is not completely obvious what would be the right thing to do in such a case.
-            # Could write code to systematically select atoms from the possibilities until all have been resolved
-            # This is just a heuristic cutoff to detect whether something is wrong.
-            if number_of_attempts > 10 * len(self._atom_names):
-                raise RuntimeError("Can't seem to resolve atom types, there might be more than 1 unique solution.")
-            number_of_attempts += 1
-
+            # Deepcopy
+            old_types = dict(final_types)
             # For those that need to be resolved
             for atomname, possible_types_for_this_atom in possible_types_per_atom.items():
 
                 # Already assigned this atom, skip it.
                 if atomname in final_types:
                     continue
-                # If all are the same as the first one
-                elif all(x == possible_types_for_this_atom[0] for x in possible_types_for_this_atom):
-                    final_types[atomname] = possible_types_for_this_atom[0]
-                # Not in te list of final assignments, and still has more than one option
+                # If only one option available
+                elif len(possible_types_for_this_atom) == 1:
+                    final_types[atomname] = next(iter(possible_types_for_this_atom))
+                # Not in the list of final assignments, and still has more than one option
                 else:
                     # Dictionary of all the bonds that could/would have to be available when picking an atom type
                     bonded_to = self._find_all_bond_types_to_atom(atomname, final_types, possible_types_per_atom)
                     # The atom types that could be compatible with at least one of the possible atom types for each atom
                     solutions = self._resolve_types(bonded_to, available_parameters_per_type,
                                                     possible_types_for_this_atom)
-
+                    # Pick a solution
+                    solution_one = next(iter(solutions.values()))
                     # If there is only one solution, that is the final solution
                     if len(solutions) == 1:
                         final_types[atomname] = list(solutions.keys())[0]
                     elif len(solutions) == 0:
                         # If this happens, you may manually need to assign atomtypes. The available types won't do.
-                        raise ValueError(
-                            "Cannot come up with a single set of atom types that describes all states in bonded form.")
+                        raise ValueError("Cannot come up with a single set of atom types that describes all states in bonded form.")
 
+                    # If more than one atomtype is possible for this atom, but all partner atom options are the same, just pick one.
+                    elif all(solution_one == solution_value for solution_value in solutions.values()):
+                        final_types[atomname] = list(solutions.keys())[0]
                     else:
                         # Some partner atoms might still be variable
                         # kick out invalid ones, and repeat procedure afterwards
                         for partner_name in bonded_to.keys():
-                            for partner_type in possible_types_per_atom[partner_name]:
-                                # if an atomtype in the current list of options did not match
-                                # any of the possible combinations with our potential solutions for the current atom
-                                if not any(partner_type in valid_match[partner_name] for valid_match in
-                                           solutions.values()):
-                                    # kick it out of the options
-                                    possible_types_per_atom[partner_name].remove(partner_type)
+                            if partner_name in final_types.keys():
+                                continue
+                            else:
+                                for partner_type in possible_types_per_atom[partner_name]:
+                                    # if an atomtype in the current list of options did not match
+                                    # any of the possible combinations with our potential solutions for the current atom
+                                    if not any(partner_type in valid_match[partner_name] for valid_match in
+                                               solutions.values()):
+                                        # kick it out of the options
+                                        possible_types_per_atom[partner_name].remove(partner_type)
+
+            # If there is more than one unique solution to the entire thing, this may result in an infinite loop
+            # It is not completely obvious what would be the right thing to do in such a case.
+            # It takes two iterations, one to identify what atoms are now invalid, and one to check whether the number
+            # of (effective) solutions is equal to 1. If after two iterations, there are no changes, the algorithm is stuck
+            if final_types == old_types and number_of_attempts % 2 == 0:
+                raise RuntimeError("Can't seem to resolve atom types, there might be more than 1 unique solution.")
+            number_of_attempts += 1
 
         log.debug("Final atom types have been selected.")
 
@@ -776,14 +784,14 @@ def write_ffxml(xml_compiler, filename=None):
         return xmlstring
 
 
-def generate_protons_ffxml(inputmol2, outputffxml, tmpdir=None, remove_temp_files=True, pH=7.4, resname="LIG"):
+def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files=True, pH=7.4, resname="LIG"):
     """
     Parametrize a ligand for constant-pH simulation using Epik.
 
     Parameters
     ----------
-    inputmol2 : str
-        location of mol2 file with all possible atoms included.
+    inputmae : str
+        location of mae file with all possible atoms included.
     outputffxml : str
         location for output xml file containing all ligand states and their parameters
 
@@ -800,10 +808,14 @@ def generate_protons_ffxml(inputmol2, outputffxml, tmpdir=None, remove_temp_file
 
     Notes
     -----
-    The supplied mol2 file needs to have ALL possible atoms included, with unique names.
-    This could be non-physical, also don't worry about bond order.
+    The supplied mae file needs to have ALL possible atoms included, with unique names.
+    You could attempt to run epik ones, and make sure.
     If you're not sure which protons to add, better to overprotonate.
-    Epik doesn't retain the input protonation if it's non-physical.
+    Epik doesn't retain the input protonation if it's non-relevant.
+
+    TODO
+    ----
+    * Atom matching for protons based on bonded atoms?.
 
     Returns
     -------
@@ -812,7 +824,7 @@ def generate_protons_ffxml(inputmol2, outputffxml, tmpdir=None, remove_temp_file
     """
 
     log.info("Running Epik to detect protomers and tautomers...")
-    inputmol2 = os.path.abspath(inputmol2)
+    inputmae = os.path.abspath(inputmae)
     outputffxml = os.path.abspath(outputffxml)
     oldwd = os.getcwd()
     if tmpdir is None:
@@ -821,7 +833,9 @@ def generate_protons_ffxml(inputmol2, outputffxml, tmpdir=None, remove_temp_file
     log.debug("Running in {}".format(tmpdir))
 
     # Using very tolerant settings
-    omt.schrodinger.run_epik(inputmol2, "epik.mae", ph=pH, min_probability=0.00001, ph_tolerance=5.0)
+    # 10 KT min prob, no tautomers
+    omt.schrodinger.run_epik(inputmae, "epik.mae", ph=pH, min_probability=4.53999298e-5, ph_tolerance=2.0,
+                             tautomerize=False)
     omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
     omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
     log.info("Epik run completed.")
