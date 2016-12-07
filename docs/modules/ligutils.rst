@@ -1,7 +1,7 @@
 The ligutils submodule
 **********************
 
-.. automodule:: protons.ligutils
+.. automodule:: protons.ligands
 
 This submodule will contain the features that enable parametrizing ligands for constant-ph simulation.
 
@@ -25,7 +25,7 @@ Several steps are needed in order to prepare a small molecule for simulation usi
 
 This code provides an automated pipeline to sequentially perform all of these steps using this handy function!
 
-.. autofunction:: protons.ligutils.parametrize_ligand
+.. autofunction:: protons.ligands.generate_protons_ffxml
 
 
 .. _Epik:  Epik, version 3.3, Schrödinger, LLC, New York, NY, 2015.

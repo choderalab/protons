@@ -1,0 +1,44 @@
+COMMAND:
+ /home/bas-pycharm/schrodinger/epik-v33013/bin/Linux-x86_64/epik_app -imae /tmp/tmpk0s2ihj_/imidazole.mae -omae /tmp/tmp3qp7lep7/epik.mae -ms 32 -ph 7.0 -pht 5.0 -p 1e-05 -pKa_atom
+SCHRODINGER: /home/bas-pycharm/schrodinger
+
+Running Epik version     3.3013
+Epik. Copyright Schrodinger, LLC. All rights reserved.
+
+Input file name:                        /tmp/tmpk0s2ihj_/imidazole.mae
+Output file name:                       /tmp/tmp3qp7lep7/epik.mae
+Maximum number of states set to: 32
+Structure adjustment calculation requested.
+  Target pH set to 7.000
+pHt tolerance set to 5.000000e+00
+Minimum probability set to 1.000000e-05
+reporting for specific atoms turned on (pKa_atom)
+
+Adjusting structures for pH 7.000000e+00 and minimum probability 1.000000e-05
+Solvent model name:                     water
+Jobcontrol is not being used for this specific Epik calculation.
+---------------------------
+Processing Input Structure #1
+        Title: Imidazole
+                                              Calculated pKas
+                                                 Conjugate
+                                          Atom   Acid/Base  pKa
+. . . . . . . . . . . . . . . . . . . . . . .
+Variation: 1
+                                             9   Conj_Acid 13.80
+                                             5   Conj_Base  6.67
+ pKa penalty:                                 0.23 kcal/mol
+     Charging penalty:                        0.23 kcal/mol
+     Neutralization penalty:                  0.00 kcal/mol
+ Overall Penalty (tautomerization included):  0.22 kcal/mol
+ Total Charge: 0
+. . . . . . . . . . . . . . . . . . . . . . .
+Variation: 2
+                                             8   Conj_Acid  6.67
+                                            10   Conj_Acid  6.67
+ pKa penalty:                                 0.68 kcal/mol
+     Charging penalty:                        0.00 kcal/mol
+     Neutralization penalty:                  0.68 kcal/mol
+ Overall Penalty (tautomerization included):  0.70 kcal/mol
+ Total Charge: 1
+---------------------------

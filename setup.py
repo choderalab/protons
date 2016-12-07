@@ -67,7 +67,7 @@ setup(
         DOCLINES[
             2:]),
     version=__version__,
-    url='https://github.com/choderalab/constph-openmm',
+    url='https://github.com/choderalab/protons',
     platforms=[
         'Linux',
         'Mac OS-X',
@@ -85,8 +85,12 @@ setup(
             'protons') +
         find_package_data(
             'protons/calibration-systems',
+            'protons') +
+        find_package_data(
+            'protons/forcefields',
             'protons')} ,
+
     zip_safe=False,
     ext_modules=extensions,
-    test_suite='nose.collector',
+    test_suite='nose.collector', # TODO replace this with py.test?
 )

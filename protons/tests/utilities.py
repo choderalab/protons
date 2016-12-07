@@ -12,9 +12,26 @@ except Exception:
     logging.info("CUDA unavailable on this system.")
     hasCUDA = False
 
+try:
+    from openeye import oechem
+    if not oechem.OEChemIsLicensed(): raise(ImportError("Need License for OEChem!"))
+    from openeye import oequacpac
+    if not oequacpac.OEQuacPacIsLicensed(): raise(ImportError("Need License for oequacpac!"))
+    from openeye import oeiupac
+    if not oeiupac.OEIUPACIsLicensed(): raise(ImportError("Need License for OEOmega!"))
+    from openeye import oeomega
+    if not oeomega.OEOmegaIsLicensed(): raise(ImportError("Need License for OEOmega!"))
+    hasOpenEye = True
+    openeye_exception_message = str()
+except Exception as e:
+    hasOpenEye = False
+    openeye_exception_message = str(e)
+
+
 class SystemSetup:
     """Empty class for storing systems and relevant attributes"""
     pass
+
 
 def make_method(func, input):
     # http://blog.kevinastone.com/generate-your-tests.html
@@ -37,7 +54,7 @@ def generate(func, *inputs):
 
     return decorator
 
-
+# TODO default paths are outdated
 def make_xml_explicit_tyr(inpcrd_filename='constph/examples/calibration-explicit/tyr.inpcrd',
                           prmtop_filename='constph/examples/calibration-explicit/tyr.prmtop',
                           outfile='tyrosine_explicit'):
@@ -57,8 +74,9 @@ def make_xml_explicit_tyr(inpcrd_filename='constph/examples/calibration-explicit
     outfile1.write(openmm.XmlSerializer.serialize(system))
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
 
-def make_xml_implicit_tyr(inpcrd_filename='constph/examples/calibration-implicit/tyr.inpcrd',
-                          prmtop_filename='constph/examples/calibration-implicit/tyr.prmtop',
+
+def make_xml_implicit_tyr(inpcrd_filename='protons/examples/calibration-implicit/tyr.inpcrd',
+                          prmtop_filename='protons/examples/calibration-implicit/tyr.prmtop',
                           outfile='tyrosine_implicit'):
 
     temperature = 300.0 * unit.kelvin
@@ -73,6 +91,39 @@ def make_xml_implicit_tyr(inpcrd_filename='constph/examples/calibration-implicit
     context = minimizer(platform_name, system, positions)
     outfile1.write(openmm.XmlSerializer.serialize(system))
     outfile2.write(openmm.XmlSerializer.serialize(context.getState(getPositions=True)))
+
+
+def make_xml_explicit_imidazole(pdb_filename='protons/examples/Ligand example/imidazole.pdb', ffxml_filename='protons/examples/Ligand example/imidazole.xml', outfile='imidazole-explicit'):
+    """Solvate an imidazole pdb file and minimize the system"""
+
+    temperature = 300.0 * unit.kelvin
+    pressure = 1.0 * unit.atmospheres
+    outfile1 = open('{}.sys.xml'.format(outfile), 'w')
+    outfile2 = open('{}.state.xml'.format(outfile), 'w')
+    gaff = get_data('gaff.xml', 'forcefields')
+    pdb = app.PDBFile(pdb_filename)
+    forcefield = app.ForceField(gaff, ffxml_filename, 'amber99sbildn.xml', 'tip3p.xml')
+    integrator = openmm.LangevinIntegrator(300 * unit.kelvin, 1.0 / unit.picoseconds,
+                                           2.0 * unit.femtoseconds)
+
+    integrator.setConstraintTolerance(0.00001)
+
+    modeller = app.Modeller(pdb.topology, pdb.positions)
+    modeller.addSolvent(forcefield, boxSize=openmm.Vec3(3.5, 3.5, 3.5) * unit.nanometers, model='tip3p', ionicStrength=0.1*unit.molar, positiveIon="Na+", negativeIon="Cl-")
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME,
+                                     nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds, rigidWater=True,
+                                     ewaldErrorTolerance=0.0005)
+    system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
+
+    simulation = app.Simulation(modeller.topology, system, integrator)
+    simulation.context.setPositions(modeller.positions)
+
+    simulation.minimizeEnergy()
+
+    outfile1.write(openmm.XmlSerializer.serialize(simulation.system))
+    positions = simulation.context.getState(getPositions=True)
+    outfile2.write(openmm.XmlSerializer.serialize(positions))
+    app.PDBFile.writeFile(simulation.topology, modeller.positions, open('imidazole-solvated-minimized.pdb', 'w'))
 
 
 def compute_potential_components(context):
