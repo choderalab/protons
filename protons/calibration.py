@@ -461,10 +461,10 @@ class AmberCalibrationSystem(object):
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
         if settings["solvent"] == "explicit":
             system.addForce(openmm.MonteCarloBarostat(pressure, temperature))
-            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=pressure, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=False)
+            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop.topology, cpin_filename, integrator, pressure=pressure, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=False)
         elif settings["solvent"] == "implicit":
             system = prmtop.createSystem(implicitSolvent=app.OBC2, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=True)
+            mc_titration = AmberProtonDrive(system, temperature, pH, prmtop.topology, cpin_filename, integrator, pressure=None, ncmc_steps_per_trial=ncmc_steps_per_trial, implicit=True)
         else:
             raise ValueError("Solvent not recognized")
 

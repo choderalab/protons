@@ -88,7 +88,153 @@ class _BaseProtonDrive(_BaseDrive):
       * Make integrator optional if not using NCMC
 
     """
-    __metaclass__ = ABCMeta
+
+    def __init__(self, system, temperature, pH, topology, integrator, pressure=None,
+                 nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
+                 ncmc_steps_per_trial=0, ncmc_prop_per_step=1, ncmc_timestep=1.0 * units.femtoseconds,
+                 maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
+
+
+        """
+        Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
+
+        Parameters
+        ----------
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature at which the system is to be simulated.
+        pH : float
+            The pH at which the system is to be simulated.
+        topology : simtk.openmm.app.Topology
+            OpenMM object containing the topology of system
+        cpin_filename : string
+            AMBER 'cpin' file defining protonation charge states and energies of amino acids
+        integrator : simtk.openmm.integrator
+            The integrator used for dynamics
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
+            For explicit solvent simulations, the pressure.
+        nattempts_per_update : int, optional, default=None
+            Number of protonation state change attempts per update call;
+            if None, set automatically based on number of titratible groups (default: None)
+        simultaneous_proposal_probability : float, optional, default=0.1
+            Probability of simultaneously proposing two updates
+        debug : bool, optional, default=False
+            Turn debug information on/off.
+        ncmc_steps_per_trial : int, optional, default=0
+            Number of perturbation steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        ncmc_prop_per_step: int, optional, default=1
+            Number of propagation steps for each NCMC perturbation step, unused if ncmc_steps_per_trial = 0
+        ncmc_timestep : simtk.unit.Quantity with units compatible with femtoseconds
+            Timestep to use for NCMC switching
+        maintainChargeNeutrality : bool, optional, default=True
+            If True, waters will be converted to monovalent counterions and vice-versa.
+        cationName : str, optional, default='Na+'
+            Name of cation residue from which parameters are to be taken.
+        anionName : str, optional, default='Cl-'
+            Name of anion residue from which parameters are to be taken.
+        implicit: bool, optional, default=False
+            Flag for implicit simulation. Skips ion parameter lookup.
+
+        Todo
+        ----
+        * Allow constant-pH dynamics to be initialized in other ways than using the AMBER cpin file (e.g. from OpenMM app; automatically).
+        * Generalize simultaneous_proposal_probability to allow probability of single, double, triple, etc. proposals to be specified?
+
+        """
+        if implicit and maintainChargeNeutrality:
+            raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
+
+        # Set defaults.
+        # probability of proposing two simultaneous protonation state changes
+        self.simultaneous_proposal_probability = simultaneous_proposal_probability
+
+        # Store parameters.
+        self.system = system
+        self.temperature = temperature
+        kT = kB * temperature  # thermal energy
+        self.beta = 1.0 / kT  # inverse temperature
+        self.beta_unitless = strip_in_unit_system(
+            self.beta)  # For more efficient calculation of the work (in multiples of KT) during NCMC
+        self.pressure = pressure
+        self.pH = pH
+        self.debug = debug
+        self.nsteps_per_trial = ncmc_steps_per_trial
+        self.ncmc_prop_per_step = ncmc_prop_per_step
+        if implicit:
+            self.solvent = "implicit"
+        else:
+            self.solvent = "explicit"
+        # Create a GHMC integrator to handle NCMC integration
+        self.compound_integrator = openmm.CompoundIntegrator()
+        self.compound_integrator.addIntegrator(integrator)
+
+        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 / units.picosecond, ncmc_timestep,
+                                                          nsteps=self.ncmc_prop_per_step)
+        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
+        self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
+        # Set constraint tolerance.
+        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
+
+        # Record the forces that need to be switched off for NCMC
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+
+        # Control center mass remover
+        if 'CMMotionRemover' in forces:
+            self.cm_remover = forces['CMMotionRemover']
+            self.cm_remover_freq = self.cm_remover.getFrequency()
+        else:
+            self.cm_remover = None
+            self.cm_remover_freq = None
+
+        # Check that system has MonteCarloBarostat if pressure is specified
+        if pressure is not None:
+            if 'MonteCarloBarostat' not in forces:
+                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
+
+        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
+        self.maintainChargeNeutrality = maintainChargeNeutrality
+        if not implicit:
+            self.water_residues = self._identify_water_residues(topology)  # water molecules that can be converted to ions
+            self.anion_parameters = self._retrieve_ion_parameters(topology, system,
+                                                                  anionName)  # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
+            self.cation_parameters = self._retrieve_ion_parameters(topology, system,
+                                                                   cationName)  # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
+            self.anion_residues = list()  # water molecules that have been converted to anions
+            self.cation_residues = list()  # water molecules that have been converted to cations
+
+        # Initialize titration group records.
+        self.titrationGroups = list()
+        self.titrationStates = list()
+
+        # Keep track of forces and whether they're cached.
+        self.precached_forces = False
+
+        # Track simulation state
+        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)
+        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
+        self.states_per_update = list()
+
+        # Determine 14 Coulomb and Lennard-Jones scaling from system.
+        self.coulomb14scale = self._get14scaling(system)
+
+        # Store list of exceptions that may need to be modified.
+        self.atomExceptions = [list() for index in range(topology.getNumAtoms())]
+        self._set14exceptions(system)
+
+        # Store force object pointers.
+        # TODO: Add Custom forces.
+        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce']
+        self.forces_to_update = list()
+        for force_index in range(self.system.getNumForces()):
+            force = self.system.getForce(force_index)
+            if force.__class__.__name__ in force_classes_to_update:
+                self.forces_to_update.append(force)
+
+        self.reset_statistics()
+
+        return
 
     def _retrieve_ion_parameters(self, topology, system, resname):
         """
@@ -1356,7 +1502,7 @@ class AmberProtonDrive(_BaseProtonDrive):
 
     """
 
-    def __init__(self, system, temperature, pH, prmtop, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
+    def __init__(self, system, temperature, pH, topology, cpin_filename, integrator, pressure=None, nattempts_per_update=None, simultaneous_proposal_probability=0.1, debug=False,
                  ncmc_steps_per_trial=0, ncmc_prop_per_step=1, ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
@@ -1370,8 +1516,8 @@ class AmberProtonDrive(_BaseProtonDrive):
             Temperature at which the system is to be simulated.
         pH : float
             The pH at which the system is to be simulated.
-        prmtop : simtk.openmm.app.Prmtop
-            Parsed AMBER 'prmtop' file (necessary to provide information on exclusions)
+        topology : simtk.openmm.app.Topology
+            OpenMM object containing the topology of system
         cpin_filename : string
             AMBER 'cpin' file defining protonation charge states and energies of amino acids
         integrator : simtk.openmm.integrator
@@ -1407,147 +1553,59 @@ class AmberProtonDrive(_BaseProtonDrive):
 
         """
 
-        # Set defaults.
-        # probability of proposing two simultaneous protonation state changes
-        self.simultaneous_proposal_probability = simultaneous_proposal_probability
+        super(AmberProtonDrive, self).__init__(system, temperature, pH, topology, integrator, pressure=pressure, nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug,
+                 ncmc_steps_per_trial=ncmc_steps_per_trial, ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
+                 maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName, anionName=anionName, implicit=implicit)
 
-        # Store parameters.
-        self.system = system
-        self.temperature = temperature
-        kT = kB * temperature  # thermal energy
-        self.beta = 1.0 / kT  # inverse temperature
-        self.beta_unitless = strip_in_unit_system(self.beta)   # For more efficient calculation of the work (in multiples of KT) during NCMC
-        self.pressure = pressure
-        self.pH = pH
-        self.cpin_filename = cpin_filename
-        self.debug = debug
-        self.nsteps_per_trial = ncmc_steps_per_trial
-        self.ncmc_prop_per_step = ncmc_prop_per_step
-        if implicit:
-            self.solvent = "implicit"
-        else:
-            self.solvent = "explicit"
-        # Create a GHMC integrator to handle NCMC integration
-        self.compound_integrator = openmm.CompoundIntegrator()
-        self.compound_integrator.addIntegrator(integrator)
+        # Load AMBER cpin file defining protonation states.
+        namelist = self._parse_fortran_namelist(cpin_filename, 'CNSTPH')
 
-        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 /units.picosecond, ncmc_timestep, nsteps=self.ncmc_prop_per_step)
-        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
-        self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
-        # Set constraint tolerance.
-        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
+        # Make sure RESSTATE is a list.
+        if type(namelist['RESSTATE']) == int:
+            namelist['RESSTATE'] = [namelist['RESSTATE']]
 
-        # Record the forces that need to be switched off for NCMC
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
-                  range(system.getNumForces())}
+        # Make sure RESNAME is a list.
+        if type(namelist['RESNAME']) == str:
+            namelist['RESNAME'] = [namelist['RESNAME']]
 
-        # Control center mass remover
-        if 'CMMotionRemover' in forces:
-            self.cm_remover = forces['CMMotionRemover']
-            self.cm_remover_freq = self.cm_remover.getFrequency()
-        else:
-            self.cm_remover = None
-            self.cm_remover_freq = None
+        # Extract number of titratable groups.
+        ngroups = len(namelist['RESSTATE'])
 
-        # Check that system has MonteCarloBarostat if pressure is specified
-        if pressure is not None:
-            if 'MonteCarloBarostat' not in forces:
-                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
+        # Define titratable groups and titration states.
+        for group_index in range(ngroups):
+            # Extract information about this titration group.
+            name = namelist['RESNAME'][group_index + 1]
+            first_atom = namelist['STATEINF(%d)%%FIRST_ATOM' % group_index] - 1
+            first_charge = namelist['STATEINF(%d)%%FIRST_CHARGE' % group_index]
+            first_state = namelist['STATEINF(%d)%%FIRST_STATE' % group_index]
+            num_atoms = namelist['STATEINF(%d)%%NUM_ATOMS' % group_index]
+            num_states = namelist['STATEINF(%d)%%NUM_STATES' % group_index]
 
-        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
-        self.maintainChargeNeutrality = maintainChargeNeutrality
-        if not implicit:
-            self.water_residues = self._identify_water_residues(prmtop.topology) # water molecules that can be converted to ions
-            self.anion_parameters = self._retrieve_ion_parameters(prmtop.topology, system, anionName) # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
-            self.cation_parameters = self._retrieve_ion_parameters(prmtop.topology, system, cationName) # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
-            self.anion_residues = list() # water molecules that have been converted to anions
-            self.cation_residues = list() # water molecules that have been converted to cations
+            # Define titratable group.
+            atom_indices = range(first_atom, first_atom + num_atoms)
+            self._add_titratable_group(atom_indices, name=name)
 
-        if implicit and maintainChargeNeutrality:
-            raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
+            # Define titration states.
+            for titration_state in range(num_states):
+                # Extract charges for this titration state.
+                # is defined in elementary_charge units
+                charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
 
-        # Initialize titration group records.
-        self.titrationGroups = list()
-        self.titrationStates = list()
+                # Extract relative energy for this titration state.
+                relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
+                relative_energy = 0.0 * units.kilocalories_per_mole
+                # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
+                pKref = 0.0
+                # Get proton count.
+                proton_count = namelist['PROTCNT'][first_state + titration_state]
+                # Create titration state.
+                self._add_titration_state(group_index, pKref, relative_energy, charges, proton_count)
+                self._cache_force(group_index, titration_state)
+            # Set default state for this group.
 
-        # Keep track of forces and whether they're cached.
-        self.precached_forces = False
-
-        # Track simulation state
-        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)
-        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
-        self.states_per_update = list()
-
-        # Determine 14 Coulomb and Lennard-Jones scaling from system.
-        # TODO: Get this from prmtop file?
-        self.coulomb14scale = self._get14scaling(system)
-
-        # Store list of exceptions that may need to be modified.
-        self.atomExceptions = [list() for index in range(prmtop.topology.getNumAtoms())]
-        self._set14exceptions(system)
-
-        # Store force object pointers.
-        # TODO: Add Custom forces.
-        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce']
-        self.forces_to_update = list()
-        for force_index in range(self.system.getNumForces()):
-            force = self.system.getForce(force_index)
-            if force.__class__.__name__ in force_classes_to_update:
-                self.forces_to_update.append(force)
-
-        if cpin_filename:
-            # Load AMBER cpin file defining protonation states.
-            namelist = self._parse_fortran_namelist(cpin_filename, 'CNSTPH')
-
-            # Make sure RESSTATE is a list.
-            if type(namelist['RESSTATE']) == int:
-                namelist['RESSTATE'] = [namelist['RESSTATE']]
-
-            # Make sure RESNAME is a list.
-            if type(namelist['RESNAME']) == str:
-                namelist['RESNAME'] = [namelist['RESNAME']]
-
-            # Extract number of titratable groups.
-            self.ngroups = len(namelist['RESSTATE'])
-
-            # Define titratable groups and titration states.
-            for group_index in range(self.ngroups):
-                # Extract information about this titration group.
-                name = namelist['RESNAME'][group_index + 1]
-                first_atom = namelist['STATEINF(%d)%%FIRST_ATOM' % group_index] - 1
-                first_charge = namelist['STATEINF(%d)%%FIRST_CHARGE' % group_index]
-                first_state = namelist['STATEINF(%d)%%FIRST_STATE' % group_index]
-                num_atoms = namelist['STATEINF(%d)%%NUM_ATOMS' % group_index]
-                num_states = namelist['STATEINF(%d)%%NUM_STATES' % group_index]
-
-                # Define titratable group.
-                atom_indices = range(first_atom, first_atom + num_atoms)
-                self._add_titratable_group(atom_indices, name=name)
-
-                # Define titration states.
-                for titration_state in range(num_states):
-                    # Extract charges for this titration state.
-                    # is defined in elementary_charge units
-                    charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
-
-                    # Extract relative energy for this titration state.
-                    # relative_energy = namelist['STATENE'][first_state + titration_state] * units.kilocalories_per_mole
-                    relative_energy = 0.0 * units.kilocalories_per_mole
-                    # Don't use pKref for AMBER cpin files---reference pKa contribution is already included in relative_energy.
-                    pKref = 0.0
-                    # Get proton count.
-                    proton_count = namelist['PROTCNT'][first_state + titration_state]
-                    # Create titration state.
-                    self._add_titration_state(group_index, pKref, relative_energy, charges, proton_count)
-                    self._cache_force(group_index, titration_state)
-                # Set default state for this group.
-
-                self._set_titration_state(group_index, namelist['RESSTATE'][group_index])
+            self._set_titration_state(group_index, namelist['RESSTATE'][group_index])
 
         self._set_num_attempts_per_update(nattempts_per_update)
-
-        # Reset statistics.
-        self.reset_statistics()
 
         return
 
@@ -1669,107 +1727,22 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             if not isinstance(residues_by_index, list):
                 raise ValueError("residues_by_index needs to be a list")
 
-        if implicit and maintainChargeNeutrality:
-            raise ValueError("Implicit solvent and charge neutrality are mutually exclusive.")
+        super(ForceFieldProtonDrive, self).__init__(system, temperature, pH, topology, integrator, pressure=pressure,
+                                               nattempts_per_update=nattempts_per_update,
+                                               simultaneous_proposal_probability=simultaneous_proposal_probability,
+                                               debug=debug,
+                                               ncmc_steps_per_trial=ncmc_steps_per_trial,
+                                               ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
+                                               maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName,
+                                               anionName=anionName, implicit=implicit)
 
         if isinstance(ffxml_files, str):
             ffxml_files = [ffxml_files]
 
-        # probability of proposing two simultaneous protonation state changes
-        self.simultaneous_proposal_probability = simultaneous_proposal_probability
-
-        # Store parameters.
-        self.system = system
-        self.temperature = temperature
-        kT = kB * temperature  # thermal energy
-        self.beta = 1.0 / kT  # inverse temperature
-        self.beta_unitless = strip_in_unit_system(
-            self.beta)  # For more efficient calculation of the work (in multiples of KT) during NCMC
-        self.pressure = pressure
-        self.pH = pH
-        self.debug = debug
-        self.nsteps_per_trial = ncmc_steps_per_trial
-        self.ncmc_prop_per_step = ncmc_prop_per_step
-
-        if implicit:
-            self.solvent = "implicit"
-        else:
-            self.solvent = "explicit"
-
-        # Create a GHMC integrator to handle NCMC integration
-        self.compound_integrator = openmm.CompoundIntegrator()
-        self.compound_integrator.addIntegrator(integrator)
-
-        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 / units.picosecond, ncmc_timestep,
-                                                          nsteps=self.ncmc_prop_per_step)
-        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
-        self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
-        # Set constraint tolerance.
-        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
-
-        # Record the forces that need to be switched off for NCMC
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
-                  range(system.getNumForces())}
-
-        # Control center mass remover
-        if 'CMMotionRemover' in forces:
-            self.cm_remover = forces['CMMotionRemover']
-            self.cm_remover_freq = self.cm_remover.getFrequency()
-        else:
-            self.cm_remover = None
-            self.cm_remover_freq = None
-
-        # Check that system has MonteCarloBarostat if pressure is specified
-        if pressure is not None:
-            if 'MonteCarloBarostat' not in forces:
-                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
-
-        # Store options for maintaining charge neutrality by converting waters to/from monovalent ions.
-        self.maintainChargeNeutrality = maintainChargeNeutrality
-        if not implicit:
-            # water molecules that can be converted to ions
-            self.water_residues = self._identify_water_residues(topology)
-            # dict of ['charge', 'sigma', 'epsilon'] for cation parameters
-            self.anion_parameters = self._retrieve_ion_parameters(topology, system, anionName)
-            # dict of ['charge', 'sigma', 'epsilon'] for anion parameters
-            self.cation_parameters = self._retrieve_ion_parameters(topology, system, cationName)
-            self.anion_residues = list()  # water molecules that have been converted to anions
-            self.cation_residues = list()  # water molecules that have been converted to cations
-
-
-        # Initialize titration group records.
-        self.titrationGroups = list()
-        self.titrationStates = list()
-
-        # Keep track of forces and whether they're cached.
-        self.precached_forces = False
-
-        # Track simulation state
-        self.kin_energies = units.Quantity(list(), units.kilocalorie_per_mole)
-        self.pot_energies = units.Quantity(list(), units.kilocalorie_per_mole)
-        self.states_per_update = list()
-
-        # Determine 14 Coulomb and Lennard-Jones scaling from system.
-        # TODO : Does one 1-4 scale fit all?
-        self.coulomb14scale = self._get14scaling(system)
-
-        # Store list of exceptions that may need to be modified.
-        self.atomExceptions = [list() for index in range(topology.getNumAtoms())]
-        self._set14exceptions(system)
-
-        # Store force object pointers.
-        # TODO: Add Custom forces.
-        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce']
-        self.forces_to_update = list()
-        for force_index in range(self.system.getNumForces()):
-            force = self.system.getForce(force_index)
-            if force.__class__.__name__ in force_classes_to_update:
-                self.forces_to_update.append(force)
-
         # Collect xml parameters from provided input files
-        self.xmltrees = [etree.parse(filename) for filename in ffxml_files]
+        xmltrees = [etree.parse(filename) for filename in ffxml_files]
         compatible_residues = dict()
-        for xmltree in self.xmltrees:
+        for xmltree in xmltrees:
             # All residues that contain a protons block
             for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
                 xml_resname = xml_residue.get("name")
@@ -1807,15 +1780,14 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                 if residue.name in compatible_residues:
                     selected_residue_indices.append(residue.index)
 
-
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
 
         # Extract number of titratable groups.
-        self.ngroups = len(selected_residue_indices)
+        ngroups = len(selected_residue_indices)
 
         # Define titratable groups and titration states.
-        for group_index in range(self.ngroups):
+        for group_index in range(ngroups):
             # Extract information about this titration group.
             residue_index = selected_residue_indices[group_index]
             residue = all_residues[residue_index]
@@ -1848,9 +1820,6 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
 
         # If number of attempts not specified, number of attempts is set equal to the number of titratable groups
         self._set_num_attempts_per_update(nattempts_per_update)
-
-        # Set nattempted, naccepted, nrejected, and work_history before initializing
-        self.reset_statistics()
 
         return
 

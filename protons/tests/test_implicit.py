@@ -50,7 +50,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
@@ -65,7 +65,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
@@ -83,7 +83,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=None, ncmc_steps_per_trial=0, implicit=True)
         sams_sampler = SelfAdjustedMixtureSampling(driver)
@@ -101,7 +101,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
@@ -121,7 +121,7 @@ class TestAmberTyrosineImplicit(object):
         testsystem = self.setup_tyrosine_implicit()
 
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename, integrator, debug=False,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=10, implicit=True)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
@@ -136,7 +136,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=None, ncmc_steps_per_trial=10, implicit=True)
         sams_sampler = SelfAdjustedMixtureSampling(driver)
@@ -154,7 +154,7 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=10, implicit=True)
@@ -256,7 +256,7 @@ class TestAmberPeptideImplicit(object):
         """
         testsystem = self.setup_edchky_peptide()
         integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop, testsystem.cpin_filename,
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
 
