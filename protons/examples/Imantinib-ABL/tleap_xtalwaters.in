@@ -1,0 +1,26 @@
+source leaprc.constph
+
+# Load the PDBs
+protein = loadPDB 2HYY-clean-waters.pdb
+
+# Load ion force field params
+loadAmberParams frcmod.ionsjc_tip3p
+
+# There are no disulfide bonds
+
+# Solvate
+solvateBox protein TIP3PBOX 10.0
+
+# Calculate the total charge
+charge protein
+
+# Add ions
+#addIonsRand protein Cl- 23 Na+ 14
+addIons2 protein Na+ 0
+
+# Save topology files
+
+saveAmberParm protein 2HYY.parmtop 2HYY.inpcrd
+
+# Quit
+quit
