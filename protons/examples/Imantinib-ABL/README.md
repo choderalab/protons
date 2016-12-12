@@ -8,3 +8,5 @@
     * Appended xtal-waters.pdb to 2HYY-clean.pdb (and taking care to ensure the END line doesn't occur before the waters
 * Ran tleap: `tleap -f tleap_xtalwaters.in` to create `2HYY.inpcrd` and `2HYY.parmtop`
 * Created a cpin: `cpinutil.py -p 2HYY.parmtop -o 2HYY.cpin`
+
+The structure of the prepared system, before the simulation, is `leap_output.pdb`.
