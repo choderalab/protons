@@ -45,9 +45,14 @@ class _BaseDrive(object):
         pass
 
     @abstractmethod
-    def import_gk_values(self):
+    def import_gk_values(self, gk_dict):
         """
         Import the relative weights, gk, of the different states of the residues that are part of the system
+
+        Parameters
+        ----------
+        gk_dict : dict
+            dict of starting value g_k estimates in numpy arrays, with residue names as keys.
         """
         pass
 
@@ -108,8 +113,6 @@ class _BaseProtonDrive(_BaseDrive):
             The pH at which the system is to be simulated.
         topology : simtk.openmm.app.Topology
             OpenMM object containing the topology of system
-        cpin_filename : string
-            AMBER 'cpin' file defining protonation charge states and energies of amino acids
         integrator : simtk.openmm.integrator
             The integrator used for dynamics
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
@@ -1721,11 +1724,11 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         # Input validation
         if residues_by_name is not None:
             if not isinstance(residues_by_name, list):
-                raise ValueError("residues_by_name needs to be a list")
+                raise TypeError("residues_by_name needs to be a list")
 
         if residues_by_index is not None:
             if not isinstance(residues_by_index, list):
-                raise ValueError("residues_by_index needs to be a list")
+                raise TypeError("residues_by_index needs to be a list")
 
         super(ForceFieldProtonDrive, self).__init__(system, temperature, pH, topology, integrator, pressure=pressure,
                                                nattempts_per_update=nattempts_per_update,
@@ -1736,21 +1739,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                                                maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName,
                                                anionName=anionName, implicit=implicit)
 
-        if isinstance(ffxml_files, str):
-            ffxml_files = [ffxml_files]
-
-        # Collect xml parameters from provided input files
-        xmltrees = [etree.parse(filename) for filename in ffxml_files]
-        compatible_residues = dict()
-        for xmltree in xmltrees:
-            # All residues that contain a protons block
-            for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
-                xml_resname = xml_residue.get("name")
-                if not xml_resname in compatible_residues:
-                    # Store the protons block of the residue
-                    compatible_residues[xml_resname] = xml_residue
-                else:
-                    raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+        ffxml_residues = self._parse_ffxml_files(ffxml_files)
 
         # Collect all of the residues that need to be treated
         all_residues = list(topology.residues())
@@ -1760,15 +1749,15 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         if residues_by_index is not None:
             for residue_index in residues_by_index:
                 residue = all_residues[residue_index]
-                if residue.name not in compatible_residues:
-                    raise ValueError("Residue '{}:{}' is not treatable using protons. Please provide parameters, or deselect it.".format(residue.name, residue.index))
+                if residue.name not in ffxml_residues:
+                    raise ValueError("Residue '{}:{}' is not treatable using protons. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue.name, residue.index))
             selected_residue_indices.extend(residues_by_index)
 
         # Validate user specified residue names
         if residues_by_name is not None:
             for residue_name in residues_by_name:
-                if residue_name not in compatible_residues:
-                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide parameters, or deselect it.")
+                if residue_name not in ffxml_residues:
+                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.")
 
             for residue in all_residues:
                 if residue.name in residues_by_name:
@@ -1777,15 +1766,33 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         # If no names or indices are specified, make all compatible residues titratable
         if residues_by_name is None and residues_by_index is None:
             for residue in all_residues:
-                if residue.name in compatible_residues:
+                if residue.name in ffxml_residues:
                     selected_residue_indices.append(residue.index)
 
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
 
+        self._add_xml_titration_groups(all_residues, ffxml_residues, selected_residue_indices)
+        # If number of attempts not specified, number of attempts is set equal to the number of titratable groups
+        self._set_num_attempts_per_update(nattempts_per_update)
+
+        return
+
+    def _add_xml_titration_groups(self, all_residues, ffxml_residues, selected_residue_indices):
+        """
+        Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
+        Parameters
+        ----------
+        all_residues - The list of residues from the topology
+        ffxml_residues - dict of residue ffxml templates
+        selected_residue_indices - Residues to treat using Protons.
+
+        Returns
+        -------
+
+        """
         # Extract number of titratable groups.
         ngroups = len(selected_residue_indices)
-
         # Define titratable groups and titration states.
         for group_index in range(ngroups):
             # Extract information about this titration group.
@@ -1794,10 +1801,11 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
 
             # Define titratable group.
             atom_indices = [atom.index for atom in residue.atoms()]
-            self._add_titratable_group(atom_indices, name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
+            self._add_titratable_group(atom_indices,
+                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
 
             # Define titration states.
-            protons_block = compatible_residues[residue.name].xpath('Protons')[0]
+            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
@@ -1818,10 +1826,45 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             # Set default state for this group.
             self._set_titration_state(group_index, 0)
 
-        # If number of attempts not specified, number of attempts is set equal to the number of titratable groups
-        self._set_num_attempts_per_update(nattempts_per_update)
+    def _parse_ffxml_files(self, ffxml_files):
+        """
+        Read an ffxml file, or a list of ffxml files, and extract the residues that have Protons information.
 
-        return
+        Parameters
+        ----------
+        ffxml_files single object, or list of
+            - a file name/path
+            - a file object
+            - a file-like object
+            - a URL using the HTTP or FTP protocol
+        The file should contain ffxml residues that have a <Protons> block.
+
+        Returns
+        -------
+        ffxml_residues - dict of all residue blocks that were detected, with residue names as keys.
+
+        """
+        if not isinstance(ffxml_files, list):
+            ffxml_files = [ffxml_files]
+
+        # Collect xml parameters from provided input files
+        xmltrees = [etree.parse(filename) for filename in ffxml_files]
+        ffxml_residues = dict()
+        for xmltree in xmltrees:
+            # All residues that contain a protons block
+            for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
+                xml_resname = xml_residue.get("name")
+                if not xml_resname in ffxml_residues:
+                    # Store the protons block of the residue
+                    ffxml_residues[xml_resname] = xml_residue
+                else:
+                    raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+
+        return ffxml_residues
+
+
+
+
 
 
 def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
