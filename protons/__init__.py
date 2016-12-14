@@ -10,6 +10,8 @@ from .logger import log
 # Module constants
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
+__version__ = '0.0-dev' # TODO set automatically from commit hash?
+
 
 def get_data(filename, folder):
     """
