@@ -1,28 +1,29 @@
 # coding=utf-8
 """
-Functionality to store simulation output by means of netCDF4 files
+Functionality to record simulation output by means of netCDF4 files
 """
 import netCDF4
 import numpy as np
-import protons
 from simtk import unit, openmm
+
+import protons
 
 # Specification of attributes and variable types to be stored and read
 # tuples of (name, type, unit)
 
 # Single value attributes of ProtonDrive (states are defined separately)
-drive_attributes = [('naccepted',int, None), ("nrejected",int, None), ("nattempted", int, None)]
+drive_attributes = [('naccepted', int, None), ("nrejected", int, None), ("nattempted", int, None)]
 # Global variables of GHMC integrators
 ghmc_global_variables = [('naccept', int, None), ('ntrials', int, None), ('work', np.float64, 'kilojoule_per_mole')]
 # Context state variables
 state_vars = [('total_energy', np.float64, 'kilojoule_per_mole'),
               ('kinetic_energy', np.float64, 'kilojoule_per_mole'),
               ('potential_energy', np.float64, 'kilojoule_per_mole'),
-              ('temperature', np.float64, 'kelvin'),]
+              ('temperature', np.float64, 'kelvin'), ]
 
 
 def netcdf_file(filename, num_titratable_groups, num_iterations=None, degrees_of_freedom=-1):
-    """ Creates an NC file with groups and variables for ProtonDrives, Systems, and GHMCIntegrator
+    """ Creates a netCDF4 file with groups and variables for ProtonDrives, State, and GHMCIntegrator
 
     Parameters
     ----------
@@ -32,7 +33,9 @@ def netcdf_file(filename, num_titratable_groups, num_iterations=None, degrees_of
         Number of titratable groups in the system
     num_iterations - int, default is None
         Number of iterations, leave None for unlimited
-
+    degrees_of_freedom - int, default = -1
+        Degrees of freedom of the system. Necessary to calculate temperature.
+        Can be provided for convenience if known. Otherwise, gets calculated the first time it is needed.
     Returns
     -------
     Dataset - netCDF4 dataset
@@ -53,13 +56,13 @@ def netcdf_file(filename, num_titratable_groups, num_iterations=None, degrees_of
 
     # Proton drive variable group
     proton_drive = ncfile.createGroup('ProtonDrive')
-    for attribute,attrtype, attrunit in drive_attributes:
+    for attribute, attrtype, attrunit in drive_attributes:
         newvar = proton_drive.createVariable(attribute, attrtype, ('iteration',))
         if attrunit is not None:
             newvar.unit = attrunit
 
     # Titration state at each iteration, for each residue
-    proton_drive.createVariable('titration_states', int, ('iteration','group'))
+    proton_drive.createVariable('titration_states', int, ('iteration', 'group'))
 
     # NCMC integrator variable subgroup
     ncmc_integrator = proton_drive.createGroup('NCMCIntegrator')
@@ -79,7 +82,7 @@ def netcdf_file(filename, num_titratable_groups, num_iterations=None, degrees_of
     return ncfile
 
 
-def save_drive_data(ncfile, drive, iteration):
+def record_drive_data(ncfile, drive, iteration):
     """
     Store all relevant properties of a ProtonDrive type object in a netcdf dataset.
 
@@ -94,7 +97,7 @@ def save_drive_data(ncfile, drive, iteration):
     """
     # Append new iteration to the ProtonDrive variable group
     for attribute, attrtype, attrunit in drive_attributes:
-        ncfile['ProtonDrive/{}'.format(attribute)][iteration] = getattr(drive,attribute)
+        ncfile['ProtonDrive/{}'.format(attribute)][iteration] = getattr(drive, attribute)
 
     # Append the titrationstate for each group
     for titration_group_index, titration_state in enumerate(drive.titrationStates):
@@ -104,12 +107,13 @@ def save_drive_data(ncfile, drive, iteration):
 
     # Append new iteration to the NCMC integrator variable group
     for globvar, vartype, varunit in ghmc_global_variables:
-        ncfile['ProtonDrive/NCMCIntegrator/{}'.format(globvar)][iteration] = ncmc_integrator.getGlobalVariableByName(globvar)
+        ncfile['ProtonDrive/NCMCIntegrator/{}'.format(globvar)][iteration] = ncmc_integrator.getGlobalVariableByName(
+            globvar)
 
     return
 
 
-def save_ghmc_integrator_data(ncfile, integrator, iteration):
+def record_ghmc_integrator_data(ncfile, integrator, iteration):
     """
     Store relevant properties of a GHMCIntegrator object in a netcdf dataset
 
@@ -120,19 +124,19 @@ def save_ghmc_integrator_data(ncfile, integrator, iteration):
     integrator - protons.integrators.GHMCIntegrator
         Custom GHMCIntegrator class to save variables from
     iteration - the current iteration
+
     """
     # Append new iteration to the GHMCIntegrator variable group
     for globvar, vartype, varunit in ghmc_global_variables:
         ncfile['GHMCIntegrator/{}'.format(globvar)][iteration] = integrator.getGlobalVariableByName(globvar)
 
 
-def save_state_data(ncfile, context, system, iteration):
+def record_state_data(ncfile, context, system, iteration):
     """
-    Store state properties from a simulation Context, and system object
+    Store state properties from a simulation Context, and System object
 
     Parameters
     ----------
-
     ncfile - netCDF4.Dataset
         An opened netCDF4 Dataset object
     context - openmm simulation Context object
@@ -141,9 +145,6 @@ def save_state_data(ncfile, context, system, iteration):
         The simulation system
     iteration - int
         The current iteration
-
-    Returns
-    -------
 
     """
 
@@ -155,10 +156,11 @@ def save_state_data(ncfile, context, system, iteration):
 
     state = context.getState(getEnergy=True)
     statedata = {'potential_energy': state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole),
-            'kinetic_energy' : state.getKineticEnergy().value_in_unit(unit.kilojoule_per_mole)}
+                 'kinetic_energy': state.getKineticEnergy().value_in_unit(unit.kilojoule_per_mole)}
     statedata['total_energy'] = statedata['potential_energy'] + statedata['kinetic_energy']
     # T = 2 * Kin / ( R * dof)
-    statedata['temperature'] = (2 * statedata['kinetic_energy'] * unit.kilojoule_per_mole / (ncfile.degrees_of_freedom * unit.MOLAR_GAS_CONSTANT_R)).value_in_unit(unit.kelvin)
+    statedata['temperature'] = (2 * statedata['kinetic_energy'] * unit.kilojoule_per_mole / (
+    ncfile.degrees_of_freedom * unit.MOLAR_GAS_CONSTANT_R)).value_in_unit(unit.kelvin)
 
     for state_var, state_type, state_unit in state_vars:
         ncfile['State/{}'.format(state_var)][iteration] = statedata[state_var]
@@ -192,7 +194,7 @@ def _calculate_degrees_of_freedom(system):
     return degrees_of_freedom
 
 
-def save_all(ncfile, drive, integrator, context, system, iteration):
+def record_all(ncfile, drive, integrator, context, system, iteration):
     """
     Save relevant properties from ProtonDrive, GHMCIntegrator, and context plus system with one function
 
@@ -219,18 +221,18 @@ def save_all(ncfile, drive, integrator, context, system, iteration):
     """
     # Extend the iteration variable ( and dimension )
     ncfile['iteration'][iteration] = iteration
-    save_drive_data(ncfile, drive, iteration)
-    save_ghmc_integrator_data(ncfile, integrator, iteration)
-    save_state_data(ncfile, context, system, iteration)
+    record_drive_data(ncfile, drive, iteration)
+    record_ghmc_integrator_data(ncfile, integrator, iteration)
+    record_state_data(ncfile, context, system, iteration)
 
 
-def walk_netcdf_tree(top):
+def _walk_netcdf_tree(top):
     """
     Recurse through a given netcdf Dataset or Group and yield children
 
     Parameters
     ----------
-    top - top branch of a netcdf file (Group of Dataset)
+    top - top branch of a netcdf file (Group or Dataset)
 
     Yields
     ------
@@ -240,7 +242,7 @@ def walk_netcdf_tree(top):
     values = top.groups.values()
     yield values
     for value in top.groups.values():
-        for children in walk_netcdf_tree(value):
+        for children in _walk_netcdf_tree(value):
             yield children
 
 
@@ -252,7 +254,7 @@ def display_content_structure(rootgrp):
     ----------
     rootgrp - the directory to walk through
     """
-    for children in walk_netcdf_tree(rootgrp):
+    for children in _walk_netcdf_tree(rootgrp):
         for child in children:
             print(child)
             for var in child.variables:
