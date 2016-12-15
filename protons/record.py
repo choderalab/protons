@@ -51,7 +51,7 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     ncfile.version = protons.__version__
     ncfile.createDimension('iteration', size=num_iterations)
     ncfile.createVariable('iteration', int, ('iteration',))
-    ncfile.createDimension('group', size=num_titratable_groups)
+
 
     # System variable group
     system = ncfile.createGroup('State')
@@ -64,6 +64,7 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     proton_drive = ncfile.createGroup('ProtonDrive')
     proton_drive.createDimension('attempt', size=num_attempts_per_update)
     proton_drive.createVariable('attempt', int, ('iteration', 'attempt',))
+    proton_drive.createDimension('group', size=num_titratable_groups)
     for attribute, attrtype, attrunit in drive_attributes:
         newvar = proton_drive.createVariable(attribute, attrtype, ('iteration',))
         if attrunit is not None:
