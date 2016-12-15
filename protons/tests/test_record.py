@@ -42,12 +42,14 @@ def setup_forcefield_drive():
     drive = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
                                   [testsystem.ffxml_filename],
                                   testsystem.topology, integrator, debug=False,
-                                  pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
-                                  residues_by_name=['LIG'])
+                                  pressure=testsystem.pressure, ncmc_steps_per_trial=2, implicit=False,
+                                  residues_by_name=['LIG'], nattempts_per_update=1)
     platform = openmm.Platform.getPlatformByName('CPU')
     context = openmm.Context(testsystem.system, drive.compound_integrator, platform)
     context.setPositions(testsystem.positions)  # set to minimized positions
     context.setVelocitiesToTemperature(testsystem.temperature)
+    integrator.step(1)
+    drive.update(context)
 
     return drive, integrator, context, testsystem.system
 
@@ -58,7 +60,7 @@ def test_record_drive():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups))
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
     for iteration in range(10):
         record.record_drive_data(ncfile, drive, iteration=iteration)
     record.display_content_structure(ncfile)
@@ -72,7 +74,7 @@ def test_record_ghmc_integrator():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups))
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
     for iteration in range(10):
         record.record_ghmc_integrator_data(ncfile, integrator, iteration)
     record.display_content_structure(ncfile)
@@ -86,7 +88,7 @@ def test_record_state():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups))
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
     for iteration in range(10):
         record.record_state_data(ncfile, context, system, iteration)
     record.display_content_structure(ncfile)
@@ -100,9 +102,9 @@ def test_record_all():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups))
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups),2 , 1)
     for iteration in range(10):
-        record.record_all(ncfile, drive, integrator, context, system, iteration)
+        record.record_all(ncfile, iteration, drive, integrator, context, system)
     record.display_content_structure(ncfile)
     ncfile.close()
     shutil.rmtree(tmpdir)
