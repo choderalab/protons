@@ -33,7 +33,8 @@ Testbed for constant-pH methodologies using OpenMM.
 
 
 ## Contributors / coauthors ##
-
+* Bas Rustenburg <bas.rustenburg@choderalab.org>
+* Gregory Ross <gregory.ross@choderalab.org>
 * John D. Chodera <choderaj@mskcc.org>
 * Patrick Grinaway <grinawap@mskcc.org>
 * Jason Swails <jason.swails@gmail.com>
