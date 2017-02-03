@@ -658,6 +658,7 @@
       <Bond atomName1="C" atomName2="O"/>
       <ExternalBond atomName="N"/>
       <ExternalBond atomName="C"/>
+      <ExternalBond atomName="SG"/>
     </Residue>
     <Residue name="GLH">
       <Atom name="N" type="N" charge="-0.4157"/>
@@ -7953,6 +7954,7 @@
       <Bond atomName1="CB" atomName2="SG"/>
       <Bond atomName1="C" atomName2="O"/>
       <ExternalBond atomName="C"/>
+      <ExternalBond atomName="SG"/>
     </Residue>
     <Residue name="NGLN">
       <Atom name="N" type="N3" charge="0.1493"/>
@@ -8825,6 +8827,7 @@
       <Bond atomName1="C" atomName2="O"/>
       <Bond atomName1="C" atomName2="OXT"/>
       <ExternalBond atomName="N"/>
+      <ExternalBond atomName="SG"/>
     </Residue>
     <Residue name="CGLN">
       <Atom name="N" type="N" charge="-0.3821"/>

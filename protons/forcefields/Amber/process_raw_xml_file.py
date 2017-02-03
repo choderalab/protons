@@ -22,9 +22,15 @@ xmltree = etree.parse("raw-constph.xml", etree.XMLParser(remove_blank_text=True,
 
 for residue in xmltree.xpath('/ForceField/Residues/Residue'):
     residue_name = residue.get('name')
+    # CYX residues have an external bond from SG that needs explicit adding
+    if residue_name.endswith("CYX"):
+        residue.append(etree.fromstring('<ExternalBond atomName="SG"/>'))
+
     if residue_name in residue_objects:
 
         residue_state_parameters = residue_objects[residue_name]
+
+
         # Get the atom block
         atoms = [atom for atom in residue.xpath('Atom')]
 
@@ -84,9 +90,9 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
 xmlstring = etree.tostring(xmltree,encoding="utf-8", pretty_print=True, xml_declaration=False)
 xmlstring = xmlstring.decode("utf-8")
 
-with open('constph.xml', 'w') as fstream:
+with open('../protons.xml', 'w') as fstream:
     fstream.write(xmlstring)
 
 # Validate that the resulting file can be read by openmm
-y = app.ForceField('../constph.xml')
+y = app.ForceField('../protons.xml')
 
