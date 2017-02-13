@@ -18,7 +18,8 @@ from simtk.openmm import app, openmm
 # Validate that the initial file can be parsed by openmm
 x = app.ForceField('raw-constph.xml')
 
-xmltree = etree.parse("raw-constph.xml", etree.XMLParser(remove_blank_text=True, remove_comments=True))
+xml_parser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
+xmltree = etree.parse("raw-protons.xml", xml_parser)
 
 for residue in xmltree.xpath('/ForceField/Residues/Residue'):
     residue_name = residue.get('name')
@@ -29,8 +30,6 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
     if residue_name in residue_objects:
 
         residue_state_parameters = residue_objects[residue_name]
-
-
         # Get the atom block
         atoms = [atom for atom in residue.xpath('Atom')]
 
@@ -54,7 +53,7 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
             for atom_index,atom in enumerate(atoms):
                 protons_atom = deepcopy(atom)
                 atomname = atom.get("name")
-                # this is encoded wrongly in parmed
+                # compatibility fix since this is encoded differently in parmed titratable residues
                 if atomname == "OP1":
                     atomname = "O1P"
                 elif atomname == "OP2":
@@ -84,7 +83,6 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
         # Add the atoms back to the residue list in the original order.
         for atom in reversed(atoms):
             residue.insert(0, atom)
-
 
 # Write out to file
 xmlstring = etree.tostring(xmltree,encoding="utf-8", pretty_print=True, xml_declaration=False)

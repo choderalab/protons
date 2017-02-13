@@ -1,1 +1,0 @@
-['parm10.dat', 'cph_nucleic_caps.lib', 'constph.lib', 'amino10.lib', 'all_prot_nucleic10.lib', 'nucleic10.lib', 'solvents.lib', 'aminont10.lib', 'aminoct10.lib', 'atomic_ions.lib', 'frcmod.constph', 'frcmod.protonated_nucleic']
