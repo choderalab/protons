@@ -30,6 +30,7 @@ Follow these steps to generate the xml files. The specific workings of the scrip
 2. Then, run `2-process_raw_xml_file.py` to generate `protons.xml`, which contains `<Protons>` blocks for use in 
 constant-pH simulation.
 3. Create hydrogen definitions by running `3-create_hydrogen_definitions.py`.
+4. Create bond definitions by running `4-create_bond_definitions.py`.
 
 ### Ion files
 

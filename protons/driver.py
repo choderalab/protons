@@ -1849,10 +1849,6 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         return ffxml_residues
 
 
-
-
-
-
 def strip_in_unit_system(quant, unit_system=units.md_unit_system, compatible_with=None):
     """Strips the unit from a simtk.units.Quantity object and returns it's value conforming to a unit system
 
