@@ -10,6 +10,7 @@ This procedure generates 5 files.
 
 * `protons.xml`, which contains the amber ff10 forcefield with constant-pH residues 
 * `hydrogens-protons.xml`, custom hydrogen definitions for protons residues
+* `bonds-protons.xml`, custom bond definitions for topology loading.
 
 If you are including ions in your simulation, be sure to include one of these files, depending on your solvent model:
 
