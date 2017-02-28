@@ -1,12 +1,12 @@
 # coding=utf-8
 """Test the reading of forcefield files included with the package"""
 
-from protons import ff, integrators, ForceFieldProtonDrive
-import simtk
-from simtk.openmm import app, openmm as mm
-from simtk import unit
-from . import get_test_data
 import pytest
+from simtk import unit
+from simtk.openmm import app, openmm as mm
+
+from protons import ff, integrators, ForceFieldProtonDrive
+from . import get_test_data
 
 
 # Patch topology to unload standard bond definitions
@@ -31,7 +31,8 @@ def test_reading_bonds():
     """Read bond definitions in bonds-protons.xml using OpenMM."""
 
     app.Topology.loadBondDefinitions(ff.bonds)
-    # unit test specific errors might occur otherwise when loading files due to class side effects
+    # unit test specific errors might occur otherwise when loading files due
+    # to class side effects
     app.Topology.unloadStandardBonds()
 
 
@@ -40,7 +41,10 @@ def test_create_peptide_system_using_protons_xml():
     app.Topology.loadBondDefinitions(ff.bonds)
 
     # Load pdb file with protons compatible residue names
-    pdbx = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
+    pdbx = app.PDBxFile(
+        get_test_data(
+            'glu_ala_his-solvated-minimized-renamed.cif',
+            'testsystems/tripeptides'))
     forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
 
     # System Configuration
@@ -50,7 +54,7 @@ def test_create_peptide_system_using_protons_xml():
     constraintTolerance = 1.e-7
 
     # Integration Options
-    dt = 0.5 * unit.picoseconds
+    dt = 0.5 * unit.femtoseconds
     temperature = 300. * unit.kelvin
     friction = 1. / unit.picosecond
     pressure = 1.0 * unit.atmospheres
@@ -62,15 +66,24 @@ def test_create_peptide_system_using_protons_xml():
     # Prepare the Simulation
     topology = pdbx.topology
     positions = pdbx.positions
-    system = forcefield.createSystem(topology, nonbondedMethod=nonbondedMethod,
-                                     constraints=constraints, rigidWater=rigidWater, )
-    system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
+    system = forcefield.createSystem(
+        topology,
+        nonbondedMethod=nonbondedMethod,
+        constraints=constraints,
+        rigidWater=rigidWater,
+    )
+    system.addForce(
+        mm.MonteCarloBarostat(
+            pressure,
+            temperature,
+            barostatInterval))
 
     integrator = integrators.GHMCIntegrator(temperature, friction, dt)
     integrator.setConstraintTolerance(constraintTolerance)
 
     # Clean up so that the classes remain unmodified
-    # unit test specific errors might occur otherwise when loading files due to class side effects
+    # unit test specific errors might occur otherwise when loading files due
+    # to class side effects
     app.Topology.unloadStandardBonds()
 
 
@@ -81,7 +94,10 @@ def test_create_peptide_simulation_using_protons_xml():
     app.Topology.loadBondDefinitions(ff.bonds)
 
     # Load pdb file with protons compatible residue names
-    pdbx = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
+    pdbx = app.PDBxFile(
+        get_test_data(
+            'glu_ala_his-solvated-minimized-renamed.cif',
+            'testsystems/tripeptides'))
     forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
 
     # System Configuration
@@ -91,7 +107,7 @@ def test_create_peptide_simulation_using_protons_xml():
     constraintTolerance = 1.e-7
 
     # Integration Options
-    dt = 0.5 * unit.picoseconds
+    dt = 0.5 * unit.femtoseconds
     temperature = 300. * unit.kelvin
     friction = 1. / unit.picosecond
     pressure = 1.0 * unit.atmospheres
@@ -103,19 +119,32 @@ def test_create_peptide_simulation_using_protons_xml():
     # Prepare the Simulation
     topology = pdbx.topology
     positions = pdbx.positions
-    system = forcefield.createSystem(topology, nonbondedMethod=nonbondedMethod,
-                                     constraints=constraints, rigidWater=rigidWater, )
-    system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
+    system = forcefield.createSystem(
+        topology,
+        nonbondedMethod=nonbondedMethod,
+        constraints=constraints,
+        rigidWater=rigidWater,
+    )
+    system.addForce(
+        mm.MonteCarloBarostat(
+            pressure,
+            temperature,
+            barostatInterval))
 
     integrator = integrators.GHMCIntegrator(temperature, friction, dt)
     integrator.setConstraintTolerance(constraintTolerance)
 
-    driver = ForceFieldProtonDrive(system, temperature, 7.0, [ff.protonsff],
-                                   topology, integrator, debug=False,
-                                   pressure=pressure, ncmc_steps_per_trial=1, implicit=False,
-                                   cationName="NA", anionName="CL")
+    driver = ForceFieldProtonDrive(
+        system, temperature, 7.0, [ff.protonsff],
+        topology, integrator, debug=False, pressure=pressure,
+        ncmc_steps_per_trial=1, implicit=False, cationName="NA",
+        anionName="CL")
 
-    simulation = app.Simulation(topology, system, driver.compound_integrator, platform)
+    simulation = app.Simulation(
+        topology,
+        system,
+        driver.compound_integrator,
+        platform)
     simulation.context.setPositions(positions)
     simulation.context.setVelocitiesToTemperature(temperature)
 
@@ -123,7 +152,8 @@ def test_create_peptide_simulation_using_protons_xml():
     simulation.step(1)
     driver.update(simulation.context, nattempts=1)
     # Clean up so that the classes remain unmodified
-    # unit test specific errors might occur otherwise when loading files due to class side effects
+    # unit test specific errors might occur otherwise when loading files due
+    # to class side effects
     app.Topology.unloadStandardBonds()
 
 
@@ -134,7 +164,10 @@ def test_create_hewl_simulation_using_protons_xml():
     app.Topology.loadBondDefinitions(ff.bonds)
 
     # Input Files
-    pdbx = app.PDBxFile(get_test_data('4lzt-protons.cif', 'testsystems/hewl-explicit'))
+    pdbx = app.PDBxFile(
+        get_test_data(
+            '4lzt-protons.cif',
+            'testsystems/hewl-explicit'))
     forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
 
     # System Configuration
@@ -146,7 +179,7 @@ def test_create_hewl_simulation_using_protons_xml():
     constraintTolerance = 1.e-7
 
     # Integration Options
-    dt = 0.5 * unit.picoseconds
+    dt = 0.5 * unit.femtoseconds
     temperature = 300. * unit.kelvin
     friction = 1. / unit.picosecond
     pressure = 1.0 * unit.atmospheres
@@ -158,17 +191,26 @@ def test_create_hewl_simulation_using_protons_xml():
     # Prepare the Simulation
     topology = pdbx.topology
     positions = pdbx.positions
-    system = forcefield.createSystem(topology, nonbondedMethod=nonbondedMethod, nonbondedCutoff=nonbondedCutoff,
-                                     constraints=constraints, rigidWater=rigidWater,
-                                     ewaldErrorTolerance=ewaldErrorTolerance)
-    system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
+    system = forcefield.createSystem(
+        topology,
+        nonbondedMethod=nonbondedMethod,
+        nonbondedCutoff=nonbondedCutoff,
+        constraints=constraints,
+        rigidWater=rigidWater,
+        ewaldErrorTolerance=ewaldErrorTolerance)
+    system.addForce(
+        mm.MonteCarloBarostat(
+            pressure,
+            temperature,
+            barostatInterval))
     integrator = integrators.GHMCIntegrator(temperature, friction, dt)
     integrator.setConstraintTolerance(constraintTolerance)
     simulation = app.Simulation(topology, system, integrator, platform)
     simulation.context.setPositions(positions)
 
     # Clean up so that the classes remain unmodified
-    # unit test specific errors might occur otherwise when loading files due to class side effects
+    # unit test specific errors might occur otherwise when loading files due
+    # to class side effects
     app.Topology.unloadStandardBonds()
 
 
