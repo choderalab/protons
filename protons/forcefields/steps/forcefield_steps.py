@@ -45,7 +45,7 @@ def step_a_file_named_filename_exists_in_the_directory_directory(context, filena
 def step_i_run_command(context, command):
     """Run a command"""
     command_ = shlex.split(command)
-    context.output = subprocess.check_output(command_,stderr=subprocess.DEVNULL)
+    context.output = subprocess.check_output(command_)
 
 
 @when(u'I successfully run "{command}"')
