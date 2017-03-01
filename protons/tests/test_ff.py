@@ -48,7 +48,7 @@ def test_create_peptide_system_using_protons_xml():
     forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
 
     # System Configuration
-    nonbondedMethod = app.NoCutoff
+    nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
     constraintTolerance = 1.e-7
@@ -101,7 +101,7 @@ def test_create_peptide_simulation_using_protons_xml():
     forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
 
     # System Configuration
-    nonbondedMethod = app.NoCutoff
+    nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
     constraintTolerance = 1.e-7
