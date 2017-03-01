@@ -22,9 +22,11 @@ script:
   - conda build devtools/conda-recipe
   - conda install --yes --use-local ${PACKAGENAME}-dev
   # Install testing dependencies
-  - conda install --yes --quiet pytest pytest-cov
+  - conda install --yes --quiet pytest pytest-cov behave
   # Test the package, measure coverage, verbose output,  include summaries of skipped and failed tests.
   - cd devtools && py.test --cov=${PACKAGENAME} --verbose -rxs --pyargs ${PACKAGENAME}  && cd ..
+  # Test generation of forcefield files
+  - cd protons/forcefields && behave && cd ../..
   
 env:
   matrix:
