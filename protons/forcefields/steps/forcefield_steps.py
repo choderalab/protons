@@ -10,7 +10,8 @@ def step_use_curdir_as_working_directory(context):
     Uses the current directory as working directory
     """
     context.workdir = os.path.abspath(".")
-    assert(os.path.exists(context.workdir and os.path.isdir(context.workdir))), "The current directory does not exist."
+    assert os.path.exists(context.workdir), "The current path does not exist."
+    assert os.path.isdir(context.workdir), "The working directory does not exist."
 
 
 @given(u'the directory "{directory}" exists')
@@ -28,14 +29,16 @@ def step_the_directory_exists(context, directory):
 def step_a_file_named_filename_exists(context, filename):
     """Test if a file exists"""
     filename_ = os.path.join(context.workdir, filename)
-    assert(os.path.exists(filename_) and os.path.isfile(filename_)), "The file {} does not exist.".format(filename_)
+    assert os.path.exists(filename_), "The file {} does not exist.".format(filename_)
+    assert os.path.isfile(filename_), "Target {} is not a file.".format(filename_)
 
 
 @given(u'a file named "{filename}" exists in the directory "{directory}"')
 def step_a_file_named_filename_exists_in_the_directory_directory(context, filename, directory):
     """Test if a file exists"""
     filename_ = os.path.join(context.workdir, directory, filename)
-    assert(os.path.exists(filename_) and os.path.isfile(filename_)), "The file {} does not exist.".format(filename_)
+    assert os.path.exists(filename_), "The file {} does not exist.".format(filename_)
+    assert os.path.isfile(filename_), "Target {} is not a file.".format(filename_)
 
 
 @when(u'I run "{command}"')
@@ -43,7 +46,6 @@ def step_i_run_command(context, command):
     """Run a command"""
     command_ = shlex.split(command)
     context.output = subprocess.check_output(command_,stderr=subprocess.DEVNULL)
-    print(context.output)
 
 
 @when(u'I successfully run "{command}"')
@@ -59,7 +61,6 @@ def step_i_successfully_run_command(context, command):
 @then(u'a file named "{filename}" should exist')
 def step_a_file_named_filename_should_exist(context,filename):
     """Test if a file exists"""
-    print(filename, os.path.isfile(filename))
     step_a_file_named_filename_exists(context,filename)
 
 
