@@ -33,6 +33,8 @@ constant-pH simulation.
 3. Create hydrogen definitions by running `3-create_hydrogen_definitions.py`.
 4. Create bond definitions by running `4-create_bond_definitions.py`.
 
+
+
 ### Ion files
 
 To run simulations with ions, you'll need these. 
@@ -43,3 +45,16 @@ From within the `ions` subdirectory, follow these instructions:
 which won't work with openmm. The next step fixes that.
 2. Run `2-process_raw_ff10_ions.py` to remove residues without parameters. This should provide you with the three xml files
 containing ion parameters and templates.
+
+
+## Testing functionality
+
+Dependencies may break over time. To test whether these scripts are valid simply run 
+
+`behave`
+
+from the `forcefields` directory. This will run all of the scripts. These tests require that you install the `behave` library. If you are using conda, typing 
+
+`conda install -c omnia behave`
+
+will install this for you.
