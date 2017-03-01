@@ -9,7 +9,7 @@ from simtk.openmm import app
 for inputfile in ['raw_ions_spce.xml','raw_ions_tip3p.xml', 'raw_ions_tip4pew.xml']:
     shortnames= inputfile[4:-4] # slice off raw tag and .xml
     xml_parser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-    xmltree = etree.parse(inputfile, xml_parser)
+    xmltree = etree.parse("Amber_input_files/ions/" + inputfile, xml_parser)
 
     # Create set of all available atom types
     types = set()
@@ -26,7 +26,7 @@ for inputfile in ['raw_ions_spce.xml','raw_ions_tip3p.xml', 'raw_ions_tip4pew.xm
     xmlstring = etree.tostring(xmltree, encoding="utf-8", pretty_print=True, xml_declaration=False)
     xmlstring = xmlstring.decode("utf-8")
 
-    output_name = '../../{}.xml'.format(shortnames)
+    output_name = '{}-tmp.xml'.format(shortnames)
     with open(output_name, 'w') as fstream:
         fstream.write(xmlstring)
 

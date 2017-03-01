@@ -4,7 +4,7 @@ This script parses an ffxml file, and creates a hydrogen definitions file for al
 Note that it doesn't add terminal specifications
 """
 from lxml import etree
-xmltree = etree.parse("../protons.xml", etree.XMLParser(remove_blank_text=True, remove_comments=True))
+xmltree = etree.parse("protons.xml", etree.XMLParser(remove_blank_text=True, remove_comments=True))
 hydrogen_definitions_tree = etree.fromstring('<Residues/>')
 # Detect all hydrogens by element and store them in a set
 hydrogen_types = set()
@@ -50,5 +50,5 @@ for residue in xmltree.xpath('Residues/Residue'):
 # Write output
 xmlstring = etree.tostring(hydrogen_definitions_tree,encoding="utf-8", pretty_print=True, xml_declaration=False)
 xmlstring = xmlstring.decode("utf-8")
-with open('../hydrogens-protons.xml', 'w') as fstream:
+with open('hydrogens-protons-tmp.xml', 'w') as fstream:
     fstream.write(xmlstring)

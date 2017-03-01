@@ -31,6 +31,26 @@ Testbed for constant-pH methodologies using OpenMM.
 
 `references/`           - some relevant literature references
 
+## Dependencies ##
+
+### Runtime
+    - python
+    - openmm >=7.1
+    - numpy >=1.10
+    - scipy >=0.17.0
+    - netcdf4 >=1.2.4
+    - hdf4 >4.2.11
+    - openmoltools >=0.7.0
+    - ambermini >=15.0.4
+    - joblib
+    - lxml
+    - parmed
+
+### Testing  
+    - pytest
+    - pytest-cov
+    - behave
+
 
 ## Contributors / coauthors ##
 * Bas Rustenburg <bas.rustenburg@choderalab.org>

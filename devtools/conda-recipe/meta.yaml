@@ -40,6 +40,7 @@ test:
   requires:
     - pytest
     - pytest-cov
+    - behave
 
   imports:
     - protons

@@ -7,7 +7,7 @@ Create bond definitions for protons residues.
 This script parses an ffxml file, and creates a bonds definitions file for all residues.
 """
 from lxml import etree
-xmltree = etree.parse("../protons.xml", etree.XMLParser(remove_blank_text=True, remove_comments=True))
+xmltree = etree.parse("protons.xml", etree.XMLParser(remove_blank_text=True, remove_comments=True))
 bond_definitions_tree = etree.fromstring('<Residues/>')
 
 # Loop through each residue and add one entry for the N-terminal/P-terminal bond, and all other bonds
@@ -35,5 +35,5 @@ for residue in xmltree.xpath('Residues/Residue'):
 # Write output
 xmlstring = etree.tostring(bond_definitions_tree,encoding="utf-8", pretty_print=True, xml_declaration=False)
 xmlstring = xmlstring.decode("utf-8")
-with open('../bonds-protons.xml', 'w') as fstream:
+with open('bonds-protons-tmp.xml', 'w') as fstream:
     fstream.write(xmlstring)

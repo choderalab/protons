@@ -16,10 +16,10 @@ for key in titratable_residues.titratable_residues:
 from simtk.openmm import app, openmm
 
 # Validate that the initial file can be parsed by openmm
-x = app.ForceField('raw-constph.xml')
+x = app.ForceField('Amber_input_files/raw-protons.xml')
 
 xml_parser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-xmltree = etree.parse("raw-protons.xml", xml_parser)
+xmltree = etree.parse("Amber_input_files/raw-protons.xml", xml_parser)
 
 for residue in xmltree.xpath('/ForceField/Residues/Residue'):
     residue_name = residue.get('name')
@@ -88,9 +88,9 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
 xmlstring = etree.tostring(xmltree,encoding="utf-8", pretty_print=True, xml_declaration=False)
 xmlstring = xmlstring.decode("utf-8")
 
-with open('../protons.xml', 'w') as fstream:
+with open('protons-tmp.xml', 'w') as fstream:
     fstream.write(xmlstring)
 
 # Validate that the resulting file can be read by openmm
-y = app.ForceField('../protons.xml')
+y = app.ForceField('protons-tmp.xml')
 
