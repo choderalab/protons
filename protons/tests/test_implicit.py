@@ -9,7 +9,7 @@ from protons import AmberProtonDrive
 from protons.integrators import GHMCIntegrator
 from protons.calibration import SelfAdjustedMixtureSampling, AmberCalibrationSystem
 from . import get_test_data
-from .utilities import SystemSetup
+from .utilities import SystemSetup, create_compound_gbaoab_integrator, create_compound_ghmc_integrator
 
 try:
     find_gaff_dat()
@@ -42,6 +42,7 @@ class TestAmberTyrosineImplicit(object):
         tyr_system.prmtop = app.AmberPrmtopFile('{}/tyr.prmtop'.format(testsystems))
         tyr_system.cpin_filename = '{}/tyr.cpin'.format(testsystems)
         tyr_system.nsteps_per_ghmc = 1
+        tyr_system.constraint_tolerance = 1.e-7
         return tyr_system
 
     def test_tyrosine_instantaneous(self):
@@ -49,7 +50,7 @@ class TestAmberTyrosineImplicit(object):
         Run tyrosine in implicit solvent with an instanteneous state switch.
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
@@ -64,7 +65,7 @@ class TestAmberTyrosineImplicit(object):
         Run tyrosine in implicit solvent with an instanteneous state switch, using the calibration feature.
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
@@ -82,7 +83,7 @@ class TestAmberTyrosineImplicit(object):
         Run SAMS (binary update) tyrosine in implicit solvent with an instantaneous state switch
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=None, ncmc_steps_per_trial=0, implicit=True)
@@ -100,7 +101,7 @@ class TestAmberTyrosineImplicit(object):
         Run SAMS (global update) tyrosine in implicit solvent with an instantaneous state switch
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
@@ -120,7 +121,23 @@ class TestAmberTyrosineImplicit(object):
         """
         testsystem = self.setup_tyrosine_implicit()
 
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, integrator, debug=False,
+                                        pressure=None, ncmc_steps_per_trial=10, implicit=True)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, driver.compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        integrator.step(10)  # MD
+        driver.update(context)  # protonation
+
+    def test_tyrosine_ncmc_baoab(self):
+        """
+        Run tyrosine in implicit solvent with an ncmc state switch
+        """
+        testsystem = self.setup_tyrosine_implicit()
+
+        integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=10, implicit=True)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
@@ -135,7 +152,7 @@ class TestAmberTyrosineImplicit(object):
         Run SAMS (binary update) tyrosine in implicit solvent with an ncmc state switch
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                                    integrator, debug=False,
                                                    pressure=None, ncmc_steps_per_trial=10, implicit=True)
@@ -153,7 +170,7 @@ class TestAmberTyrosineImplicit(object):
         Run SAMS (global update) tyrosine in implicit solvent with an ncmc state switch
         """
         testsystem = self.setup_tyrosine_implicit()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology,
                                         testsystem.cpin_filename,
                                         integrator, debug=False,
@@ -240,6 +257,7 @@ class TestAmberPeptideImplicit(object):
         edchky_peptide_system.pressure = 1.0 * unit.atmospheres
         edchky_peptide_system.timestep = 1.0 * unit.femtoseconds
         edchky_peptide_system.collision_rate = 1.0 / unit.picoseconds
+        edchky_peptide_system.constraint_tolerance=1.e-7
         edchky_peptide_system.pH = 7.4
         testsystems = get_test_data('edchky_implicit', 'testsystems')
         edchky_peptide_system.positions = openmm.XmlSerializer.deserialize(
@@ -255,7 +273,7 @@ class TestAmberPeptideImplicit(object):
         Run edchky peptide in implicit solvent with an instanteneous state switch. with calibration
         """
         testsystem = self.setup_edchky_peptide()
-        integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+        integrator = create_compound_ghmc_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename,
                                         integrator, debug=False,
                                         pressure=None, ncmc_steps_per_trial=0, implicit=True)
