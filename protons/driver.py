@@ -1154,7 +1154,7 @@ class _BaseProtonDrive(_BaseDrive):
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], context)
-                # If using NCMC, restore coordinates and flip velocities.
+                # If using NCMC, restore coordinates and velocities.
                 if self.nsteps_per_trial > 0:
                     context.setPositions(initial_positions)
                     context.setVelocities(initial_velocities)
