@@ -1071,7 +1071,9 @@ class _BaseProtonDrive(_BaseDrive):
 
         # If using NCMC, store initial positions.
         if self.nsteps_per_trial > 0:
-            initial_positions = context.getState(getPositions=True).getPositions(asNumpy=True)
+            initial_state = context.getState(getPositions=True, getVelocities=True)
+            initial_positions = initial_state.getPositions(asNumpy=True)
+            initial_velocities = initial_state.getVelocities(asNumpy=True)
 
         # Compute initial probability of this protonation state. Used in the acceptance test for instantaneous
         # attempts, and to record potential and kinetic energy.
@@ -1155,6 +1157,7 @@ class _BaseProtonDrive(_BaseDrive):
                 # If using NCMC, restore coordinates and flip velocities.
                 if self.nsteps_per_trial > 0:
                     context.setPositions(initial_positions)
+                    context.setVelocities(initial_velocities)
 
         except Exception as err:
             if str(err) == 'Particle coordinate is nan' and reject_on_nan:
