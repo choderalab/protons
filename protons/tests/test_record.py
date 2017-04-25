@@ -119,7 +119,7 @@ def test_read_ncfile():
 
     from netCDF4 import Dataset
     from protons.record import display_content_structure
-    filename = get_test_data('simulationdata-ligonly-0.5.nc', 'testsystems/record')
+    filename = get_test_data('sample.nc', 'testsystems/record')
     rootgrp = Dataset(filename, "r", format="NETCDF4")
     print(rootgrp['GHMCIntegrator/naccept'][:] / rootgrp['GHMCIntegrator/ntrials'][:])
     display_content_structure(rootgrp)
