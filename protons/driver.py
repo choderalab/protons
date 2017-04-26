@@ -15,6 +15,7 @@ from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree
+from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
 from .integrators import GHMCIntegrator
 
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilojoules_per_mole / units.kelvin)
@@ -981,9 +982,12 @@ class _BaseProtonDrive(_BaseDrive):
         # TODO Is it correct to just replace this by using self.ncmc_propagation_integrator?
         ncmc_integrator = self.compound_integrator.getIntegrator(1)
 
+        # Reset integrator statistics
         if isinstance(ncmc_integrator, GHMCIntegrator):
             ncmc_integrator.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
             ncmc_integrator.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
+        elif issubclass(type(ncmc_integrator), ExternalPerturbationLangevinIntegrator):
+            ncmc_integrator.setGlobalVariableByName("first_step", 0)
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
         g_initial = 0
@@ -994,19 +998,11 @@ class _BaseProtonDrive(_BaseDrive):
         # PROPAGATION
         ncmc_integrator.step(1)
 
-        # The slow way to calculate the work
-        #work = 0.0
-
         for step in range(self.nsteps_per_trial):
 
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-
-            # TODO: remove 'slow way' when certain of the final state of the code
-            # The slow way to calculate the work
-            #nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
-
-            # PERTURBATION
+            # perturbation
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
@@ -1015,16 +1011,14 @@ class _BaseProtonDrive(_BaseDrive):
                 force.updateParametersInContext(context)
             self.titrationStates[titration_group_index] = titration_state_index
 
-            # The slow way to calculate the work
-            #nrg_final = context.getState(getEnergy=True).getPotentialEnergy()
-            #work += (nrg_final - nrg_initial) * self.beta
-
-            # PROPAGATION
+            # propagation
             ncmc_integrator.step(1)
+
+            # logging of statistics
             if isinstance(ncmc_integrator, GHMCIntegrator):
                 self.ncmc_stats_per_step[self._attempt_number][step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))
             else:
-                self.ncmc_stats_per_step[self._attempt_number][step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless,0,0 )
+                self.ncmc_stats_per_step[self._attempt_number][step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless,0,0)
 
         # Extract the internally calculated work from the integrator
         work = ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless
