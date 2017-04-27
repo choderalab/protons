@@ -16,6 +16,7 @@ requirements:
     - numpy >=1.10
     - scipy >=0.17.0
     - openmoltools >=0.7.4
+    - openmmtools >=0.9.3
     - ambermini >=15.0.4
     - netcdf4 >=1.2.4
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
@@ -31,6 +32,7 @@ requirements:
     - netcdf4 >=1.2.4
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - openmoltools >=0.7.0
+    - openmmtools >=0.9.3
     - ambermini >=15.0.4
     - joblib
     - lxml

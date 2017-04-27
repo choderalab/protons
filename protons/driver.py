@@ -10,11 +10,13 @@ import re
 import sys
 import numpy as np
 import simtk
+from enum import Enum
 from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
-from .integrators import GHMCIntegrator
 from lxml import etree
+from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
+from .integrators import GHMCIntegrator
 
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilojoules_per_mole / units.kelvin)
 
@@ -94,7 +96,8 @@ class _BaseProtonDrive(_BaseDrive):
 
     """
 
-    def __init__(self, system, temperature, pH, topology, integrator, pressure=None,
+
+    def __init__(self, system, temperature, pH, topology, compound_integrator, pressure=None,
                  nattempts_per_update=1, simultaneous_proposal_probability=0.1, debug=False,
                  ncmc_steps_per_trial=0, ncmc_prop_per_step=1, ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
@@ -113,8 +116,9 @@ class _BaseProtonDrive(_BaseDrive):
             The pH at which the system is to be simulated.
         topology : simtk.openmm.app.Topology
             OpenMM object containing the topology of system
-        integrator : simtk.openmm.integrator
-            The integrator used for dynamics
+        compound_integrator : simtk.openmm.openmm.CompoundIntegrator
+            A compound integrator. The first integrator is assumed to be used for dynamics,
+            the second integrator is used for propagation in NCMC.
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
             For explicit solvent simulations, the pressure.
         nattempts_per_update : int, optional, default=1
@@ -176,15 +180,7 @@ class _BaseProtonDrive(_BaseDrive):
         else:
             self.solvent = "explicit"
         # Create a GHMC integrator to handle NCMC integration
-        self.compound_integrator = openmm.CompoundIntegrator()
-        self.compound_integrator.addIntegrator(integrator)
-
-        self.ncmc_propagation_integrator = GHMCIntegrator(temperature, 1.0 / units.picosecond, ncmc_timestep,
-                                                          nsteps=self.ncmc_prop_per_step)
-        self.compound_integrator.addIntegrator(self.ncmc_propagation_integrator)
-        self.compound_integrator.setCurrentIntegrator(0)  # make user integrator active
-        # Set constraint tolerance.
-        self.ncmc_propagation_integrator.setConstraintTolerance(integrator.getConstraintTolerance())
+        self.compound_integrator = compound_integrator
 
         # Record the forces that need to be switched off for NCMC
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
@@ -946,19 +942,16 @@ class _BaseProtonDrive(_BaseDrive):
 
         self.titrationGroups[titration_group_index]['titration_states'][titration_state_index]['forces'] = f_params
 
-    def _ncmc_ghmc(self, context, titration_group_indices, initial_titration_states, final_titration_states):
+    def _ncmc_protocol_work(self, context, titration_group_indices, initial_titration_states, final_titration_states):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from an initial protonation
         state to a final protonation state. This functions changes the system's state and returns the work for the
         transformation. Currently, parameters are linearly interpolated between the initial and final states.
-
-        Propagation is performed with a generalized Hamiltonian Monte Carlo (GHMC) integrator.
-
+        
         Notes
         -----
-        The GHMC integrator is an simtk.openmm.CustomIntegrator object that calculates the protocol work internally.
-        Although it appears to only take one propagation step per perturbation step (i.e. ghmc.step(1)), multiple
-        propagation steps can be made depending on how the GHMC integrator was initialized.
+        The integrator is an simtk.openmm.CustomIntegrator object that calculates the protocol work internally.
+        
 
         To ensure the NCMC protocol is time symmetric, it has the form
             propagation --> perturbation --> propagation
@@ -987,9 +980,14 @@ class _BaseProtonDrive(_BaseDrive):
             self.cm_remover.setFrequency(0)
 
         # TODO Is it correct to just replace this by using self.ncmc_propagation_integrator?
-        ghmc = self.compound_integrator.getIntegrator(1)
-        ghmc.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
-        ghmc.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
+        ncmc_integrator = self.compound_integrator.getIntegrator(1)
+
+        # Reset integrator statistics
+        if isinstance(ncmc_integrator, GHMCIntegrator):
+            ncmc_integrator.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
+            ncmc_integrator.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
+        elif issubclass(type(ncmc_integrator), ExternalPerturbationLangevinIntegrator):
+            ncmc_integrator.setGlobalVariableByName("first_step", 0)
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
         g_initial = 0
@@ -998,21 +996,13 @@ class _BaseProtonDrive(_BaseDrive):
             g_initial += titration_state['g_k']
 
         # PROPAGATION
-        ghmc.step(1)
-
-        # The slow way to calculate the work
-        #work = 0.0
+        ncmc_integrator.step(1)
 
         for step in range(self.nsteps_per_trial):
 
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.nsteps_per_trial)
-
-            # TODO: remove 'slow way' when certain of the final state of the code
-            # The slow way to calculate the work
-            #nrg_initial = context.getState(getEnergy=True).getPotentialEnergy()
-
-            # PERTURBATION
+            # perturbation
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
@@ -1021,16 +1011,17 @@ class _BaseProtonDrive(_BaseDrive):
                 force.updateParametersInContext(context)
             self.titrationStates[titration_group_index] = titration_state_index
 
-            # The slow way to calculate the work
-            #nrg_final = context.getState(getEnergy=True).getPotentialEnergy()
-            #work += (nrg_final - nrg_initial) * self.beta
+            # propagation
+            ncmc_integrator.step(1)
 
-            # PROPAGATION
-            ghmc.step(1)
-            self.ncmc_stats_per_step[self._attempt_number][step] = (ghmc.getGlobalVariableByName('work') * self.beta_unitless, ghmc.getGlobalVariableByName('naccept'), ghmc.getGlobalVariableByName('ntrials'))
+            # logging of statistics
+            if isinstance(ncmc_integrator, GHMCIntegrator):
+                self.ncmc_stats_per_step[self._attempt_number][step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))
+            else:
+                self.ncmc_stats_per_step[self._attempt_number][step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless,0,0)
 
         # Extract the internally calculated work from the integrator
-        work = ghmc.getGlobalVariableByName('work') * self.beta_unitless
+        work = ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless
 
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:
@@ -1050,6 +1041,7 @@ class _BaseProtonDrive(_BaseDrive):
             self.cm_remover.setFrequency(self.cm_remover_freq)
 
         return work
+
 
     def _attempt_state_change(self, context, reject_on_nan=False):
         """
@@ -1117,7 +1109,7 @@ class _BaseProtonDrive(_BaseDrive):
                 # Only perform NCMC when the proposed state is different from the current state
                 if initial_titration_states[titration_group_index] != final_titration_states[titration_group_index]:
                     # Run NCMC integration.
-                    work = self._ncmc_ghmc(context, titration_group_indices, initial_titration_states, final_titration_states)
+                    work = self._ncmc_protocol_work(context, titration_group_indices, initial_titration_states, final_titration_states)
                 else:
                     work = 0.0
                     for step in range(self.nsteps_per_trial):
@@ -1500,7 +1492,7 @@ class AmberProtonDrive(_BaseProtonDrive):
 
     """
 
-    def __init__(self, system, temperature, pH, topology, cpin_filename, integrator, pressure=None, nattempts_per_update=1, simultaneous_proposal_probability=0.1, debug=False,
+    def __init__(self, system, temperature, pH, topology, cpin_filename, compound_integrator, pressure=None, nattempts_per_update=1, simultaneous_proposal_probability=0.1, debug=False,
                  ncmc_steps_per_trial=0, ncmc_prop_per_step=1, ncmc_timestep=1.0 * units.femtoseconds,
                  maintainChargeNeutrality=False, cationName='Na+', anionName='Cl-', implicit=False):
         """
@@ -1518,7 +1510,7 @@ class AmberProtonDrive(_BaseProtonDrive):
             OpenMM object containing the topology of system
         cpin_filename : string
             AMBER 'cpin' file defining protonation charge states and energies of amino acids
-        integrator : simtk.openmm.integrator
+        compound_integrator : simtk.openmm.integrator
             The integrator used for dynamics
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
             For explicit solvent simulations, the pressure.
@@ -1550,9 +1542,9 @@ class AmberProtonDrive(_BaseProtonDrive):
 
         """
 
-        super(AmberProtonDrive, self).__init__(system, temperature, pH, topology, integrator, pressure=pressure, nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug,
-                 ncmc_steps_per_trial=ncmc_steps_per_trial, ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
-                 maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName, anionName=anionName, implicit=implicit)
+        super(AmberProtonDrive, self).__init__(system, temperature, pH, topology, compound_integrator, pressure=pressure, nattempts_per_update=nattempts_per_update, simultaneous_proposal_probability=simultaneous_proposal_probability, debug=debug,
+                                               ncmc_steps_per_trial=ncmc_steps_per_trial, ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
+                                               maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName, anionName=anionName, implicit=implicit)
 
         # Load AMBER cpin file defining protonation states.
         namelist = self._parse_fortran_namelist(cpin_filename, 'CNSTPH')
@@ -1644,7 +1636,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                  pH,
                  ffxml_files,
                  topology,
-                 integrator,
+                 compound_integrator,
                  pressure=None,
                  nattempts_per_update=1,
                  simultaneous_proposal_probability=0.1,
@@ -1674,7 +1666,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             Single ffxml filename, or list of ffxml filenames containing protons information.
         topology : simtk.openmm.app.Topology
             Topology of the system
-        integrator : simtk.openmm.integrator
+        compound_integrator : simtk.openmm.integrator
             The integrator used for dynamics
         pressure : simtk.unit.Quantity compatible with atmospheres, optional, default=None
             For explicit solvent simulations, the pressure.
@@ -1721,14 +1713,14 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             if not isinstance(residues_by_index, list):
                 raise TypeError("residues_by_index needs to be a list")
 
-        super(ForceFieldProtonDrive, self).__init__(system, temperature, pH, topology, integrator, pressure=pressure,
-                                               nattempts_per_update=nattempts_per_update,
-                                               simultaneous_proposal_probability=simultaneous_proposal_probability,
-                                               debug=debug,
-                                               ncmc_steps_per_trial=ncmc_steps_per_trial,
-                                               ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
-                                               maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName,
-                                               anionName=anionName, implicit=implicit)
+        super(ForceFieldProtonDrive, self).__init__(system, temperature, pH, topology, compound_integrator, pressure=pressure,
+                                                    nattempts_per_update=nattempts_per_update,
+                                                    simultaneous_proposal_probability=simultaneous_proposal_probability,
+                                                    debug=debug,
+                                                    ncmc_steps_per_trial=ncmc_steps_per_trial,
+                                                    ncmc_prop_per_step=ncmc_prop_per_step, ncmc_timestep=ncmc_timestep,
+                                                    maintainChargeNeutrality=maintainChargeNeutrality, cationName=cationName,
+                                                    anionName=anionName, implicit=implicit)
 
         ffxml_residues = self._parse_ffxml_files(ffxml_files)
 

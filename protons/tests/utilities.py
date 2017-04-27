@@ -2,6 +2,8 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import *
+import protons.integrators
+import openmmtools.integrators
 import logging
 
 
@@ -174,3 +176,48 @@ def minimizer(platform_name, system, positions, nsteps=1000):
     logging.info("Final energy is %s" % context.getState(getEnergy=True).getPotentialEnergy())
     positions = context.getState(getPositions=True).getPositions(asNumpy=True)
     return context, positions
+
+
+def create_compound_ghmc_integrator(testsystem):
+    """
+    Sets up a compound integrator that uses GHMC.
+    Parameters
+    ----------
+    testsystem - a SystemSetup object that contains details such as the temperature, timestep, et cetera.
+
+    Returns
+    -------
+    simtk.openmm.openmm.CompoundIntegrator
+    """
+    integrator = protons.integrators.GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+                                timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+    ncmc_propagation_integrator = protons.integrators.GHMCIntegrator(temperature=testsystem.temperature,
+                                                 collision_rate=testsystem.collision_rate,
+                                                 timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
+    compound_integrator = openmm.CompoundIntegrator()
+    compound_integrator.addIntegrator(integrator)
+    compound_integrator.addIntegrator(ncmc_propagation_integrator)
+    compound_integrator.setCurrentIntegrator(0)
+    return compound_integrator
+
+
+def create_compound_gbaoab_integrator(testsystem):
+    """
+    Sets up a compound integrator that uses gBAOAB.
+    Parameters
+    ----------
+    testsystem - a SystemSetup object that contains details such as the temperature, timestep, et cetera.
+
+    Returns
+    -------
+    simtk.openmm.openmm.CompoundIntegrator
+    """
+    integrator = protons.integrators.BAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+                                                     timestep=testsystem.timestep, constraint_tolerance=testsystem.constraint_tolerance)
+    ncmc_propagation_integrator = protons.integrators.BAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+                                                     timestep=testsystem.timestep, constraint_tolerance=testsystem.constraint_tolerance)
+    compound_integrator = openmm.CompoundIntegrator()
+    compound_integrator.addIntegrator(integrator)
+    compound_integrator.addIntegrator(ncmc_propagation_integrator)
+    compound_integrator.setCurrentIntegrator(0)
+    return compound_integrator

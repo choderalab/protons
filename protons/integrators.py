@@ -1,8 +1,31 @@
+"""
+Integrators that can be used with Protons' NCMC implementation
+"""
 import numpy
 import simtk.unit
 import simtk.unit as units
 import simtk.openmm as mm
+from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
+
+
+class BAOABIntegrator(ExternalPerturbationLangevinIntegrator):
+    """
+    Implementation of the BAOAB integrator which tracks external protocol work.
+    """
+    def __init__(self, temperature=298.0 * simtk.unit.kelvin,
+                 collision_rate=91.0 / simtk.unit.picoseconds,
+                 timestep=1.0 * simtk.unit.femtoseconds,
+                 constraint_tolerance=1e-7
+                 ):
+        super(BAOABIntegrator, self).__init__(splitting="V R O R V",
+                                              temperature=temperature,
+                                              collision_rate=collision_rate,
+                                              timestep=timestep,
+                                              constraint_tolerance=constraint_tolerance,
+                                              measure_shadow_work=False,
+                                              measure_heat=False,
+                                              )
 
 
 class GHMCIntegrator(mm.CustomIntegrator):
@@ -16,7 +39,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
     Authors: John Chodera and Gregory Ross
     """
 
-    def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=1.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):
+    def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=91.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):
         """
         Create a generalized hybrid Monte Carlo (GHMC) integrator.
 
@@ -75,7 +98,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
         self.addGlobalVariable("potential_initial", 0)  # initial potential energy
         self.addGlobalVariable("potential_old", 0)  # old potential energy
         self.addGlobalVariable("potential_new", 0)  # new potential energy
-        self.addGlobalVariable("work", 0)
+        self.addGlobalVariable("protocol_work", 0)
         self.addGlobalVariable("accept", 0)  # accept or reject
         self.addGlobalVariable("naccept", 0)  # number accepted
         self.addGlobalVariable("ntrials", 0)  # number of Metropolization trials
@@ -87,7 +110,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
         #
         self.beginIfBlock("ntrials = 0")
         self.addComputePerDof("sigma", "sqrt(kT/m)")
-        self.addComputeGlobal("work", "0.0")
+        self.addComputeGlobal("protocol_work", "0.0")
         self.addConstrainPositions()
         self.addConstrainVelocities()
         self.addComputeGlobal("potential_new", "energy")
@@ -100,7 +123,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
 
         self.addComputeGlobal("potential_initial", "energy")
         self.addComputeGlobal("step", "0")
-        self.addComputeGlobal("work", "work + (potential_initial - potential_new)")
+        self.addComputeGlobal("protocol_work", "protocol_work + (potential_initial - potential_new)")
         if True:
             self.beginWhileBlock("step < nsteps")
             #

@@ -7,6 +7,7 @@ from simtk.openmm import app, openmm as mm
 
 from protons import ff, integrators, ForceFieldProtonDrive
 from . import get_test_data
+from .utilities import create_compound_gbaoab_integrator, SystemSetup
 
 
 # Patch topology to unload standard bond definitions
@@ -91,6 +92,14 @@ def test_create_peptide_simulation_using_protons_xml():
     """Test if protons.xml can be used to successfully create a peptide Simulation object in OpenMM and
     Instantiate a ForceFieldProtonDrive."""
 
+    sys_details = SystemSetup()
+    sys_details.timestep = 0.5 * unit.femtoseconds
+    sys_details.temperature = 300. * unit.kelvin
+    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.pressure = 1.0 * unit.atmospheres
+    sys_details.barostatInterval = 25
+    sys_details.constraint_tolerance = 1.e-7
+
     app.Topology.loadBondDefinitions(ff.bonds)
 
     # Load pdb file with protons compatible residue names
@@ -104,14 +113,9 @@ def test_create_peptide_simulation_using_protons_xml():
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    constraintTolerance = 1.e-7
+    sys_details.constraintTolerance = 1.e-7
 
-    # Integration Options
-    dt = 0.5 * unit.femtoseconds
-    temperature = 300. * unit.kelvin
-    friction = 1. / unit.picosecond
-    pressure = 1.0 * unit.atmospheres
-    barostatInterval = 25
+
 
     # Simulation Options
     platform = mm.Platform.getPlatformByName('Reference')
@@ -127,16 +131,16 @@ def test_create_peptide_simulation_using_protons_xml():
     )
     system.addForce(
         mm.MonteCarloBarostat(
-            pressure,
-            temperature,
-            barostatInterval))
+            sys_details.pressure,
+            sys_details.temperature,
+            sys_details.barostatInterval))
 
-    integrator = integrators.GHMCIntegrator(temperature, friction, dt)
-    integrator.setConstraintTolerance(constraintTolerance)
+    integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
+
 
     driver = ForceFieldProtonDrive(
-        system, temperature, 7.0, [ff.protonsff],
-        topology, integrator, debug=False, pressure=pressure,
+        system, sys_details.temperature, 7.0, [ff.protonsff],
+        topology, integrator, debug=False, pressure=sys_details.pressure,
         ncmc_steps_per_trial=1, implicit=False, cationName="NA",
         anionName="CL")
 
@@ -146,7 +150,7 @@ def test_create_peptide_simulation_using_protons_xml():
         driver.compound_integrator,
         platform)
     simulation.context.setPositions(positions)
-    simulation.context.setVelocitiesToTemperature(temperature)
+    simulation.context.setVelocitiesToTemperature(sys_details.temperature)
 
     # run one step and one update
     simulation.step(1)

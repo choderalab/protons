@@ -2,6 +2,7 @@
 from __future__ import print_function
 import numpy as np
 from protons.driver import _BaseProtonDrive, AmberProtonDrive
+
 import simtk.openmm.app as app
 from simtk import openmm
 import simtk.unit as units
@@ -10,7 +11,7 @@ import abc
 from . import get_data
 from scipy.misc import logsumexp
 from collections import deque
-from protons.integrators import GHMCIntegrator
+from protons.integrators import GHMCIntegrator, BAOABIntegrator
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
@@ -455,7 +456,7 @@ class AmberCalibrationSystem(object):
         platform_name = settings["platform_name"]
 
         # TODO Confirm choice of GHMC integrator
-        integrator = GHMCIntegrator(temperature=temperature, collision_rate=integrator_collision_rate, timestep=integrator_timestep)
+        integrator = self.create_compound_ghmc_integrator(temperature,integrator_collision_rate, integrator_timestep, 1)
         self.log_state_probabilities = np.log(np.array(AmberCalibrationSystem.supported_aminoacids[residue_name](pH).populations()))
 
         # Use SAMS to determine free energies of each protonation state under uniform state target weights.
@@ -490,6 +491,30 @@ class AmberCalibrationSystem(object):
         self.system = system
         self.sams_sampler = sams_sampler
         self.settings = settings
+
+    def create_compound_ghmc_integrator(self, temperature, collision_rate, timestep, nsteps_per_ghmc):
+        """
+        Sets up a compound integrator that uses GHMC.
+        Parameters
+        ----------
+        testsystem - a SystemSetup object that contains details such as the temperature, timestep, et cetera.
+
+        Returns
+        -------
+        simtk.openmm.openmm.CompoundIntegrator
+        """
+        integrator = GHMCIntegrator(temperature=temperature,
+                                                     collision_rate=collision_rate,
+                                                        timestep=timestep, nsteps=nsteps_per_ghmc)
+        ncmc_propagation_integrator = GHMCIntegrator(temperature=temperature,
+                                                                         collision_rate=collision_rate,
+                                                                         timestep=timestep,
+                                                                         nsteps=nsteps_per_ghmc)
+        compound_integrator = openmm.CompoundIntegrator()
+        compound_integrator.addIntegrator(integrator)
+        compound_integrator.addIntegrator(ncmc_propagation_integrator)
+        compound_integrator.setCurrentIntegrator(0)
+        return compound_integrator
 
     def sams_till_converged(self, threshold=1.e-5, mc_every=500, gk_every=1, check_frequency=100, window=200,
                             max_iter=None, min_iter=1, **kwargs):
