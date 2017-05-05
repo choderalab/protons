@@ -56,6 +56,21 @@ class _Atom(object):
         return self.atom_type == "dummy"
 
 
+class _BondType(object):
+    """
+    Private class representing a bond between two atom types.
+    """
+    def __init__(self, atomtype1, atomtype2):
+            # The exact order does not matter
+            atoms = sorted([atomtype1, atomtype2])
+            self.atomType1 = atoms[0]
+            self.atomType2 = atoms[1]
+
+    def __eq__(self, other):
+        """Two bonds are the same if all their attributes are the same."""
+        return self.__dict__ == other.__dict__
+
+
 class _Bond(object):
     """
     Private class representing a bond between two atoms. Supports comparisons.
@@ -222,7 +237,6 @@ class _TitratableForceFieldCompiler(object):
             Otherwise, gaff parameters are taken from protons/forcefields/gaff.xml
         residue_name : str, optional, default = "LIG"
             name of the residue in the output template
-
         """
         self._input_state_data = input_state_data
         self._atom_names = list()
@@ -245,7 +259,7 @@ class _TitratableForceFieldCompiler(object):
         # Compile all information into the output structure
         self._make_output_tree()
 
-    def _make_output_tree(self):
+    def _make_output_tree(self, chimera=True):
         """
         Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
         """
@@ -257,7 +271,13 @@ class _TitratableForceFieldCompiler(object):
         # Register the states
         self._complete_state_registry()
         # Interpolate differing atom types between states to create a single template state.
-        self._create_hybrid_template()
+        if chimera:
+            # Chimera takes the most populated state, and then adds missing parameters from the other states
+            self._create_chimera_template()
+        else:
+            # Hybrid template does not favor one state over the other, but may not always yield a solution
+            self._create_hybrid_template()
+
         # Set the initial state of the template that is read by OpenMM
         self._initialize_forcefield_template()
         # Add isomer specific information
@@ -282,10 +302,7 @@ class _TitratableForceFieldCompiler(object):
 
     def _add_isomers(self):
         """
-        Add all the isomer specific data to the xml template
-        Returns
-        -------
-
+        Add all the isomer specific data to the xml template.
         """
 
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
@@ -386,6 +403,144 @@ class _TitratableForceFieldCompiler(object):
         for state in self._state_templates:
             state.validate()
 
+    def _create_chimera_template(self):
+        """
+        Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
+        states.
+        
+        Checks if bonded terms exist.
+        If not, creates a new bond type with the properties of the same bond in the state where the atom existed.
+        Bonds, angle, Torsions?
+        """
+        possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
+        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
+
+        # The final, uniform set of atomtypes that will be used
+        final_types = dict()
+
+        # Collect all possible types by looping through states
+        for atomname in self._atom_names:
+            possible_types_per_atom[atomname] = set()
+            for state in self._state_templates:
+                if state.atoms[atomname] is not None:
+                    # Store the atomtype for this state as a possible pick
+                    if atomname not in final_types:
+                        final_types[atomname] = state.atoms[atomname].atom_type
+
+                    # In case we need alternatives later, store potential types
+                    possible_types_per_atom[atomname].add(state.atoms[atomname].atom_type)
+                else:
+                    # add missing atoms, using the placeholder type "dummy' for now and a net charge of 0.0
+                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
+
+            # look up the parameters for the encountered atom types from all available parameter sources
+            for atom_type in possible_types_per_atom[atomname]:
+                if atom_type not in available_parameters_per_type.keys():
+                    available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
+
+        # Make sure we haven't missed any atom types
+        if len(final_types) != len(self._atom_names):
+            missing = set(self._atom_names) - set(final_types.keys())
+            raise RuntimeError("Did not find an atom type for {}".format(', '.join(missing)))
+
+        # Keep looping until solution has not changed, which means all bonds have been found
+        old_types = dict()
+        while old_types != final_types:
+            old_types = dict(final_types)
+            # Validate that bonds exist for the atomtypes that were assigned
+            for atomname in self._atom_names:
+                atom_type = final_types[atomname]
+
+                bonded_to = self._find_bond_partner_types(atomname, final_types)
+                # Search from gaff and frcmod contents for all bonds that contain this atom type
+                list_of_bond_params = self._bonds_including_type(atom_type, available_parameters_per_type)
+
+                # Loop through all bonds to check if the bond types are defined
+                for bond_partner_name, bond_partner_type in bonded_to.items():
+                    this_bond_type = _BondType(atom_type, bond_partner_type)
+
+                    # If there is no bond definition for these types
+                    # propose a change of type to a different type from another state
+                    # TODO If hydrogen atom involved,
+                    # TODO could try to first update the type of the hydrogen
+                    # TODO since that should not affect any of the other bonds in the system.
+                    if this_bond_type not in list_of_bond_params:
+                        # Keep track of whether a fix has been proposed
+                        update_made = False
+                        # Change the current atoms type to see if a bond exist
+                        for possible_type in possible_types_per_atom[atomname]:
+                            # Find all bonds that contain this new atom type
+                            alternate_list_of_bond_params = self._bonds_including_type(possible_type, available_parameters_per_type)
+                            if _BondType(possible_type, bond_partner_type) in alternate_list_of_bond_params:
+                                log.debug(
+                                    "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
+                                          atomname, atom_type, possible_type, bond_partner_name, bond_partner_type)
+
+                                # Update the current selection
+                                final_types[atomname] = possible_type
+                                update_made = True
+                                break
+
+                        # If the current atom could not be updated, attempt changing the partner
+                        if not update_made:
+
+                            # Loop through types of the bond partner found in each state
+                            for possible_type in possible_types_per_atom[bond_partner_name]:
+                                if _BondType(atom_type, possible_type) in list_of_bond_params:
+                                    log.debug(
+                                        "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
+                                        bond_partner_name, bond_partner_type, possible_type, atomname, atom_type)
+
+                                    # Update the current selection with the new type
+                                    final_types[bond_partner_name] = possible_type
+                                    update_made = True
+                                    break
+
+                        # If neither current atom, or partner atom types could be updated to match,
+                        # both atoms will need to be changed to facilitate a bond between them
+                        if not update_made:
+
+                            # All possible types from each state
+                            for possible_type_atom in possible_types_per_atom[atomname]:
+                                # Find the bonds to this atom type
+                                alternate_list_of_bond_params = self._bonds_including_type(possible_type_atom, available_parameters_per_type)
+
+                                # All possible types for the partner from each state
+                                for possible_type_partner in possible_types_per_atom[bond_partner_name]:
+
+
+                                    if _BondType(possible_type_atom, possible_type_partner) in alternate_list_of_bond_params:
+                                        log.debug(
+                                            "Atom: %s type changed %s -> %s and \n "
+                                            "Atom: %s type changed %s -> %s to facilitate bond.",
+                                            atomname, atom_type, possible_type_atom, bond_partner_name, bond_partner_type, possible_type_partner)
+
+                                        # Update both types with the new selection
+                                        final_types[atomname] = possible_type_atom
+                                        final_types[bond_partner_name] = possible_type_partner
+                                        update_made = True
+                                        break
+
+                        # There are no bond parameters for this bond anywhere
+                        # If you run into this error, likely, GAFF does not cover the protonation state you provided
+                        if not update_made:
+                            raise RuntimeError("Can not resolve bonds between Atoms {} - {}.\n"
+                                               "Gaff types may not suffice to describe this molecule/protonation state.".format(atomname, bond_partner_name))
+
+        # Assign the final atom types to each state
+        for state_index in range(len(self._state_templates)):
+            for atomname in self._atom_names:
+                self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
+        return
+
+    @staticmethod
+    def _bonds_including_type(atom_type, available_parameters_per_type):
+        bond_params = available_parameters_per_type[atom_type]['bonds']
+        list_of_bond_params = list()
+        for bond_type in bond_params:
+            list_of_bond_params.append(_BondType(bond_type.get('type1'), bond_type.get('type2')))
+        return list_of_bond_params
+
     def _create_hybrid_template(self):
         """
         Interpolate differing atom types to create a single template state that has proper bonded terms for all atoms.
@@ -431,7 +586,7 @@ class _TitratableForceFieldCompiler(object):
                 # Not in the list of final assignments, and still has more than one option
                 else:
                     # Dictionary of all the bonds that could/would have to be available when picking an atom type
-                    bonded_to = self._find_all_bond_types_to_atom(atomname, final_types, possible_types_per_atom)
+                    bonded_to = self._find_all_potential_bond_types_to_atom(atomname, final_types, possible_types_per_atom)
                     # The atom types that could be compatible with at least one of the possible atom types for each atom
                     solutions = self._resolve_types(bonded_to, available_parameters_per_type,
                                                     possible_types_for_this_atom)
@@ -447,9 +602,12 @@ class _TitratableForceFieldCompiler(object):
                     # If more than one atomtype is possible for this atom, but all partner atom options are the same, just pick one.
                     elif all(solution_one == solution_value for solution_value in solutions.values()):
                         final_types[atomname] = list(solutions.keys())[0]
+
                     else:
                         # Some partner atoms might still be variable
                         # kick out invalid ones, and repeat procedure afterwards
+
+                        old_possibilities = dict(possible_types_per_atom)
                         for partner_name in bonded_to.keys():
                             if partner_name in final_types.keys():
                                 continue
@@ -462,11 +620,16 @@ class _TitratableForceFieldCompiler(object):
                                         # kick it out of the options
                                         possible_types_per_atom[partner_name].remove(partner_type)
 
+                        # If this hasn't changed anything, remove an arbitrary option, and see if the molecule can be resolved in the next iteration.
+                        if old_possibilities == possible_types_per_atom:
+                            possible_types_per_atom[atomname].remove(next(iter(possible_types_per_atom[atomname])))
+
+
             # If there is more than one unique solution to the entire thing, this may result in an infinite loop
             # It is not completely obvious what would be the right thing to do in such a case.
             # It takes two iterations, one to identify what atoms are now invalid, and one to check whether the number
             # of (effective) solutions is equal to 1. If after two iterations, there are no changes, the algorithm is stuck
-            if final_types == old_types and number_of_attempts % 2 == 0:
+            if final_types == old_types and number_of_attempts % 2 == 0 and number_of_attempts > 20:
                 raise RuntimeError("Can't seem to resolve atom types, there might be more than 1 unique solution.")
             number_of_attempts += 1
 
@@ -479,7 +642,7 @@ class _TitratableForceFieldCompiler(object):
 
         return
 
-    def _find_all_bond_types_to_atom(self, atomname, final_types, types):
+    def _find_all_potential_bond_types_to_atom(self, atomname, final_types, potential_types):
         """ Find all the atoms it is bonded to, and collect their types
 
         Parameters
@@ -488,7 +651,7 @@ class _TitratableForceFieldCompiler(object):
             Name of the atom
         final_types : dict
             dictionary by atom name of the types that have already been determined
-        types : dict
+        potential_types : dict
             dictionary by atom name of the types that could be chosen as the final solution
 
         Returns
@@ -506,12 +669,39 @@ class _TitratableForceFieldCompiler(object):
                     if atomname2 in final_types:
                         bonded_to[atomname2] = [final_types[atomname2]]
                     else:
-                        bonded_to[atomname2] = types[atomname2]
+                        bonded_to[atomname2] = potential_types[atomname2]
                 else:
                     if atomname1 in final_types:
                         bonded_to[atomname1] = [final_types[atomname1]]
                     else:
-                        bonded_to[atomname1] = types[atomname1]
+                        bonded_to[atomname1] = potential_types[atomname1]
+        return bonded_to
+
+    def _find_bond_partner_types(self, atomname, final_types):
+        """ Find all the atoms it is bonded to, and collect their types
+
+        Parameters
+        ----------
+        atomname : str
+            Name of the atom
+        final_types : dict
+            dictionary by atom name of the types that have already been determined
+        Returns
+        -------
+        bonded_to : dict
+            The atoms that this atom is bonded to, and the types/potential type of the bond partners
+
+        """
+        bonded_to = dict()
+        for bond in self._bonds:
+            if bond.has_atom(atomname):
+                atomname1 = bond.atomName1
+                atomname2 = bond.atomName2
+                if atomname1 == atomname:
+                    bonded_to[atomname2] = final_types[atomname2]
+                else:
+
+                    bonded_to[atomname1] = final_types[atomname1]
         return bonded_to
 
     @staticmethod
