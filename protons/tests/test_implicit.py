@@ -6,7 +6,6 @@ from simtk import unit, openmm
 from simtk.openmm import app
 
 from protons import AmberProtonDrive
-from protons.integrators import GHMCIntegrator
 from protons.calibration import SelfAdjustedMixtureSampling, AmberCalibrationSystem
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator, create_compound_ghmc_integrator
