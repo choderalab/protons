@@ -11,7 +11,7 @@ import abc
 from . import get_data
 from scipy.misc import logsumexp
 from collections import deque
-from protons.integrators import GHMCIntegrator, BAOABIntegrator
+from protons.integrators import GHMCIntegrator, ReferenceGBAOABIntegrator
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 

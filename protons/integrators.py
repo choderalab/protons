@@ -2,34 +2,166 @@
 Integrators that can be used with Protons' NCMC implementation
 """
 import numpy
+import simtk.openmm as mm
 import simtk.unit
 import simtk.unit as units
-import simtk.openmm as mm
-from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
+from openmmtools.integrators import ThermostatedIntegrator
+
 kB = units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA
 
 
-class BAOABIntegrator(ExternalPerturbationLangevinIntegrator):
+class ReferenceGBAOABIntegrator(ThermostatedIntegrator):
+    """This is a reference implementation of the gBAOAB integrator. For simplicity and reliability
+    this omits the variable splitting schemes found in openmmtools.integrators.LangevinIntegrator.
+    
+    It accumulates external protocol work performed in the `protocol_work` variable, in OpenMM standard units (kJ/mol).
+    
+    To reset the protocol work, set the global variable `first_step` to 0. It will then be reset on the next iteration.
+    Alternatively, 
+
+     The different steps of the integrator are split up as followed(V(n*R)O(n*R)V), where the substeps are defined as 
+     described by Leimkuhler and Matthews
+
+        - R: Linear "drift" / Constrained "drift"
+            Deterministic update of *positions*, using current velocities
+            x <- x + v dt
+        - V: Linear "kick" / Constrained "kick"
+            Deterministic update of *velocities*, using current forces
+            v <- v + (f/m) dt
+                where f = force, m = mass
+        - O: Ornstein-Uhlenbeck
+            Stochastic update of velocities, simulating interaction with a heat bath
+            v <- av + b sqrt(kT/m) R
+                where
+                a = e^(-gamma dt)
+                b = sqrt(1 - e^(-2gamma dt))
+                R is i.i.d. standard normal
+
+    References
+    ----------
+    [Leimkuhler and Matthews, 2015] Molecular dynamics: with deterministic and stochastic numerical methods, Chapter 7
+
+
+    Main contributors (alphabetical order)
+    --------------------------------------
+    Josh Fass
+    Patrick Grinaway    
+    Gregory Ross
+    Bas Rustenburg
+
     """
-    Implementation of the BAOAB integrator which tracks external protocol work.
-    """
-    def __init__(self, temperature=298.0 * simtk.unit.kelvin,
-                 collision_rate=91.0 / simtk.unit.picoseconds,
-                 timestep=1.0 * simtk.unit.femtoseconds,
-                 constraint_tolerance=1e-7
-                 ):
-        super(BAOABIntegrator, self).__init__(splitting="V R O R V",
-                                              temperature=temperature,
-                                              collision_rate=collision_rate,
-                                              timestep=timestep,
-                                              constraint_tolerance=constraint_tolerance,
-                                              measure_shadow_work=False,
-                                              measure_heat=False,
-                                              )
+
+    def __init__(self, number_R_steps=1, temperature=298.0 * simtk.unit.kelvin,
+                 collision_rate=1.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds,
+                 constraint_tolerance=1e-8):
+        """
+        Create a gBAOAB integrator using V (R * number_R_steps) * O (R * number_R_steps) V splitting.
+
+        Parameters
+        ----------
+        number_of_R_steps : int, default: 1
+            the number of R operations/2. (Total number of R operations is 2 * number of R steps) 
+        temperature : simtk.unit.Quantity compatible with kelvin, default: 298*unit.kelvin
+           The temperature.
+        collision_rate : simtk.unit.Quantity compatible with 1/picoseconds, default: 91.0/unit.picoseconds
+           The collision rate.
+        timestep : simtk.unit.Quantity compatible with femtoseconds, default: 1.0*unit.femtoseconds
+           The integration timestep.
+        constraint_tolerance : float, default: 1.0e-8
+            Tolerance for constraint solver          
+
+        """
+        # Initialize constants.
+        kT = kB * temperature
+        gamma = collision_rate
+
+        # Create a new custom integrator.
+        super(ReferenceGBAOABIntegrator, self).__init__(temperature, timestep)
+
+        self.addPerDofVariable("sigma", 0)
+        # Velocity mixing parameter: current velocity component
+        self.addGlobalVariable("a", numpy.exp(-gamma * timestep))
+
+        # Velocity mixing parameter: random velocity component
+        self.addGlobalVariable("b", numpy.sqrt(1 - numpy.exp(- 2 * gamma * timestep)))
+
+        # Positions before application of position constraints
+        self.addPerDofVariable("x1", 0)
+
+        # Set constraint tolerance
+        self.setConstraintTolerance(constraint_tolerance)
+
+        # The protocol work, calculated before the start of the next propagation step
+        self.addGlobalVariable("protocol_work", 0)
+
+        # The energy at the start of the next propagation step, assumes perturbation happened in between propagations
+        self.addGlobalVariable("perturbed_pe", 0)
+
+        # The energy after the propagation step.
+        self.addGlobalVariable("unperturbed_pe", 0)
+
+        # Binary toggle to indicate first step
+        self.addGlobalVariable("first_step", 0)
+
+        # Begin of integration procedure
+
+        # Calculate the perturbation
+        self.addComputeGlobal("perturbed_pe", "energy")
+
+        # Assumes no perturbation is done before doing the initial MD step.
+        self.beginIfBlock("first_step < 1")
+        self.addComputeGlobal("first_step", "1")
+        self.addComputeGlobal("unperturbed_pe", "energy")
+        self.addComputeGlobal("protocol_work", "0.0")
+        self.endBlock()
+        # the protocol work is incremented
+        self.addComputeGlobal("protocol_work", "protocol_work + (perturbed_pe - unperturbed_pe)")
+
+        # Update temperature/barostat dependent state
+        self.addUpdateContextState()
+        self.addComputeTemperatureDependentConstants({"sigma": "sqrt(kT/m)"})
+
+        # V step
+        self.addComputePerDof("v", "v + (dt / 2) * f / m")
+        self.addConstrainVelocities()
+
+        # R step(s)
+        for i in range(number_R_steps):
+            self.addComputePerDof("x", "x + ((dt / {}) * v)".format(number_R_steps * 2))
+            self.addComputePerDof("x1", "x")  # save pre-constraint positions in x1
+            self.addConstrainPositions()  # x is now constrained
+            self.addComputePerDof("v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2))
+            self.addConstrainVelocities()
+
+        # O step
+        self.addComputePerDof("v", "(a * v) + (b * sigma * gaussian)")
+        self.addConstrainVelocities()
+
+        # R step(s)
+        for i in range(number_R_steps):
+            self.addComputePerDof("x", "x + ((dt / {}) * v)".format(number_R_steps * 2))
+            self.addComputePerDof("x1", "x")  # save pre-constraint positions in x1
+            self.addConstrainPositions()  # x is now constrained
+            self.addComputePerDof("v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2))
+            self.addConstrainVelocities()
+
+        # V step
+        self.addComputePerDof("v", "v + (dt / 2) * f / m")
+        self.addConstrainVelocities()
+
+        # Calculate the potential energy after propagation step
+        self.addComputeGlobal("unperturbed_pe", "energy")
+
+    def reset_protocol_work(self):
+        """Reset protocol work tracking.
+        
+        This is a shortcut to resetting the accumulation of protocol work.
+        """
+        self.setGlobalVariableByName("first_step", 0)
+        self.setGlobalVariableByName('protocol_work', 0)
 
 
 class GHMCIntegrator(mm.CustomIntegrator):
-
     """
 
     This generalized hybrid Monte Carlo (GHMC) integrator is a modification of the GHMC integrator found
@@ -39,7 +171,8 @@ class GHMCIntegrator(mm.CustomIntegrator):
     Authors: John Chodera and Gregory Ross
     """
 
-    def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=91.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):
+    def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=91.0 / simtk.unit.picoseconds,
+                 timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):
         """
         Create a generalized hybrid Monte Carlo (GHMC) integrator.
 
@@ -89,7 +222,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
         #
         self.addGlobalVariable("kT", kT)  # thermal energy
         self.addGlobalVariable("b", numpy.exp(-gamma * timestep))  # velocity mixing parameter
-        self.addPerDofVariable("sigma", 0) # velocity standard deviation
+        self.addPerDofVariable("sigma", 0)  # velocity standard deviation
         self.addGlobalVariable("ke", 0)  # kinetic energy
         self.addPerDofVariable("vold", 0)  # old velocities
         self.addPerDofVariable("xold", 0)  # old positions
@@ -103,7 +236,7 @@ class GHMCIntegrator(mm.CustomIntegrator):
         self.addGlobalVariable("naccept", 0)  # number accepted
         self.addGlobalVariable("ntrials", 0)  # number of Metropolization trials
         self.addPerDofVariable("x1", 0)  # position before application of constraints
-        self.addGlobalVariable("step", 0) # variable to keep track of number of propagation steps
+        self.addGlobalVariable("step", 0)  # variable to keep track of number of propagation steps
         self.addGlobalVariable("nsteps", nsteps)  # The number of iterations per integrator.step(1).
         #
         # Initialization.

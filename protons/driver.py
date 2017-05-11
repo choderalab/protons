@@ -15,8 +15,8 @@ from simtk import unit as units, openmm
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree
-from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
-from .integrators import GHMCIntegrator
+
+from .integrators import GHMCIntegrator, ReferenceGBAOABIntegrator
 
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilojoules_per_mole / units.kelvin)
 
@@ -371,6 +371,7 @@ class _BaseProtonDrive(_BaseDrive):
         # Build a list of exception indices involving any of the specified particles.
         exception_indices = list()
         for exception_index in range(force.getNumExceptions()):
+            # TODO this call to getExceptionParameters is expensive. Perhaps this could be cached somewhere per force.
             [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
             if (particle1 in particle_indices) or (particle2 in particle_indices):
                 if (particle2 in self.atomExceptions[particle1]) or (particle1 in self.atomExceptions[particle2]):
@@ -986,8 +987,10 @@ class _BaseProtonDrive(_BaseDrive):
         if isinstance(ncmc_integrator, GHMCIntegrator):
             ncmc_integrator.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
             ncmc_integrator.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
-        elif issubclass(type(ncmc_integrator), ExternalPerturbationLangevinIntegrator):
+        elif isinstance(ncmc_integrator, ReferenceGBAOABIntegrator):
             ncmc_integrator.setGlobalVariableByName("first_step", 0)
+        else:
+            log.warn("Integrator unknown. Protocol work not being reset during NCMC.")
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
         g_initial = 0

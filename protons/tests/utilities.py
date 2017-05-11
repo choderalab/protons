@@ -2,8 +2,7 @@ from __future__ import print_function
 from simtk import unit, openmm
 from simtk.openmm import app
 from protons import *
-import protons.integrators
-import openmmtools.integrators
+from protons.integrators import GHMCIntegrator, ReferenceGBAOABIntegrator as GBAOABIntegrator
 import logging
 
 
@@ -33,6 +32,7 @@ except Exception as e:
 class SystemSetup:
     """Empty class for storing systems and relevant attributes"""
     pass
+
 
 
 def make_method(func, input):
@@ -189,9 +189,9 @@ def create_compound_ghmc_integrator(testsystem):
     -------
     simtk.openmm.openmm.CompoundIntegrator
     """
-    integrator = protons.integrators.GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+    integrator = GHMCIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
                                 timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
-    ncmc_propagation_integrator = protons.integrators.GHMCIntegrator(temperature=testsystem.temperature,
+    ncmc_propagation_integrator = GHMCIntegrator(temperature=testsystem.temperature,
                                                  collision_rate=testsystem.collision_rate,
                                                  timestep=testsystem.timestep, nsteps=testsystem.nsteps_per_ghmc)
     compound_integrator = openmm.CompoundIntegrator()
@@ -212,9 +212,9 @@ def create_compound_gbaoab_integrator(testsystem):
     -------
     simtk.openmm.openmm.CompoundIntegrator
     """
-    integrator = protons.integrators.BAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+    integrator = GBAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
                                                      timestep=testsystem.timestep, constraint_tolerance=testsystem.constraint_tolerance)
-    ncmc_propagation_integrator = protons.integrators.BAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
+    ncmc_propagation_integrator = GBAOABIntegrator(temperature=testsystem.temperature, collision_rate=testsystem.collision_rate,
                                                      timestep=testsystem.timestep, constraint_tolerance=testsystem.constraint_tolerance)
     compound_integrator = openmm.CompoundIntegrator()
     compound_integrator.addIntegrator(integrator)
