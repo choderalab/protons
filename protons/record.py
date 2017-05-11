@@ -97,7 +97,7 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     return ncfile
 
 
-def record_drive_data(ncfile, drive, iteration):
+def record_drive_data(ncfile, drive, iteration, sync=False):
     """
     Store all relevant properties of a ProtonDrive type object in a netcdf dataset.
 
@@ -107,7 +107,12 @@ def record_drive_data(ncfile, drive, iteration):
         An opened netCDF4 dataset object.
     drive - ProtonDrive object
         This function will save all relevant properties of the supplied drive
-    iteration - the current iteration
+    iteration - int
+        the current iteration
+    sync - bool, default False
+        Synchronize file on disk
+    
+    
 
     """
     # Append new iteration to the ProtonDrive variable group
@@ -137,10 +142,13 @@ def record_drive_data(ncfile, drive, iteration):
             ncfile['ProtonDrive/NCMCIntegrator/naccept'][iteration, attempt_index, step_index] = int(step[1])
             ncfile['ProtonDrive/NCMCIntegrator/ntrials'][iteration, attempt_index, step_index] = int(step[2])
 
+    if sync:
+        ncfile.sync()
+
     return
 
 
-def record_ghmc_integrator_data(ncfile, integrator, iteration):
+def record_ghmc_integrator_data(ncfile, integrator, iteration, sync=False):
     """
     Store relevant properties of a GHMCIntegrator object in a netcdf dataset
 
@@ -150,15 +158,20 @@ def record_ghmc_integrator_data(ncfile, integrator, iteration):
         An opened netCDF4 Dataset object.
     integrator - protons.integrators.GHMCIntegrator
         Custom GHMCIntegrator class to save variables from
-    iteration - the current iteration
+    iteration - int
+        the current iteration
+    sync - bool, default False
+        Synchronize file on disk
 
     """
     # Append new iteration to the GHMCIntegrator variable group
     for globvar, vartype, varunit in ghmc_global_variables:
         ncfile['GHMCIntegrator/{}'.format(globvar)][iteration] = vartype(integrator.getGlobalVariableByName(globvar))
+    if sync:
+        ncfile.sync()
 
 
-def record_state_data(ncfile, context, system, iteration):
+def record_state_data(ncfile, context, system, iteration, sync=False):
     """
     Store state properties from a simulation Context, and System object
 
@@ -172,6 +185,8 @@ def record_state_data(ncfile, context, system, iteration):
         The simulation system
     iteration - int
         The current iteration
+    sync - bool, default False
+        Synchronize file on disk        
 
     """
 
@@ -253,6 +268,8 @@ def record_all(ncfile, iteration, drive=None, integrator=None, context=None, sys
         record_ghmc_integrator_data(ncfile, integrator, iteration)
     if system is not None and context is not None:
         record_state_data(ncfile, context, system, iteration)
+
+    ncfile.sync()
 
 
 def _walk_netcdf_tree(top):
