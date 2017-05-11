@@ -207,6 +207,9 @@ def record_state_data(ncfile, context, system, iteration, sync=False):
     for state_var, state_type, state_unit in state_vars:
         ncfile['State/{}'.format(state_var)][iteration] = statedata[state_var]
 
+    if sync:
+        ncfile.sync()
+
 
 def _calculate_degrees_of_freedom(system):
     """
