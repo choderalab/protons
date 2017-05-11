@@ -2,7 +2,6 @@ from openmmtools import testsystems
 from simtk import unit
 from simtk.openmm import openmm
 from protons.integrators import ReferenceGBAOABIntegrator
-from .utilities import almost_equal
 import pytest
 
 
