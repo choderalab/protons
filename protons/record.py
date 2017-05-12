@@ -97,7 +97,7 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     return ncfile
 
 
-def record_drive_data(ncfile, drive, iteration, sync=False):
+def record_drive_data(ncfile, drive, iteration, sync=True):
     """
     Store all relevant properties of a ProtonDrive type object in a netcdf dataset.
 
@@ -148,7 +148,7 @@ def record_drive_data(ncfile, drive, iteration, sync=False):
     return
 
 
-def record_ghmc_integrator_data(ncfile, integrator, iteration, sync=False):
+def record_ghmc_integrator_data(ncfile, integrator, iteration, sync=True):
     """
     Store relevant properties of a GHMCIntegrator object in a netcdf dataset
 
@@ -171,7 +171,7 @@ def record_ghmc_integrator_data(ncfile, integrator, iteration, sync=False):
         ncfile.sync()
 
 
-def record_state_data(ncfile, context, system, iteration, sync=False):
+def record_state_data(ncfile, context, system, iteration, sync=True):
     """
     Store state properties from a simulation Context, and System object
 
@@ -266,11 +266,11 @@ def record_all(ncfile, iteration, drive=None, integrator=None, context=None, sys
     # Extend the iteration variable ( and dimension )
     ncfile['iteration'][iteration] = iteration
     if drive is not None:
-        record_drive_data(ncfile, drive, iteration)
+        record_drive_data(ncfile, drive, iteration, sync=False)
     if integrator is not None:
-        record_ghmc_integrator_data(ncfile, integrator, iteration)
+        record_ghmc_integrator_data(ncfile, integrator, iteration, sync=False)
     if system is not None and context is not None:
-        record_state_data(ncfile, context, system, iteration)
+        record_state_data(ncfile, context, system, iteration, sync=False)
 
     ncfile.sync()
 
