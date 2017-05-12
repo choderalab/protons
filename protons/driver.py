@@ -980,17 +980,23 @@ class _BaseProtonDrive(_BaseDrive):
         if self.cm_remover is not None:
             self.cm_remover.setFrequency(0)
 
-        # TODO Is it correct to just replace this by using self.ncmc_propagation_integrator?
         ncmc_integrator = self.compound_integrator.getIntegrator(1)
 
         # Reset integrator statistics
-        if isinstance(ncmc_integrator, GHMCIntegrator):
+        try:
+            # This case covers the GHMCIntegrator
             ncmc_integrator.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
             ncmc_integrator.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
-        elif isinstance(ncmc_integrator, ReferenceGBAOABIntegrator):
-            ncmc_integrator.setGlobalVariableByName("first_step", 0)
-        else:
-            log.warn("Integrator unknown. Protocol work not being reset during NCMC.")
+
+        # Not a GHMCIntegrator
+        except:
+
+            try:
+                # This case handles the ReferenceGBAOABIntegrator, and ExternalPerturbationLangevinIntegrator
+                ncmc_integrator.setGlobalVariableByName("first_step", 0)
+                ncmc_integrator.setGlobalVariableByName("protocol_work", 0)
+            except:
+                raise RuntimeError("Could not reset the integrator work, this integrator is not supported.")
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
         g_initial = 0
@@ -1044,7 +1050,6 @@ class _BaseProtonDrive(_BaseDrive):
             self.cm_remover.setFrequency(self.cm_remover_freq)
 
         return work
-
 
     def _attempt_state_change(self, context, reject_on_nan=False):
         """
