@@ -557,7 +557,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups)
 
-    def _add_titratable_group(self, atom_indices, name=''):
+    def _add_titratable_group(self, atom_indices, residue_type, name=''):
         """
         Define a new titratable group.
 
@@ -566,6 +566,9 @@ class _BaseProtonDrive(_BaseDrive):
 
         atom_indices : list of int
             the atom indices defining the titration group
+        
+        residue_type: str
+            The type of residue, e.g. LYS for lysine, HIP for histine, STI for imatinib.
 
         Other Parameters
         ----------------
@@ -581,7 +584,7 @@ class _BaseProtonDrive(_BaseDrive):
         # Check to make sure the requested group does not share atoms with any existing titration group.
         for group in self.titrationGroups:
             if set(group['atom_indices']).intersection(atom_indices):
-                raise Exception("Titration groups cannot share atoms.  The requested atoms of new titration group (%s) share atoms with another group (%s)." % (
+                raise Exception("Titration groups cannot share atoms. The requested atoms of new titration group (%s) share atoms with another group (%s)." % (
                     str(atom_indices), str(group['atom_indices'])))
 
         # Define the new group.
@@ -591,6 +594,7 @@ class _BaseProtonDrive(_BaseDrive):
         group_index = len(self.titrationGroups) + 1
         group['index'] = group_index
         group['name'] = name
+        group['residue_type'] = residue_type
         group['nstates'] = 0
         # NonbondedForce exceptions associated with this titration state
         group['exception_indices'] = self._get14exceptions(self.system, atom_indices)
@@ -1276,7 +1280,7 @@ class _BaseProtonDrive(_BaseDrive):
         log.debug("Calibration results %s", g_k)
         return g_k
 
-    def import_gk_values(self, gk_dict):
+    def import_gk_values(self, gk_dict, strict=False):
         """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
 
         If you changed any details, rerun calibrate instead!
@@ -1285,16 +1289,34 @@ class _BaseProtonDrive(_BaseDrive):
         ----------
         gk_dict : dict
             dict of starting value g_k estimates in numpy arrays, with residue names as keys.
+        strict: bool, default False 
+            If True, raises an error if gk values are specified for nonexistent residue.
 
         """
-        from .calibration import AmberCalibrationSystem
-        resname_per_index, unique_residuenames = self._detect_residues(AmberCalibrationSystem.supported_aminoacids)
 
-        # Set the g_k values to the user supplied values.
-        for group_index, group in enumerate(self.titrationGroups):
-            for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
-                self.titrationGroups[group_index]['titration_states'][state_index]['g_k'] = \
-                    gk_dict[resname_per_index[group_index]][state_index]
+        all_restypes = {group['residue_type'] for group in self.titrationGroups}
+
+        # If gk_dict contains entry not in
+        supplied_residues = set(gk_dict.keys())
+        if not supplied_residues <= all_restypes:
+            if strict:
+                raise ValueError("Weights were supplied for a residue that was not in the system.\n"
+                                 "{}".format(", ".join(supplied_residues-all_restypes)))
+
+        for residue_type, weights in gk_dict.items():
+            # Set the g_k values to the user supplied values.
+            for group_index, group in enumerate(self.titrationGroups):
+                if group['residue_type'] == residue_type:
+
+                    # Make sure the right number of weights are specified
+                    num_weights = len(weights)
+                    num_states = len(self.titrationGroups[group_index]['titration_states'])
+                    if not num_weights == num_states:
+                        raise ValueError("The number of weights ({}) supplied does not match the number of states ({}) for this residue.".format(num_weights, num_states))
+
+                    for state_index, state in enumerate(self.titrationGroups[group_index]['titration_states']):
+                        self.titrationGroups[group_index]['titration_states'][state_index]['g_k'] = \
+                            gk_dict[residue_type][state_index]
 
     def _detect_residues(self, supported_residues=None):
         """
@@ -1580,7 +1602,12 @@ class AmberProtonDrive(_BaseProtonDrive):
 
             # Define titratable group.
             atom_indices = range(first_atom, first_atom + num_atoms)
-            self._add_titratable_group(atom_indices, name=name)
+            residue_type = str.split(name)[1] #  Should grab AS4
+            if not len(residue_type) == 3:
+                example = 'Residue: AS4 2'
+                log.warn("Residue type '{}' has unusual length, verify residue name"
+                         " in CPIN file has format like this one: '{}'".format(residue_type, example))
+            self._add_titratable_group(atom_indices, residue_type, name=name)
 
             # Define titration states.
             for titration_state in range(num_states):
@@ -1790,7 +1817,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
 
             # Define titratable group.
             atom_indices = [atom.index for atom in residue.atoms()]
-            self._add_titratable_group(atom_indices,
+            self._add_titratable_group(atom_indices, residue.name,
                                        name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
 
             # Define titration states.

@@ -56,6 +56,17 @@ class TestAmberTyrosineExplicit(object):
         compound_integrator.step(10)  # MD
         driver.update(context)  # protonation
 
+    def test_tyrosine_import_gk(self):
+        """
+        Import calibrated values for tyrosine
+        """
+        testsystem = self.setup_tyrosine_explicit()
+        compound_integrator = create_compound_ghmc_integrator(testsystem)
+
+        driver = AmberProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, testsystem.prmtop.topology, testsystem.cpin_filename, compound_integrator, debug=False,
+                                        pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False)
+        driver.import_gk_values(dict(TYR=[0.0,1.0]))
+
     def test_tyrosine_sams_instantaneous_binary(self):
         """
         Run SAMS (binary update) tyrosine in explicit solvent with an instanteneous state switch
@@ -325,6 +336,17 @@ class TestForceFieldImidazoleExplicit(object):
 
         compound_integrator.step(10)  # MD
         driver.update(context)  # protonation
+
+    def test_imidazole_import_gk(self):
+        """
+        Import calibrated values for imidazole weights
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_ghmc_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, [testsystem.ffxml_filename],
+                                  testsystem.topology, compound_integrator, debug=False,
+                                  pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False, residues_by_name=['LIG'])
+        driver.import_gk_values(gk_dict=dict(LIG=[0.0,1.0]))
 
     def test_imidazole_ncmc(self):
         """
