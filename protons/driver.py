@@ -175,6 +175,9 @@ class _BaseProtonDrive(_BaseDrive):
         self.nrejected = 0
         self.last_proposal = [None] * nattempts_per_update
 
+        # Sets of residues that are pooled together to sample exclusively from them
+        self.residue_pools = dict()
+
         if implicit:
             self.solvent = "implicit"
         else:
@@ -239,6 +242,43 @@ class _BaseProtonDrive(_BaseDrive):
                 self.forces_to_update.append(force)
 
         return
+
+    def define_pools(self, dict_of_pools):
+        """
+        Specify named pools/subgroups of residues that can be sampled from separately. 
+
+        For instance, it might be useful to separate the protein from the ligand so you can sample the 
+        protonation state of one component of the system at a time. 
+
+        Note that the indices are dependent on self.titrationGroups, not a residue index in the PDB or in
+        OpenMM topology. 
+
+        Parameters
+        ----------
+
+        dict_of_pools : dict of list of int
+            Provide a dictionary with named groups of residue indices.
+
+        Examples
+        --------       
+
+        pools = dict{protein=list(range(34)),ligand=[34])
+
+        """
+
+        # TODO alter residue specification by openmm topology index?
+
+        # Validate user input
+        if not (isinstance(dict_of_pools, dict)):
+            raise TypeError("Please define a dict of the different")
+
+        # Make sure residues exist
+        for group, indices in dict_of_pools.items():
+
+            if not all(index < len(self.titrationGroups) for index in indices):
+                raise ValueError("Residue in {} specified is outside of range.".format(group))
+
+        self.residue_pools = dict_of_pools
 
     def _retrieve_ion_parameters(self, topology, system, resname):
         """
@@ -1055,7 +1095,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         return work
 
-    def _attempt_state_change(self, context, reject_on_nan=False):
+    def _attempt_state_change(self, context, residue_pool=None, reject_on_nan=False):
         """
         Attempt a single Monte Carlo protonation state change.
 
@@ -1063,6 +1103,10 @@ class _BaseProtonDrive(_BaseDrive):
         ----------
         context : simtk.openmm.Context
             The context to update
+            
+        residue_pool : str, default None
+            The set of titration group incides to propose from. See self.titrationGroups for the list of groups.
+            If None, select from all groups uniformly.
 
         reject_on_nan: bool, (default=False)
             Reject proposal if NaN. Not recommended since NaN typically indicates issues with the simulation.
@@ -1079,6 +1123,15 @@ class _BaseProtonDrive(_BaseDrive):
             initial_positions = initial_state.getPositions(asNumpy=True)
             initial_velocities = initial_state.getVelocities(asNumpy=True)
 
+        # Select which titratible residues to update.
+        if residue_pool is None:
+            residue_pool_indices = range(self._get_num_titratable_groups())
+        else:
+            try:
+                residue_pool_indices = self.residue_pools[residue_pool]
+            except KeyError:
+                raise KeyError("The residue pool '{}' does not exist.".format(residue_pool))
+
         # Compute initial probability of this protonation state. Used in the acceptance test for instantaneous
         # attempts, and to record potential and kinetic energy.
         log_P_initial, pot1, kin1 = self._compute_log_probability(context)
@@ -1093,10 +1146,10 @@ class _BaseProtonDrive(_BaseDrive):
         # Choose how many titratable groups to simultaneously attempt to update.
         # TODO: Refine how we select residues and groups of residues to titrate to increase efficiency.
         ndraw = 1
-        if (self._get_num_titratable_groups() > 1) and (random.random() < self.simultaneous_proposal_probability):
+        if (len(residue_pool_indices) > 1) and (random.random() < self.simultaneous_proposal_probability):
             ndraw = 2
-        # Select which titratible residues to update.
-        titration_group_indices = random.sample(range(self._get_num_titratable_groups()), ndraw)
+
+        titration_group_indices = random.sample(residue_pool_indices, ndraw)
         # Select new titration states.
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
@@ -1185,7 +1238,7 @@ class _BaseProtonDrive(_BaseDrive):
 
         return
 
-    def update(self, context, nattempts=None):
+    def update(self, context, residue_pool=None, nattempts=None):
         """
         Perform a number of Monte Carlo update trials for the system protonation/tautomer states of multiple residues.
 
@@ -1193,6 +1246,10 @@ class _BaseProtonDrive(_BaseDrive):
         ----------
         context : simtk.openmm.Context
             The context to update
+            
+        residue_pool : str            
+            The set of titration group incides to propose from. Groups can be defined using self.define_pools.            
+            If None, select from all titration groups uniformly.
 
         nattempts: int, optional
             Number of individual attempts per update.
@@ -1210,7 +1267,7 @@ class _BaseProtonDrive(_BaseDrive):
         # Perform a number of protonation state update trials.
         for attempt in range(nattempts):
             self._attempt_number = attempt
-            self._attempt_state_change(context)
+            self._attempt_state_change(context, residue_pool=residue_pool)
         self.states_per_update.append(self._get_titration_states())
 
         return
@@ -1794,6 +1851,9 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
 
         return
 
+
+
+
     def _add_xml_titration_groups(self, all_residues, ffxml_residues, selected_residue_indices):
         """
         Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
@@ -1841,6 +1901,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
 
             # Set default state for this group.
             self._set_titration_state(group_index, 0)
+
 
     def _parse_ffxml_files(self, ffxml_files):
         """
