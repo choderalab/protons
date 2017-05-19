@@ -161,6 +161,82 @@ def test_create_peptide_simulation_using_protons_xml():
     app.Topology.unloadStandardBonds()
 
 
+def test_create_peptide_simulation_with_residue_pools_using_protons_xml():
+    """Test if protons.xml can be used to successfully create a peptide Simulation object in OpenMM and
+    Instantiate a ForceFieldProtonDrive, while using pools of residues to sample from."""
+
+    sys_details = SystemSetup()
+    sys_details.timestep = 0.5 * unit.femtoseconds
+    sys_details.temperature = 300. * unit.kelvin
+    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.pressure = 1.0 * unit.atmospheres
+    sys_details.barostatInterval = 25
+    sys_details.constraint_tolerance = 1.e-7
+
+    app.Topology.loadBondDefinitions(ff.bonds)
+
+    # Load pdb file with protons compatible residue names
+    pdbx = app.PDBxFile(
+        get_test_data(
+            'glu_ala_his-solvated-minimized-renamed.cif',
+            'testsystems/tripeptides'))
+    forcefield = app.ForceField(ff.protonsff, ff.ions_spce, 'spce.xml')
+
+    # System Configuration
+    nonbondedMethod = app.PME
+    constraints = app.AllBonds
+    rigidWater = True
+    sys_details.constraintTolerance = 1.e-7
+
+
+
+    # Simulation Options
+    platform = mm.Platform.getPlatformByName('Reference')
+
+    # Prepare the Simulation
+    topology = pdbx.topology
+    positions = pdbx.positions
+    system = forcefield.createSystem(
+        topology,
+        nonbondedMethod=nonbondedMethod,
+        constraints=constraints,
+        rigidWater=rigidWater,
+    )
+    system.addForce(
+        mm.MonteCarloBarostat(
+            sys_details.pressure,
+            sys_details.temperature,
+            sys_details.barostatInterval))
+
+    integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
+
+    driver = ForceFieldProtonDrive(
+        system, sys_details.temperature, 7.0, [ff.protonsff],
+        topology, integrator, debug=False, pressure=sys_details.pressure,
+        ncmc_steps_per_trial=1, implicit=False, cationName="NA",
+        anionName="CL")
+
+    pools = {'glu' : [0], 'his': [1],  'glu-his' : [0,1] }
+
+    driver.define_pools(pools)
+
+    simulation = app.Simulation(
+        topology,
+        system,
+        driver.compound_integrator,
+        platform)
+    simulation.context.setPositions(positions)
+    simulation.context.setVelocitiesToTemperature(sys_details.temperature)
+
+    # run one step and one update
+    simulation.step(1)
+    driver.update(simulation.context, nattempts=1, residue_pool='his')
+    # Clean up so that the classes remain unmodified
+    # unit test specific errors might occur otherwise when loading files due
+    # to class side effects
+    app.Topology.unloadStandardBonds()
+
+
 @pytest.mark.skip(reason="Still creating input file.")
 def test_create_hewl_simulation_using_protons_xml():
     """Test if protons.xml can be used to successfully create a Simulation object in OpenMM."""
