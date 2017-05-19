@@ -270,10 +270,13 @@ class _BaseProtonDrive(_BaseDrive):
 
         # Validate user input
         if not (isinstance(dict_of_pools, dict)):
-            raise TypeError("Please define a dict of the different")
+            raise TypeError("Please provide a dict of the different pools.")
 
         # Make sure residues exist
         for group, indices in dict_of_pools.items():
+
+            if not(isinstance(indices, list) or isinstance(indices, np.ndarray)):
+                raise ValueError("Indices must be supplied as list or ndarrays.")
 
             if not all(index < len(self.titrationGroups) for index in indices):
                 raise ValueError("Residue in {} specified is outside of range.".format(group))
