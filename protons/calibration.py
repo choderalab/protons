@@ -33,10 +33,17 @@ class SelfAdjustedMixtureSampling(object):
 
     """
 
-    def __init__(self, driver):
+    def __init__(self, driver, group_index):
         """
         Initialize a Self-adjusted mixture sampling (SAMS) simulation engine for a given
         ProtonDrive object.
+        
+        Parameters
+        ----------
+        driver : _BaseProtonDrive derived class
+        group_index : int
+            Index of the titration group that is being sampled.
+        
         """
 
         # Check if driver is of the right type.
@@ -52,7 +59,6 @@ class SelfAdjustedMixtureSampling(object):
                 else:
                     self.driver.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.driver.titrationGroups[i]['titration_states'])
 
-        group_index = 0
         nstates = len(self.driver.titrationGroups[group_index]['titration_states'])
         self.state_counts = np.zeros(nstates, np.float64)
         log.info('There are %d titration states' % nstates)
@@ -178,7 +184,6 @@ class SelfAdjustedMixtureSampling(object):
         update = np.dot(self._gain_factor(b=b, stage=stage, group_index=group_index, end_of_burnin=end_of_burnin), update)
 
         # Update count of current state weights.
-        group_index = 0
         current_state = self.driver._get_titration_state(group_index)
         #  Use sqrt to make recent states count more
         self.state_counts[current_state] += np.sqrt(self.n_adaptations)
