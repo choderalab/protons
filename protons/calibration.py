@@ -33,7 +33,7 @@ class SelfAdjustedMixtureSampling(object):
 
     """
 
-    def __init__(self, driver, group_index):
+    def __init__(self, driver, group_index=0):
         """
         Initialize a Self-adjusted mixture sampling (SAMS) simulation engine for a given
         ProtonDrive object.
@@ -41,7 +41,7 @@ class SelfAdjustedMixtureSampling(object):
         Parameters
         ----------
         driver : _BaseProtonDrive derived class
-        group_index : int
+        group_index : int, default 0
             Index of the titration group that is being sampled.
         
         """
