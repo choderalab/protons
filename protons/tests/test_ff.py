@@ -139,7 +139,7 @@ def test_create_peptide_simulation_using_protons_xml():
 
 
     driver = ForceFieldProtonDrive(
-        system, sys_details.temperature, 7.0, [ff.protonsff],
+        system, sys_details.temperature, 7.0, [ff.protonsff], forcefield,
         topology, integrator, debug=False, pressure=sys_details.pressure,
         ncmc_steps_per_trial=1, implicit=False, cationName="NA",
         anionName="CL")
@@ -211,7 +211,7 @@ def test_create_peptide_simulation_with_residue_pools_using_protons_xml():
     integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
 
     driver = ForceFieldProtonDrive(
-        system, sys_details.temperature, 7.0, [ff.protonsff],
+        system, sys_details.temperature, 7.0, [ff.protonsff], forcefield,
         topology, integrator, debug=False, pressure=sys_details.pressure,
         ncmc_steps_per_trial=1, implicit=False, cationName="NA",
         anionName="CL")

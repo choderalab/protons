@@ -11,7 +11,10 @@ import sys
 import numpy as np
 import simtk
 from enum import Enum
-from simtk import unit as units, openmm
+from heapq import heappush, heappop
+from simtk import unit as units
+from simtk.openmm import app
+
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree
@@ -1730,6 +1733,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                  temperature,
                  pH,
                  ffxml_files,
+                 forcefield,
                  topology,
                  compound_integrator,
                  pressure=None,
@@ -1759,6 +1763,8 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             The pH at which the system is to be simulated.
         ffxml_files : str or list of str
             Single ffxml filename, or list of ffxml filenames containing protons information.
+        forcefield : simtk.openmm.app.ForceField
+            ForceField parameters used to make a system.
         topology : simtk.openmm.app.Topology
             Topology of the system
         compound_integrator : simtk.openmm.integrator
@@ -1835,7 +1841,7 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         if residues_by_name is not None:
             for residue_name in residues_by_name:
                 if residue_name not in ffxml_residues:
-                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.")
+                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue_name))
 
             for residue in all_residues:
                 if residue.name in residues_by_name:
@@ -1850,19 +1856,17 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
 
-        self._add_xml_titration_groups(all_residues, ffxml_residues, selected_residue_indices)
+        self._add_xml_titration_groups(topology, forcefield, ffxml_residues, selected_residue_indices)
 
         return
 
-
-
-
-    def _add_xml_titration_groups(self, all_residues, ffxml_residues, selected_residue_indices):
+    def _add_xml_titration_groups(self, topology, forcefield, ffxml_residues, selected_residue_indices):
         """
         Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
         Parameters
         ----------
-        all_residues - The list of residues from the topology
+        topology - OpenMM Topology object
+        forcefield - OpenMM ForceField object
         ffxml_residues - dict of residue ffxml templates
         selected_residue_indices - Residues to treat using Protons.
 
@@ -1870,6 +1874,10 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
         -------
 
         """
+
+        all_residues = list(topology.residues())
+        bonded_to_atoms_list = forcefield._buildBondedToAtomList(topology)
+
         # Extract number of titratable groups.
         ngroups = len(selected_residue_indices)
         # Define titratable groups and titration states.
@@ -1878,8 +1886,19 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
             residue_index = selected_residue_indices[group_index]
             residue = all_residues[residue_index]
 
-            # Define titratable group.
+            template = forcefield._templates[residue.name]
+            # Find the system indices of the template atoms for this residue
+            matches = app.forcefield._matchResidue(residue, template, bonded_to_atoms_list)
+
+            if matches is None:
+                raise ValueError("Could not match residue atoms to template.")
+
             atom_indices = [atom.index for atom in residue.atoms()]
+
+            # Sort the atom indices in the template in the same order as the topology indices.
+            atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
+
+            # Create a new group with the given indices
             self._add_titratable_group(atom_indices, residue.name,
                                        name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
 
@@ -1889,8 +1908,8 @@ class ForceFieldProtonDrive(_BaseProtonDrive):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
                 state_index = int(state_block.get("index"))
+                # Original charges for each state from the template
                 charges = [float(atom.get("charge")) for atom in state_block.xpath("Atom")]
-
                 # Extract relative energy for this titration state.
                 relative_energy = float(state_block.get("g_k")) * units.kilocalories_per_mole
                 # Don't use pKref

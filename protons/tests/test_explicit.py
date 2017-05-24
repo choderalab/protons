@@ -5,9 +5,10 @@ import pytest
 
 from simtk import unit, openmm
 from simtk.openmm import app
-
+from difflib import ndiff
 from protons import AmberProtonDrive, ForceFieldProtonDrive
 from protons.calibration import SelfAdjustedMixtureSampling, AmberCalibrationSystem
+from protons import ff
 from . import get_test_data
 from .utilities import hasCUDA, SystemSetup, create_compound_gbaoab_integrator, create_compound_ghmc_integrator
 
@@ -314,6 +315,7 @@ class TestForceFieldImidazoleExplicit(object):
         imidazole_explicit_system.system = openmm.XmlSerializer.deserialize(
             open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
         imidazole_explicit_system.ffxml_filename = '{}/protons-imidazole.xml'.format(testsystems)
+        imidazole_explicit_system.forcefield = app.ForceField(ff.gaff, imidazole_explicit_system.ffxml_filename)
         imidazole_explicit_system.gaff = get_test_data("gaff.xml", "../forcefields/")
         imidazole_explicit_system.pdbfile = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
         imidazole_explicit_system.topology = imidazole_explicit_system.pdbfile.topology
@@ -326,7 +328,7 @@ class TestForceFieldImidazoleExplicit(object):
         """
         testsystem = self.setup_imidazole_explicit()
         compound_integrator = create_compound_ghmc_integrator(testsystem)
-        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, [testsystem.ffxml_filename],
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, [testsystem.ffxml_filename], testsystem.forcefield,
                                   testsystem.topology, compound_integrator, debug=False,
                                   pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False, residues_by_name=['LIG'])
         platform = openmm.Platform.getPlatformByName(self.default_platform)
@@ -337,6 +339,42 @@ class TestForceFieldImidazoleExplicit(object):
         compound_integrator.step(10)  # MD
         driver.update(context)  # protonation
 
+    @staticmethod
+    def pattern_from_multiline(multiline, pattern):
+        """Return only lines that contain the pattern
+        
+        Parameters
+        ----------
+        multiline - multiline str        
+        pattern - str
+
+        Returns
+        -------
+        multiline str containing pattern
+        """
+
+        return '\n'.join([line for line in multiline.splitlines() if pattern in line])
+
+    def test_system_integrity(self):
+        """
+        Set up imidazole, and assure that the systems particles have not been modified after driver instantiation.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_ghmc_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
+                                       [testsystem.ffxml_filename], testsystem.forcefield,
+                                       testsystem.topology, compound_integrator, debug=False,
+                                       pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
+                                       residues_by_name=['LIG'])
+
+        _system_folder = get_test_data('imidazole_explicit', 'testsystems')
+        # Only grab the particles from each system. It is okay if versions et cetera mismatch.
+        original_system = self.pattern_from_multiline(open('{}/imidazole-explicit.sys.xml'.format(_system_folder)).read(), '<Particle')
+        after_driver = self.pattern_from_multiline(openmm.XmlSerializer.serialize(testsystem.system),'<Particle')
+
+        # Make sure there are no differences between the particles in each system
+        assert original_system == after_driver
+
     def test_imidazole_import_gk(self):
         """
         Import calibrated values for imidazole weights
@@ -344,7 +382,7 @@ class TestForceFieldImidazoleExplicit(object):
         testsystem = self.setup_imidazole_explicit()
         compound_integrator = create_compound_ghmc_integrator(testsystem)
         driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH, [testsystem.ffxml_filename],
-                                  testsystem.topology, compound_integrator, debug=False,
+                                  testsystem.forcefield, testsystem.topology, compound_integrator, debug=False,
                                   pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False, residues_by_name=['LIG'])
         driver.import_gk_values(gk_dict=dict(LIG=[0.0,1.0]))
 
@@ -356,7 +394,7 @@ class TestForceFieldImidazoleExplicit(object):
         compound_integrator = create_compound_ghmc_integrator(testsystem)
 
         driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                       [testsystem.ffxml_filename],
+                                       [testsystem.ffxml_filename], testsystem.forcefield,
                                        testsystem.topology, compound_integrator, debug=False,
                                        pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False,
                                        residues_by_name=['LIG'])
@@ -376,7 +414,7 @@ class TestForceFieldImidazoleExplicit(object):
 
         compound_integrator = create_compound_ghmc_integrator(testsystem)
         driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                       [testsystem.ffxml_filename],
+                                       [testsystem.ffxml_filename],testsystem.forcefield,
                                        testsystem.topology, compound_integrator, debug=False,
                                        pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
                                        residues_by_name=['LIG'])
@@ -398,7 +436,7 @@ class TestForceFieldImidazoleExplicit(object):
 
         compound_integrator = create_compound_ghmc_integrator(testsystem)
         driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                       [testsystem.ffxml_filename],
+                                       [testsystem.ffxml_filename], testsystem.forcefield,
                                        testsystem.topology, compound_integrator, debug=False,
                                        pressure=testsystem.pressure, ncmc_steps_per_trial=0, implicit=False,
                                        residues_by_name=['LIG'])
@@ -421,7 +459,7 @@ class TestForceFieldImidazoleExplicit(object):
         compound_integrator = create_compound_ghmc_integrator(testsystem)
 
         driver = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                       [testsystem.ffxml_filename],
+                                       [testsystem.ffxml_filename], testsystem.forcefield,
                                        testsystem.topology, compound_integrator, debug=False,
                                        pressure=testsystem.pressure, ncmc_steps_per_trial=10, implicit=False,
                                        residues_by_name=['LIG'])
