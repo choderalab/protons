@@ -10,8 +10,6 @@ import re
 import sys
 import numpy as np
 import simtk
-from enum import Enum
-from heapq import heappush, heappop
 from simtk import unit as units
 from simtk.openmm import app
 
