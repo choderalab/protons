@@ -3,6 +3,7 @@ from simtk import unit
 from simtk.openmm import openmm
 from protons.integrators import ReferenceGBAOABIntegrator
 import pytest
+import os
 
 
 class TestGBAOABIntegrator(object):
@@ -17,6 +18,7 @@ class TestGBAOABIntegrator(object):
         for platform_name in ['Reference', 'CPU']:
             self.compare_external_protocol_work_accumulation(testsystem, parameter_name, parameter_initial, parameter_final, platform_name=platform_name)
 
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_protocol_work_accumulation_waterbox(self):
         """Testing protocol work accumulation for ExternalPerturbationLangevinIntegrator with AlchemicalWaterBox
         """
@@ -31,6 +33,7 @@ class TestGBAOABIntegrator(object):
                 name = '%s %s %s' % (testsystem.name, nonbonded_method, platform_name)
                 self.compare_external_protocol_work_accumulation(testsystem, parameter_name, parameter_initial, parameter_final, platform_name=platform_name, name=name)
 
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_protocol_work_accumulation_waterbox_barostat(self):
         """
         Testing protocol work accumulation for ExternalPerturbationLangevinIntegrator with AlchemicalWaterBox

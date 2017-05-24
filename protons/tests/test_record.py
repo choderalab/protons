@@ -9,7 +9,7 @@ from simtk import unit
 from simtk.openmm import openmm, app
 
 from protons import ForceFieldProtonDrive
-from protons import record
+from protons import record, ff
 import pytest
 from protons.integrators import GHMCIntegrator
 from . import get_test_data
@@ -27,11 +27,13 @@ def setup_forcefield_drive():
     testsystem.collision_rate = 1.0 / unit.picoseconds
     testsystem.pH = 9.6
     testsystems = get_test_data('imidazole_explicit', 'testsystems')
+
     testsystem.positions = openmm.XmlSerializer.deserialize(
         open('{}/imidazole-explicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
     testsystem.system = openmm.XmlSerializer.deserialize(
         open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
     testsystem.ffxml_filename = '{}/protons-imidazole.xml'.format(testsystems)
+    testsystem.forcefield = app.ForceField(ff.gaff, testsystem.ffxml_filename)
     testsystem.gaff = get_test_data("gaff.xml", "../forcefields/")
     testsystem.pdbfile = app.PDBFile(
         get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
@@ -41,7 +43,7 @@ def setup_forcefield_drive():
     integrator = create_compound_gbaoab_integrator(testsystem)
 
     drive = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                  [testsystem.ffxml_filename],
+                                  [testsystem.ffxml_filename], testsystem.forcefield,
                                   testsystem.topology, integrator, debug=False,
                                   pressure=testsystem.pressure, ncmc_steps_per_trial=2, implicit=False,
                                   residues_by_name=['LIG'], nattempts_per_update=1)
