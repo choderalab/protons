@@ -1126,6 +1126,7 @@ class _BaseProtonDrive(_BaseDrive):
             initial_state = context.getState(getPositions=True, getVelocities=True)
             initial_positions = initial_state.getPositions(asNumpy=True)
             initial_velocities = initial_state.getVelocities(asNumpy=True)
+            initial_box_vectors = initial_state.getPeriodicBoxVectors()
 
         # Select which titratible residues to update.
         if residue_pool is None:
@@ -1219,6 +1220,7 @@ class _BaseProtonDrive(_BaseDrive):
                 if self.nsteps_per_trial > 0:
                     context.setPositions(initial_positions)
                     context.setVelocities(initial_velocities)
+                    context.setPeriodicBoxVectors(*initial_box_vectors)
 
         except Exception as err:
             if str(err) == 'Particle coordinate is nan' and reject_on_nan:
