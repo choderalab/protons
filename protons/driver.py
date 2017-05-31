@@ -1126,7 +1126,7 @@ class _BaseProtonDrive(_BaseDrive):
             initial_state = context.getState(getPositions=True, getVelocities=True)
             initial_positions = initial_state.getPositions(asNumpy=True)
             initial_velocities = initial_state.getVelocities(asNumpy=True)
-            initial_box_vectors = initial_state.getPeriodicBoxVectors()
+            initial_box_vectors = initial_state.getPeriodicBoxVectors(asNumpy=True)
 
         # Select which titratible residues to update.
         if residue_pool is None:
