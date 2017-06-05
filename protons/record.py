@@ -23,14 +23,13 @@ state_vars = [('total_energy', np.float64, 'kilojoule_per_mole'),
 
 
 def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attempts_per_update, num_iterations=None,
-                degrees_of_freedom=-1):
-    """ Creates a netCDF4 file with groups and variables for ProtonDrives, State, and GHMCIntegrator
+                degrees_of_freedom=-1, calibration=False, nstates_calibration=-1, ghmc_integrator=False):
+    """Convenience function to create a netCDF4 file with groups and variables for ProtonDrives, State, SelfAdjustedMixtureSampling, and GHMCIntegrator
 
     Parameters
     ----------
     filename - str
         Name of the nc file that is to be created
-
     num_titratable_groups - int
         Number of titratable groups in the system
     num_attempts_per_update - int
@@ -42,6 +41,11 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     degrees_of_freedom - int, default = -1
         Degrees of freedom of the system. Necessary to calculate temperature.
         Can be provided for convenience if known. Otherwise, gets calculated the first time it is needed.
+    calibration : bool, default = False
+        Add a group for SAMS calibration data. Assumes one group is being titrated at a time
+    ghmc_integrator : bool, default = False
+        Include a group for storing data for a GHMC integrator
+
     Returns
     -------
     Dataset - netCDF4 dataset
@@ -51,7 +55,6 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     ncfile.version = protons.__version__
     ncfile.createDimension('iteration', size=num_iterations)
     ncfile.createVariable('iteration', int, ('iteration',))
-
 
     # System variable group
     system = ncfile.createGroup('State')
@@ -82,19 +85,90 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
     ncmc_integrator.createDimension('ncmc_step', size=ncmc_steps_per_trial)
     ncmc_integrator.createVariable('ncmc_step', int, ('iteration', 'attempt', 'ncmc_step',))
     # Work per ncmc step at each algorithm iteration
-    work_per_step = ncmc_integrator.createVariable('work_per_step', np.float64, ('iteration', 'attempt', 'ncmc_step',))
+    work_per_step = ncmc_integrator.createVariable('work_per_step', np.float64, ('iteration', 'attempt', 'ncmc_step',),zlib=True)
     work_per_step.unit = "unitless"
-    ncmc_integrator.createVariable('naccept', int, ('iteration', 'attempt', 'ncmc_step',))
-    ncmc_integrator.createVariable('ntrials', int, ('iteration', 'attempt', 'ncmc_step',))
+    ncmc_integrator.createVariable('naccept', int, ('iteration', 'attempt', 'ncmc_step',),zlib=True)
+    ncmc_integrator.createVariable('ntrials', int, ('iteration', 'attempt', 'ncmc_step',),zlib=True)
+
+    # SAMS calibration details
+    # Assumes one group being updated at a time
+    # Can be used to continue a calibration
+    if calibration:
+        if nstates_calibration < 0:
+            raise ValueError("Please provide the number of states for the calibration residue.")
+        sams = ncfile.createGroup("SelfAdjustedMixtureSampling")
+        sams.createDimension('state', size=nstates_calibration)
+        g_k = sams.createVariable('g_k', np.float64, ('iteration', 'state'))
+        g_k.description = "Array of SAMS weights (g_k/RT) for each state at the current iteration"
+        g_k.unit = "unitless"
+        dev = sams.createVariable('deviation', np.float64, ('iteration',))
+        dev.description = "Sum of absolute deviations from the target histogram of each state."
+
+        # If the burn-in has ended, necessary to calculate the gain factor in the slow-gain stage
+        sams.createVariable('end_of_burnin', int)
+        # burn-in or slow-gain
+        sams.createVariable('stage', str)
+        # binary vs global
+        sams.createVariable('scheme', str)
+        # Two stage beta value
+        sams.createVariable('beta', np.float64)
 
     # GHMC integrator variable group
-    ghmc_integrator = ncfile.createGroup('GHMCIntegrator')
-    for globvar, vartype, varunit in ghmc_global_variables:
-        newvar = ghmc_integrator.createVariable(globvar, vartype, ('iteration',))
-        if varunit is not None:
-            newvar.unit = varunit
+    if ghmc_integrator:
+        ghmc_integrator = ncfile.createGroup('GHMCIntegrator')
+        for globvar, vartype, varunit in ghmc_global_variables:
+            newvar = ghmc_integrator.createVariable(globvar, vartype, ('iteration',))
+            if varunit is not None:
+                newvar.unit = varunit
 
     return ncfile
+
+
+def record_sams_data(ncfile, g_k, deviation, iteration, stage=None, end_of_burnin=None, beta=None, scheme=None, sync=True):
+    """
+
+    Parameters
+    ----------
+    ncfile - netCDF4.Dataset
+        An opened netCDF4 dataset object
+    g_k - array of float64
+        Weights of each state at the current iteration.
+    deviation - float64
+        Absolute deviation from target histogram summed over all states at the  current iteration
+    iteration - int
+        the current iteration number
+    stage - str, optional
+        Sams stage. "burn-in" or "slow-gain"
+    end_of_burnin - int, optional
+        End of sams "burn-in" stage, also known as t0. Used for calculating SAMS gain factor.
+    beta - float64, optional
+        Float between 0.5 and 1.0 that is used for calculating SAMS gain factor.
+    scheme - str, optional
+        Indicates which SAMS scheme was used to run calibration. For instance "binary" or "global".
+    sync - bool, default False
+        Synchronize to file on disk
+    """
+
+    # Insert new data for the current iteration
+    ncfile['SelfAdjustedMixtureSampling/g_k'][iteration,:] = g_k
+    ncfile['SelfAdjustedMixtureSampling/deviation'][iteration] = deviation
+
+    # Store metadata if supplied. These values should be useful for resuming a calibration
+    if stage is not None:
+        ncfile['SelfAdjustedMixtureSampling/stage'][0] = stage
+
+    if end_of_burnin is not None:
+        ncfile['SelfAdjustedMixtureSampling/end_of_burnin'][0] = end_of_burnin
+
+    if beta is not None:
+        ncfile['SelfAdjustedMixtureSampling/beta'][0] = beta
+
+    if scheme is not None:
+        ncfile['SelfAdjustedMixtureSampling/scheme'][0] = scheme
+
+    # Synchronize file to disk
+    if sync:
+        ncfile.sync()
 
 
 def record_drive_data(ncfile, drive, iteration, sync=True):
@@ -111,27 +185,29 @@ def record_drive_data(ncfile, drive, iteration, sync=True):
         the current iteration
     sync - bool, default False
         Synchronize file on disk
-    
-    
-
     """
-    # Append new iteration to the ProtonDrive variable group
+    # Insert data for the supplied iteration to the ProtonDrive variable group
     for attribute, attrtype, attrunit in drive_attributes:
         ncfile['ProtonDrive/{}'.format(attribute)][iteration] = getattr(drive, attribute)
 
-    # Append the titration state for each group
+    # Insert the titration state data for each group
     for titration_group_index, titration_state in enumerate(drive.titrationStates):
         ncfile['ProtonDrive/titration_states'][iteration, titration_group_index] = titration_state
 
+    # Record the data from each separate attempt
     for attempt_index, attempt in enumerate(drive.last_proposal):
         ncfile['ProtonDrive/attempt'][iteration, attempt_index] = attempt_index
+        # Index 0 contains the initial titration state of every group
         for titration_group_index, titration_state in enumerate(attempt[0]):
             ncfile['ProtonDrive/initial_states'][iteration, attempt_index, titration_group_index] = titration_state
 
+        # Index 1 contains the final titration state of every group
+        # Note that this is the proposal, not the actual state after the acceptance/rejection step
         for titration_group_index, titration_state in enumerate(attempt[1]):
             ncfile['ProtonDrive/proposed_final_states'][
                 iteration, attempt_index, titration_group_index] = titration_state
 
+        # Index 2 contains the NCMC work of the proposal, plus the sum of all weights g_k
         ncfile['ProtonDrive/proposal_work'][iteration, attempt_index] = attempt[2]
 
     # Append new iteration to the NCMC integrator variable group

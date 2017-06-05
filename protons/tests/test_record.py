@@ -11,6 +11,7 @@ from simtk.openmm import openmm, app
 from protons import ForceFieldProtonDrive
 from protons import record, ff
 import pytest
+import numpy as np
 from protons.integrators import GHMCIntegrator
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator
@@ -69,6 +70,48 @@ def test_record_drive():
     record.display_content_structure(ncfile)
     ncfile.close()
     shutil.rmtree(tmpdir)
+
+
+def test_record_sams():
+    """Record the variables for a single interation of a sams algorithm"""
+    tmpdir = tempfile.mkdtemp(prefix="protons-test-")
+    # Using required arguments
+    # filename,
+    # num_titratable_groups : 1
+    # ncmc_steps_per_trial 2
+    # num_attempts_per_update : 1 num_iterations=None
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+
+    # Arbitrary array of weights
+    g_k = np.asarray([0.000, 1.e2, 0.7e2,-3e1])
+    # Arbitrary deviation from target
+    dev = 0.341
+
+    record.record_sams_data(ncfile, g_k, dev, 1)
+    record.display_content_structure(ncfile)
+    ncfile.close()
+    shutil.rmtree(tmpdir)
+
+
+def test_record_sams_with_metadata():
+    """Record the variables for a single interation of a sams algorithm"""
+    tmpdir = tempfile.mkdtemp(prefix="protons-test-")
+    # Using required arguments
+    # filename,
+    # num_titratable_groups : 1
+    # ncmc_steps_per_trial 2
+    # num_attempts_per_update : 1 num_iterations=None
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+
+    # Arbitrary array of weights
+    g_k = np.asarray([0.000, 1.e2, 0.7e2,-3e1])
+    # Arbitrary deviation from target
+    dev = 0.341
+    record.record_sams_data(ncfile, g_k, dev, 1, stage="slow-gain", end_of_burnin=500, beta=0.5, scheme='binary')
+    record.display_content_structure(ncfile)
+    ncfile.close()
+    shutil.rmtree(tmpdir)
+
 
 @pytest.mark.skip("Needs revamping.")
 def test_record_ghmc_integrator():
