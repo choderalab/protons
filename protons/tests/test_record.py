@@ -82,13 +82,17 @@ def test_record_sams():
     # num_attempts_per_update : 1 num_iterations=None
     ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
 
-    # Arbitrary array of weights
-    g_k = np.asarray([0.000, 1.e2, 0.7e2,-3e1])
-    # Arbitrary deviation from target
-    dev = 0.341
+    # Arbitrary sequence of weights
+    samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"), 10)
+    # Arbitrary sequence of deviations
+    dev = np.asarray([np.exp(-0.05*(n+1)) for n in range(10)])
+    for iteration in range(10):
+        record.record_sams_data(ncfile, samples[iteration], dev[iteration], iteration)
 
-    record.record_sams_data(ncfile, g_k, dev, 1)
     record.display_content_structure(ncfile)
+    assert ncfile['SelfAdjustedMixtureSampling/g_k'][4,2] == samples[4,2], "The weights in the netCDF file should match the supplied samples."
+    assert ncfile['SelfAdjustedMixtureSampling/deviation'][7] == dev[7], "The deviation recored in the netCDF file should match the supplied value."
+
     ncfile.close()
     shutil.rmtree(tmpdir)
 
@@ -103,11 +107,33 @@ def test_record_sams_with_metadata():
     # num_attempts_per_update : 1 num_iterations=None
     ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
 
-    # Arbitrary array of weights
-    g_k = np.asarray([0.000, 1.e2, 0.7e2,-3e1])
-    # Arbitrary deviation from target
-    dev = 0.341
-    record.record_sams_data(ncfile, g_k, dev, 1, stage="slow-gain", end_of_burnin=500, beta=0.5, scheme='binary')
+    # Arbitrary sequence of weights
+    samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"),
+                                            10)
+    # Arbitrary sequence of deviations
+    dev = np.asarray([np.exp(-0.05 * (n + 1)) for n in range(10)])
+    stage = "burn-in"
+    end_of_burnin = 0
+    beta = 0.5
+    scheme = "binary"
+    for iteration in range(10):
+
+        # pretend switch to slow-gain phase
+        if iteration == 7:
+            stage = "slow-gain"
+            end_of_burnin = 7
+
+        record.record_sams_data(ncfile, samples[iteration], dev[iteration], iteration, stage=stage, end_of_burnin=end_of_burnin, beta=beta, scheme=scheme)
+
+    record.display_content_structure(ncfile)
+    assert ncfile['SelfAdjustedMixtureSampling/g_k'][4, 2] == samples[
+        4, 2], "The weights in the netCDF file should match the supplied samples."
+    assert ncfile['SelfAdjustedMixtureSampling/deviation'][7] == dev[
+        7], "The deviation recored in the netCDF file should match the supplied value."
+    assert ncfile['SelfAdjustedMixtureSampling/stage'][0] == "slow-gain", "The stage should be recorded as slow-gain"
+    assert ncfile['SelfAdjustedMixtureSampling/beta'][0] == beta, "Beta should be recorded as {}".format(beta)
+    assert ncfile['SelfAdjustedMixtureSampling/scheme'][0] == scheme, "The scheme should be recored as binary."
+    assert ncfile['SelfAdjustedMixtureSampling/end_of_burnin'][0] == 7, "The end of burn-in should be recorded as iteration 7."
     record.display_content_structure(ncfile)
     ncfile.close()
     shutil.rmtree(tmpdir)
