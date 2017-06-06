@@ -28,27 +28,29 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
 
     Parameters
     ----------
-    filename - str
+    filename : str
         Name of the nc file that is to be created
-    num_titratable_groups - int
+    num_titratable_groups : int
         Number of titratable groups in the system
-    num_attempts_per_update - int
+    num_attempts_per_update : int
         Number of protonation state change attempts per system update
-    ncmc_steps_per_trial - int
+    ncmc_steps_per_trial : int
         Number of steps per ncmc trial (1 propagation + 1 perturbation step counts as one)
-    num_iterations - int, default is None
+    num_iterations : int, default is None
         Number of iterations, leave None for unlimited
-    degrees_of_freedom - int, default = -1
+    degrees_of_freedom : int, default = -1
         Degrees of freedom of the system. Necessary to calculate temperature.
         Can be provided for convenience if known. Otherwise, gets calculated the first time it is needed.
     calibration : bool, default = False
         Add a group for SAMS calibration data. Assumes one group is being titrated at a time
+    nstates_calibration : int, If calibration equals True, needs to be provided.
+        The number of states of the residue that is being calibrated.
     ghmc_integrator : bool, default = False
         Include a group for storing data for a GHMC integrator
 
     Returns
     -------
-    Dataset - netCDF4 dataset
+    Dataset : netCDF4 dataset
     """
     ncfile = netCDF4.Dataset(filename, mode='w', format='NETCDF4')
     ncfile.degrees_of_freedom = degrees_of_freedom
@@ -129,23 +131,23 @@ def record_sams_data(ncfile, g_k, deviation, iteration, stage=None, end_of_burni
 
     Parameters
     ----------
-    ncfile - netCDF4.Dataset
+    ncfile : netCDF4.Dataset
         An opened netCDF4 dataset object
-    g_k - array of float64
+    g_k : array of float64
         Weights of each state at the current iteration.
-    deviation - float64
+    deviation : float64
         Absolute deviation from target histogram summed over all states at the  current iteration
-    iteration - int
+    iteration : int
         the current iteration number
-    stage - str, optional
+    stage : str, optional
         Sams stage. "burn-in" or "slow-gain"
-    end_of_burnin - int, optional
+    end_of_burnin : int, optional
         End of sams "burn-in" stage, also known as t0. Used for calculating SAMS gain factor.
-    beta - float64, optional
+    beta : float64, optional
         Float between 0.5 and 1.0 that is used for calculating SAMS gain factor.
-    scheme - str, optional
+    scheme : str, optional
         Indicates which SAMS scheme was used to run calibration. For instance "binary" or "global".
-    sync - bool, default False
+    sync : bool, default False
         Synchronize to file on disk
     """
 
@@ -177,13 +179,13 @@ def record_drive_data(ncfile, drive, iteration, sync=True):
 
     Parameters
     ----------
-    ncfile - netCDF4.Dataset
+    ncfile : netCDF4.Dataset
         An opened netCDF4 dataset object.
-    drive - ProtonDrive object
+    drive : ProtonDrive object
         This function will save all relevant properties of the supplied drive
-    iteration - int
+    iteration : int
         the current iteration
-    sync - bool, default False
+    sync : bool, default False
         Synchronize file on disk
     """
     # Insert data for the supplied iteration to the ProtonDrive variable group
@@ -230,13 +232,13 @@ def record_ghmc_integrator_data(ncfile, integrator, iteration, sync=True):
 
     Parameters
     ----------
-    ncfile - netCDF4.Dataset
+    ncfile : netCDF4.Dataset
         An opened netCDF4 Dataset object.
-    integrator - protons.integrators.GHMCIntegrator
+    integrator : protons.integrators.GHMCIntegrator
         Custom GHMCIntegrator class to save variables from
-    iteration - int
+    iteration : int
         the current iteration
-    sync - bool, default False
+    sync : bool, default False
         Synchronize file on disk
 
     """
@@ -253,15 +255,15 @@ def record_state_data(ncfile, context, system, iteration, sync=True):
 
     Parameters
     ----------
-    ncfile - netCDF4.Dataset
+    ncfile : netCDF4.Dataset
         An opened netCDF4 Dataset object
-    context - openmm simulation Context object
+    context : openmm simulation Context object
         The context from which to save the state
-    system - openmm simulation System object
+    system : openmm simulation System object
         The simulation system
-    iteration - int
+    iteration : int
         The current iteration
-    sync - bool, default False
+    sync : bool, default False
         Synchronize file on disk        
 
     """
@@ -295,11 +297,11 @@ def _calculate_degrees_of_freedom(system):
 
     Parameters
     ----------
-    system - OpenMM simulation System
+    system : OpenMM simulation System
 
     Returns
     -------
-    int - degrees of freedom
+    int : degrees of freedom
     """
     degrees_of_freedom = 0
     for i in range(system.getNumParticles()):
@@ -322,17 +324,17 @@ def record_all(ncfile, iteration, drive=None, integrator=None, context=None, sys
     Parameters
     ----------
 
-    ncfile - netCDF4.Dataset
+    ncfile : netCDF4.Dataset
         An opened netCDF4 Dataset object
-    drive - ProtonDrive object, optional
+    drive : ProtonDrive object, optional
         This function will save all relevant properties of the supplied drive
-    integrator - protons.integrators.GHMCIntegrator, optional
+    integrator : protons.integrators.GHMCIntegrator, optional
         Custom GHMCIntegrator class to save variables from
-    context - openmm simulation Context object, optional except if system is supplied
+    context : openmm simulation Context object, optional except if system is supplied
         The context from which to save the state, optional except if context is supplied
-    system - openmm simulation System object
+    system : openmm simulation System object
         The simulation system
-    iteration - int
+    iteration : int
         The current iteration
 
     Returns
@@ -357,7 +359,7 @@ def _walk_netcdf_tree(top):
 
     Parameters
     ----------
-    top - top branch of a netcdf file (Group or Dataset)
+    top : top branch of a netcdf file (Group or Dataset)
 
     Yields
     ------
@@ -377,7 +379,7 @@ def display_content_structure(rootgrp):
 
     Parameters
     ----------
-    rootgrp - the directory to walk through
+    rootgrp : the directory to walk through
     """
     for children in _walk_netcdf_tree(rootgrp):
         for child in children:
