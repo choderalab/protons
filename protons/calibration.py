@@ -90,7 +90,7 @@ class SelfAdjustedMixtureSampling(object):
         self.n_adaptations += 1
 
         # zeta^{t-1}
-        zeta = self.get_gk()
+        zeta = self.get_gk(group_index=group_index)
 
         if scheme == 'binary':
             update = self._binary_update(group_index=group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
