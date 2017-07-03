@@ -70,6 +70,7 @@ setup(
     classifiers=CLASSIFIERS.splitlines(),
     packages=[
         'protons',
+        'protons.app',
         'protons.tests'],
     package_data={
         'protons': find_package_data(
