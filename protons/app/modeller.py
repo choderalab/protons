@@ -2,7 +2,6 @@
 """Pre-configured OpenMM Modeller object for use with the default protons forcefield. Modified from original source code by Peter Eastman."""
 
 from .topology import Topology
-from .forcefield import ForceField
 from simtk.openmm.app import modeller
 from simtk.openmm.vec3 import Vec3
 from simtk.openmm import System, Context,  CustomNonbondedForce, HarmonicBondForce, HarmonicAngleForce, VerletIntegrator, LocalEnergyMinimizer

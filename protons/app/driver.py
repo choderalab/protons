@@ -14,7 +14,6 @@ from simtk import unit
 from simtk import openmm as mm
 from .proposals import _StateProposal
 from .topology import Topology
-from .forcefield import ForceField
 from simtk.openmm import app
 
 from .logger import log

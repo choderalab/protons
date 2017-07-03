@@ -16,11 +16,8 @@ from openeye import oechem
 from openmoltools import forcefield_generators as omtff
 from .logger import log
 
-
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
-import os
-PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 gaff_default = os.path.join(PACKAGE_ROOT, 'data', 'gaff.xml')
 
