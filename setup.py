@@ -87,6 +87,9 @@ setup(
             'protons')} ,
 
     zip_safe=False,
+    entry_points={
+        'openmm.forcefielddir' : 'protons.app:get_datadir',
+    },
     ext_modules=extensions,
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
