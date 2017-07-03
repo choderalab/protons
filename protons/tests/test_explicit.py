@@ -144,10 +144,10 @@ class TestForceFieldImidazoleExplicit(object):
             open('{}/imidazole-explicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
         imidazole_explicit_system.system = openmm.XmlSerializer.deserialize(
             open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
-        imidazole_explicit_system.ffxml_filename = '{}\\protons-imidazole.xml'.format(testsystems)
+        imidazole_explicit_system.ffxml_filename = os.path.join(testsystems,'protons-imidazole.xml')
         imidazole_explicit_system.forcefield = ForceField('gaff.xml', imidazole_explicit_system.ffxml_filename)
         imidazole_explicit_system.gaff = 'gaff.xml'
-        imidazole_explicit_system.pdbfile = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems\\imidazole_explicit"))
+        imidazole_explicit_system.pdbfile = app.PDBFile(os.path.join(testsystems, "imidazole-solvated-minimized.pdb"))
         imidazole_explicit_system.topology = imidazole_explicit_system.pdbfile.topology
         imidazole_explicit_system.nsteps_per_ghmc = 1
         imidazole_explicit_system.constraint_tolerance = 1.e-7

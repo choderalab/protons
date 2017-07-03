@@ -6,17 +6,17 @@ from protons import app, GBAOABIntegrator, ForceFieldProtonDrive
 
 from simtk import unit
 from simtk.openmm import openmm as mm
-
+from . import get_test_data
 
 class TestConstantPHSimulation(object):
     """Tests use cases for ConstantPHSimulation"""
 
-    _default_platform =  mm.Platform.getPlatformByName('Reference')
+    _default_platform = mm.Platform.getPlatformByName('Reference')
 
     def test_create_constantphsimulation(self):
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
-        pdb = app.PDBxFile('testsystems/tripeptides/glu_ala_his-solvated-minimized-renamed.cif')
+        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
         forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
 
         system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
@@ -54,7 +54,7 @@ class TestConstantPHCalibration:
 
     def test_create_constantphcalibration(self):
         """Test running a calibration using constant-pH."""
-        pdb = app.PDBxFile('testsystems/tripeptides/glu_ala_his-solvated-minimized-renamed.cif')
+        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
         forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
 
         system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
