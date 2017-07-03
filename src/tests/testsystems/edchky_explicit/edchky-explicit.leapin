@@ -1,7 +1,0 @@
-source leaprc.constph
-loadamberparams frcmod.ionsjc_tip3p
-peptide = sequence { ACE GL4 AS4 CYS HIP LYS TYR NME }
-solvatebox peptide TIP3PBOX 12 0.75
-addions peptide Na+ 1 Cl- 1
-saveAmberParm peptide edchky-explicit.prmtop edchky-explicit.inpcrd
-quit

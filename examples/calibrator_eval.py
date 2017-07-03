@@ -17,7 +17,7 @@ settings["pressure"] = 1.0 * unit.atmospheres
 settings["collision_rate"] = 9.1 / unit.picoseconds
 settings["pH"] = 7.4
 settings["solvent"] = "implicit"
-settings["nsteps_per_trial"] = 0
+settings["perturbations_per_trial"] = 0
 settings["platform_name"] = "CUDA"
 datapoints = dict(HIP=[], HID=[], HIE=[],idx=[])
 aac = AmberCalibrationSystem("hip", settings, minimize=True, guess_free_energy=[0.0, 0.0, 0.0])

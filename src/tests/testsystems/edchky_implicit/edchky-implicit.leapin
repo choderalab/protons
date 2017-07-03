@@ -1,4 +1,0 @@
-source leaprc.constph
-peptide = sequence { ACE GL4 AS4 CYS HIP LYS TYR NME }
-saveAmberParm peptide edchky-implicit.prmtop edchky-implicit.inpcrd
-quit

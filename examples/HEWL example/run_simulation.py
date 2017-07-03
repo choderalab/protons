@@ -28,7 +28,7 @@ log.info("Done creating system")
 # Create the driver that will track the state of the simulation and provides the updating API
 log.info("Creating protondrive")
 driver = AmberProtonDrive(pH, system, temperature, pressure=None, simultaneous_proposal_probability=cpin_filename,
-                          ncmc_steps_per_trial=0)
+                          perturbations_per_trial=0)
 log.info("Finished drive setup")
 
 # Create an OpenMM simulation object as one normally would.
