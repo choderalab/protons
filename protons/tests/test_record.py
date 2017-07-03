@@ -35,7 +35,6 @@ def setup_forcefield_drive():
         open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
     testsystem.ffxml_filename = '{}/protons-imidazole.xml'.format(testsystems)
     testsystem.forcefield = app.ForceField('gaff.xml', testsystem.ffxml_filename)
-    testsystem.gaff = get_test_data("gaff.xml", "../forcefields/")
     testsystem.pdbfile = app.PDBFile(
         get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
     testsystem.topology = testsystem.pdbfile.topology
