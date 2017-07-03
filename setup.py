@@ -34,7 +34,7 @@ def find_package_data(data_root, package_root):
             files.append(relpath(pjoin(root, fn), package_root))
     return files
 
-VERSION = '0.0.0'
+VERSION = '0.0.1'
 ISRELEASED = False
 __version__ = VERSION
 

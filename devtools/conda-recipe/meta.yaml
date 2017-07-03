@@ -1,6 +1,6 @@
 package:
   name: protons-dev
-  version: !!str 0.0.0
+  version: !!str 0.0.1
 
 source:
   path: ../../
@@ -23,6 +23,8 @@ requirements:
     - joblib
     - lxml
     - parmed
+    - pytest
+    - pytest-runner
 
   run:
     - python
@@ -41,6 +43,7 @@ requirements:
 test:
   requires:
     - pytest
+    - pytest-runner
     - pytest-cov
     - behave
 
