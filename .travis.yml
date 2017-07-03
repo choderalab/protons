@@ -26,7 +26,7 @@ script:
   # Test the package, measure coverage, verbose output,  include summaries of skipped and failed tests, skip slow tests.
   - cd devtools && py.test --cov=${PACKAGENAME} --verbose -rxs --pyargs ${PACKAGENAME} -m "not slowtest" && cd ..
   # Test generation of forcefield files
-  - cd protons/app/data && behave && cd ../..
+  - cd protons/app/data && behave && cd ../../..
   
 env:
   matrix:
