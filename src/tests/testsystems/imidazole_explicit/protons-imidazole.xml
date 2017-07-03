@@ -1,0 +1,61 @@
+<ForceField>
+  <Residues>
+    <Residue name="LIG">
+      <Atom name="C1" type="cc" charge="-0.2617"/>
+      <Atom name="C2" type="cd" charge="0.2909"/>
+      <Atom name="N3" type="na" charge="-0.3221"/>
+      <Atom name="C4" type="cc" charge="0.3815"/>
+      <Atom name="N5" type="na" charge="-0.6658"/>
+      <Atom name="H6" type="h4" charge="0.042"/>
+      <Atom name="H7" type="h5" charge="0.0598"/>
+      <Atom name="H9" type="h4" charge="0.1759"/>
+      <Atom name="H10" type="hn" charge="0.2994"/>
+      <Atom name="H8" type="hn" charge="0.0"/>
+      <Bond atomName1="C1" atomName2="C2"/>
+      <Bond atomName1="C1" atomName2="H9"/>
+      <Bond atomName1="C1" atomName2="N3"/>
+      <Bond atomName1="C2" atomName2="H6"/>
+      <Bond atomName1="C2" atomName2="N5"/>
+      <Bond atomName1="C4" atomName2="N3"/>
+      <Bond atomName1="H10" atomName2="N3"/>
+      <Bond atomName1="C4" atomName2="N5"/>
+      <Bond atomName1="C4" atomName2="H7"/>
+      <Bond atomName1="H8" atomName2="N5"/>
+      <Protons number_of_states="2">
+        <State index="0" log_population="-0.36692927332637043" g_k="0.2174" proton_count="0">
+          <Atom name="C1" type="cc" charge="-0.2617"/>
+          <Atom name="C2" type="cd" charge="0.2909"/>
+          <Atom name="N3" type="na" charge="-0.3221"/>
+          <Atom name="C4" type="cc" charge="0.3815"/>
+          <Atom name="N5" type="na" charge="-0.6658"/>
+          <Atom name="H6" type="h4" charge="0.042"/>
+          <Atom name="H7" type="h5" charge="0.0598"/>
+          <Atom name="H9" type="h4" charge="0.1759"/>
+          <Atom name="H10" type="hn" charge="0.2994"/>
+          <Atom name="H8" type="hn" charge="0.0"/>
+        </State>
+        <State index="1" log_population="-1.1802835365093416" g_k="0.6993" proton_count="1">
+          <Atom name="C1" type="cc" charge="-0.0006"/>
+          <Atom name="C2" type="cd" charge="-0.0006"/>
+          <Atom name="N3" type="na" charge="-0.4999"/>
+          <Atom name="C4" type="cc" charge="0.2042"/>
+          <Atom name="N5" type="na" charge="-0.4999"/>
+          <Atom name="H6" type="h4" charge="0.2427"/>
+          <Atom name="H7" type="h5" charge="0.2679"/>
+          <Atom name="H9" type="h4" charge="0.2427"/>
+          <Atom name="H10" type="hn" charge="0.5217"/>
+          <Atom name="H8" type="hn" charge="0.5217"/>
+        </State>
+      </Protons>
+    </Residue>
+  </Residues>
+  <PeriodicTorsionForce>
+    <Improper type1="cc" type2="cd" type3="h4" type4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="cd" type2="cc" type3="h4" type4="nd" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="na" type2="cc" type3="cc" type4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="cc" type2="h5" type3="na" type4="nd" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="cd" type2="cc" type3="h4" type4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="cc" type2="h5" type3="na" type4="na" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+    <Improper type1="na" type2="cc" type3="cd" type4="hn" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
+  </PeriodicTorsionForce>
+</ForceField>

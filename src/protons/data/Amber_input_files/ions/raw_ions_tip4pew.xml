@@ -1,0 +1,222 @@
+<ForceField>
+ <Info>
+  <DateGenerated>2017-02-13</DateGenerated>
+ </Info>
+ <AtomTypes>
+  <Type name="Li+" class="Li+" element="Li" mass="6.94"/>
+  <Type name="Na+" class="Na+" element="Na" mass="22.99"/>
+  <Type name="K+" class="K+" element="K" mass="39.1"/>
+  <Type name="Rb+" class="Rb+" element="Rb" mass="85.47"/>
+  <Type name="Cs+" class="Cs+" element="Cs" mass="132.91"/>
+  <Type name="F-" class="F-" element="F" mass="19.0"/>
+  <Type name="Cl-" class="Cl-" element="Cl" mass="35.45"/>
+  <Type name="Br-" class="Br-" element="Br" mass="79.9"/>
+  <Type name="I-" class="I-" element="I" mass="126.9"/>
+ </AtomTypes>
+ <Residues>
+  <Residue name="AG">
+   <Atom name="AG" type="Ag+" charge="1.0"/>
+  </Residue>
+  <Residue name="AL">
+   <Atom name="AL" type="Al3+" charge="3.0"/>
+  </Residue>
+  <Residue name="Ag">
+   <Atom name="Ag" type="Ag2+" charge="2.0"/>
+  </Residue>
+  <Residue name="BA">
+   <Atom name="BA" type="Ba2+" charge="2.0"/>
+  </Residue>
+  <Residue name="BR">
+   <Atom name="BR" type="Br-" charge="-1.0"/>
+  </Residue>
+  <Residue name="Be">
+   <Atom name="Be" type="Be2+" charge="2.0"/>
+  </Residue>
+  <Residue name="CA">
+   <Atom name="CA" type="Ca2+" charge="2.0"/>
+  </Residue>
+  <Residue name="CD">
+   <Atom name="CD" type="Cd2+" charge="2.0"/>
+  </Residue>
+  <Residue name="CE">
+   <Atom name="CE" type="Ce3+" charge="3.0"/>
+  </Residue>
+  <Residue name="CL">
+   <Atom name="CL" type="Cl-" charge="-1.0"/>
+  </Residue>
+  <Residue name="CO">
+   <Atom name="CO" type="Co2+" charge="2.0"/>
+  </Residue>
+  <Residue name="CR">
+   <Atom name="CR" type="Cr3+" charge="3.0"/>
+  </Residue>
+  <Residue name="CS">
+   <Atom name="CS" type="Cs+" charge="1.0"/>
+  </Residue>
+  <Residue name="CU">
+   <Atom name="CU" type="Cu2+" charge="2.0"/>
+  </Residue>
+  <Residue name="CU1">
+   <Atom name="CU" type="Cu+" charge="1.0"/>
+  </Residue>
+  <Residue name="Ce">
+   <Atom name="Ce" type="Ce4+" charge="4.0"/>
+  </Residue>
+  <Residue name="Cr">
+   <Atom name="Cr" type="Cr2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Dy">
+   <Atom name="Dy" type="Dy3+" charge="3.0"/>
+  </Residue>
+  <Residue name="EU">
+   <Atom name="EU" type="Eu2+" charge="2.0"/>
+  </Residue>
+  <Residue name="EU3">
+   <Atom name="EU3" type="Eu3+" charge="3.0"/>
+  </Residue>
+  <Residue name="Er">
+   <Atom name="Er" type="Er3+" charge="3.0"/>
+  </Residue>
+  <Residue name="F">
+   <Atom name="F" type="F-" charge="-1.0"/>
+  </Residue>
+  <Residue name="FE">
+   <Atom name="FE" type="Fe3+" charge="3.0"/>
+  </Residue>
+  <Residue name="FE2">
+   <Atom name="FE2" type="Fe2+" charge="2.0"/>
+  </Residue>
+  <Residue name="GD3">
+   <Atom name="GD" type="Gd3+" charge="3.0"/>
+  </Residue>
+  <Residue name="H3O+">
+   <Atom name="O" type="H3O+" charge="1.0"/>
+  </Residue>
+  <Residue name="HE+">
+   <Atom name="H" type="HE+" charge="1.0"/>
+  </Residue>
+  <Residue name="HG">
+   <Atom name="HG" type="Hg2+" charge="2.0"/>
+  </Residue>
+  <Residue name="HZ+">
+   <Atom name="H" type="HZ+" charge="1.0"/>
+  </Residue>
+  <Residue name="Hf">
+   <Atom name="Hf" type="Hf4+" charge="4.0"/>
+  </Residue>
+  <Residue name="IN">
+   <Atom name="IN" type="In3+" charge="3.0"/>
+  </Residue>
+  <Residue name="IOD">
+   <Atom name="I" type="I-" charge="-1.0"/>
+  </Residue>
+  <Residue name="K">
+   <Atom name="K" type="K+" charge="1.0"/>
+  </Residue>
+  <Residue name="LA">
+   <Atom name="LA" type="La3+" charge="3.0"/>
+  </Residue>
+  <Residue name="LI">
+   <Atom name="LI" type="Li+" charge="1.0"/>
+  </Residue>
+  <Residue name="LU">
+   <Atom name="LU" type="Lu3+" charge="3.0"/>
+  </Residue>
+  <Residue name="MG">
+   <Atom name="MG" type="Mg2+" charge="2.0"/>
+  </Residue>
+  <Residue name="MN">
+   <Atom name="MN" type="Mn2+" charge="2.0"/>
+  </Residue>
+  <Residue name="NA">
+   <Atom name="NA" type="Na+" charge="1.0"/>
+  </Residue>
+  <Residue name="NH4">
+   <Atom name="N" type="NH4+" charge="1.0"/>
+  </Residue>
+  <Residue name="NI">
+   <Atom name="NI" type="Ni2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Nd">
+   <Atom name="Nd" type="Nd3+" charge="3.0"/>
+  </Residue>
+  <Residue name="PB">
+   <Atom name="PB" type="Pb2+" charge="2.0"/>
+  </Residue>
+  <Residue name="PD">
+   <Atom name="PD" type="Pd2+" charge="2.0"/>
+  </Residue>
+  <Residue name="PR">
+   <Atom name="PR" type="Pr3+" charge="3.0"/>
+  </Residue>
+  <Residue name="PT">
+   <Atom name="PT" type="Pt2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Pu">
+   <Atom name="Pu" type="Pu4+" charge="4.0"/>
+  </Residue>
+  <Residue name="RB">
+   <Atom name="RB" type="Rb+" charge="1.0"/>
+  </Residue>
+  <Residue name="Ra">
+   <Atom name="Ra" type="Ra2+" charge="2.0"/>
+  </Residue>
+  <Residue name="SM">
+   <Atom name="SM" type="Sm3+" charge="3.0"/>
+  </Residue>
+  <Residue name="SR">
+   <Atom name="SR" type="Sr2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Sm">
+   <Atom name="Sm" type="Sm2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Sn">
+   <Atom name="Sn" type="Sn2+" charge="2.0"/>
+  </Residue>
+  <Residue name="TB">
+   <Atom name="TB" type="Tb3+" charge="3.0"/>
+  </Residue>
+  <Residue name="TL">
+   <Atom name="TL" type="Tl+" charge="1.0"/>
+  </Residue>
+  <Residue name="Th">
+   <Atom name="Th" type="Th4+" charge="4.0"/>
+  </Residue>
+  <Residue name="Tl">
+   <Atom name="Tl" type="Tl3+" charge="3.0"/>
+  </Residue>
+  <Residue name="Tm">
+   <Atom name="Tm" type="Tm3+" charge="3.0"/>
+  </Residue>
+  <Residue name="U4+">
+   <Atom name="U" type="U4+" charge="4.0"/>
+  </Residue>
+  <Residue name="V2+">
+   <Atom name="V2+" type="V2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Y">
+   <Atom name="Y" type="Y3+" charge="3.0"/>
+  </Residue>
+  <Residue name="YB2">
+   <Atom name="YB2" type="Yb2+" charge="2.0"/>
+  </Residue>
+  <Residue name="ZN">
+   <Atom name="ZN" type="Zn2+" charge="2.0"/>
+  </Residue>
+  <Residue name="Zr">
+   <Atom name="Zr" type="Zr4+" charge="4.0"/>
+  </Residue>
+ </Residues>
+ <NonbondedForce coulomb14scale="0.8333333333333334" lj14scale="0.5">
+  <UseAttributeFromResidue name="charge"/>
+  <Atom type="Li+" sigma="0.14396923285147886" epsilon="0.4350874656"/>
+  <Atom type="Na+" sigma="0.21844836568801118" epsilon="0.7047424999999999"/>
+  <Atom type="K+" sigma="0.2833057923686279" epsilon="1.1692819784000001"/>
+  <Atom type="Rb+" sigma="0.304509181860368" epsilon="1.8122970896000001"/>
+  <Atom type="Cs+" sigma="0.3364033559697921" epsilon="1.6503026512"/>
+  <Atom type="F-" sigma="0.4522201893280362" epsilon="0.0065906368"/>
+  <Atom type="Cl-" sigma="0.49177609241346726" epsilon="0.048791716"/>
+  <Atom type="Br-" sigma="0.4932015303624918" epsilon="0.1270986232"/>
+  <Atom type="I-" sigma="0.5259866031900563" epsilon="0.1745071088"/>
+ </NonbondedForce>
+</ForceField>

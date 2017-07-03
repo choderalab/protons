@@ -1,0 +1,57 @@
+<ForceField>
+  <Info>
+    <DateGenerated>2017-02-13</DateGenerated>
+  </Info>
+  <AtomTypes>
+    <Type name="Li+" class="Li+" element="Li" mass="6.94"/>
+    <Type name="Na+" class="Na+" element="Na" mass="22.99"/>
+    <Type name="K+" class="K+" element="K" mass="39.1"/>
+    <Type name="Rb+" class="Rb+" element="Rb" mass="85.47"/>
+    <Type name="Cs+" class="Cs+" element="Cs" mass="132.91"/>
+    <Type name="F-" class="F-" element="F" mass="19.0"/>
+    <Type name="Cl-" class="Cl-" element="Cl" mass="35.45"/>
+    <Type name="Br-" class="Br-" element="Br" mass="79.9"/>
+    <Type name="I-" class="I-" element="I" mass="126.9"/>
+  </AtomTypes>
+  <Residues>
+    <Residue name="BR">
+      <Atom name="BR" type="Br-" charge="-1.0"/>
+    </Residue>
+    <Residue name="CL">
+      <Atom name="CL" type="Cl-" charge="-1.0"/>
+    </Residue>
+    <Residue name="CS">
+      <Atom name="CS" type="Cs+" charge="1.0"/>
+    </Residue>
+    <Residue name="F">
+      <Atom name="F" type="F-" charge="-1.0"/>
+    </Residue>
+    <Residue name="IOD">
+      <Atom name="I" type="I-" charge="-1.0"/>
+    </Residue>
+    <Residue name="K">
+      <Atom name="K" type="K+" charge="1.0"/>
+    </Residue>
+    <Residue name="LI">
+      <Atom name="LI" type="Li+" charge="1.0"/>
+    </Residue>
+    <Residue name="NA">
+      <Atom name="NA" type="Na+" charge="1.0"/>
+    </Residue>
+    <Residue name="RB">
+      <Atom name="RB" type="Rb+" charge="1.0"/>
+    </Residue>
+  </Residues>
+  <NonbondedForce coulomb14scale="0.8333333333333334" lj14scale="0.5">
+    <UseAttributeFromResidue name="charge"/>
+    <Atom type="Li+" sigma="0.18263423721876956" epsilon="0.1171084864"/>
+    <Atom type="Na+" sigma="0.2439280690268249" epsilon="0.3658460312"/>
+    <Atom type="K+" sigma="0.3037964628858557" epsilon="0.8103692536"/>
+    <Atom type="Rb+" sigma="0.32303987519768707" epsilon="1.3716068296000001"/>
+    <Atom type="Cs+" sigma="0.3520831734090621" epsilon="1.7009608496"/>
+    <Atom type="F-" sigma="0.4103479495754403" epsilon="0.014074976"/>
+    <Atom type="Cl-" sigma="0.4477656957373345" epsilon="0.14891274399999999"/>
+    <Atom type="Br-" sigma="0.46469277138200105" epsilon="0.24541419360000002"/>
+    <Atom type="I-" sigma="0.5095940667762741" epsilon="0.22460381440000002"/>
+  </NonbondedForce>
+</ForceField>

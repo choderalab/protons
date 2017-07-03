@@ -49,11 +49,9 @@ Topic :: Scientific/Engineering
 Operating System :: POSIX
 Operating System :: Unix
 Operating System :: MacOS
-Programming Language :: Python :: 2
-Programming Language :: Python :: 2.7
 Programming Language :: Python :: 3
-Programming Language :: Python :: 3.4
 Programming Language :: Python :: 3.5
+Programming Language :: Python :: 3.6
 """
 
 extensions = []
@@ -68,10 +66,7 @@ setup(
             2:]),
     version=__version__,
     url='https://github.com/choderalab/protons',
-    platforms=[
-        'Linux',
-        'Mac OS-X',
-        'Unix'],
+    platforms=['any'],
     classifiers=CLASSIFIERS.splitlines(),
     packages=[
         'protons',
@@ -87,10 +82,11 @@ setup(
             'protons/calibration-systems',
             'protons') +
         find_package_data(
-            'protons/forcefields',
+            'protons/app/data',
             'protons')} ,
 
     zip_safe=False,
     ext_modules=extensions,
-    test_suite='nose.collector', # TODO replace this with py.test?
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest'],
 )
