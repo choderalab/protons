@@ -7,10 +7,8 @@ import random
 import numpy as np
 
 
-class _StateProposal(object):
-    """An abstract base class describing the common public interface of residue selection moves
-    """
-    __metaclass__ = ABCMeta
+class _StateProposal(metaclass=ABCMeta):
+    """An abstract base class describing the common public interface of residue selection moves."""
 
     @abstractmethod
     def propose_states(self, drive, residue_pool_indices):

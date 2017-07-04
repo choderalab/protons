@@ -22,7 +22,7 @@ state_vars = [('total_energy', np.float64, 'kilojoule_per_mole'),
               ('temperature', np.float64, 'kelvin'), ]
 
 
-def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attempts_per_update, num_iterations=None,
+def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_iterations=None,
                 degrees_of_freedom=-1, calibration=False, nstates_calibration=-1, ghmc_integrator=False):
     """Convenience function to create a netCDF4 file with groups and variables for ProtonDrives, State, SelfAdjustedMixtureSampling, and GHMCIntegrator
 
@@ -32,8 +32,6 @@ def netcdf_file(filename, num_titratable_groups, ncmc_steps_per_trial, num_attem
         Name of the nc file that is to be created
     num_titratable_groups : int
         Number of titratable groups in the system
-    num_attempts_per_update : int
-        Number of protonation state change attempts per system update
     ncmc_steps_per_trial : int
         Number of steps per ncmc trial (1 propagation + 1 perturbation step counts as one)
     num_iterations : int, default is None
