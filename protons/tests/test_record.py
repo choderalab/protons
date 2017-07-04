@@ -60,7 +60,7 @@ def test_record_drive():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_drive_data(ncfile, drive, iteration=iteration)
     record.display_content_structure(ncfile)
@@ -76,7 +76,7 @@ def test_record_sams():
     # num_titratable_groups : 1
     # ncmc_steps_per_trial 2
     # num_attempts_per_update : 1 num_iterations=None
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, calibration=True, nstates_calibration=4)
 
     # Arbitrary sequence of weights
     samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"), 10)
@@ -101,7 +101,7 @@ def test_record_sams_with_metadata():
     # num_titratable_groups : 1
     # ncmc_steps_per_trial 2
     # num_attempts_per_update : 1 num_iterations=None
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, calibration=True, nstates_calibration=4)
 
     # Arbitrary sequence of weights
     samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"),
@@ -142,7 +142,7 @@ def test_record_ghmc_integrator():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_ghmc_integrator_data(ncfile, integrator, iteration)
     record.display_content_structure(ncfile)
@@ -156,7 +156,7 @@ def test_record_state():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_state_data(ncfile, context, system, iteration)
     record.display_content_structure(ncfile)
@@ -170,7 +170,7 @@ def test_record_all():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups),2 , 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups),2)
     # TODO Disabled integrator writing for now!
     for iteration in range(10):
         record.record_all(ncfile, iteration, drive, integrator=None, context=context, system=system)
