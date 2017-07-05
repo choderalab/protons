@@ -113,9 +113,9 @@ class ConstantPHSimulation(Simulation):
 
             self.currentUpdate += nextUpdates
             if anyReport:
-                for reporter, nextR in zip(self.reporters, nextReport):
+                for reporter, nextR in zip(self.update_reporters, nextReport):
                     if nextR[0] == nextUpdates:
-                        reporter.report(self, self.drive)
+                        reporter.report(self)
 
 
 class ConstantPHCalibration(ConstantPHSimulation):
@@ -180,7 +180,6 @@ class ConstantPHCalibration(ConstantPHSimulation):
                 self.beta_sams = samsProperties['beta']
             if 'flatness_criterion' in samsProperties:
                 self.flatness_criterion = samsProperties['flatness_criterion']
-
 
     def adapt(self):
         """

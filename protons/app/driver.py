@@ -105,6 +105,16 @@ class _TitratableResidue():
         for id, state in enumerate(self):
             state.g_k = g_klist[id]
 
+    @property
+    def proton_count(self):
+        """Number of titratable protons in current state."""
+        return self.state.proton_count
+
+    @property
+    def proton_counts(self):
+        """Number of titratable protons active in each state."""
+        return [state.proton_count for state in self]
+
     def __len__(self):
         """Return length of group."""
         return len(self.titration_states)
@@ -127,12 +137,18 @@ class _TitratableResidue():
         """Returns boolean array of atoms, and if they're switched on.
         Defined as charge equal to 0 (to precision of 1.e-9
         """
-        return [False if abs(charge) < 1.e-9 else True for charge in self.state.charges]
+        return [0 if abs(charge) < 1.e-9 else 1 for charge in self.state.charges]
 
     @property
     def total_charge(self):
+        """Total charge of the current titration state."""
         return self.state.total_charge
-    
+
+    @property
+    def total_charges(self):
+        """Total charge of each state."""
+        return [state.total_charge for state in self]
+
 
 class _TitrationState():
     """Representation of a titration state"""
@@ -149,7 +165,7 @@ class _TitrationState():
     @property
     def total_charge(self):
         """Return the total charge of the state."""
-        return unit.Quantity((self.charges / self.charges.unit).sum(), self.charges.unit)
+        return sum(self.charges)
 
     @property
     def forces(self):
