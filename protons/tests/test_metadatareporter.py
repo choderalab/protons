@@ -1,7 +1,7 @@
 # coding=utf-8
 """Test functionality of the TitrationReporter."""
 from protons import app
-from protons.app import titrationreporter as tr
+from protons.app import metadatareporter as mr
 from simtk import unit, openmm as mm
 from protons.app import GBAOABIntegrator, ForceFieldProtonDrive
 from . import get_test_data
@@ -9,7 +9,7 @@ import uuid
 import os
 
 
-class TestTitrationReporter(object):
+class TestMetadataReporter(object):
     """Tests use cases for ConstantPHSimulation"""
 
     _default_platform = mm.Platform.getPlatformByName('Reference')
@@ -42,17 +42,17 @@ class TestTitrationReporter(object):
         simulation.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(filename, 2, shared=False)
+        newreporter = mr.MetadataReporter(filename, shared=False)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
         simulation.step(1)
         # Update the titration states using the uniform proposal
-        simulation.update(6)
+        simulation.update(1)
         # Basic checks for dimension
-        assert newreporter.ncfile['TitrationReporter'].dimensions['update'].size == 3, "There should be 3 updates recorded."
-        assert newreporter.ncfile['TitrationReporter'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
-        assert newreporter.ncfile['TitrationReporter'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
+        assert newreporter.ncfile['MetadataReporter'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
+        assert newreporter.ncfile['MetadataReporter'].dimensions['state'].size == 5, "There should be 2 residues recorded."
+        assert newreporter.ncfile['MetadataReporter'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
         # cleanup
         del(newreporter)
         os.remove(filename)

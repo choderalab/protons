@@ -5,7 +5,8 @@ import netCDF4
 import time
 import numpy as np
 
-class NCMCReporter(object):
+
+class NCMCReporter:
     """NCMCReporter outputs NCMC statistics from a ConstantPHSimulation to a netCDF4 file."""
 
     def __init__(self, netcdffile, reportInterval, shared=False):
