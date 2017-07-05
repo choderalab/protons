@@ -49,13 +49,13 @@ class SelfAdjustedMixtureSampling(object):
 
         target_weights = None
         for i, group in enumerate(self.driver.titrationGroups):
-            for j, state in enumerate(self.driver.titrationGroups[i]['titration_states']):
+            for j, state in enumerate(self.driver.titrationGroups[i]):
                 if target_weights is not None:
-                    self.driver.titrationGroups[i]['titration_states'][j]['target_weight'] = target_weights[i][j]
+                    self.driver.titrationGroups[i].target_weights = target_weights[i]
                 else:
-                    self.driver.titrationGroups[i]['titration_states'][j]['target_weight'] = 1.0 / len(self.driver.titrationGroups[i]['titration_states'])
+                    self.driver.titrationGroups[i].target_weights  = [1.0 / len(self.driver.titrationGroups[i])] * len(self.driver.titrationGroups[i])
 
-        nstates = len(self.driver.titrationGroups[group_index]['titration_states'])
+        nstates = len(self.driver.titrationGroups[group_index])
         self.state_counts = np.zeros(nstates, np.float64)
         log.debug('There are %d titration states' % nstates)
 
@@ -117,8 +117,7 @@ class SelfAdjustedMixtureSampling(object):
         """
 
         for i, titr_state_zeta in enumerate(zetas):
-            # Zeta has opposite sign of relative energies
-            self.driver.titrationGroups[group_index]['titration_states'][i]['g_k'] = titr_state_zeta
+            self.driver.titrationGroups[group_index][i].g_k = titr_state_zeta
 
     def get_gk(self, group_index=0):
         """Retrieve g_k/zeta for specified titratable group.
@@ -132,7 +131,7 @@ class SelfAdjustedMixtureSampling(object):
         -------
         np.ndarray - zeta of states
         """
-        zeta = np.asarray(list(map(lambda x: x['g_k'], self.driver.titrationGroups[group_index]['titration_states'][:])))
+        zeta = np.asarray(self.driver.titrationGroups[group_index].g_k_values)
         return zeta
 
     def _get_target_weights(self, group_index=0):
@@ -147,7 +146,7 @@ class SelfAdjustedMixtureSampling(object):
         np.ndarray - target population of the states.
 
         """
-        return np.asarray(list(map(lambda x: x['target_weight'], self.driver.titrationGroups[group_index]['titration_states'][:])))
+        return np.asarray(self.driver.titrationGroups[group_index].target_weights)
 
     def _binary_update(self, group_index=0, b=1.0, stage="slow-gain", end_of_burnin=0):
         """
@@ -168,7 +167,7 @@ class SelfAdjustedMixtureSampling(object):
         np.ndarray - free energy updates
         """
         # [1/pi_1...1/pi_i]
-        update = np.asarray(list(map(lambda x: 1 / x['target_weight'], self.driver.titrationGroups[group_index]['titration_states'][:])))
+        update = np.asarray(list(map(lambda x: 1 / x, self.driver.titrationGroups[group_index].target_weights)))
         # delta(Lt)
         delta = np.zeros_like(update)
         delta[self.driver._get_titration_state(group_index)] = 1
