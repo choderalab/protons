@@ -122,6 +122,17 @@ class _TitratableResidue():
         else:
             return self.titration_states[item]
 
+    @property
+    def atom_status(self):
+        """Returns boolean array of atoms, and if they're switched on.
+        Defined as charge equal to 0 (to precision of 1.e-9
+        """
+        return [False if abs(charge) < 1.e-9 else True for charge in self.state.charges]
+
+    @property
+    def total_charge(self):
+        return self.state.total_charge
+    
 
 class _TitrationState():
     """Representation of a titration state"""
