@@ -1,12 +1,12 @@
 # coding=utf-8
-"""Reporters for Constant-pH simulations."""
+"""A reporter for ConstantPHSimulation that tracks NCMC statistics."""
 
 import netCDF4
 import time
+import numpy as np
 
-
-class TitrationReporter(object):
-    """TitrationReporter outputs protonation states of residues in the system to a netCDF4 file."""
+class NCMCReporter(object):
+    """NCMCReporter outputs NCMC statistics from a ConstantPHSimulation to a netCDF4 file."""
 
     def __init__(self, netcdffile, reportInterval, shared=False):
         """Create a TitrationReporter.
@@ -33,6 +33,8 @@ class TitrationReporter(object):
         self._grp = None # netcdf group that will contain all data.
         self._hasInitialized = False
         self._update = 0 # Number of updates written to the file.
+        self._ngroups = 0 # number of residues
+        self._perturbation_steps = 0 # number of perturbation steps per ncmc trial
 
         if shared:
             self._close_file = False # close the file on deletion of this reporter.
@@ -77,11 +79,11 @@ class TitrationReporter(object):
 
         # Gather and record all data for the current update
         self._write_update(simulation)
+        # Update number of written updates
         self._update += 1
 
         # Write the values.
         self._out.sync()
-
 
     def _write_update(self, simulation):
         """Record data for the current update in the netCDF file.
@@ -97,10 +99,13 @@ class TitrationReporter(object):
         self._grp['update'][iupdate] = simulation.currentUpdate
         for ires, residue in enumerate(drv.titrationGroups):
             # The present state of the residue. [update,residue]
-            self._grp['state'][iupdate, ] = residue.state_index
-            # Indicator of whether an atom is on/off (charged) at present. [update,residue,atom]
-            for iatom, status in enumerate(residue.atom_status):
-                self._grp['atom_status'][iupdate, ires, iatom] = status
+            self._grp['state'][iupdate,] = residue.state_index
+
+        # first array is initial states, second is proposed state, last is work
+        self._grp['initial_state'][iupdate,:] = drv.last_proposal[0]
+        self._grp['proposed_state'][iupdate,:] = drv.last_proposal[1]
+        self._grp['total_work'][iupdate,] = drv.last_proposal[2]
+        self._grp['cumulative_work'][iupdate,:] = np.asarray(drv.ncmc_stats_per_step)[:,0]
 
     def _initialize_constants(self, simulation):
         """Initialize a set of constants required for the reports
@@ -111,54 +116,36 @@ class TitrationReporter(object):
         system = simulation.system
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
+        self._perturbation_steps = driver.perturbations_per_trial
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
         """
 
-        grp = self._out.createGroup("TitrationReporter")
-        grp.description = "This group contains data stored by a TitrationReporter object from protons."
-        grp.history = "This group was created on UTC [{}].".format(time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))
+        grp = self._out.createGroup("NCMCReporter")
+        grp.description = "This group contains data stored by a NCMCReporter object from protons."
+        grp.history = "This group was created on UTC [{}].".format(
+            time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))
 
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
-        state_dim = grp.createDimension('state')
-        atom_dim = grp.createDimension('atom')
+        perturbation_dim = grp.createDimension('perturbation', self._perturbation_steps)
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
         update.description = "The iteration of the protonation state update attempt. [update]"
-
-        residue_state = grp.createVariable("state", int, ('update', 'residue',))
+        residue_state = grp.createVariable('state', int, ('update', 'residue',))
         residue_state.description = "The present state of the residue. [update,residue]"
-
-        atom_status = grp.createVariable("atom_status", 'u1', ('update', 'residue', 'atom',))
-        atom_status.description = "Indicator (1/0) of whether an atom is on/off (charged) at present. [update,residue,atom]"
-
-        # Metadata, written once
-        residue_idx = grp.createVariable("residue_index", int, ('residue',))
-        residue_idx.description = "The index of the titratable residue group in the drive (NOT the topology index)."
-
-        residue_types = grp.createVariable("residue_type", str, ('residue',))
-        residue_types.description = "The type of residue, e.g. pdb code/ffxml residue name. [residue]"
-
-        residue_name = grp.createVariable("residue_name", str, ('residue',))
-        residue_name.description = "A name to recognize the residue by. [residue]"
-
-        state_gk = grp.createVariable("g_k", float, ('residue', 'state',))
-        state_gk.description = "The free energy bias g_k for each titration state. [residue,state]"
-
-        state_proton_count = grp.createVariable("proton_count", int, ('residue', 'state',))
-        state_proton_count.description = "The amount of (titratable) protons active in the state. [residue,state]"
-
-        state_charge = grp.createVariable("total_charge", float, ('residue', 'state',))
-        state_charge.description = "The total charge of a state. [residue, state]"
-
-        atom_index = grp.createVariable('atom_index', int, ('residue', 'atom',))
-        atom_index.description = "The index of the residue atoms in the topology. [residue,atom]"
-
-        charge = grp.createVariable('charge', float, ('residue', 'atom', 'state',))
-        charge.description = "The charge of residue atoms per state. [residue,atom,state]"
+        residue_initial_state = grp.createVariable('initial_state', int, ('update', 'residue',))
+        residue_initial_state.description = "The state of the residue, before switching.[update,residue]"
+        residue_proposed_state = grp.createVariable('proposed_state', int, ('update', 'residue',))
+        residue_proposed_state.description = "The proposed state of the residue. [update,residue]"
+        total_work = grp.createVariable('total_work', float, ('update',))
+        total_work.description = "The work of the protocol, including Δg_k. [update]"
+        total_work.unit = "unitless (W/kT)"
+        cumulative_work = grp.createVariable('cumulative_work', float, ('update', 'perturbation',), zlib=True)
+        cumulative_work.description = "Cumulative work at the end of each NCMC perturbation step.[update,perturbation]"
+        cumulative_work.unit = "unitless (W/kT)"
 
         self._grp = grp
         self._out.sync()
@@ -172,24 +159,6 @@ class TitrationReporter(object):
         ----------
         simulation - ConstantPHSimulation
         """
-        drv = simulation.drive
-
-        # Per residue variable
-        for ires, residue in enumerate(drv.titrationGroups):
-            self._grp['residue_index'][ires] = residue.index
-            self._grp['residue_type'][ires] = residue.residue_type
-            self._grp['residue_name'][ires] = residue.name
-            # Per residue, per atom variable
-            for iatom,atom_index in enumerate(residue.atom_indices):
-                self._grp['atom_index'][ires,iatom] = atom_index
-            # Per residue, per state variable
-            for istate, state in enumerate(residue):
-                self._grp['g_k'][ires, istate] = state.g_k
-                self._grp['proton_count'][ires, istate] = state.proton_count
-                self._grp['total_charge'][ires, istate] = state.total_charge
-                # Per residue, per state, per atom
-                for iatom, charge in enumerate(state.charges):
-                    self._grp['charge'][ires, iatom, istate] = charge
         return
 
     def __del__(self):
