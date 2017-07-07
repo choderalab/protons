@@ -10,7 +10,7 @@ import uuid
 import os
 
 
-class TestNCMCReporter(object):
+class TestSAMSReporter(object):
     """Tests use cases for ConstantPHCalibration"""
 
     _default_platform = mm.Platform.getPlatformByName('Reference')
