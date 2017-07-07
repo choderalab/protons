@@ -1,7 +1,8 @@
 # coding=utf-8
-"""Test functionality of the NCMCReporter."""
+"""Testing of the SAMSReporter class"""
+
 from protons import app
-from protons.app import ncmcreporter as ncr
+from protons.app import samsreporter as sr
 from simtk import unit, openmm as mm
 from protons.app import GBAOABIntegrator, ForceFieldProtonDrive
 from . import get_test_data
@@ -10,7 +11,7 @@ import os
 
 
 class TestNCMCReporter(object):
-    """Tests use cases for ConstantPHSimulation"""
+    """Tests use cases for ConstantPHCalibration"""
 
     _default_platform = mm.Platform.getPlatformByName('Reference')
 
@@ -37,25 +38,25 @@ class TestNCMCReporter(object):
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
                                        perturbations_per_trial=3)
 
-        simulation = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
-        simulation.context.setPositions(pdb.positions)
-        simulation.context.setVelocitiesToTemperature(temperature)
+        calibration = app.ConstantPHCalibration(pdb.topology, system, compound_integrator, driver, group_index=1, platform=self._default_platform)
+        calibration.context.setPositions(pdb.positions)
+        calibration.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = ncr.NCMCReporter(filename, 2, shared=False)
-        simulation.update_reporters.append(newreporter)
+        newreporter = sr.SAMSReporter(filename, 2, shared=False)
+        calibration.calibration_reporters.append(newreporter)
 
         # Regular MD step
-        simulation.step(1)
-        # Update the titration states using the uniform proposal
-        simulation.update(4)
+        for iteration in range(4):
+            calibration.step(1)
+            # Update the titration states using the uniform proposal
+            calibration.update(1)
+            # adapt sams weights
+            calibration.adapt()
+
         # Basic checks for dimension
-        assert newreporter.ncfile['Protons/NCMC'].dimensions['update'].size == 2, "There should be 3 updates recorded."
-        assert newreporter.ncfile['Protons/NCMC'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
-        assert newreporter.ncfile['Protons/NCMC'].dimensions['perturbation'].size == 3, "There should be max 3 perturbations recorded."
+        assert newreporter.ncfile['Protons/SAMS'].dimensions['adaptation'].size == 2, "There should be 2 updates recorded."
+        assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 3, "There should be 3 states reported."
         # cleanup
         del(newreporter)
         # os.remove(filename)
-
-
-

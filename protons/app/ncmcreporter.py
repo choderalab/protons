@@ -17,7 +17,7 @@ class NCMCReporter:
         netcdffile : string
             The netcdffile to write to
         reportInterval : int
-            The interval (in time steps) at which to write frames
+            The interval (in update steps) at which to write frames
         shared: bool, default False
             Indicate whether the netcdf file is shared by other
 

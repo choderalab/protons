@@ -165,6 +165,7 @@ class ConstantPHCalibration(ConstantPHSimulation):
         super(ConstantPHCalibration, self).__init__(topology, system, compound_integrator, drive,  move=move, pools=pools, platform=platform, platformProperties=platformProperties, state=state)
         self.sams = SelfAdjustedMixtureSampling(self.drive, group_index=group_index)
 
+        self.group_index = group_index
         self.scheme = "binary"
         self.beta_sams = 0.5
         self.stage = "burn-in"
@@ -172,6 +173,9 @@ class ConstantPHCalibration(ConstantPHSimulation):
         self.end_of_burnin = 0 # t0, end of the burn in period.
         self.current_adaptation = 0
         self.calibration_reporters = list() # keeps track of calibration results
+        self.min_burn = 0
+        self.last_dev = None # deviation at last iteration
+        self.last_gk = None # weights at last iteration
 
         if samsProperties is not None:
             if 'scheme' in samsProperties:
@@ -180,6 +184,8 @@ class ConstantPHCalibration(ConstantPHSimulation):
                 self.beta_sams = samsProperties['beta']
             if 'flatness_criterion' in samsProperties:
                 self.flatness_criterion = samsProperties['flatness_criterion']
+            if 'min_burn' in samsProperties:
+                self.min_burn = samsProperties['min_burn']
 
     def adapt(self):
         """
@@ -193,12 +199,12 @@ class ConstantPHCalibration(ConstantPHSimulation):
             if 0 < nextReport[i][0] <= 1:
                 anyReport = True
 
-        deviation = self.sams.adapt_zetas(self.scheme, stage=self.stage, b=self.beta_sams, end_of_burnin=self.end_of_burnin)
-        weights = self.sams.get_gk()
+        self.last_dev = self.sams.adapt_zetas(self.scheme, stage=self.stage, b=self.beta_sams, end_of_burnin=self.end_of_burnin)
+        self.last_gk = self.sams.get_gk(group_index=self.group_index)
         self.current_adaptation += 1
         # If the histogram is flat below the criterion
         # Flatness is defined as the sum of absolute deviations
-        if deviation < self.flatness_criterion and self.stage == "burn-in":
+        if self.last_dev < self.flatness_criterion and self.stage == "burn-in" and self.current_adaptation > self.min_burn:
             log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.flatness_criterion))
             self.stage = "slow-gain"
             self.end_of_burnin = int(self.sams.n_adaptations)
@@ -208,5 +214,5 @@ class ConstantPHCalibration(ConstantPHSimulation):
                 if nextR[0] == 1:
                     reporter.report(self)
 
-        return deviation, weights
+        return self.last_dev, self.last_gk
 
