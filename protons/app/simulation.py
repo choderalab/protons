@@ -170,8 +170,8 @@ class ConstantPHCalibration(ConstantPHSimulation):
         self.stage = "burn-in"
         self.flatness_criterion = 0.20
         self.end_of_burnin = 0 # t0, end of the burn in period.
-        self.adaptation_step = 0
-
+        self.current_adaptation = 0
+        self.calibration_reporters = list() # keeps track of calibration results
 
         if samsProperties is not None:
             if 'scheme' in samsProperties:
@@ -186,15 +186,27 @@ class ConstantPHCalibration(ConstantPHSimulation):
         Adapt the weights for the residue that is being calibrated.
         """
 
+        nextReport = [None] * len(self.calibration_reporters)
+        anyReport = False
+        for i, reporter in enumerate(self.calibration_reporters):
+            nextReport[i] = reporter.describeNextReport(self)
+            if 0 < nextReport[i][0] <= 1:
+                anyReport = True
+
         deviation = self.sams.adapt_zetas(self.scheme, stage=self.stage, b=self.beta_sams, end_of_burnin=self.end_of_burnin)
         weights = self.sams.get_gk()
-
+        self.current_adaptation += 1
         # If the histogram is flat below the criterion
         # Flatness is defined as the sum of absolute deviations
         if deviation < self.flatness_criterion and self.stage == "burn-in":
             log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.flatness_criterion))
             self.stage = "slow-gain"
             self.end_of_burnin = int(self.sams.n_adaptations)
+
+        if anyReport:
+            for reporter, nextR in zip(self.calibration_reporters, nextReport):
+                if nextR[0] == 1:
+                    reporter.report(self)
 
         return deviation, weights
 
