@@ -14,14 +14,14 @@ class TestHistidine(object):
         Weights for histidine at pH == pKa_delta
         """
         weights = Histidine(Histidine.pka_d).populations()
-        approx(weights[0], weights[1])
+        assert approx(weights[0], weights[1])
 
     def test_pka_eps(self):
         """
         Weights for histidine at pH == pKa_eps
         """
         weights = Histidine(Histidine.pka_e).populations()
-        approx(weights[0], weights[2])
+        assert approx(weights[0], weights[2])
 
     def test_totals(self):
         """
@@ -29,7 +29,7 @@ class TestHistidine(object):
         """
 
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Histidine(ph).populations()))
+            assert approx(1.0, sum(Histidine(ph).populations()))
 
 
 class TestLysine(object):
@@ -40,7 +40,7 @@ class TestLysine(object):
         Weights for lysine at pH == pKa
         """
         weights = Lysine(Lysine.pka).populations()
-        approx(weights[0], weights[1])
+        assert approx(weights[0], weights[1])
 
     def test_ph_greater_than_pka(self):
         """
@@ -48,7 +48,7 @@ class TestLysine(object):
         """
 
         weights = Lysine(Lysine.pka + 1).populations()
-        approx(10.0 * weights[0], weights[1])
+        assert approx(10.0 * weights[0], weights[1])
 
     def test_ph_less_than_pka(self):
         """
@@ -56,14 +56,14 @@ class TestLysine(object):
         """
 
         weights = Lysine(Lysine.pka - 1).populations()
-        approx(weights[0], 10.0 * weights[1])
+        assert approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
         Fractional concentrations of lysine should always sum to 1.0
         """
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Lysine(ph).populations()))
+            assert approx(1.0, sum(Lysine(ph).populations()))
 
 
 class TestTyrosine(object):
@@ -74,7 +74,7 @@ class TestTyrosine(object):
         Weights for tyrosine at pH == pKa
         """
         weights = Tyrosine(Tyrosine.pka).populations()
-        approx(weights[0], weights[1])
+        assert approx(weights[0], weights[1])
 
     def test_ph_greater_than_pka(self):
         """
@@ -82,7 +82,7 @@ class TestTyrosine(object):
         """
 
         weights = Tyrosine(Tyrosine.pka + 1).populations()
-        approx(10.0 * weights[0], weights[1])
+        assert approx(10.0 * weights[0], weights[1])
 
     def test_ph_less_than_pka(self):
         """
@@ -90,7 +90,7 @@ class TestTyrosine(object):
         """
 
         weights = Tyrosine(Tyrosine.pka - 1).populations()
-        approx(weights[0], 10.0 * weights[1])
+        assert approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
@@ -98,7 +98,7 @@ class TestTyrosine(object):
         """
 
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Tyrosine(ph).populations()))
+            assert approx(1.0, sum(Tyrosine(ph).populations()))
 
 
 class TestCysteine(object):
@@ -109,7 +109,7 @@ class TestCysteine(object):
         Weights for cysteine at pH == pka
         """
         weights = Cysteine(Cysteine.pka).populations()
-        approx(weights[0], weights[1])
+        assert approx(weights[0], weights[1])
 
     def test_ph_greater_than_pka(self):
         """
@@ -117,7 +117,7 @@ class TestCysteine(object):
         """
 
         weights = Cysteine(Cysteine.pka + 1).populations()
-        approx(10.0 * weights[0], weights[1])
+        assert approx(10.0 * weights[0], weights[1])
 
     def test_ph_less_than_pka(self):
         """
@@ -125,7 +125,7 @@ class TestCysteine(object):
         """
 
         weights = Cysteine(Cysteine.pka - 1).populations()
-        approx(weights[0], 10.0 * weights[1])
+        assert approx(weights[0], 10.0 * weights[1])
 
     def test_totals(self):
         """
@@ -133,7 +133,7 @@ class TestCysteine(object):
         """
 
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Cysteine(ph).populations()))
+            assert approx(1.0, sum(Cysteine(ph).populations()))
 
 
 class TestGlutamicAcid(object):
@@ -146,10 +146,10 @@ class TestGlutamicAcid(object):
         weights = Glutamic4(Glutamic4.pka).populations()
 
         # 4 protonated forms of the same state
-        approx(weights[0], weights[1]*4)
-        approx(weights[0], weights[2]*4)
-        approx(weights[0], weights[3]*4)
-        approx(weights[0], weights[4]*4)
+        assert approx(weights[0], weights[1]*4)
+        assert approx(weights[0], weights[2]*4)
+        assert approx(weights[0], weights[3]*4)
+        assert approx(weights[0], weights[4]*4)
 
     def test_ph_greater_than_pka(self):
         """
@@ -159,10 +159,10 @@ class TestGlutamicAcid(object):
         weights = Glutamic4(Glutamic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
-        approx(weights[0], 10.0 * weights[1]*4)
-        approx(weights[0], 10.0 * weights[2]*4)
-        approx(weights[0], 10.0 * weights[3]*4)
-        approx(weights[0], 10.0 * weights[4]*4)
+        assert approx(weights[0], 10.0 * weights[1]*4)
+        assert approx(weights[0], 10.0 * weights[2]*4)
+        assert approx(weights[0], 10.0 * weights[3]*4)
+        assert approx(weights[0], 10.0 * weights[4]*4)
 
     def test_ph_less_than_pka(self):
         """
@@ -172,10 +172,10 @@ class TestGlutamicAcid(object):
         weights = Glutamic4(Glutamic4.pka - 1).populations()
 
         # 4 protonated forms of the same state
-        approx(10.0 * weights[0], 4.0 * weights[1])
-        approx(10.0 * weights[0], 4.0 * weights[2])
-        approx(10.0 * weights[0], 4.0 * weights[3])
-        approx(10.0 * weights[0], 4.0 * weights[4])
+        assert approx(10.0 * weights[0], 4.0 * weights[1])
+        assert approx(10.0 * weights[0], 4.0 * weights[2])
+        assert approx(10.0 * weights[0], 4.0 * weights[3])
+        assert approx(10.0 * weights[0], 4.0 * weights[4])
 
     def test_totals(self):
         """
@@ -183,7 +183,7 @@ class TestGlutamicAcid(object):
         """
 
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Glutamic4(ph).populations()))
+            assert approx(1.0, sum(Glutamic4(ph).populations()))
 
 
 class TestAsparticAcid(object):
@@ -195,10 +195,10 @@ class TestAsparticAcid(object):
         weights = Aspartic4(Aspartic4.pka).populations()
 
         # 4 protonated forms of the same state
-        approx(weights[0], weights[1]*4)
-        approx(weights[0], weights[2]*4)
-        approx(weights[0], weights[3]*4)
-        approx(weights[0], weights[4]*4)
+        assert approx(weights[0], weights[1]*4)
+        assert approx(weights[0], weights[2]*4)
+        assert approx(weights[0], weights[3]*4)
+        assert approx(weights[0], weights[4]*4)
 
     def test_ph_greater_than_pka(self):
         """
@@ -208,10 +208,10 @@ class TestAsparticAcid(object):
         weights = Aspartic4(Aspartic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
-        approx(weights[0], 10.0 * weights[1]*4)
-        approx(weights[0], 10.0 * weights[2]*4)
-        approx(weights[0], 10.0 * weights[3]*4)
-        approx(weights[0], 10.0 * weights[4]*4)
+        assert approx(weights[0], 10.0 * weights[1]*4)
+        assert approx(weights[0], 10.0 * weights[2]*4)
+        assert approx(weights[0], 10.0 * weights[3]*4)
+        assert approx(weights[0], 10.0 * weights[4]*4)
 
     def test_ph_less_than_pka(self):
         """
@@ -221,10 +221,10 @@ class TestAsparticAcid(object):
         weights = Aspartic4(Aspartic4.pka - 1).populations()
 
         # 4 protonated forms of the same state
-        approx(10.0 * weights[0], 4.0 * weights[1])
-        approx(10.0 * weights[0], 4.0 * weights[2])
-        approx(10.0 * weights[0], 4.0 * weights[3])
-        approx(10.0 * weights[0], 4.0 * weights[4])
+        assert approx(10.0 * weights[0], 4.0 * weights[1])
+        assert approx(10.0 * weights[0], 4.0 * weights[2])
+        assert approx(10.0 * weights[0], 4.0 * weights[3])
+        assert approx(10.0 * weights[0], 4.0 * weights[4])
 
     def test_totals(self):
         """
@@ -232,4 +232,4 @@ class TestAsparticAcid(object):
         """
 
         for ph in linspace(-1, 15, 50):
-            approx(1.0, sum(Aspartic4(ph).populations()))
+            assert approx(1.0, sum(Aspartic4(ph).populations()))
