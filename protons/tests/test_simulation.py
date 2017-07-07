@@ -44,7 +44,8 @@ class TestConstantPHSimulation(object):
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)
         # Outputfile for reporters
-        ncfile = netCDF4.Dataset(uuid4().hex + '.nc', 'w')
+        newname = uuid4().hex + '.nc'
+        ncfile = netCDF4.Dataset(newname, 'w')
         tr = TitrationReporter(ncfile, 1, shared=True)
         mr = MetadataReporter(ncfile, shared=True)
         nr = NCMCReporter(ncfile, 1, shared=True)
@@ -62,7 +63,7 @@ class TestConstantPHSimulation(object):
         del mr
         del nr
         ncfile.close()
-        os.remove(ncfile)
+        os.remove(newname)
 
         print('Done!')
 
@@ -167,7 +168,8 @@ class TestConstantPHCalibration:
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)
         # Outputfile for reporters
-        ncfile = netCDF4.Dataset(uuid4().hex + '.nc', 'w')
+        newname = uuid4().hex + '.nc'
+        ncfile = netCDF4.Dataset(newname, 'w')
         tr = TitrationReporter(ncfile, 1, shared=True)
         mr = MetadataReporter(ncfile, shared=True)
         nr = NCMCReporter(ncfile, 1, shared=True)
@@ -189,4 +191,4 @@ class TestConstantPHCalibration:
         del nr
         del sr
         ncfile.close()
-        os.remove(ncfile)
+        os.remove(newname)
