@@ -55,7 +55,7 @@ class TestNCMCReporter(object):
         assert newreporter.ncfile['Protons/NCMC'].dimensions['perturbation'].size == 3, "There should be max 3 perturbations recorded."
         # cleanup
         del(newreporter)
-        # os.remove(filename)
+        os.remove(filename)
 
 
 

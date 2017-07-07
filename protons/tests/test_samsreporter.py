@@ -59,4 +59,4 @@ class TestNCMCReporter(object):
         assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 3, "There should be 3 states reported."
         # cleanup
         del(newreporter)
-        # os.remove(filename)
+        os.remove(filename)
