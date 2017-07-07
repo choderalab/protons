@@ -25,7 +25,7 @@ from .integrators import GHMCIntegrator, GBAOABIntegrator
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
 
 
-class _TitratableResidue():
+class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
     def __init__(self, atom_indices, group_index, name, residue_type, exception_indices):
@@ -150,7 +150,7 @@ class _TitratableResidue():
         return [state.total_charge for state in self]
 
 
-class _TitrationState():
+class _TitrationState:
     """Representation of a titration state"""
 
     def __init__(self, g_k, charges, proton_count):
