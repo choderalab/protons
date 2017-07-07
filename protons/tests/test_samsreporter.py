@@ -57,7 +57,3 @@ class TestSAMSReporter(object):
         # Basic checks for dimension
         assert newreporter.ncfile['Protons/SAMS'].dimensions['adaptation'].size == 2, "There should be 2 updates recorded."
         assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 3, "There should be 3 states reported."
-        # cleanup
-        newreporter.ncfile.close()
-        del(newreporter)
-        os.remove(filename)

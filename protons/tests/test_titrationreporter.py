@@ -53,10 +53,6 @@ class TestTitrationReporter(object):
         assert newreporter.ncfile['Protons/Titration'].dimensions['update'].size == 3, "There should be 3 updates recorded."
         assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
         assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
-        # cleanup
-        newreporter.ncfile.close()
-        del(newreporter)
-        os.remove(filename)
 
 
 

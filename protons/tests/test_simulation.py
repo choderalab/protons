@@ -58,15 +58,6 @@ class TestConstantPHSimulation(object):
         # Update the titration states using the uniform proposal
         simulation.update(1)
 
-        #cleanup
-        del tr
-        del mr
-        del nr
-        ncfile.close()
-        os.remove(newname)
-
-        print('Done!')
-
     def test_create_simulation(self):
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
@@ -184,11 +175,3 @@ class TestConstantPHCalibration:
         simulation.update(1)
         # Adapt the weights using binary update.
         simulation.adapt()
-
-        # cleanup
-        del tr
-        del mr
-        del nr
-        del sr
-        ncfile.close()
-        os.remove(newname)
