@@ -10,14 +10,15 @@ from . import get_test_data
 import netCDF4
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
 from uuid import uuid4
+import os
 
 class TestConstantPHSimulation(object):
     """Tests use cases for ConstantPHSimulation"""
 
     _default_platform = mm.Platform.getPlatformByName('Reference')
 
-    def test_create_constantphsimulation(self):
-        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
+    def test_create_constantphsimulation_with_reporters(self):
+        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide, with reporters."""
 
         pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
         forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
@@ -56,10 +57,17 @@ class TestConstantPHSimulation(object):
         # Update the titration states using the uniform proposal
         simulation.update(1)
 
+        #cleanup
+        del tr
+        del mr
+        del nr
+        ncfile.close()
+        os.remove(ncfile)
+
         print('Done!')
 
-    def test_create_simulation_with_reporters(self):
-        """Tests starting a simulation with multiple reporters attached."""
+    def test_create_simulation(self):
+        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
@@ -97,7 +105,6 @@ class TestConstantPHSimulation(object):
         # Update the titration states using the uniform proposal
         simulation.update(1)
         print('Done!')
-
 
 
 class TestConstantPHCalibration:
@@ -175,3 +182,11 @@ class TestConstantPHCalibration:
         simulation.update(1)
         # Adapt the weights using binary update.
         simulation.adapt()
+
+        # cleanup
+        del tr
+        del mr
+        del nr
+        del sr
+        ncfile.close()
+        os.remove(ncfile)
