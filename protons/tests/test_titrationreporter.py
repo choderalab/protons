@@ -50,9 +50,9 @@ class TestTitrationReporter(object):
         # Update the titration states using the uniform proposal
         simulation.update(6)
         # Basic checks for dimension
-        assert newreporter.ncfile['TitrationReporter'].dimensions['update'].size == 3, "There should be 3 updates recorded."
-        assert newreporter.ncfile['TitrationReporter'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
-        assert newreporter.ncfile['TitrationReporter'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
+        assert newreporter.ncfile['Protons/Titration'].dimensions['update'].size == 3, "There should be 3 updates recorded."
+        assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
+        assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
         # cleanup
         del(newreporter)
         os.remove(filename)

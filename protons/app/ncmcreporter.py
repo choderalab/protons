@@ -123,7 +123,7 @@ class NCMCReporter:
         """Construct the netCDF directory structure and variables
         """
 
-        grp = self._out.createGroup("NCMCReporter")
+        grp = self._out.createGroup("Protons/NCMC")
         grp.description = "This group contains data stored by a NCMCReporter object from protons."
         grp.history = "This group was created on UTC [{}].".format(
             time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))

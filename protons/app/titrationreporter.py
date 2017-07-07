@@ -115,7 +115,7 @@ class TitrationReporter:
         """Construct the netCDF directory structure and variables
         """
 
-        grp = self._out.createGroup("TitrationReporter")
+        grp = self._out.createGroup("Protons/Titration")
         grp.description = "This group contains data stored by a TitrationReporter object from protons."
         grp.history = "This group was created on UTC [{}].".format(time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))
 

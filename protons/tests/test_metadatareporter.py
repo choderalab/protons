@@ -50,9 +50,9 @@ class TestMetadataReporter(object):
         # Update the titration states using the uniform proposal
         simulation.update(1)
         # Basic checks for dimension
-        assert newreporter.ncfile['MetadataReporter'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
-        assert newreporter.ncfile['MetadataReporter'].dimensions['state'].size == 5, "There should be 2 residues recorded."
-        assert newreporter.ncfile['MetadataReporter'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
+        assert newreporter.ncfile['Protons/Metadata'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
+        assert newreporter.ncfile['Protons/Metadata'].dimensions['state'].size == 5, "There should be 2 residues recorded."
+        assert newreporter.ncfile['Protons/Metadata'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
         # cleanup
         del(newreporter)
         os.remove(filename)

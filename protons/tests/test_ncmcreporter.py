@@ -50,9 +50,9 @@ class TestNCMCReporter(object):
         # Update the titration states using the uniform proposal
         simulation.update(4)
         # Basic checks for dimension
-        assert newreporter.ncfile['NCMCReporter'].dimensions['update'].size == 2, "There should be 3 updates recorded."
-        assert newreporter.ncfile['NCMCReporter'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
-        assert newreporter.ncfile['NCMCReporter'].dimensions['perturbation'].size == 3, "There should be max 3 perturbations recorded."
+        assert newreporter.ncfile['Protons/NCMC'].dimensions['update'].size == 2, "There should be 3 updates recorded."
+        assert newreporter.ncfile['Protons/NCMC'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
+        assert newreporter.ncfile['Protons/NCMC'].dimensions['perturbation'].size == 3, "There should be max 3 perturbations recorded."
         # cleanup
         del(newreporter)
         # os.remove(filename)

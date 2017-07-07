@@ -7,7 +7,8 @@ import numpy as np
 
 
 class MetadataReporter:
-    """MetadataReporter outputs protonation state metadata for the system to a netCDF4 file."""
+    """MetadataReporter outputs protonation state metadata for the system to a netCDF4 file.
+    Writes only once at the start of the simulation."""
 
     def __init__(self, netcdffile, shared=False):
         """Create a MetadataReporter.
@@ -18,7 +19,6 @@ class MetadataReporter:
             The netcdffile to write to
         shared: bool, default False
             Indicate whether the netcdf file is shared by other reporters. Prevents file closing.
-
         """
         if isinstance(netcdffile, str):
             self._out = netCDF4.Dataset(netcdffile, mode="w")
@@ -93,7 +93,7 @@ class MetadataReporter:
         """Construct the netCDF directory structure and variables
         """
 
-        grp = self._out.createGroup("MetadataReporter")
+        grp = self._out.createGroup("Protons/Metadata")
         grp.description = "This group contains data stored by a MetadataReporter object from protons."
         grp.history = "This group was created on UTC [{}].".format(time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime()))
 
