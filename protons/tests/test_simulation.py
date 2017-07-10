@@ -154,7 +154,7 @@ class TestConstantPHCalibration:
 
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
-                                       perturbations_per_trial=2)
+                                       perturbations_per_trial=2, propagations_per_step=1)
         simulation = app.ConstantPHCalibration(pdb.topology, system, compound_integrator, driver,group_index=1, platform=self._default_platform)
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)

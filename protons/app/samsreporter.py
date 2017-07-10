@@ -103,7 +103,7 @@ class SAMSReporter:
 
         self._grp['stage'][0] = calibration.stage
         if calibration.stage == "slow-gain":
-            self._grp['end_of_burnin'] = calibration.end_of_burnin
+            self._grp['end_of_burnin'][0] = calibration.end_of_burnin
 
     def _initialize_constants(self, simulation):
         """Initialize a set of constants required for the reports
