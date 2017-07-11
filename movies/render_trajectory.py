@@ -149,12 +149,12 @@ for frame in range(nframes):
                 inactive_protons.append(atom_index[residue,atom] + 1)
             elif atom_status[frame,residue,atom] == 1:
                 active_protons.append(atom_index[residue,atom] + 1)
-    active_selection = 'index ' + '+'.join([str(index) for index in active_protons])
-    inactive_selection = 'index ' + '+'.join([str(index) for index in inactive_protons])
-    #cmd.show('spheres', inactive_selection)
+    active_selection = 'id ' + '+'.join([str(index) for index in active_protons])
+    inactive_selection = 'id ' + '+'.join([str(index) for index in inactive_protons])
     #cmd.show('spheres', active_selection)
-    cmd.set('sphere_transparency', 0.8, inactive_selection)
-    cmd.set('sphere_transparency', 0.0, active_selection)
+    cmd.hide('spheres', inactive_selection)
+    #cmd.set('sphere_transparency', 0.8, inactive_selection)
+    #cmd.set('sphere_transparency', 0.0, active_selection)
 
     last_inactive_protons = inactive_protons
     last_active_protons = active_protons
