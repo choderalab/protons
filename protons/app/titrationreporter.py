@@ -3,6 +3,7 @@
 
 import netCDF4
 import time
+import numpy as np
 
 
 class TitrationReporter:
@@ -93,12 +94,16 @@ class TitrationReporter:
         iupdate = self._update
         # The iteration of the protonation state update attempt. [update]
         self._grp['update'][iupdate] = simulation.currentUpdate
+        all_stat = np.ones(self._natoms_topology, dtype=np.bool_)
         for ires, residue in enumerate(drv.titrationGroups):
             # The present state of the residue. [update,residue]
             self._grp['state'][iupdate, ires] = residue.state_index
             # Indicator of whether an atom is on/off (charged) at present. [update,residue,atom]
             for iatom, status in enumerate(residue.atom_status):
-                self._grp['atom_status'][iupdate, ires, iatom] = status
+                if status != 1:
+                    topo_index = residue.atom_indices[iatom]
+                    all_stat[topo_index] = False
+        self._grp['atom_status'][iupdate, :] = all_stat[:]
 
     def _initialize_constants(self, simulation):
         """Initialize a set of constants required for the reports
@@ -109,6 +114,7 @@ class TitrationReporter:
         system = simulation.system
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
+        self._natoms_topology = simulation.topology.getNumAtoms()
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
@@ -120,7 +126,7 @@ class TitrationReporter:
 
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
-        atom_dim = grp.createDimension('atom')
+        atom_dim = grp.createDimension('atom', self._natoms_topology)
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
@@ -129,8 +135,8 @@ class TitrationReporter:
         residue_state = grp.createVariable("state", int, ('update', 'residue',))
         residue_state.description = "The present state of the residue. [update,residue]"
 
-        atom_status = grp.createVariable("atom_status", 'u1', ('update', 'residue', 'atom',))
-        atom_status.description = "Indicator (1/0) of whether an atom is on/off (charged) at present.[update,residue,atom]"
+        atom_status = grp.createVariable("atom_status", 'u1', ('update', 'atom'), zlib=True)
+        atom_status.description = "Byte indicator (1/0) of whether an atom is on/off (charged) at present, where the atom index is equal to the topology.[update,atom]"
 
         self._grp = grp
         self._out.sync()

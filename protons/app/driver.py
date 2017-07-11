@@ -305,6 +305,7 @@ class NCMCProtonDrive(_BaseDrive):
         self.nattempted = 0
         self.naccepted = 0
         self.nrejected = 0
+        self.topology = topology
 
         # Sets of residues that are pooled together to sample exclusively from them
         self.residue_pools = dict()
