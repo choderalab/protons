@@ -57,6 +57,7 @@ class TestTitrationReporter(object):
         assert newreporter.ncfile['Protons/Titration'].dimensions['update'].size == 3, "There should be 3 updates recorded."
         assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == num_titratable, "There should be {} residues recorded.".format(num_titratable)
         assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == num_atoms, "There should be {} atoms recorded.".format(num_atoms)
+        newreporter.ncfile.close()
 
     def test_state_reporting(self):
         """Test if the titration state is correctly reported."""
@@ -108,6 +109,8 @@ class TestTitrationReporter(object):
         assert np.array_equal(glu_states, recorded_glu_states), "Glutamate states are not recorded correctly."
         assert np.array_equal(his_states, recorded_his_states), "Histidine states are not recorded correctly."
 
+        ncfile.close()
+
     def test_atom_status_reporting(self):
         """Test if the atom_status is correctly reported."""
 
@@ -154,6 +157,8 @@ class TestTitrationReporter(object):
             self._verify_atom_status(i, 0, ncfile, simulation)
             # check his
             self._verify_atom_status(i, 1, ncfile, simulation)
+
+        ncfile.close()
 
     @staticmethod
     def _verify_atom_status(iteration, group_index, ncfile, simulation):
@@ -218,6 +223,9 @@ class TestTitrationReporter(object):
                 tot_charge += icharge
                 assert ncfile['Protons/Titration/{}_charge'.format(resi)][i] == icharge, "Residue charge is not recorded correctly."
             assert ncfile['Protons/Titration/complex_charge'][i] == tot_charge, "The recorded complex total charge does not match the actual charge."
+
+        # close files to avoid segfaults, possibly
+        ncfile.close()
 
     @staticmethod
     def calculate_total_charge(system):

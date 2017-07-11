@@ -54,6 +54,8 @@ class TestMetadataReporter(object):
         assert newreporter.ncfile['Protons/Metadata'].dimensions['state'].size == 5, "There should be 2 residues recorded."
         assert newreporter.ncfile['Protons/Metadata'].dimensions['atom'].size == 19, "There should be max 19 atoms recorded."
 
+        newreporter.ncfile.close()
+
 
 
 

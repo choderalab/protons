@@ -57,6 +57,8 @@ class TestSAMSReporter(object):
         assert newreporter.ncfile['Protons/SAMS'].dimensions['adaptation'].size == 2, "There should be 2 updates recorded."
         assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 3, "There should be 3 states reported."
 
+        newreporter.ncfile.close()
+
     def test_burn_in_sams(self):
         """
         Tests a case of a SAMS reporter that finished burn_in
@@ -102,4 +104,7 @@ class TestSAMSReporter(object):
             calibration.update(1)
             # adapt sams weights
             calibration.adapt()
+
+        # close files to avoid segfaults, possibly
+        newreporter.ncfile.close()
 

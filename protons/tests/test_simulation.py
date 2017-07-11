@@ -175,3 +175,5 @@ class TestConstantPHCalibration:
         simulation.update(1)
         # Adapt the weights using binary update.
         simulation.adapt()
+        # Attempt to prevent segfaults by closing files
+        ncfile.close()
