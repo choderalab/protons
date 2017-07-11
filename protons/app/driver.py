@@ -71,7 +71,7 @@ class _TitratableResidue:
         """
 
         if state > len(self):
-            raise IndexError("Titration state too large. ( > {}".format(len(self)))
+            raise IndexError("Titration state index out of bounds. ( > {}".format(len(self)))
         self._state = state
 
     @property

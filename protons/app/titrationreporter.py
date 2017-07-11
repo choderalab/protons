@@ -81,7 +81,6 @@ class TitrationReporter:
         # Write the values.
         self._out.sync()
 
-
     def _write_update(self, simulation):
         """Record data for the current update in the netCDF file.
 
@@ -96,7 +95,7 @@ class TitrationReporter:
         self._grp['update'][iupdate] = simulation.currentUpdate
         for ires, residue in enumerate(drv.titrationGroups):
             # The present state of the residue. [update,residue]
-            self._grp['state'][iupdate, ] = residue.state_index
+            self._grp['state'][iupdate, ires] = residue.state_index
             # Indicator of whether an atom is on/off (charged) at present. [update,residue,atom]
             for iatom, status in enumerate(residue.atom_status):
                 self._grp['atom_status'][iupdate, ires, iatom] = status
