@@ -114,7 +114,7 @@ class NCMCReporter:
         Parameters
         - simulation (ConstantPHSimulation) The simulation to generate a report for
         """
-        system = simulation.system
+        system = simulation.context.getSystem()
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
         self._perturbation_steps = driver.perturbations_per_trial

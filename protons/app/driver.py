@@ -406,7 +406,7 @@ class NCMCProtonDrive(_BaseDrive):
 
     def define_pools(self, dict_of_pools):
         """
-        Specify named pools/subgroups of residues that can be sampled from separately. 
+        Specify named residue_pools/subgroups of residues that can be sampled from separately.
 
         For instance, it might be useful to separate the protein from the ligand so you can sample the 
         protonation state of one component of the system at a time. 
@@ -423,7 +423,7 @@ class NCMCProtonDrive(_BaseDrive):
         Examples
         --------       
 
-        pools = dict{protein=list(range(34)),ligand=[34])
+        residue_pools = dict{protein=list(range(34)),ligand=[34])
 
         """
 
@@ -431,7 +431,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Validate user input
         if not (isinstance(dict_of_pools, dict)):
-            raise TypeError("Please provide a dict of the different pools.")
+            raise TypeError("Please provide a dict of the different residue_pools.")
 
         # Make sure residues exist
         for group, indices in dict_of_pools.items():
