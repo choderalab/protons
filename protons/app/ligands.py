@@ -15,6 +15,7 @@ from lxml import etree, objectify
 from openeye import oechem
 from openmoltools import forcefield_generators as omtff
 from .logger import log
+import numpy as np
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -976,19 +977,24 @@ def write_ffxml(xml_compiler, filename=None):
         return xmlstring
 
 
-def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files=True, pH=7.4, resname="LIG"):
+def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files=True, max_penalty=10.0, pH=7.4, resname="LIG"):
     """
     Parametrize a ligand for constant-pH simulation using Epik.
 
     Parameters
     ----------
     inputmae : str
-        location of mae file with all possible atoms included.
+        location of mae file with all possible atoms included, with unique names.
+        There currently is no implementation of an atom mapping between protonation states, therefore, you will have to
+        include all potential protons in your input file. Be careful not to change bond orders.
+
     outputffxml : str
         location for output xml file containing all ligand states and their parameters
 
     Other Parameters
     ----------------
+    max_penalty : float, (default : 10.0)
+        Maximum energy penalty (in units of kT) for titration states.
     pH : float
         The pH that Epik should use to detect states
     tmpdir : str, optional
@@ -1026,8 +1032,7 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
 
     # Using very tolerant settings
     # 10 KT min prob, no tautomers
-    omt.schrodinger.run_epik(inputmae, "epik.mae", ph=pH, min_probability=4.53999298e-5, ph_tolerance=2.0,
-                             tautomerize=False)
+    omt.schrodinger.run_epik(inputmae, "epik.mae", ph=pH, min_probability=np.exp(-max_penalty), tautomerize=False)
     omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
     omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
     log.info("Epik run completed.")
