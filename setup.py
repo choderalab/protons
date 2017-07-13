@@ -34,7 +34,7 @@ def find_package_data(data_root, package_root):
             files.append(relpath(pjoin(root, fn), package_root))
     return files
 
-VERSION = '0.0.0'
+VERSION = '0.0.1'
 ISRELEASED = False
 __version__ = VERSION
 
@@ -49,11 +49,9 @@ Topic :: Scientific/Engineering
 Operating System :: POSIX
 Operating System :: Unix
 Operating System :: MacOS
-Programming Language :: Python :: 2
-Programming Language :: Python :: 2.7
 Programming Language :: Python :: 3
-Programming Language :: Python :: 3.4
 Programming Language :: Python :: 3.5
+Programming Language :: Python :: 3.6
 """
 
 extensions = []
@@ -68,13 +66,11 @@ setup(
             2:]),
     version=__version__,
     url='https://github.com/choderalab/protons',
-    platforms=[
-        'Linux',
-        'Mac OS-X',
-        'Unix'],
+    platforms=['any'],
     classifiers=CLASSIFIERS.splitlines(),
     packages=[
         'protons',
+        'protons.app',
         'protons.tests'],
     package_data={
         'protons': find_package_data(
@@ -87,10 +83,14 @@ setup(
             'protons/calibration-systems',
             'protons') +
         find_package_data(
-            'protons/forcefields',
+            'protons/app/data',
             'protons')} ,
 
     zip_safe=False,
+    entry_points={
+        'openmm.forcefielddir' : 'protons=protons.app.utils:get_datadir',
+    },
     ext_modules=extensions,
-    test_suite='nose.collector', # TODO replace this with py.test?
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest'],
 )

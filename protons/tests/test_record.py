@@ -5,14 +5,14 @@ Tests the storing of specific protons objects in netcdf files.
 import shutil
 import tempfile
 
+import numpy as np
+import pytest
 from simtk import unit
-from simtk.openmm import openmm, app
+from simtk.openmm import openmm
 
 from protons import ForceFieldProtonDrive
-from protons import record, ff
-import pytest
-import numpy as np
-from protons.integrators import GHMCIntegrator
+from protons.app import record
+from protons import app
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator
 
@@ -34,8 +34,7 @@ def setup_forcefield_drive():
     testsystem.system = openmm.XmlSerializer.deserialize(
         open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
     testsystem.ffxml_filename = '{}/protons-imidazole.xml'.format(testsystems)
-    testsystem.forcefield = app.ForceField(ff.gaff, testsystem.ffxml_filename)
-    testsystem.gaff = get_test_data("gaff.xml", "../forcefields/")
+    testsystem.forcefield = app.ForceField('gaff.xml', testsystem.ffxml_filename)
     testsystem.pdbfile = app.PDBFile(
         get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
     testsystem.topology = testsystem.pdbfile.topology
@@ -43,17 +42,14 @@ def setup_forcefield_drive():
     testsystem.constraint_tolerance = 1.e-7
     integrator = create_compound_gbaoab_integrator(testsystem)
 
-    drive = ForceFieldProtonDrive(testsystem.system, testsystem.temperature, testsystem.pH,
-                                  [testsystem.ffxml_filename], testsystem.forcefield,
-                                  testsystem.topology, integrator, debug=False,
-                                  pressure=testsystem.pressure, ncmc_steps_per_trial=2, implicit=False,
-                                  residues_by_name=['LIG'], nattempts_per_update=1)
+    drive = ForceFieldProtonDrive(ffxml_files=[testsystem.ffxml_filename], system=testsystem.system, forcefield=testsystem.forcefield, pressure=testsystem.pressure, topology=testsystem.topology, temperature=testsystem.temperature, perturbations_per_trial=2)
     platform = openmm.Platform.getPlatformByName('CPU')
-    context = openmm.Context(testsystem.system, drive.compound_integrator, platform)
+    context = openmm.Context(testsystem.system, integrator, platform)
     context.setPositions(testsystem.positions)  # set to minimized positions
     context.setVelocitiesToTemperature(testsystem.temperature)
+    drive.attach_context(context)
     integrator.step(1)
-    drive.update(context)
+    drive.update(app.UniformProposal())
 
     return drive, integrator, context, testsystem.system
 
@@ -64,7 +60,7 @@ def test_record_drive():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_drive_data(ncfile, drive, iteration=iteration)
     record.display_content_structure(ncfile)
@@ -80,7 +76,7 @@ def test_record_sams():
     # num_titratable_groups : 1
     # ncmc_steps_per_trial 2
     # num_attempts_per_update : 1 num_iterations=None
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, calibration=True, nstates_calibration=4)
 
     # Arbitrary sequence of weights
     samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"), 10)
@@ -105,7 +101,7 @@ def test_record_sams_with_metadata():
     # num_titratable_groups : 1
     # ncmc_steps_per_trial 2
     # num_attempts_per_update : 1 num_iterations=None
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, 1, calibration=True, nstates_calibration=4)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), 1, 2, calibration=True, nstates_calibration=4)
 
     # Arbitrary sequence of weights
     samples = np.random.multivariate_normal([0.000, 1.e2, 0.7e2, -3e1], np.matrix("3 0 0 0; 0 5 0 0; 0 0 7 0; 0 0 0 8"),
@@ -146,7 +142,7 @@ def test_record_ghmc_integrator():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_ghmc_integrator_data(ncfile, integrator, iteration)
     record.display_content_structure(ncfile)
@@ -160,7 +156,7 @@ def test_record_state():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2, 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups), 2)
     for iteration in range(10):
         record.record_state_data(ncfile, context, system, iteration)
     record.display_content_structure(ncfile)
@@ -174,7 +170,7 @@ def test_record_all():
     """
     tmpdir = tempfile.mkdtemp(prefix="protons-test-")
     drive, integrator, context, system = setup_forcefield_drive()
-    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups),2 , 1)
+    ncfile = record.netcdf_file('{}/new.nc'.format(tmpdir), len(drive.titrationGroups),2)
     # TODO Disabled integrator writing for now!
     for iteration in range(10):
         record.record_all(ncfile, iteration, drive, integrator=None, context=context, system=system)
@@ -189,7 +185,7 @@ def test_read_ncfile():
     """
 
     from netCDF4 import Dataset
-    from protons.record import display_content_structure
+    from protons.app.record import display_content_structure
     filename = get_test_data('sample.nc', 'testsystems/record')
     rootgrp = Dataset(filename, "r", format="NETCDF4")
     print(rootgrp['GHMCIntegrator/naccept'][:] / rootgrp['GHMCIntegrator/ntrials'][:])

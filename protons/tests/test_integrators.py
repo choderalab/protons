@@ -1,9 +1,11 @@
+import os
+
+import pytest
 from openmmtools import testsystems
 from simtk import unit
 from simtk.openmm import openmm
-from protons.integrators import ReferenceGBAOABIntegrator
-import pytest
-import os
+
+from protons import GBAOABIntegrator
 
 
 class TestGBAOABIntegrator(object):
@@ -18,6 +20,17 @@ class TestGBAOABIntegrator(object):
         for platform_name in ['Reference', 'CPU']:
             self.compare_external_protocol_work_accumulation(testsystem, parameter_name, parameter_initial, parameter_final, platform_name=platform_name)
 
+    def test_no_work_accumulation_harmonic_oscillator(self):
+        """Testing protocol work accumulation for ExternalPerturbationLangevinIntegrator with HarmonicOscillator
+        """
+        testsystem = testsystems.HarmonicOscillator()
+        parameter_name = 'testsystems_HarmonicOscillator_x0'
+        parameter_initial = 0.0 * unit.angstroms
+        parameter_final = 10.0 * unit.angstroms
+        for platform_name in ['Reference', 'CPU']:
+            self.run_without_work_accumulation(testsystem, parameter_name, parameter_initial, parameter_final, platform_name=platform_name)
+
+    @pytest.mark.slowtest
     @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_protocol_work_accumulation_waterbox(self):
         """Testing protocol work accumulation for ExternalPerturbationLangevinIntegrator with AlchemicalWaterBox
@@ -33,6 +46,7 @@ class TestGBAOABIntegrator(object):
                 name = '%s %s %s' % (testsystem.name, nonbonded_method, platform_name)
                 self.compare_external_protocol_work_accumulation(testsystem, parameter_name, parameter_initial, parameter_final, platform_name=platform_name, name=name)
 
+    @pytest.mark.slowtest
     @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
     def test_protocol_work_accumulation_waterbox_barostat(self):
         """
@@ -71,7 +85,7 @@ class TestGBAOABIntegrator(object):
 
         nsteps = 20
         kT = kB * temperature
-        integrator = ReferenceGBAOABIntegrator(temperature=temperature)
+        integrator = GBAOABIntegrator(temperature=temperature)
         context = openmm.Context(system, integrator, platform)
         context.setParameter(parameter_name, parameter_initial)
         context.setPositions(testsystem.positions)
@@ -98,4 +112,36 @@ class TestGBAOABIntegrator(object):
             # Test relative tolerance
             assert pytest.approx(external_protocol_work, 0.001) == integrator_protocol_work, message
 
+        del context, integrator
+
+    def run_without_work_accumulation(self, testsystem, parameter_name, parameter_initial, parameter_final, platform_name='Reference', name=None):
+        """Compare external work accumulation between Reference and CPU platforms.
+        """
+
+        if name is None:
+            name = testsystem.name
+
+        from openmmtools.constants import kB
+        system, topology = testsystem.system, testsystem.topology
+        temperature = 298.0 * unit.kelvin
+        platform = openmm.Platform.getPlatformByName(platform_name)
+
+        # TODO: Set precision and determinism if platform is ['OpenCL', 'CUDA']
+
+        nsteps = 20
+        kT = kB * temperature
+        integrator = GBAOABIntegrator(temperature=temperature, external_work=False)
+        context = openmm.Context(system, integrator, platform)
+        context.setParameter(parameter_name, parameter_initial)
+        context.setPositions(testsystem.positions)
+        context.setVelocitiesToTemperature(temperature)
+        integrator.step(1)
+
+        for step in range(nsteps):
+            lambda_value = float(step+1) / float(nsteps)
+            parameter_value = parameter_initial * (1-lambda_value) + parameter_final * lambda_value
+            initial_energy = context.getState(getEnergy=True).getPotentialEnergy()
+            context.setParameter(parameter_name, parameter_value)
+            final_energy = context.getState(getEnergy=True).getPotentialEnergy()
+            integrator.step(1)
         del context, integrator

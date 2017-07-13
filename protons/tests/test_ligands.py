@@ -5,11 +5,12 @@ from lxml import etree
 from openmoltools import forcefield_generators as omtff
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from openmoltools.amber import find_gaff_dat
+from protons import app as protons_app
 from simtk import unit
 from simtk.openmm import app
 
 try:
-    from protons.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, write_ffxml
+    from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, write_ffxml
     ligands_success = True
 except ImportError:
     ligands_success = False
@@ -133,6 +134,7 @@ class TestLigandParameterizationExplicit(object):
 
         generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_explicit"), "/tmp/protons-imidazole-parameterization-test-explicit.xml", remove_temp_files=True, pH=7.0, resname="LIG")
 
+    @pytest.mark.slowtest
     @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
                             reason="This test requires Schrodinger's suite, OpenEye, and gaff")
     def test_imatinib_parametrization(self):
@@ -140,9 +142,7 @@ class TestLigandParameterizationExplicit(object):
         Run epik on imatinib and parametrize its isomers using antechamber
         """
 
-        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"),
-                           "/tmp/protons-imatinib-parameterization-test-implicit.xml",
-                           pH=7.4)
+        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"), "protons-imatinib-parameterization-test-implicit.xml", pH=7.4)
 
     @pytest.mark.skipif(not hasOpenEye, reason="This test requires OpenEye.")
     def test_xml_compilation(self):
@@ -195,8 +195,8 @@ class TestLigandParameterizationExplicit(object):
         output_xml = '/tmp/imidazole-explicit.cph.xml'
 
         write_ffxml(compiler, filename=output_xml)
-        gaff = get_test_data("gaff.xml", "../forcefields/")
-        forcefield = app.ForceField(gaff, output_xml)
+        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
+        forcefield = app.ForceField(gaffpath, output_xml)
 
     def test_reading_validated_xml_file_using_forcefield(self):
         """
@@ -208,15 +208,15 @@ class TestLigandParameterizationExplicit(object):
         This can detect failure because of changes to OpenMM ForceField.
         """
         xmlfile = get_test_data("protons-imidazole.xml", "testsystems/imidazole_explicit")
-        gaff = get_test_data("gaff.xml", "../forcefields/")
-        forcefield = app.ForceField(gaff, xmlfile)
+        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
+        forcefield = app.ForceField(gaffpath, xmlfile)
 
     def test_creating_ligand_system(self):
         """Create an OpenMM system using a pdbfile, and a ligand force field"""
         xmlfile = get_test_data("protons-imidazole.xml", "testsystems/imidazole_explicit")
-        gaff = get_test_data("gaff.xml", "../forcefields/")
+        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
 
-        forcefield = app.ForceField(gaff, xmlfile, 'amber99sbildn.xml', 'tip3p.xml')
+        forcefield = app.ForceField(gaffpath, xmlfile, 'amber99sbildn.xml', 'tip3p.xml')
         pdb = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
         system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.Ewald,
                                          nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds,

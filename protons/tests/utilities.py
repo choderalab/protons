@@ -1,10 +1,11 @@
 from __future__ import print_function
-from simtk import unit, openmm
-from simtk.openmm import app
-from protons import *
-from protons.integrators import GHMCIntegrator, ReferenceGBAOABIntegrator as GBAOABIntegrator
+
 import logging
 
+from simtk import unit, openmm
+from simtk.openmm import app
+
+from protons.app.integrators import GHMCIntegrator, GBAOABIntegrator
 
 try:
     openmm.Platform.getPlatformByName('CUDA')
