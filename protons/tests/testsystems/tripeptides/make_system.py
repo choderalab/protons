@@ -1,6 +1,7 @@
 from simtk import unit
 from simtk.openmm import app, openmm
-from protons.ff import protonsff, ions_tip3p, bonds
+
+from protons import protonsff, ions_tip3p, bonds
 
 
 def make_explicit_system(pdb_filename='his_ala_his.pdb', outfile='his_ala_his'):

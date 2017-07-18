@@ -1,6 +1,6 @@
 package:
   name: protons-dev
-  version: !!str 0.0.0
+  version: !!str 0.0.1
 
 source:
   path: ../../
@@ -12,7 +12,7 @@ build:
 requirements:
   build:
     - python
-    - openmm >=7.1
+    - openmm >=7.2
     - numpy >=1.10
     - scipy >=0.17.0
     - openmoltools >=0.7.5
@@ -23,10 +23,12 @@ requirements:
     - joblib
     - lxml
     - parmed
+    - pytest
+    - pytest-runner
 
   run:
     - python
-    - openmm >=7.1
+    - openmm >=7.2
     - numpy >=1.10
     - scipy >=0.17.0
     - netcdf4 >=1.2.4
@@ -41,6 +43,7 @@ requirements:
 test:
   requires:
     - pytest
+    - pytest-runner
     - pytest-cov
     - behave
 

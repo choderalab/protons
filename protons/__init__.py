@@ -1,30 +1,6 @@
-#!/usr/local/bin/env python
-# -*- coding: utf-8 -*-
-
-from __future__ import print_function
-import os
-
-from .driver import AmberProtonDrive, ForceFieldProtonDrive
-from .logger import log
-
-# Module constants
-PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
-
-__version__ = '0.0-dev' # TODO set automatically from commit hash?
-
-
-def get_data(filename, folder):
-    """
-    Function to obtain data that is part of the package, such as the calibration systems
-
-    Parameters
-    ----------
-
-    filename : str
-        the name of the file/path you want to obtain
-    folder : str
-        The name of the folder it is contained in
-    """
-    return os.path.join(PACKAGE_ROOT, folder, filename)
-
+# coding=utf-8
+"""Imports as shortcuts"""
+from .app.integrators import GBAOABIntegrator, GHMCIntegrator
+from .app.driver import AmberProtonDrive, ForceFieldProtonDrive
+from .app.calibration import SelfAdjustedMixtureSampling
 
