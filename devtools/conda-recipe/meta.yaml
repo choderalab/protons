@@ -25,6 +25,9 @@ requirements:
     - parmed
     - pytest
     - pytest-runner
+    - pymbar
+    - seaborn
+    - matplotlib
 
   run:
     - python
@@ -39,6 +42,9 @@ requirements:
     - joblib
     - lxml
     - parmed
+    - pymbar
+    - seaborn
+    - matplotlib
 
 test:
   requires:
@@ -51,4 +57,4 @@ test:
     - protons
 
 about:
-  home: https://github.com/choderalab/constph-openmm
+  home: https://github.com/choderalab/protons
