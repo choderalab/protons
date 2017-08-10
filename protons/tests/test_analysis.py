@@ -41,9 +41,8 @@ class TestBARforSAMS:
         Try plotting calibration data using the defaults
         """
         dataset = netCDF4.Dataset(self.sams_netcdf)
-
         ax = analysis.plot_calibration_weight_traces(dataset)
-        analysis.plt.show()
+
 
     def test_plotting_calibration_zerobased(self):
         """
