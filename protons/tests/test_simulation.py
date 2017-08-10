@@ -12,6 +12,7 @@ from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSR
 from uuid import uuid4
 import os
 
+
 class TestConstantPHSimulation(object):
     """Tests use cases for ConstantPHSimulation"""
 

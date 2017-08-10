@@ -7,8 +7,13 @@ from simtk import unit, openmm as mm
 from protons.app import GBAOABIntegrator, ForceFieldProtonDrive
 from . import get_test_data
 import uuid
+import os
+import pytest
+
+travis = os.environ.get("TRAVIS", None)
 
 
+@pytest.mark.skipif(travis == 'true', reason="Travis segfaulting risk.")
 class TestSAMSReporter(object):
     """Tests use cases for ConstantPHCalibration"""
 
