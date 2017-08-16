@@ -2,10 +2,9 @@ Protons
 =======
 
 [![Build Status](https://travis-ci.org/choderalab/protons.svg?branch=master)](https://travis-ci.org/choderalab/protons)
-[![Code Issues](https://www.quantifiedcode.com/api/v1/project/b852925afabc4ff3aa41d94b4b2623dc/badge.svg)](https://www.quantifiedcode.com/app/project/b852925afabc4ff3aa41d94b4b2623dc)
 [![Documentation Status](https://readthedocs.org/projects/protons/badge/?version=latest)](http://protons.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/choderalab/protons/branch/master/graph/badge.svg)](https://codecov.io/gh/choderalab/protons)
-
+[![Code Climate](https://codeclimate.com/github/choderalab/protons/badges/gpa.svg)](https://codeclimate.com/github/choderalab/protons)
 
 Testbed for constant-pH methodologies using OpenMM.
 
