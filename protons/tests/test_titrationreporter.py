@@ -9,8 +9,13 @@ import uuid
 import numpy as np
 import netCDF4
 from math import floor, ceil
+import os
+import pytest
+
+travis = os.environ.get("TRAVIS", None)
 
 
+@pytest.mark.skipif(travis == 'true', reason="Travis segfaulting risk.")
 class TestTitrationReporter(object):
     """Tests use cases for ConstantPHSimulation"""
 
