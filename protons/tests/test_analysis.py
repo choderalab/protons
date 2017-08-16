@@ -11,7 +11,7 @@ import os
 
 travis = os.environ.get("TRAVIS", None)
 
-# @pytest.mark.skipif(travis == 'true', reason="Travis segfaulting risk.")
+@pytest.mark.skipif(travis == 'true', reason="Tests have segfaulting risk on Linux.")
 class TestBARforSAMS:
     """These tests ensure that the BAR analysis functionality works for the protons format SAMS data."""
 
@@ -68,7 +68,7 @@ class TestBARforSAMS:
         with netCDF4.Dataset(self.sams_netcdf, 'r') as dataset:
             assert 1.0 >= analysis.calculate_ncmc_acceptance_rate(dataset) >= 0.0, "The acceptance rate is not between 0, 1"
 
-# @pytest.mark.skipif(travis == 'true', reason="Travis segfaulting risk.")
+@pytest.mark.skipif(travis == 'true', reason="Tests have segfaulting risk on Linux.")
 class TestPlots:
     """These tests plot data not specific to calibration."""
     # This file contains the last 50 samples from an imatinib calibration in solvent
