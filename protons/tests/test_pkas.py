@@ -1,7 +1,7 @@
 """Tests for pH curve calculation"""
 from __future__ import print_function
 
-from protons.app.pka import Histidine, Lysine, Tyrosine, Aspartic4, Cysteine, Glutamic4
+from protons.app.pka import HIP as Histidine, TYR as Tyrosine, AS4 as Aspartic4, CYS as Cysteine, GL4 as Glutamic4, LYS as Lysine
 from numpy import linspace
 from pytest import approx
 

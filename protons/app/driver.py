@@ -6,7 +6,8 @@ import copy
 import logging
 import math
 import random
-import re
+from pandas import DataFrame
+import pandas as pd
 import sys
 import numpy as np
 import os
@@ -14,8 +15,10 @@ from simtk import unit
 from simtk import openmm as mm
 from .proposals import _StateProposal
 from .topology import Topology
+from .pka import available_pkas
 from simtk.openmm import app
-
+from numbers import Number
+import re
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree
@@ -28,13 +31,19 @@ kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
-    def __init__(self, atom_indices, group_index, name, residue_type, exception_indices):
+    def __init__(self, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
         """
         Instantiate a _TitratableResidue
 
         Parameters
         ----------
-
+        atom_indices - list of system indices of the residue atoms
+        group_index - the index of the residue in the list of titratable residues
+        name - str, an identifier for this residue
+        residue_type - str, the 3 letter residue type in the forcefield specification (e.g. AS4).
+        exception_indices - list of NonbondedForce exceptions associated with this titration state
+        pka_data - dict, optional, dict of weights, with pH as key. floats as keys. Not compatible with residue_pka option.
+        residue_pka - PopulationCalculator, optional. Can be used to provide target weights at a given pH. Not compatible with pka_data option.
         """
         # The indices of the residue atoms in the system
         self.atom_indices = list(atom_indices)  # deep copy
@@ -46,10 +55,96 @@ class _TitratableResidue:
         # NonbondedForce exceptions associated with this titration state
         self.exception_indices = exception_indices
         self._state = None
+        self._pka_data = None
+        self._residue_pka = None
+
+        if pka_data is not None and residue_pka is not None:
+            raise ValueError("You can only provide pka_data, or residue_pka, not both.")
+        elif pka_data is not None:
+            self._pka_data = pka_data
+
+        elif residue_pka is not None:
+            self._residue_pka = residue_pka
+
+        return
 
     def add_state(self, state):
         """Adds a _TitrationState to the residue."""
         self.titration_states.append(state)
+
+    def get_populations(self, pH, temperature=None, ionic_strength=None, strict=True):
+        """Return the state populations for a given pH.
+
+        Parameters
+        ----------
+        pH - float, the pH for which populations should be returned
+        temperature - float, the temperature in Kelvin that should be used  to find the log populations if available.
+            Optional, soft requirement. Won't throw error if not matched.
+        ionic_strength - float, the ionic strength in millimolar that should be used to find the log populations if available.
+            Optional, soft requirement. Won't throw error if not matched.
+        strict - bool, default True. If there are no pH dependent weights, throw an error. Else, just return default weights.
+
+        Notes
+        -----
+        Temperature, and ionic strength are soft requirements.
+
+        """
+        weights = np.empty(len(self))
+        # look up weights in the dictionary
+        if self._pka_data is not None:
+            # Search an appropriate log population value from the dataframe that was constructed.
+            # Temperature and Ionic strength aren't always provided.
+            for state, group in self._pka_data.groupby("State"):
+                # Get the first element where the pH matches, the temperature potentially matches, and the ionic strenght potentially matches
+                state = int(state)
+                pH_match = (group['pH'] == pH)
+                temperature_match = True
+                ionic_strength_match = True
+                if temperature is not None:
+                    temperature_match = (group['Temperature (K)'].isin([temperature, None]))
+
+                if ionic_strength is not None:
+                    ionic_strength_match = (group['Ionic strength (mM)'].isin(ionic_strength, None))
+
+                matches = group.loc[pH_match & temperature_match & ionic_strength_match]
+
+                # If there are no matches, throw an error
+                if len(matches) == 0:
+                    raise ValueError("There is no matching pH/temperature condition available for residue {}.".format(self.name))
+                # get the first one
+                else:
+                    first_row = next(matches.iterrows())
+                    # index 1 is the row values, get the log population
+                    log_population = first_row[1]['log population']
+
+                weights[state] = log_population
+
+        # calculate residue weights from pka object
+        elif self._residue_pka is not None:
+            weights = self._residue_pka(pH).populations()
+
+        # If there is no pH dependent population specified, return the current target populations.
+        # This will be equal if this was never specified previously. See the target_weights property.
+        else:
+            if strict:
+                raise RuntimeError("Residue is not adjustable by pH. {}".format(self.name))
+            else:
+                weights = self.target_weights
+
+        return np.asarray(weights)
+
+    def set_populations(self, pH):
+        """
+        Set the target weights using the pH
+
+        Parameters
+        ----------
+        pH - float, the pH of the simulation.
+        """
+        # old_weights = np.asarray(self.target_weights)
+        self.target_weights = self.get_populations(pH, strict=True)
+        ph_correction = - np.log(self.target_weights)
+        self.g_k_values = np.asarray(self.g_k_values) + ph_correction
 
     @property
     def state(self):
@@ -62,6 +157,9 @@ class _TitratableResidue:
 
     @property
     def state_index(self):
+        """
+        The index of the current state of the residue.
+        """
         return self._state
 
     @state.setter
@@ -94,6 +192,7 @@ class _TitratableResidue:
 
     @property
     def g_k_values(self):
+        """A list containing the g_k value for each state."""
         return [state.g_k for state in self]
 
     @g_k_values.setter
@@ -240,6 +339,24 @@ class _BaseDrive(metaclass=ABCMeta):
         Parameters
         ----------
         dict_of_pools - dict of lists
+        """
+        pass
+
+    @abstractmethod
+    def adjust_to_ph(self, pH):
+        """
+        Apply the pH target weight correction for the specified pH.
+
+        For amino acids, the pKa values in app.pkas will be used to calculate the correction.
+        For ligands, target populations at the specified pH need to be available, otherwise an exception will be thrown.
+
+        Parameters
+        ----------
+        pH - float, the pH to which target populations should be adjusted.
+
+        Raises
+        ------
+        ValueError - if the target weight for a given pH is not supplied.
         """
         pass
 
@@ -526,6 +643,25 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
+    def adjust_to_ph(self, pH):
+        """
+        Apply the pH target weight correction for the specified pH.
+
+        For amino acids, the pKa values in app.pkas will be used to calculate the correction.
+        For ligands, target populations at the specified pH need to be available, otherwise an exception will be thrown.
+
+        Parameters
+        ----------
+        pH - float, the pH to which target populations should be adjusted.
+
+        Raises
+        ------
+        ValueError - if the target weight for a given pH is not supplied.
+        """
+
+        for residue in self.titrationGroups:
+            residue.set_populations(pH)
+
     def _get14scaling(self, system):
         """
         Determine Coulomb 14 scaling.
@@ -732,7 +868,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups)
 
-    def _add_titratable_group(self, atom_indices, residue_type, name=''):
+    def _add_titratable_group(self, atom_indices, residue_type, name='', residue_pka=None, pka_data=None):
         """
         Define a new titratable group.
 
@@ -764,7 +900,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Define the new group.
         group_index = len(self.titrationGroups) + 1
-        group = _TitratableResidue(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices))
+        group = _TitratableResidue(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices), residue_pka=residue_pka, pka_data=pka_data)
         self.titrationGroups.append(group)
         return group_index
 
@@ -1501,7 +1637,12 @@ class AmberProtonDrive(NCMCProtonDrive):
                 example = 'Residue: AS4 2'
                 log.warn("Residue type '{}' has unusual length, verify residue name"
                          " in CPIN file has format like this one: '{}'".format(residue_type, example))
-            self._add_titratable_group(atom_indices, residue_type, name=name)
+            if residue_type in available_pkas:
+                residue_pka = available_pkas[residue_type]
+            else:
+                residue_pka = None
+
+            self._add_titratable_group(atom_indices, residue_type, name=name, residue_pka=residue_pka)
 
             # Define titration states.
             for titration_state in range(num_states):
@@ -1515,6 +1656,7 @@ class AmberProtonDrive(NCMCProtonDrive):
                 # Get proton count.
                 proton_count = namelist['PROTCNT'][first_state + titration_state]
                 # Create titration state.
+
                 self._add_titration_state(group_index, relative_energy, charges, proton_count)
                 self._cache_force(group_index, titration_state)
             # Set default state for this group.
@@ -1678,13 +1820,46 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             # Sort the atom indices in the template in the same order as the topology indices.
             atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
+            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+
+            residue_pka = None
+            pka_data = None
+            # Add pka adjustment features
+            if residue.name in available_pkas:
+                residue_pka = available_pkas[residue.name]
+
+            if len(protons_block.findall('State/Condition')) > 0 and residue_pka is None:
+                pka_data = DataFrame(columns=["pH", 'Temperature (K)', 'Ionic strength (mM)' 'log population'])
+                for state_index, state_block in enumerate(protons_block.xpath('State')):
+                    for condition in state_block.xpath('Condition'):
+                        row = dict(State=state_index)
+                        try:
+                            row['pH'] = float(condition.get('pH'))
+                        except TypeError:
+                            row['pH'] = None
+                        try:
+                            row['Temperature (K)'] = float(condition.get('temperature_kelvin'))
+                        except TypeError:
+                            row['Temperature (K)'] = None
+                        try:
+                            row['Ionic strength (mM)'] = float(condition.get('ionic_strength_mM'))
+                        except TypeError:
+                            row['Ionic strength (mM)'] = None
+                        logpop = condition.get('log_population')
+                        try:
+                            row['log population'] = float(logpop)
+                        except TypeError:
+                            raise ValueError("The log population provided can not be converted to a number :'{}'".format(logpop))
+                        pka_data = pka_data.append(row, ignore_index=True)
 
             # Create a new group with the given indices
-            self._add_titratable_group(atom_indices, residue.name,
-                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
+            self._add_titratable_group(atom_indices,
+                                       residue.name,
+                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id),
+                                       residue_pka=residue_pka, pka_data=pka_data)
 
             # Define titration states.
-            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
@@ -1701,6 +1876,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             # Set default state for this group.
             self._set_titration_state(group_index, 0)
+
 
     def _parse_ffxml_files(self, ffxml_files):
         """

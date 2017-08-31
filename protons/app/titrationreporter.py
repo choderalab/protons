@@ -12,6 +12,7 @@ from simtk.unit import elementary_charge
 # ion names from ions xml files in protons.
 _solvent_names = ["HOH", "H20", "WAT", "SOL", "TIP3", "TP3", "Li+", "Na+", "K+", "Rb+", "Cs+", "F-", "Cl-", "Br-", "I-"]
 
+
 class TitrationReporter:
     """TitrationReporter outputs protonation states of residues in the system to a netCDF4 file."""
 
