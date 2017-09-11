@@ -31,9 +31,34 @@ kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
-    def __init__(self, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
+    def __init__(self):
         """
         Instantiate a _TitratableResidue
+
+        Notes
+        -----
+        This class should not be instantiated directly. Use `from_lists` or `from_serialized_xml` instead.
+
+        """
+        # The indices of the residue atoms in the system
+        self.atom_indices = list()
+        # List to store titration states
+        self.titration_states = list()
+        self.index = None
+        self.name = None
+        self.residue_type = None
+        # NonbondedForce exceptions associated with this titration state
+        self.exception_indices = list()
+        self._state = None
+        self._pka_data = None
+        self._residue_pka = None
+
+        return
+
+    @classmethod
+    def from_lists(cls, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
+        """
+        Instantiate a _TitratableResidue from lists and strings that contain all necessary information
 
         Parameters
         ----------
@@ -46,27 +71,80 @@ class _TitratableResidue:
         residue_pka - PopulationCalculator, optional. Can be used to provide target weights at a given pH. Not compatible with pka_data option.
         """
         # The indices of the residue atoms in the system
-        self.atom_indices = list(atom_indices)  # deep copy
+        obj = cls()
+
+        obj.atom_indices = list(atom_indices)  # deep copy
         # List to store titration states
-        self.titration_states = list()
-        self.index = group_index
-        self.name = name
-        self.residue_type = residue_type
+        obj.titration_states = list()
+        obj.index = group_index
+        obj.name = name
+        obj.residue_type = residue_type
         # NonbondedForce exceptions associated with this titration state
-        self.exception_indices = exception_indices
-        self._state = None
-        self._pka_data = None
-        self._residue_pka = None
+        obj.exception_indices = exception_indices
+        obj._state = None
+        obj._pka_data = None
+        obj._residue_pka = None
 
         if pka_data is not None and residue_pka is not None:
             raise ValueError("You can only provide pka_data, or residue_pka, not both.")
         elif pka_data is not None:
-            self._pka_data = pka_data
+            obj._pka_data = pka_data
 
         elif residue_pka is not None:
-            self._residue_pka = residue_pka
+            obj._residue_pka = residue_pka
 
-        return
+        return obj
+
+    @classmethod
+    def from_serialized_xml(cls, xmltree):
+        """Create a titratable residue from a serialized titratable residue.
+
+        Parameters
+        ----------
+        xmltree - etree , should only contain one residue.
+
+        """
+
+        obj = cls()
+
+        # The indices of the residue atoms in the system
+        atom_indices = list()
+
+        res = xmltree.xpath('/TitratableResidue')[0]
+        for atom in xmltree.xpath('/TitratableResidue/atom'):
+            atom_indices.append(int(atom.get('index')))
+        obj.atom_indices = atom_indices
+
+        # List to store titration states
+        obj.titration_states = list()
+        obj.index = int(res.get('index'))
+        obj.name = str(res.get('name'))
+        obj.residue_type = str(res.get('type'))
+        # NonbondedForce exceptions associated with this titration state
+        exception_indices = list()
+        for exception in xmltree.xpath('/TitratableResidue/exception'):
+            exception_indices.append(int(exception.get('index')))
+
+        obj.exception_indices = exception_indices
+        obj._state = None
+        obj._pka_data = None
+        obj_residue_pka = None
+
+        # parse the pka data block as if an html table
+        pka_data = xmltree.xpath('/TitratableResidue/pka_data')
+        if len(pka_data):
+            pka_data = pka_data[0]
+            pka_data.tag = 'table'
+            obj._pka_data = pd.read_html(etree.tostring(pka_data))[0]
+
+        for residue_pka in xmltree.xpath('/TitratableResidue/residue_pka'):
+            obj._residue_pka = available_pkas[residue_pka]
+
+        if obj._pka_data is not None and obj._residue_pka is not None:
+            raise ValueError("You can only provide pka_data, or residue_pka, not both.")
+
+        # for state in xmltree.xpath
+        return obj
 
     def add_state(self, state):
         """Adds a _TitrationState to the residue."""
@@ -86,7 +164,8 @@ class _TitratableResidue:
         res = E.TitratableResidue(
             name=self.name,
             type=self.residue_type,
-            index=str(self.index))
+            index=str(self.index),
+            state=str(self.state_index))
 
         for atom_index in self.atom_indices:
             objectify.SubElement(res, 'atom', index=str(atom_index))
@@ -982,7 +1061,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Define the new group.
         group_index = len(self.titrationGroups) + 1
-        group = _TitratableResidue(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices), residue_pka=residue_pka, pka_data=pka_data)
+        group = _TitratableResidue.from_lists(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices), residue_pka=residue_pka, pka_data=pka_data)
         self.titrationGroups.append(group)
         return group_index
 

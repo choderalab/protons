@@ -29,6 +29,7 @@ requirements:
     - seaborn
     - matplotlib
     - pandas
+    - beautifulsoup4 # for deserialization of html tables
 
   run:
     - python
@@ -47,6 +48,7 @@ requirements:
     - seaborn
     - matplotlib
     - pandas
+    - beautifulsoup4 # for deserialization of html tables
 
 test:
   requires:
