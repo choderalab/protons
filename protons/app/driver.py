@@ -21,7 +21,7 @@ from numbers import Number
 import re
 from .logger import log
 from abc import ABCMeta, abstractmethod
-from lxml import etree
+from lxml import etree, objectify
 
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
@@ -71,6 +71,39 @@ class _TitratableResidue:
     def add_state(self, state):
         """Adds a _TitrationState to the residue."""
         self.titration_states.append(state)
+
+    def serialize(self):
+        """
+        Create an xml representation of this residue.
+
+        Returns
+        -------
+        res - lxml tree containing residue information
+
+        """
+        # xml factory
+        E = objectify.E
+        res = E.TitratableResidue(
+            name=self.name,
+            type=self.residue_type,
+            index=str(self.index))
+
+        for atom_index in self.atom_indices:
+            objectify.SubElement(res, 'atom', index=str(atom_index))
+
+        for exception_index in self.exception_indices:
+            objectify.SubElement(res, 'exception', index=str(exception_index))
+
+        if self._pka_data is not None:
+            res.pka_data = objectify.fromstring(self._pka_data.to_html(index=False))
+
+        if self._residue_pka is not None:
+            # residue_pka holds a reference to the base class. Storing the name
+            res.residue_pka = self._residue_pka.__name__
+        res.TitrationState = E.TitrationState()
+        res.TitrationState[:] = [state.serialize(index) for index,state in enumerate(self.titration_states)][:]
+
+        return res
 
     def get_populations(self, pH, temperature=None, ionic_strength=None, strict=True):
         """Return the state populations for a given pH.
@@ -143,7 +176,7 @@ class _TitratableResidue:
         """
         # old_weights = np.asarray(self.target_weights)
         self.target_weights = self.get_populations(pH, strict=True)
-        ph_correction = - np.log(self.target_weights)
+        ph_correction = -np.asarray(self.target_weights)
         self.g_k_values = np.asarray(self.g_k_values) + ph_correction
 
     @property
@@ -281,6 +314,55 @@ class _TitrationState:
     @target_weight.setter
     def target_weight(self, weight):
         self._target_weight = weight
+
+    def serialize(self, index=None):
+        """Serialize a state into xml etree.
+
+        Returns
+        -------
+        state - objectify tree
+        """
+        E = objectify.E
+        if index is not None:
+            index = str(index)
+        state = E.TitrationState(proton_count=str(self.proton_count), target_weight=str(self.target_weight), total_charge=str(self.total_charge), index=index, g_k=str(self.g_k))
+
+        q_tags = list()
+        for q_index, q in enumerate(self.charges):
+            q_tags.append(E.charge(str(q), atom_index=str(q_index)))
+
+        state.charge = E.charge
+        state.charge[:] = q_tags[:]
+
+        # forces is a list of forces
+        # Inside each force is a dict containing 'atoms', and 'exceptions'
+        # 'atoms' and 'exceptions' are lists
+        # Inside of the list are dicts.
+        # Each dictionary contains the parameters for either an atom, or an exception.
+        # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
+        # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
+        for f_index, force in enumerate(self._forces):
+            force_xml = E.force(index=str(f_index), # the force index in the internal state, not the force index in openmm
+                                )
+            atoms = force['atoms']
+            exceptions = force['exceptions']
+            for atom in atoms:
+                # Convert to string for xml storage
+                atom_strings = dict(atom)
+                for key in atom.keys():
+                    atom_strings[key] = str(atom[key])
+                atom_tag = objectify.SubElement(force_xml, 'atom', **atom_strings)
+            for exception in exceptions:
+                exception_strings = dict(exception)
+                for key in exception.keys():
+                    exception_strings[key] = str(exception[key])
+                exception_tag = objectify.SubElement(force_xml, 'exception', **exception_strings)
+
+            state.force = force_xml
+
+        return state
+
+        pass
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -1829,7 +1911,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 residue_pka = available_pkas[residue.name]
 
             if len(protons_block.findall('State/Condition')) > 0 and residue_pka is None:
-                pka_data = DataFrame(columns=["pH", 'Temperature (K)', 'Ionic strength (mM)' 'log population'])
+                pka_data = DataFrame(columns=["pH", 'Temperature (K)', 'Ionic strength (mM)', 'log population'])
                 for state_index, state_block in enumerate(protons_block.xpath('State')):
                     for condition in state_block.xpath('Condition'):
                         row = dict(State=state_index)
