@@ -122,7 +122,7 @@ class _TitratableResidue:
         Temperature, and ionic strength are soft requirements.
 
         """
-        weights = np.empty(len(self))
+        log_weights = np.empty(len(self))
         # look up weights in the dictionary
         if self._pka_data is not None:
             # Search an appropriate log population value from the dataframe that was constructed.
@@ -150,11 +150,11 @@ class _TitratableResidue:
                     # index 1 is the row values, get the log population
                     log_population = first_row[1]['log population']
 
-                weights[state] = log_population
+                log_weights[state] = log_population
 
         # calculate residue weights from pka object
         elif self._residue_pka is not None:
-            weights = self._residue_pka(pH).populations()
+            log_weights = self._residue_pka(pH).populations()
 
         # If there is no pH dependent population specified, return the current target populations.
         # This will be equal if this was never specified previously. See the target_weights property.
@@ -162,9 +162,9 @@ class _TitratableResidue:
             if strict:
                 raise RuntimeError("Residue is not adjustable by pH. {}".format(self.name))
             else:
-                weights = self.target_weights
+                log_weights = np.log(np.asarray(self.target_weights))
 
-        return np.asarray(weights)
+        return np.asarray(log_weights)
 
     def set_populations(self, pH):
         """
@@ -175,8 +175,8 @@ class _TitratableResidue:
         pH - float, the pH of the simulation.
         """
         # old_weights = np.asarray(self.target_weights)
-        self.target_weights = self.get_populations(pH, strict=True)
-        ph_correction = -np.asarray(self.target_weights)
+        self.target_weights = np.exp(self.get_populations(pH, strict=True))
+        ph_correction = -np.log(self.target_weights)
         self.g_k_values = np.asarray(self.g_k_values) + ph_correction
 
     @property
