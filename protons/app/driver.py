@@ -101,7 +101,11 @@ class _TitratableResidue:
 
         Parameters
         ----------
-        xmltree - etree , should only contain one residue.
+        xmltree - etree.ElementTree or compatible lxml class, should only contain one residue.
+
+        Returns
+        -------
+        obj - a newly instantiated _TitratableResidue object.
 
         """
 
@@ -143,7 +147,13 @@ class _TitratableResidue:
         if obj._pka_data is not None and obj._residue_pka is not None:
             raise ValueError("You can only provide pka_data, or residue_pka, not both.")
 
-        # for state in xmltree.xpath
+        states = xmltree.xpath('/TitratableResidue/TitrationState')
+        obj.titration_states = [None] * len(states)
+
+        for state in states:
+            state_index = int(state.get('index'))
+            obj.titration_states[state_index] = _TitrationState.from_serialized_xml(state)
+
         return obj
 
     def add_state(self, state):
@@ -364,14 +374,96 @@ class _TitratableResidue:
 class _TitrationState:
     """Representation of a titration state"""
 
-    def __init__(self, g_k, charges, proton_count):
+    def __init__(self):
         """Instantiate a _TitrationState"""
 
-        self.g_k = g_k  # dimensionless quantity
-        self.charges = copy.deepcopy(charges)
-        self.proton_count = proton_count
+        self.g_k = None  # dimensionless quantity
+        self.charges = list()
+        self.proton_count = None
         self._forces = list()
         self._target_weight = None
+
+    @classmethod
+    def from_lists(cls, g_k, charges, proton_count):
+        """Instantiate a _TitrationState from g_k, proton count and a list of the charges
+
+
+
+        Returns
+        -------
+        obj - a new _TitrationState instance
+        """
+        obj = cls()
+        obj.g_k = g_k  # dimensionless quantity
+        obj.charges = copy.deepcopy(charges)
+        obj.proton_count = proton_count
+        # Note that forces are to be manually added by force caching functionality in ProtonDrives
+        obj._forces = list()
+        obj._target_weight = None
+        return obj
+
+    @classmethod
+    def from_serialized_xml(cls, state_element):
+        """
+        Deserialize a _TitrationState from a previously serialized xml tree
+
+        Parameters
+        ----------
+        xmltree - etree.Element or compatible lxml class containing one single titration state
+
+        Returns
+        -------
+        obj - a new _TitrationState instance
+        """
+
+        obj = cls()
+
+        state = state_element
+        obj.proton_count = int(state.get('proton_count'))
+        obj._target_weight = float(state.get('target_weight'))
+        obj.g_k = float(state.get('g_k'))
+
+        charges = state.xpath('charge')
+        obj.charges = [None] * len(charges)
+        for charge in charges:
+            # Get the array index
+            charge_index = int(charge.get('charge_index'))
+            charge_value = float(charge.text)
+            obj.charges[charge_index] = charge_value
+
+        # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
+        # TODO implement GBSA forces or custom forces here
+        # Inside each force is a dict containing 'atoms', and 'exceptions'
+        # 'atoms' and 'exceptions' are lists
+        # Inside of the list are dicts.
+        # Each dictionary contains the parameters for either an atom, or an exception.
+        # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
+        # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
+        forces = state.xpath('force')
+        obj._forces = [None] * len(forces)
+        for f_index, force in enumerate(forces):
+            force_dict = dict(atoms=list(), exceptions=list())
+
+            for atom in force.xpath('atom'):
+                atom_dict = dict()
+                for key in ['atom_index', 'charge', 'epsilon', 'sigma']:
+                    if key == 'atom_index':
+                        atom_dict[key] = int(atom.get(key))
+                    else:
+                        atom_dict[key] = float(atom.get(key))
+                force_dict['atoms'].append(atom_dict)
+
+            for exception in force.xpath('exception'):
+                exc_dict = dict()
+                for key in ["chargeProd", "epsilon", "exception_index", "particle1", "particle2" , "sigma"]:
+                    if key in ["particle1", "particle2"]:
+                        exc_dict[key] = int(exception.get(key))
+                    else:
+                        exc_dict[key] = float(exception.get(key))
+                force_dict['exceptions'].append(exc_dict)
+            obj._forces[f_index] = force_dict
+
+        return obj
 
     @property
     def total_charge(self):
@@ -404,16 +496,18 @@ class _TitrationState:
         E = objectify.E
         if index is not None:
             index = str(index)
-        state = E.TitrationState(proton_count=str(self.proton_count), target_weight=str(self.target_weight), total_charge=str(self.total_charge), index=index, g_k=str(self.g_k))
+        # Only serializing values that are not properties.
+        state = E.TitrationState(proton_count=str(self.proton_count), target_weight=str(self.target_weight), index=index, g_k=str(self.g_k))
 
         q_tags = list()
         for q_index, q in enumerate(self.charges):
-            q_tags.append(E.charge(str(q), atom_index=str(q_index)))
+            q_tags.append(E.charge(str(q), charge_index=str(q_index)))
 
         state.charge = E.charge
         state.charge[:] = q_tags[:]
 
-        # forces is a list of forces
+        # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
+        # Other forces will get serialized correctly, but deserialization may be an issue.
         # Inside each force is a dict containing 'atoms', and 'exceptions'
         # 'atoms' and 'exceptions' are lists
         # Inside of the list are dicts.
@@ -440,8 +534,6 @@ class _TitrationState:
             state.force = force_xml
 
         return state
-
-        pass
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -1117,7 +1209,7 @@ class NCMCProtonDrive(_BaseDrive):
         if len(charges) != len(self.titrationGroups[titration_group_index].atom_indices):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
-        state = _TitrationState(relative_energy * self.beta, copy.deepcopy(charges), proton_count)
+        state = _TitrationState.from_lists(relative_energy * self.beta, copy.deepcopy(charges), proton_count)
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
