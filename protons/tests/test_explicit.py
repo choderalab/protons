@@ -418,6 +418,22 @@ class TestAmberPeptide(object):
         compound_integrator.step(10)  # MD
         driver.update(UniformProposal(), nattempts=10)  # protonation
 
+    def test_peptide_serialization(self):
+        """
+        Set up a peptide system and serialize it.
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                  testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=2)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        x = driver.serialize_state()
+
 
 class TestForceFieldImidazoleExplicitpHAdjusted(object):
     """Tests for pH adjusting imidazole weights in explict solvent (TIP3P)"""

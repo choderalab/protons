@@ -586,9 +586,7 @@ class _TitrationState:
     def __eq__(self, other):
         """Compare the equality of two _TitrationState objects."""
         if not isinstance(other, _TitrationState):
-            raise TypeError("Can not compare equality between _TitrationState and {}".format(type(other)))
-
-        import pytest
+            return False
 
         float_atol = 1.e-10
         if not np.isclose(self._target_weight, other._target_weight, rtol=0.0, atol=float_atol):
@@ -623,12 +621,7 @@ class _TitrationState:
                         return False
 
         # Everything that was checked seems equal.
-        pytest.set_trace()
         return True
-
-
-
-
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -821,6 +814,21 @@ class NCMCProtonDrive(_BaseDrive):
                 self.forces_to_update.append(force)
 
         return
+
+    def serialize_state(self):
+        """Store the state of residues handled by the drive as xml.
+
+        Returns
+        -------
+        str - xml representation of the residues inside of the drive.
+        """
+        xmltree = etree.Element("NCMCProtonDrive")
+        for res in self.titrationGroups:
+            xmltree.append(res.serialize())
+
+        return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
+
+
 
     @property
     def titrationStates(self):
