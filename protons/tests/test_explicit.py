@@ -517,5 +517,27 @@ class TestForceFieldImidazoleExplicitpHAdjusted(object):
         driver.adjust_to_ph(7.4)
         x = driver.titrationGroups[0].serialize()
         y = app.driver._TitratableResidue.from_serialized_xml(x)
-        pytest.set_trace()
+
+    def test_imidazole_serialization_correctness(self):
+        """
+        Test the correctness of a deserialized imidazole titration group.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                       testsystem.forcefield, testsystem.ffxml_filename,
+                                       pressure=testsystem.pressure,
+                                       perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        driver.adjust_to_ph(7.4)
+        before_group = driver.titrationGroups[0]
+        x = before_group.serialize()
+        after_group = app.driver._TitratableResidue.from_serialized_xml(x)
+        assert before_group == after_group, "The deserialized group does not match what was serialized."
+
+
 

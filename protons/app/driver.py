@@ -8,6 +8,7 @@ import math
 import random
 from pandas import DataFrame
 import pandas as pd
+from pandas.util.testing import assert_frame_equal
 import sys
 import numpy as np
 import os
@@ -26,7 +27,7 @@ from lxml import etree, objectify
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
-
+np.set_printoptions(precision=15)
 
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
@@ -54,6 +55,36 @@ class _TitratableResidue:
         self._residue_pka = None
 
         return
+
+    def __eq__(self, other):
+
+        for own_state, other_state in zip(self.titration_states, other.titration_states):
+            if own_state != other_state:
+                return False
+
+        if self.name != other.name:
+            return False
+
+        if self.residue_type != other.residue_type:
+            return False
+
+        if self.index != other.index:
+            return False
+
+        if self._state != other._state:
+            return False
+
+        if self._pka_data is not None and  other._pka_data is not None:
+            try:
+                assert_frame_equal(self._pka_data, other._pka_data)
+            except AssertionError:
+                return False
+
+        if self._residue_pka != other._residue_pka:
+            return False
+
+        return True
+
 
     @classmethod
     def from_lists(cls, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
@@ -109,6 +140,8 @@ class _TitratableResidue:
 
         """
 
+        # prevent accidental modification of the user supplied file.
+        xmltree = copy.deepcopy(xmltree)
         obj = cls()
 
         # The indices of the residue atoms in the system
@@ -123,6 +156,7 @@ class _TitratableResidue:
         obj.titration_states = list()
         obj.index = int(res.get('index'))
         obj.name = str(res.get('name'))
+
         obj.residue_type = str(res.get('type'))
         # NonbondedForce exceptions associated with this titration state
         exception_indices = list()
@@ -137,7 +171,7 @@ class _TitratableResidue:
         # parse the pka data block as if an html table
         pka_data = xmltree.xpath('/TitratableResidue/pka_data')
         if len(pka_data):
-            pka_data = pka_data[0]
+            pka_data = copy.deepcopy(pka_data[0])
             pka_data.tag = 'table'
             obj._pka_data = pd.read_html(etree.tostring(pka_data))[0]
 
@@ -153,6 +187,9 @@ class _TitratableResidue:
         for state in states:
             state_index = int(state.get('index'))
             obj.titration_states[state_index] = _TitrationState.from_serialized_xml(state)
+
+        # Set the titration state of this residue
+        obj.state = int(res.get('state'))
 
         return obj
 
@@ -418,17 +455,18 @@ class _TitrationState:
 
         obj = cls()
 
-        state = state_element
+        # prevent accidental modification
+        state = copy.deepcopy(state_element)
         obj.proton_count = int(state.get('proton_count'))
-        obj._target_weight = float(state.get('target_weight'))
-        obj.g_k = float(state.get('g_k'))
+        obj._target_weight = np.float64(state.get('target_weight'))
+        obj.g_k = np.float64(state.get('g_k'))
 
         charges = state.xpath('charge')
         obj.charges = [None] * len(charges)
         for charge in charges:
             # Get the array index
             charge_index = int(charge.get('charge_index'))
-            charge_value = float(charge.text)
+            charge_value = np.float64(charge.text)
             obj.charges[charge_index] = charge_value
 
         # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
@@ -450,16 +488,16 @@ class _TitrationState:
                     if key == 'atom_index':
                         atom_dict[key] = int(atom.get(key))
                     else:
-                        atom_dict[key] = float(atom.get(key))
+                        atom_dict[key] = np.float64(atom.get(key))
                 force_dict['atoms'].append(atom_dict)
 
             for exception in force.xpath('exception'):
                 exc_dict = dict()
                 for key in ["chargeProd", "epsilon", "exception_index", "particle1", "particle2" , "sigma"]:
-                    if key in ["particle1", "particle2"]:
+                    if key in ["particle1", "particle2", "exception_index"]:
                         exc_dict[key] = int(exception.get(key))
                     else:
-                        exc_dict[key] = float(exception.get(key))
+                        exc_dict[key] = np.float64(exception.get(key))
                 force_dict['exceptions'].append(exc_dict)
             obj._forces[f_index] = force_dict
 
@@ -501,7 +539,9 @@ class _TitrationState:
 
         q_tags = list()
         for q_index, q in enumerate(self.charges):
-            q_tags.append(E.charge(str(q), charge_index=str(q_index)))
+            # Ensure float is numpy type for print precision as specified in numpy print options
+            q = np.float64(q)
+            q_tags.append(E.charge("{:.15f}".format(q), charge_index=str(q_index)))
 
         state.charge = E.charge
         state.charge[:] = q_tags[:]
@@ -523,17 +563,72 @@ class _TitrationState:
                 # Convert to string for xml storage
                 atom_strings = dict(atom)
                 for key in atom.keys():
-                    atom_strings[key] = str(atom[key])
+                    if key == 'atom_index':
+                        atom_strings[key] = str(atom[key])
+                    else:
+                        # Ensure numpy type for print precision
+                        atom_strings[key] = "{:.15f}".format(np.float64(atom[key]))
                 atom_tag = objectify.SubElement(force_xml, 'atom', **atom_strings)
             for exception in exceptions:
                 exception_strings = dict(exception)
                 for key in exception.keys():
-                    exception_strings[key] = str(exception[key])
+                    if key in ["particle1", "particle2", "exception_index"]:
+                        exception_strings[key] = str(exception[key])
+                    else:
+                        # Ensure numpy type for print precision
+                        exception_strings[key] = "{:.15f}".format(np.float64(exception[key]))
                 exception_tag = objectify.SubElement(force_xml, 'exception', **exception_strings)
 
             state.force = force_xml
 
         return state
+
+    def __eq__(self, other):
+        """Compare the equality of two _TitrationState objects."""
+        if not isinstance(other, _TitrationState):
+            raise TypeError("Can not compare equality between _TitrationState and {}".format(type(other)))
+
+        import pytest
+
+        float_atol = 1.e-10
+        if not np.isclose(self._target_weight, other._target_weight, rtol=0.0, atol=float_atol):
+            return False
+
+        if not np.isclose(self.proton_count, other.proton_count, rtol=0.0, atol=float_atol):
+            return False
+
+        if not np.isclose(self.g_k, other.g_k, rtol=0.0, atol=float_atol):
+            return False
+
+        if len(self.charges) != len(other.charges):
+            return False
+
+        # Check if all stored charges are equal
+        if not np.all(np.isclose(self.charges, other.charges, atol=float_atol, rtol=0.0)):
+            return False
+
+        # check if all force parameters are equal
+        for own_force, other_force in zip(self._forces, other._forces):
+            own_atoms, other_atoms = own_force['atoms'], other_force['atoms']
+            own_exceptions, other_exceptions = own_force['exceptions'], other_force['exceptions']
+
+            for own_atom, other_atom in zip(own_atoms, other_atoms):
+                for key in own_atom.keys():
+                    if not np.isclose(own_atom[key], other_atom[key], rtol=0.0, atol=float_atol):
+                        return False
+
+            for own_exception, other_exception in zip(own_exceptions, other_exceptions):
+                for key in own_exception.keys():
+                    if not np.isclose(own_exception[key], other_exception[key], rtol=0.0, atol=float_atol):
+                        return False
+
+        # Everything that was checked seems equal.
+        pytest.set_trace()
+        return True
+
+
+
+
 
 
 class _BaseDrive(metaclass=ABCMeta):
