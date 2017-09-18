@@ -118,7 +118,7 @@ class _State(object):
     """
     Private class representing a template of a single isomeric state of the molecule.
     """
-    def __init__(self, index, log_population, g_k, net_charge, atom_list):
+    def __init__(self, index, log_population, g_k, net_charge, atom_list, pH):
         """
 
         Parameters
@@ -143,6 +143,7 @@ class _State(object):
         self.proton_count = -1
         for atom in atom_list:
             self.atoms[atom] = None
+        self.pH = pH
 
     def validate(self):
         """
@@ -215,10 +216,9 @@ class _State(object):
         self.proton_count = int(self.net_charge) - min_charge
 
     def __str__(self):
-        return '<State index="{index}" ' \
-               'log_population="{log_population}"' \
-               ' g_k="{g_k}"' \
-               ' proton_count="{proton_count}"/>'.format(**self.__dict__)
+        return """<State index="{index}" log_population="{log_population}" g_k="{g_k}" proton_count="{proton_count}">
+                <Condition pH="{pH}" log_population="{log_population}" temperature_kelvin="298.15"/>
+                </State>""".format(**self.__dict__)
 
     __repr__ = __str__
 
@@ -867,7 +867,8 @@ class _TitratableForceFieldCompiler(object):
                               state['log_population'],
                               state['epik_penalty'],
                               net_charge,
-                              self._atom_names
+                              self._atom_names,
+                              state['pH']
                               )
             for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
                 template.set_atom(_Atom(xml_atom.attrib['name'], xml_atom.attrib['type'], xml_atom.attrib['charge']))
@@ -1063,7 +1064,7 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
         elif "r_epik_State_Penalty" in line:
             # Next line contains epik state penalty
             store = "log_population"
-            isomers[isomer_index] = dict()
+            isomers[isomer_index] = dict(pH=pH)
 
         elif "i_epik_Tot_Q" in line:
             # Next line contains charge
