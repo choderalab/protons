@@ -7,7 +7,7 @@ from simtk.openmm.app import *
 from .topology import Topology
 from .calibration import SelfAdjustedMixtureSampling
 from .simulation import ConstantPHCalibration, ConstantPHSimulation
-from .driver import ForceFieldProtonDrive, AmberProtonDrive
+from .driver import ForceFieldProtonDrive, AmberProtonDrive, NCMCProtonDrive
 from .proposals import UniformProposal, DoubleProposal, CategoricalProposal
 from .integrators import GBAOABIntegrator
 from .modeller import Modeller

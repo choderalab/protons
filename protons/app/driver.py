@@ -29,6 +29,7 @@ from .integrators import GHMCIntegrator, GBAOABIntegrator
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
 np.set_printoptions(precision=15)
 
+
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
@@ -166,7 +167,7 @@ class _TitratableResidue:
         obj.exception_indices = exception_indices
         obj._state = None
         obj._pka_data = None
-        obj_residue_pka = None
+        obj._residue_pka = None
 
         # parse the pka data block as if an html table
         pka_data = xmltree.xpath('/TitratableResidue/pka_data')
@@ -175,8 +176,9 @@ class _TitratableResidue:
             pka_data.tag = 'table'
             obj._pka_data = pd.read_html(etree.tostring(pka_data))[0]
 
-        for residue_pka in xmltree.xpath('/TitratableResidue/residue_pka'):
-            obj._residue_pka = available_pkas[residue_pka]
+        res_pka = res.get("residue_pka")
+        if res_pka is not None:
+            obj._residue_pka = available_pkas[res_pka]
 
         if obj._pka_data is not None and obj._residue_pka is not None:
             raise ValueError("You can only provide pka_data, or residue_pka, not both.")
@@ -214,6 +216,11 @@ class _TitratableResidue:
             index=str(self.index),
             state=str(self.state_index))
 
+        if self._residue_pka is not None:
+            # residue_pka holds a reference to the base class.
+            # Storing the name of the type, which can be looked to find it from the available_pkas dict
+            res.set('residue_pka', self.residue_type)
+
         for atom_index in self.atom_indices:
             objectify.SubElement(res, 'atom', index=str(atom_index))
 
@@ -223,9 +230,7 @@ class _TitratableResidue:
         if self._pka_data is not None:
             res.pka_data = objectify.fromstring(self._pka_data.to_html(index=False))
 
-        if self._residue_pka is not None:
-            # residue_pka holds a reference to the base class. Storing the name
-            res.residue_pka = self._residue_pka.__name__
+
         res.TitrationState = E.TitrationState()
         res.TitrationState[:] = [state.serialize(index) for index,state in enumerate(self.titration_states)][:]
 
@@ -423,8 +428,6 @@ class _TitrationState:
     @classmethod
     def from_lists(cls, g_k, charges, proton_count):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
-
-
 
         Returns
         -------
@@ -815,8 +818,8 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def serialize_state(self):
-        """Store the state of residues handled by the drive as xml.
+    def serialize_titration_groups(self):
+        """Store residues handled by the drive as xml.
 
         Returns
         -------
@@ -828,7 +831,11 @@ class NCMCProtonDrive(_BaseDrive):
 
         return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
 
-
+    def add_residues_from_serialized_xml(self, xmltree):
+        """Add residues from previously serialized residues."""
+        drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
+        for res in drive_xml.xpath("TitratableResidue"):
+            self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
 
     @property
     def titrationStates(self):
