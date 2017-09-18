@@ -4,12 +4,12 @@ import pytest
 import os
 from simtk import unit, openmm
 from protons import app
-from protons.app import AmberProtonDrive, ForceFieldProtonDrive
+from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
 from protons.app import Topology
 from protons.app import ForceField
-
+from lxml import etree
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator
 
@@ -432,7 +432,37 @@ class TestAmberPeptide(object):
         context.setPositions(testsystem.positions)  # set to minimized positions
         context.setVelocitiesToTemperature(testsystem.temperature)
         driver.attach_context(context)
-        x = driver.serialize_state()
+        driver.adjust_to_ph(7.4)
+        x = driver.serialize_titration_groups()
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
+    def test_peptide_deserialization(self):
+        """
+        Set up a peptide system and serialize it, then deserialize it.
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        olddrive = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                  testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=2)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        olddrive.attach_context(context)
+        olddrive.adjust_to_ph(7.4)
+
+        x = olddrive.serialize_titration_groups()
+        newdrive = NCMCProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, pressure=testsystem.pressure, perturbations_per_trial=2)
+        newdrive.add_residues_from_serialized_xml(etree.fromstring(x))
+
+        for old_res, new_res in zip(olddrive.titrationGroups, newdrive.titrationGroups):
+            assert old_res == new_res, "Residues don't match. {} :: {}".format(old_res.name, new_res.name)
+
+        newdrive.attach_context(context)
+        compound_integrator.step(10)
+        newdrive.update(UniformProposal(), nattempts=1)
 
 
 class TestForceFieldImidazoleExplicitpHAdjusted(object):
