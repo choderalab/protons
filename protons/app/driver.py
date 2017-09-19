@@ -833,6 +833,8 @@ class NCMCProtonDrive(_BaseDrive):
 
     def add_residues_from_serialized_xml(self, xmltree):
         """Add residues from previously serialized residues."""
+        if type(xmltree) == str:
+            xmltree = etree.fromstring(xmltree)
         drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
         for res in drive_xml.xpath("TitratableResidue"):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
