@@ -198,7 +198,6 @@ class TestConstantPHCalibration:
 
         assert simulation2.current_adaptation == 6, "The resumed calibration does not have the right adaptation_index"
 
-        import pytest; pytest.set_trace()
 
     def test_create_constantphcalibration_with_reporters(self):
         """Test running a calibration using constant-pH with reporters."""
