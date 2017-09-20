@@ -4,12 +4,12 @@ import pytest
 import os
 from simtk import unit, openmm
 from protons import app
-from protons.app import AmberProtonDrive, ForceFieldProtonDrive
+from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
 from protons.app import Topology
 from protons.app import ForceField
-
+from lxml import etree
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator
 
@@ -58,6 +58,28 @@ class TestAmberTyrosineExplicit(object):
 
         compound_integrator.step(10)  # MD
         driver.update(UniformProposal())  # protonation
+
+    def test_tyrosine_instantaneous_pH_adjusted(self):
+        """
+        Run tyrosine in explicit solvent with an instanteneous state switch at pH 7.4 using a pKa based adjustment
+        """
+        testsystem = self.setup_tyrosine_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal())  # protonation
+        old_values = list(driver.titrationGroups[0].g_k_values)
+        driver.adjust_to_ph(7.4)
+        new_values = list(driver.titrationGroups[0].g_k_values)
+        assert old_values != new_values, "Values are not adjusted"
+
 
     def test_tyrosine_import_gk(self):
         """
@@ -395,3 +417,173 @@ class TestAmberPeptide(object):
 
         compound_integrator.step(10)  # MD
         driver.update(UniformProposal(), nattempts=10)  # protonation
+
+    def test_peptide_serialization(self):
+        """
+        Set up a peptide system and serialize it.
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                  testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=2)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        driver.adjust_to_ph(7.4)
+        x = driver.serialize_titration_groups()
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
+    def test_peptide_deserialization(self):
+        """
+        Set up a peptide system and serialize it, then deserialize it.
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        olddrive = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                  testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=2)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        olddrive.attach_context(context)
+        olddrive.adjust_to_ph(7.4)
+
+        x = olddrive.serialize_titration_groups()
+        newdrive = NCMCProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, pressure=testsystem.pressure, perturbations_per_trial=2)
+        newdrive.add_residues_from_serialized_xml(etree.fromstring(x))
+
+        for old_res, new_res in zip(olddrive.titrationGroups, newdrive.titrationGroups):
+            assert old_res == new_res, "Residues don't match. {} :: {}".format(old_res.name, new_res.name)
+
+        newdrive.attach_context(context)
+        compound_integrator.step(10)
+        newdrive.update(UniformProposal(), nattempts=1)
+
+
+class TestForceFieldImidazoleExplicitpHAdjusted(object):
+    """Tests for pH adjusting imidazole weights in explict solvent (TIP3P)"""
+
+    default_platform = 'CPU'
+
+    @staticmethod
+    def setup_imidazole_explicit():
+        """
+        Set up a tyrosine in explicit solvent
+        """
+        imidazole_explicit_system = SystemSetup()
+        imidazole_explicit_system.temperature = 300.0 * unit.kelvin
+        imidazole_explicit_system.pressure = 1.0 * unit.atmospheres
+        imidazole_explicit_system.timestep = 1.0 * unit.femtoseconds
+        imidazole_explicit_system.collision_rate = 1.0 / unit.picoseconds
+        imidazole_explicit_system.pH = 9.6
+        testsystems = get_test_data('imidazole_explicit', 'testsystems')
+        imidazole_explicit_system.positions = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
+        imidazole_explicit_system.system = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
+        imidazole_explicit_system.ffxml_filename = os.path.join(testsystems,'protons-imidazole-ph-feature.xml')
+        imidazole_explicit_system.forcefield = ForceField('gaff.xml', imidazole_explicit_system.ffxml_filename)
+        imidazole_explicit_system.gaff = 'gaff.xml'
+        imidazole_explicit_system.pdbfile = app.PDBFile(os.path.join(testsystems, "imidazole-solvated-minimized.pdb"))
+        imidazole_explicit_system.topology = imidazole_explicit_system.pdbfile.topology
+        imidazole_explicit_system.nsteps_per_ghmc = 1
+        imidazole_explicit_system.constraint_tolerance = 1.e-7
+        return imidazole_explicit_system
+
+    def test_imidazole_instantaneous_pH_adjust(self):
+        """
+        Run imidazole in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure, perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        old_values = list(driver.titrationGroups[0].g_k_values)
+        driver.adjust_to_ph(7.4)
+        new_values = list(driver.titrationGroups[0].g_k_values)
+        assert old_values != new_values, "Values are not adjusted"
+
+    def test_imidazole_instantaneous_wrongpH_adjust(self):
+        """
+        Run imidazole in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure, perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        with pytest.raises(ValueError) as exception_info:
+            driver.adjust_to_ph(4.0)
+
+    def test_imidazole_instantaneous_serialize(self):
+        """
+        Test the serialization of an imidazole titration group.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                       testsystem.forcefield, testsystem.ffxml_filename, pressure=testsystem.pressure,
+                                       perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        driver.adjust_to_ph(7.4)
+        x = driver.titrationGroups[0].serialize()
+
+    def test_imidazole_instantaneous_deserialize(self):
+        """
+        Test the deserialization of an imidazole titration group.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                       testsystem.forcefield, testsystem.ffxml_filename,
+                                       pressure=testsystem.pressure,
+                                       perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        driver.adjust_to_ph(7.4)
+        x = driver.titrationGroups[0].serialize()
+        y = app.driver._TitratableResidue.from_serialized_xml(x)
+
+    def test_imidazole_serialization_correctness(self):
+        """
+        Test the correctness of a deserialized imidazole titration group.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
+                                       testsystem.forcefield, testsystem.ffxml_filename,
+                                       pressure=testsystem.pressure,
+                                       perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        driver.adjust_to_ph(7.4)
+        before_group = driver.titrationGroups[0]
+        x = before_group.serialize()
+        after_group = app.driver._TitratableResidue.from_serialized_xml(x)
+        assert before_group == after_group, "The deserialized group does not match what was serialized."
+
+
+

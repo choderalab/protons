@@ -123,7 +123,6 @@ class ConstantPHCalibration(ConstantPHSimulation):
     self-adjusted mixture sampling (SAMS) to calculate the relative free energy of different protonation states
     in a simulation system."""
 
-
     def __init__(self, topology, system, compound_integrator, drive, group_index=0, move=None, pools=None, samsProperties=None, platform=None, platformProperties=None, state=None):
         """Create a ConstantPHCalibration.
 
@@ -150,7 +149,7 @@ class ConstantPHCalibration(ConstantPHSimulation):
         pools: dict, default is None
             A dictionary of titration group indices to group together.
         samsProperties: dict, default is None
-            A dictionary with properties for the sams calibration.
+            A dictionary with properties for the sams calibration. Used to set parameters for calibration or to resume.
         platform : Platform=None
             If not None, the OpenMM Platform to use
         platformProperties : map=None
@@ -167,7 +166,7 @@ class ConstantPHCalibration(ConstantPHSimulation):
 
         self.group_index = group_index
         self.scheme = "binary"
-        self.beta_sams = 0.5
+        self.beta_sams = 0.5 # beta is stored as beta_sams to prevent confusion with 1/kT beta
         self.stage = "burn-in"
         self.flatness_criterion = 0.20
         self.end_of_burnin = 0 # t0, end of the burn in period.
@@ -178,14 +177,10 @@ class ConstantPHCalibration(ConstantPHSimulation):
         self.last_gk = None # weights at last iteration
 
         if samsProperties is not None:
-            if 'scheme' in samsProperties:
-                self.scheme = samsProperties['scheme']
-            if 'beta' in samsProperties:
-                self.beta_sams = samsProperties['beta']
-            if 'flatness_criterion' in samsProperties:
-                self.flatness_criterion = samsProperties['flatness_criterion']
-            if 'min_burn' in samsProperties:
-                self.min_burn = samsProperties['min_burn']
+            # retrieve property if provided and convert to the appropriate type
+            for prop, proptype in [('scheme', str), ('beta_sams', float), ('flatness_criterion', float), ('min_burn', int),  ('current_adaptation', int), ('stage',str), ('end_of_burnin', int)]:
+                if prop in samsProperties:
+                        setattr(self, prop, proptype(samsProperties[prop]))
 
     def adapt(self):
         """
@@ -216,3 +211,12 @@ class ConstantPHCalibration(ConstantPHSimulation):
 
         return self.last_dev, self.last_gk
 
+    def export_samsProperties(self):
+        """Returns a dictionary of properties of the state of the SAMS algorithm.
+        This can be used to resume a calibration by providing it in the constructor.
+        """
+        samsProperties = dict()
+        for prop in ['scheme', 'beta_sams', 'flatness_criterion', 'min_burn', 'current_adaptation', 'stage', 'end_of_burnin']:
+            samsProperties[prop] = getattr(self,prop)
+
+        return samsProperties

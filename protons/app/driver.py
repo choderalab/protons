@@ -6,7 +6,9 @@ import copy
 import logging
 import math
 import random
-import re
+from pandas import DataFrame
+import pandas as pd
+from pandas.util.testing import assert_frame_equal
 import sys
 import numpy as np
 import os
@@ -14,42 +16,299 @@ from simtk import unit
 from simtk import openmm as mm
 from .proposals import _StateProposal
 from .topology import Topology
+from .pka import available_pkas
 from simtk.openmm import app
-
+from numbers import Number
+import re
 from .logger import log
 from abc import ABCMeta, abstractmethod
-from lxml import etree
+from lxml import etree, objectify
 
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
+np.set_printoptions(precision=15)
 
 
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
-    def __init__(self, atom_indices, group_index, name, residue_type, exception_indices):
+    def __init__(self):
         """
         Instantiate a _TitratableResidue
 
-        Parameters
-        ----------
+        Notes
+        -----
+        This class should not be instantiated directly. Use `from_lists` or `from_serialized_xml` instead.
 
         """
         # The indices of the residue atoms in the system
-        self.atom_indices = list(atom_indices)  # deep copy
+        self.atom_indices = list()
         # List to store titration states
         self.titration_states = list()
-        self.index = group_index
-        self.name = name
-        self.residue_type = residue_type
+        self.index = None
+        self.name = None
+        self.residue_type = None
         # NonbondedForce exceptions associated with this titration state
-        self.exception_indices = exception_indices
+        self.exception_indices = list()
         self._state = None
+        self._pka_data = None
+        self._residue_pka = None
+
+        return
+
+    def __eq__(self, other):
+
+        for own_state, other_state in zip(self.titration_states, other.titration_states):
+            if own_state != other_state:
+                return False
+
+        if self.name != other.name:
+            return False
+
+        if self.residue_type != other.residue_type:
+            return False
+
+        if self.index != other.index:
+            return False
+
+        if self._state != other._state:
+            return False
+
+        if self._pka_data is not None and  other._pka_data is not None:
+            try:
+                assert_frame_equal(self._pka_data, other._pka_data)
+            except AssertionError:
+                return False
+
+        if self._residue_pka != other._residue_pka:
+            return False
+
+        return True
+
+
+    @classmethod
+    def from_lists(cls, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
+        """
+        Instantiate a _TitratableResidue from lists and strings that contain all necessary information
+
+        Parameters
+        ----------
+        atom_indices - list of system indices of the residue atoms
+        group_index - the index of the residue in the list of titratable residues
+        name - str, an identifier for this residue
+        residue_type - str, the 3 letter residue type in the forcefield specification (e.g. AS4).
+        exception_indices - list of NonbondedForce exceptions associated with this titration state
+        pka_data - dict, optional, dict of weights, with pH as key. floats as keys. Not compatible with residue_pka option.
+        residue_pka - PopulationCalculator, optional. Can be used to provide target weights at a given pH. Not compatible with pka_data option.
+        """
+        # The indices of the residue atoms in the system
+        obj = cls()
+
+        obj.atom_indices = list(atom_indices)  # deep copy
+        # List to store titration states
+        obj.titration_states = list()
+        obj.index = group_index
+        obj.name = name
+        obj.residue_type = residue_type
+        # NonbondedForce exceptions associated with this titration state
+        obj.exception_indices = exception_indices
+        obj._state = None
+        obj._pka_data = None
+        obj._residue_pka = None
+
+        if pka_data is not None and residue_pka is not None:
+            raise ValueError("You can only provide pka_data, or residue_pka, not both.")
+        elif pka_data is not None:
+            obj._pka_data = pka_data
+
+        elif residue_pka is not None:
+            obj._residue_pka = residue_pka
+
+        return obj
+
+    @classmethod
+    def from_serialized_xml(cls, xmltree):
+        """Create a titratable residue from a serialized titratable residue.
+
+        Parameters
+        ----------
+        xmltree - etree.ElementTree or compatible lxml class, should only contain one residue.
+
+        Returns
+        -------
+        obj - a newly instantiated _TitratableResidue object.
+
+        """
+
+        # prevent accidental modification of the user supplied file.
+        xmltree = copy.deepcopy(xmltree)
+        obj = cls()
+
+        # The indices of the residue atoms in the system
+        atom_indices = list()
+
+        res = xmltree.xpath('/TitratableResidue')[0]
+        for atom in xmltree.xpath('/TitratableResidue/atom'):
+            atom_indices.append(int(atom.get('index')))
+        obj.atom_indices = atom_indices
+
+        # List to store titration states
+        obj.titration_states = list()
+        obj.index = int(res.get('index'))
+        obj.name = str(res.get('name'))
+
+        obj.residue_type = str(res.get('type'))
+        # NonbondedForce exceptions associated with this titration state
+        exception_indices = list()
+        for exception in xmltree.xpath('/TitratableResidue/exception'):
+            exception_indices.append(int(exception.get('index')))
+
+        obj.exception_indices = exception_indices
+        obj._state = None
+        obj._pka_data = None
+        obj._residue_pka = None
+
+        # parse the pka data block as if an html table
+        pka_data = xmltree.xpath('/TitratableResidue/pka_data')
+        if len(pka_data):
+            pka_data = copy.deepcopy(pka_data[0])
+            pka_data.tag = 'table'
+            obj._pka_data = pd.read_html(etree.tostring(pka_data))[0]
+
+        res_pka = res.get("residue_pka")
+        if res_pka is not None:
+            obj._residue_pka = available_pkas[res_pka]
+
+        if obj._pka_data is not None and obj._residue_pka is not None:
+            raise ValueError("You can only provide pka_data, or residue_pka, not both.")
+
+        states = xmltree.xpath('/TitratableResidue/TitrationState')
+        obj.titration_states = [None] * len(states)
+
+        for state in states:
+            state_index = int(state.get('index'))
+            obj.titration_states[state_index] = _TitrationState.from_serialized_xml(state)
+
+        # Set the titration state of this residue
+        obj.state = int(res.get('state'))
+
+        return obj
 
     def add_state(self, state):
         """Adds a _TitrationState to the residue."""
         self.titration_states.append(state)
+
+    def serialize(self):
+        """
+        Create an xml representation of this residue.
+
+        Returns
+        -------
+        res - lxml tree containing residue information
+
+        """
+        # xml factory
+        E = objectify.E
+        res = E.TitratableResidue(
+            name=self.name,
+            type=self.residue_type,
+            index=str(self.index),
+            state=str(self.state_index))
+
+        if self._residue_pka is not None:
+            # residue_pka holds a reference to the base class.
+            # Storing the name of the type, which can be looked to find it from the available_pkas dict
+            res.set('residue_pka', self.residue_type)
+
+        for atom_index in self.atom_indices:
+            objectify.SubElement(res, 'atom', index=str(atom_index))
+
+        for exception_index in self.exception_indices:
+            objectify.SubElement(res, 'exception', index=str(exception_index))
+
+        if self._pka_data is not None:
+            res.pka_data = objectify.fromstring(self._pka_data.to_html(index=False))
+
+
+        res.TitrationState = E.TitrationState()
+        res.TitrationState[:] = [state.serialize(index) for index,state in enumerate(self.titration_states)][:]
+
+        return res
+
+    def get_populations(self, pH, temperature=None, ionic_strength=None, strict=True):
+        """Return the state populations for a given pH.
+
+        Parameters
+        ----------
+        pH - float, the pH for which populations should be returned
+        temperature - float, the temperature in Kelvin that should be used  to find the log populations if available.
+            Optional, soft requirement. Won't throw error if not matched.
+        ionic_strength - float, the ionic strength in millimolar that should be used to find the log populations if available.
+            Optional, soft requirement. Won't throw error if not matched.
+        strict - bool, default True. If there are no pH dependent weights, throw an error. Else, just return default weights.
+
+        Notes
+        -----
+        Temperature, and ionic strength are soft requirements.
+
+        """
+        log_weights = np.empty(len(self))
+        # look up weights in the dictionary
+        if self._pka_data is not None:
+            # Search an appropriate log population value from the dataframe that was constructed.
+            # Temperature and Ionic strength aren't always provided.
+            for state, group in self._pka_data.groupby("State"):
+                # Get the first element where the pH matches, the temperature potentially matches, and the ionic strenght potentially matches
+                state = int(state)
+                pH_match = (group['pH'] == pH)
+                temperature_match = True
+                ionic_strength_match = True
+                if temperature is not None:
+                    temperature_match = (group['Temperature (K)'].isin([temperature, None]))
+
+                if ionic_strength is not None:
+                    ionic_strength_match = (group['Ionic strength (mM)'].isin(ionic_strength, None))
+
+                matches = group.loc[pH_match & temperature_match & ionic_strength_match]
+
+                # If there are no matches, throw an error
+                if len(matches) == 0:
+                    raise ValueError("There is no matching pH/temperature condition available for residue {}.".format(self.name))
+                # get the first one
+                else:
+                    first_row = next(matches.iterrows())
+                    # index 1 is the row values, get the log population
+                    log_population = first_row[1]['log population']
+
+                log_weights[state] = log_population
+
+        # calculate residue weights from pka object
+        elif self._residue_pka is not None:
+            log_weights = self._residue_pka(pH).populations()
+
+        # If there is no pH dependent population specified, return the current target populations.
+        # This will be equal if this was never specified previously. See the target_weights property.
+        else:
+            if strict:
+                raise RuntimeError("Residue is not adjustable by pH. {}".format(self.name))
+            else:
+                log_weights = np.log(np.asarray(self.target_weights))
+
+        return np.asarray(log_weights)
+
+    def set_populations(self, pH):
+        """
+        Set the target weights using the pH
+
+        Parameters
+        ----------
+        pH - float, the pH of the simulation.
+        """
+        # old_weights = np.asarray(self.target_weights)
+        self.target_weights = np.exp(self.get_populations(pH, strict=True))
+        ph_correction = -np.log(self.target_weights)
+        self.g_k_values = np.asarray(self.g_k_values) + ph_correction
 
     @property
     def state(self):
@@ -62,6 +321,9 @@ class _TitratableResidue:
 
     @property
     def state_index(self):
+        """
+        The index of the current state of the residue.
+        """
         return self._state
 
     @state.setter
@@ -94,6 +356,7 @@ class _TitratableResidue:
 
     @property
     def g_k_values(self):
+        """A list containing the g_k value for each state."""
         return [state.g_k for state in self]
 
     @g_k_values.setter
@@ -153,14 +416,95 @@ class _TitratableResidue:
 class _TitrationState:
     """Representation of a titration state"""
 
-    def __init__(self, g_k, charges, proton_count):
+    def __init__(self):
         """Instantiate a _TitrationState"""
 
-        self.g_k = g_k  # dimensionless quantity
-        self.charges = copy.deepcopy(charges)
-        self.proton_count = proton_count
+        self.g_k = None  # dimensionless quantity
+        self.charges = list()
+        self.proton_count = None
         self._forces = list()
         self._target_weight = None
+
+    @classmethod
+    def from_lists(cls, g_k, charges, proton_count):
+        """Instantiate a _TitrationState from g_k, proton count and a list of the charges
+
+        Returns
+        -------
+        obj - a new _TitrationState instance
+        """
+        obj = cls()
+        obj.g_k = g_k  # dimensionless quantity
+        obj.charges = copy.deepcopy(charges)
+        obj.proton_count = proton_count
+        # Note that forces are to be manually added by force caching functionality in ProtonDrives
+        obj._forces = list()
+        obj._target_weight = None
+        return obj
+
+    @classmethod
+    def from_serialized_xml(cls, state_element):
+        """
+        Deserialize a _TitrationState from a previously serialized xml tree
+
+        Parameters
+        ----------
+        xmltree - etree.Element or compatible lxml class containing one single titration state
+
+        Returns
+        -------
+        obj - a new _TitrationState instance
+        """
+
+        obj = cls()
+
+        # prevent accidental modification
+        state = copy.deepcopy(state_element)
+        obj.proton_count = int(state.get('proton_count'))
+        obj._target_weight = np.float64(state.get('target_weight'))
+        obj.g_k = np.float64(state.get('g_k'))
+
+        charges = state.xpath('charge')
+        obj.charges = [None] * len(charges)
+        for charge in charges:
+            # Get the array index
+            charge_index = int(charge.get('charge_index'))
+            charge_value = np.float64(charge.text)
+            obj.charges[charge_index] = charge_value
+
+        # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
+        # TODO implement GBSA forces or custom forces here
+        # Inside each force is a dict containing 'atoms', and 'exceptions'
+        # 'atoms' and 'exceptions' are lists
+        # Inside of the list are dicts.
+        # Each dictionary contains the parameters for either an atom, or an exception.
+        # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
+        # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
+        forces = state.xpath('force')
+        obj._forces = [None] * len(forces)
+        for f_index, force in enumerate(forces):
+            force_dict = dict(atoms=list(), exceptions=list())
+
+            for atom in force.xpath('atom'):
+                atom_dict = dict()
+                for key in ['atom_index', 'charge', 'epsilon', 'sigma']:
+                    if key == 'atom_index':
+                        atom_dict[key] = int(atom.get(key))
+                    else:
+                        atom_dict[key] = np.float64(atom.get(key))
+                force_dict['atoms'].append(atom_dict)
+
+            for exception in force.xpath('exception'):
+                exc_dict = dict()
+                for key in ["chargeProd", "epsilon", "exception_index", "particle1", "particle2" , "sigma"]:
+                    if key in ["particle1", "particle2", "exception_index"]:
+                        exc_dict[key] = int(exception.get(key))
+                    else:
+                        exc_dict[key] = np.float64(exception.get(key))
+                force_dict['exceptions'].append(exc_dict)
+            obj._forces[f_index] = force_dict
+
+        return obj
 
     @property
     def total_charge(self):
@@ -182,6 +526,105 @@ class _TitrationState:
     @target_weight.setter
     def target_weight(self, weight):
         self._target_weight = weight
+
+    def serialize(self, index=None):
+        """Serialize a state into xml etree.
+
+        Returns
+        -------
+        state - objectify tree
+        """
+        E = objectify.E
+        if index is not None:
+            index = str(index)
+        # Only serializing values that are not properties.
+        state = E.TitrationState(proton_count=str(self.proton_count), target_weight=str(self.target_weight), index=index, g_k=str(self.g_k))
+
+        q_tags = list()
+        for q_index, q in enumerate(self.charges):
+            # Ensure float is numpy type for print precision as specified in numpy print options
+            q = np.float64(q)
+            q_tags.append(E.charge("{:.15f}".format(q), charge_index=str(q_index)))
+
+        state.charge = E.charge
+        state.charge[:] = q_tags[:]
+
+        # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
+        # Other forces will get serialized correctly, but deserialization may be an issue.
+        # Inside each force is a dict containing 'atoms', and 'exceptions'
+        # 'atoms' and 'exceptions' are lists
+        # Inside of the list are dicts.
+        # Each dictionary contains the parameters for either an atom, or an exception.
+        # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
+        # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
+        for f_index, force in enumerate(self._forces):
+            force_xml = E.force(index=str(f_index), # the force index in the internal state, not the force index in openmm
+                                )
+            atoms = force['atoms']
+            exceptions = force['exceptions']
+            for atom in atoms:
+                # Convert to string for xml storage
+                atom_strings = dict(atom)
+                for key in atom.keys():
+                    if key == 'atom_index':
+                        atom_strings[key] = str(atom[key])
+                    else:
+                        # Ensure numpy type for print precision
+                        atom_strings[key] = "{:.15f}".format(np.float64(atom[key]))
+                atom_tag = objectify.SubElement(force_xml, 'atom', **atom_strings)
+            for exception in exceptions:
+                exception_strings = dict(exception)
+                for key in exception.keys():
+                    if key in ["particle1", "particle2", "exception_index"]:
+                        exception_strings[key] = str(exception[key])
+                    else:
+                        # Ensure numpy type for print precision
+                        exception_strings[key] = "{:.15f}".format(np.float64(exception[key]))
+                exception_tag = objectify.SubElement(force_xml, 'exception', **exception_strings)
+
+            state.force = force_xml
+
+        return state
+
+    def __eq__(self, other):
+        """Compare the equality of two _TitrationState objects."""
+        if not isinstance(other, _TitrationState):
+            return False
+
+        float_atol = 1.e-10
+        if not np.isclose(self._target_weight, other._target_weight, rtol=0.0, atol=float_atol):
+            return False
+
+        if not np.isclose(self.proton_count, other.proton_count, rtol=0.0, atol=float_atol):
+            return False
+
+        if not np.isclose(self.g_k, other.g_k, rtol=0.0, atol=float_atol):
+            return False
+
+        if len(self.charges) != len(other.charges):
+            return False
+
+        # Check if all stored charges are equal
+        if not np.all(np.isclose(self.charges, other.charges, atol=float_atol, rtol=0.0)):
+            return False
+
+        # check if all force parameters are equal
+        for own_force, other_force in zip(self._forces, other._forces):
+            own_atoms, other_atoms = own_force['atoms'], other_force['atoms']
+            own_exceptions, other_exceptions = own_force['exceptions'], other_force['exceptions']
+
+            for own_atom, other_atom in zip(own_atoms, other_atoms):
+                for key in own_atom.keys():
+                    if not np.isclose(own_atom[key], other_atom[key], rtol=0.0, atol=float_atol):
+                        return False
+
+            for own_exception, other_exception in zip(own_exceptions, other_exceptions):
+                for key in own_exception.keys():
+                    if not np.isclose(own_exception[key], other_exception[key], rtol=0.0, atol=float_atol):
+                        return False
+
+        # Everything that was checked seems equal.
+        return True
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -240,6 +683,24 @@ class _BaseDrive(metaclass=ABCMeta):
         Parameters
         ----------
         dict_of_pools - dict of lists
+        """
+        pass
+
+    @abstractmethod
+    def adjust_to_ph(self, pH):
+        """
+        Apply the pH target weight correction for the specified pH.
+
+        For amino acids, the pKa values in app.pkas will be used to calculate the correction.
+        For ligands, target populations at the specified pH need to be available, otherwise an exception will be thrown.
+
+        Parameters
+        ----------
+        pH - float, the pH to which target populations should be adjusted.
+
+        Raises
+        ------
+        ValueError - if the target weight for a given pH is not supplied.
         """
         pass
 
@@ -356,6 +817,27 @@ class NCMCProtonDrive(_BaseDrive):
                 self.forces_to_update.append(force)
 
         return
+
+    def serialize_titration_groups(self):
+        """Store residues handled by the drive as xml.
+
+        Returns
+        -------
+        str - xml representation of the residues inside of the drive.
+        """
+        xmltree = etree.Element("NCMCProtonDrive")
+        for res in self.titrationGroups:
+            xmltree.append(res.serialize())
+
+        return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
+
+    def add_residues_from_serialized_xml(self, xmltree):
+        """Add residues from previously serialized residues."""
+        if type(xmltree) == str:
+            xmltree = etree.fromstring(xmltree)
+        drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
+        for res in drive_xml.xpath("TitratableResidue"):
+            self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
 
     @property
     def titrationStates(self):
@@ -525,6 +1007,25 @@ class NCMCProtonDrive(_BaseDrive):
         self.nrejected = 0
 
         return
+
+    def adjust_to_ph(self, pH):
+        """
+        Apply the pH target weight correction for the specified pH.
+
+        For amino acids, the pKa values in app.pkas will be used to calculate the correction.
+        For ligands, target populations at the specified pH need to be available, otherwise an exception will be thrown.
+
+        Parameters
+        ----------
+        pH - float, the pH to which target populations should be adjusted.
+
+        Raises
+        ------
+        ValueError - if the target weight for a given pH is not supplied.
+        """
+
+        for residue in self.titrationGroups:
+            residue.set_populations(pH)
 
     def _get14scaling(self, system):
         """
@@ -732,7 +1233,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups)
 
-    def _add_titratable_group(self, atom_indices, residue_type, name=''):
+    def _add_titratable_group(self, atom_indices, residue_type, name='', residue_pka=None, pka_data=None):
         """
         Define a new titratable group.
 
@@ -764,7 +1265,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Define the new group.
         group_index = len(self.titrationGroups) + 1
-        group = _TitratableResidue(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices))
+        group = _TitratableResidue.from_lists(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices), residue_pka=residue_pka, pka_data=pka_data)
         self.titrationGroups.append(group)
         return group_index
 
@@ -820,7 +1321,7 @@ class NCMCProtonDrive(_BaseDrive):
         if len(charges) != len(self.titrationGroups[titration_group_index].atom_indices):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
-        state = _TitrationState(relative_energy * self.beta, copy.deepcopy(charges), proton_count)
+        state = _TitrationState.from_lists(relative_energy * self.beta, copy.deepcopy(charges), proton_count)
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
@@ -1501,7 +2002,12 @@ class AmberProtonDrive(NCMCProtonDrive):
                 example = 'Residue: AS4 2'
                 log.warn("Residue type '{}' has unusual length, verify residue name"
                          " in CPIN file has format like this one: '{}'".format(residue_type, example))
-            self._add_titratable_group(atom_indices, residue_type, name=name)
+            if residue_type in available_pkas:
+                residue_pka = available_pkas[residue_type]
+            else:
+                residue_pka = None
+
+            self._add_titratable_group(atom_indices, residue_type, name=name, residue_pka=residue_pka)
 
             # Define titration states.
             for titration_state in range(num_states):
@@ -1515,6 +2021,7 @@ class AmberProtonDrive(NCMCProtonDrive):
                 # Get proton count.
                 proton_count = namelist['PROTCNT'][first_state + titration_state]
                 # Create titration state.
+
                 self._add_titration_state(group_index, relative_energy, charges, proton_count)
                 self._cache_force(group_index, titration_state)
             # Set default state for this group.
@@ -1678,13 +2185,46 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             # Sort the atom indices in the template in the same order as the topology indices.
             atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
+            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+
+            residue_pka = None
+            pka_data = None
+            # Add pka adjustment features
+            if residue.name in available_pkas:
+                residue_pka = available_pkas[residue.name]
+
+            if len(protons_block.findall('State/Condition')) > 0 and residue_pka is None:
+                pka_data = DataFrame(columns=["pH", 'Temperature (K)', 'Ionic strength (mM)', 'log population'])
+                for state_index, state_block in enumerate(protons_block.xpath('State')):
+                    for condition in state_block.xpath('Condition'):
+                        row = dict(State=state_index)
+                        try:
+                            row['pH'] = float(condition.get('pH'))
+                        except TypeError:
+                            row['pH'] = None
+                        try:
+                            row['Temperature (K)'] = float(condition.get('temperature_kelvin'))
+                        except TypeError:
+                            row['Temperature (K)'] = None
+                        try:
+                            row['Ionic strength (mM)'] = float(condition.get('ionic_strength_mM'))
+                        except TypeError:
+                            row['Ionic strength (mM)'] = None
+                        logpop = condition.get('log_population')
+                        try:
+                            row['log population'] = float(logpop)
+                        except TypeError:
+                            raise ValueError("The log population provided can not be converted to a number :'{}'".format(logpop))
+                        pka_data = pka_data.append(row, ignore_index=True)
 
             # Create a new group with the given indices
-            self._add_titratable_group(atom_indices, residue.name,
-                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id))
+            self._add_titratable_group(atom_indices,
+                                       residue.name,
+                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id),
+                                       residue_pka=residue_pka, pka_data=pka_data)
 
             # Define titration states.
-            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
@@ -1701,6 +2241,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             # Set default state for this group.
             self._set_titration_state(group_index, 0)
+
 
     def _parse_ffxml_files(self, ffxml_files):
         """
