@@ -179,7 +179,11 @@ class _SaltSwapProposal:
         Returns
         -------
         list(int) - indices of water molecule in saltswap that are swapped
-        list(tuple(dict,dict),) -  list of tuples with (initial, final) parameters of the water molecule/ion as dict, one tuple for each requested swap
+        list(tuple(int,int),) -  list of tuples with (initial, final) states of the water molecule/ion as int, one tuple for each requested swap
+            By saltswap convention
+             - 0 is water
+             - 1 is cation
+             - 2 is anion
         float - log (probability of reverse proposal)/(probability of forward proposal)
         """
 
@@ -209,12 +213,12 @@ class UniformSwapProposal(_SaltSwapProposal):
 
         Returns
         -------
-        dict(wat2cat, wat2ani, cat2wat, ani2wat)
+        dict(water_to_cation, water_to_anion, cation_to_water, anion_to_water)
 
         """
 
         # Note that we don't allow for direct transitions between ions of different charge.
-        swaps = dict(wat2cat=0, wat2ani=0, cat2wat=0, ani2wat=0)
+        swaps = dict(water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0)
         excess_ions = int(drive.excess_ions)  # copy
 
         while abs(charge_to_counter) > 0:
@@ -239,14 +243,14 @@ class UniformSwapProposal(_SaltSwapProposal):
 
         # Need to counter positive charge by adding anion
         if charge_to_counter > 0:
-            swaps['wat2ani'] += 1
+            swaps['water_to_anion'] += 1
             # One negative charge was added
             net_ions -= 1
             # One positive charge was countered
             charge_to_counter -= 1
         # Need to counter negative charge by removing anion
         elif charge_to_counter < 0:
-            swaps['ani2wat'] += 1
+            swaps['anion_to_water'] += 1
             # One negative charge was removed
             net_ions += 1
             # One negative charge was countered
@@ -258,14 +262,14 @@ class UniformSwapProposal(_SaltSwapProposal):
         """Add a neutralizing swap operation in the case of no excess ions."""
         # Need to counter positive charge by adding anion
         if charge_to_counter > 0:
-            swaps['wat2ani'] += 1
+            swaps['water_to_anion'] += 1
             # One negative charge was added
             net_ions -= 1
             # One positive charge was countered
             charge_to_counter -= 1
         # Need to counter negative charge by adding cation
         elif charge_to_counter < 0:
-            swaps['wat2cat'] += 1
+            swaps['water_to_cation'] += 1
             # One positive charge was added
             net_ions += 1
             # One negative charge was countered
@@ -278,14 +282,14 @@ class UniformSwapProposal(_SaltSwapProposal):
         """Add a swap of water/ions in the case of excess cations."""
         # Need to counter positive charge by removing cation
         if charge_to_counter > 0:
-            swaps['cat2wat'] += 1
+            swaps['cation_to_water'] += 1
             # One positive charge was removed
             net_ions -= 1
             # One positive charge was countered
             charge_to_counter -= 1
         # Need to counter negative charge by adding cation
         elif charge_to_counter < 0:
-            swaps['wat2cat'] += 1
+            swaps['water_to_cation'] += 1
             # One positive charge was added
             net_ions += 1
             # One negative charge was countered
@@ -303,13 +307,13 @@ class UniformSwapProposal(_SaltSwapProposal):
             The error message will detail what the conflict is.
         """
 
-        if swaps['wat2cat'] != 0 and swaps['wat2ani'] != 0:
+        if swaps['water_to_cation'] != 0 and swaps['water_to_anion'] != 0:
             raise RuntimeError("Opposing charge ions are added. This is a bug in the code.")
-        elif swaps['cat2wat'] != 0 and swaps['ani2wat'] != 0:
+        elif swaps['cation_to_water'] != 0 and swaps['anion_to_water'] != 0:
             raise RuntimeError("Opposing charge ions are removed. This is a bug in the code.")
-        elif swaps['cat2wat'] != 0 and swaps['wat2cat'] != 0:
+        elif swaps['cation_to_water'] != 0 and swaps['water_to_cation'] != 0:
             raise RuntimeError("Cations are being added and removed at the same time. This is a bug in the code.")
-        elif swaps['ani2wat'] != 0 and swaps['wat2ani'] != 0:
+        elif swaps['anion_to_water'] != 0 and swaps['water_to_anion'] != 0:
             raise RuntimeError("Anions are being added and removed at the same time. This is a bug in the code.")
 
     def propose_swaps(self, drive, net_charge_difference):
@@ -324,21 +328,22 @@ class UniformSwapProposal(_SaltSwapProposal):
             Returns
             -------
             list(int) - indices of water molecule in saltswap that are swapped
-            list(tuple(dict,dict),) -  list of tuples with (initial, final) parameters of the water molecule/ion as dict, one tuple for each requested swap
+            list(tuple(int,int),) -  list of tuples with (initial, final) states of the water molecule/ion as dict, one tuple for each requested swap
+                By saltswap convention:
+                - 0 is water
+                - 1 is cation
+                - 2 is anion
+
             float - log (probability of reverse proposal)/(probability of forward proposal)
         """
 
         # Defaults. If no swaps are necessary, this will be all that is needed.
         saltswap_residue_indices = list()
-        saltswap_parameter_pairs = list()
+        saltswap_state_pairs = list()
         log_ratio = 0.0 # fully symmetrical proposal if no swaps occur.
 
         # If swaps are needed
         if net_charge_difference != 0:
-
-            water_params = drive.swapper.water_parameters
-            cation_params = drive.swapper.cation_parameters
-            anion_params = drive.swapper.anion_parameters
 
             # There is a net charge difference, find which swaps are necessary to compute.
             swaps = self._select_ion_water_swaps(drive, net_charge_difference)
@@ -351,61 +356,61 @@ class UniformSwapProposal(_SaltSwapProposal):
             all_anions = np.where(drive.swapper.stateVector == 2)[0]
 
 
-            # This code should only perform wat2cat OR wat2ani, not both.
+            # This code should only perform water_to_cation OR water_to_anion, not both.
             # The sanity check should prevent the same waters/ions from being selected twice.
             # individual types of swaps should be completely independent for the purpose of calculating
             # the proposal probabilities.
 
-            if swaps['wat2cat'] > 0:
-                for water_index in np.random.choice(a=all_waters, size=swaps['wat2cat'], replace=False):
+            if swaps['water_to_cation'] > 0:
+                for water_index in np.random.choice(a=all_waters, size=swaps['water_to_cation'], replace=False):
                     saltswap_residue_indices.append(water_index)
-                    saltswap_parameter_pairs.append(tuple([water_params, cation_params]))
+                    saltswap_state_pairs.append(tuple([0, 1]))
 
                 # Forward: choose m water to change into cations, probability of one pick is
-                # 1.0 / (n_water choose m); e.g. from all waters select m (the wat2cat count).
-                log_p_forward = -np.log(comb(all_waters.size, swaps['wat2cat'], exact=True))
+                # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_cation count).
+                log_p_forward = -np.log(comb(all_waters.size, swaps['water_to_cation'], exact=True))
                 # Reverse: choose m cations to change into water, probability of one pick is
-                # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the wat2cat count), select m
-                log_p_reverse = -np.log(comb(all_cations.size + swaps['wat2cat'], swaps['wat2cat'], exact=True))
+                # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the water_to_cation count), select m
+                log_p_reverse = -np.log(comb(all_cations.size + swaps['water_to_cation'], swaps['water_to_cation'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
 
-            if swaps['wat2ani'] > 0:
-                for water_index in np.random.choice(a=all_waters, size=swaps['wat2ani'], replace=False):
+            if swaps['water_to_anion'] > 0:
+                for water_index in np.random.choice(a=all_waters, size=swaps['water_to_anion'], replace=False):
                     saltswap_residue_indices.append(water_index)
-                    saltswap_parameter_pairs.append(tuple([water_params, anion_params]))
+                    saltswap_state_pairs.append(tuple([0, 2]))
 
                 # Forward: probability of one pick is
-                # 1.0 / (n_water choose m); e.g. from all waters select m (the wat2ani count).
-                log_p_forward = -np.log(comb(all_waters.size, swaps['wat2ani'], exact=True))
+                # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_anion count).
+                log_p_forward = -np.log(comb(all_waters.size, swaps['water_to_anion'], exact=True))
                 # Reverse: probability of one pick is
-                # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the wat2ani count), select m
-                log_p_reverse = -np.log(comb(all_anions.size + swaps['wat2ani'], swaps['wat2ani'], exact=True))
+                # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the water_to_anion count), select m
+                log_p_reverse = -np.log(comb(all_anions.size + swaps['water_to_anion'], swaps['water_to_anion'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
 
-            if swaps['cat2wat'] > 0:
-                for cation_index in np.random.choice(a=all_cations, size=swaps['cat2wat'], replace=False):
+            if swaps['cation_to_water'] > 0:
+                for cation_index in np.random.choice(a=all_cations, size=swaps['cation_to_water'], replace=False):
                     saltswap_residue_indices.append(cation_index)
-                    saltswap_parameter_pairs.append(tuple([cation_params, water_params]))
+                    saltswap_state_pairs.append(tuple([1, 0]))
 
                 # Forward: choose m cations to change into water, probability of one pick is
-                # 1.0 / (n_cations choose m); e.g. from all cations select m (the cat2wat count).
-                log_p_forward = -np.log(comb(all_cations.size, swaps['cat2wat'], exact=True))
+                # 1.0 / (n_cations choose m); e.g. from all cations select m (the cation_to_water count).
+                log_p_forward = -np.log(comb(all_cations.size, swaps['cation_to_water'], exact=True))
                 # Reverse: choose m water to change into cations, probability of one pick is
-                # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the ani2wat count), select m
-                log_p_reverse = -np.log(comb(all_cations.size + swaps['cat2wat'], swaps['cat2wat'], exact=True))
+                # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the anion_to_water count), select m
+                log_p_reverse = -np.log(comb(all_cations.size + swaps['cation_to_water'], swaps['cation_to_water'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
 
-            if swaps['ani2wat'] > 0:
-                for anion_index in np.random.choice(a=all_anions, size=swaps['ani2wat'], replace=False):
+            if swaps['anion_to_water'] > 0:
+                for anion_index in np.random.choice(a=all_anions, size=swaps['anion_to_water'], replace=False):
                     saltswap_residue_indices.append(anion_index)
-                    saltswap_parameter_pairs.append(tuple([anion_params, water_params]))
+                    saltswap_state_pairs.append(tuple([2, 0]))
 
                 # Forward: probability of one pick is
-                # 1.0 / (n_anions choose m); e.g. from all anions select m (the ani2wat count).
-                log_p_forward = -np.log(comb(all_anions.size, swaps['ani2wat'], exact=True))
+                # 1.0 / (n_anions choose m); e.g. from all anions select m (the anion_to_water count).
+                log_p_forward = -np.log(comb(all_anions.size, swaps['anion_to_water'], exact=True))
                 # Reverse: probability of one pick is
-                # 1.0 / (n_water + m choose m); e.g. from water plus m (the ani2wat count), select m
-                log_p_reverse = -np.log(comb(all_waters.size + swaps['ani2wat'], swaps['ani2wat'], exact=True))
+                # 1.0 / (n_water + m choose m); e.g. from water plus m (the anion_to_water count), select m
+                log_p_reverse = -np.log(comb(all_waters.size + swaps['anion_to_water'], swaps['anion_to_water'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
 
-        return saltswap_residue_indices, saltswap_parameter_pairs, log_ratio
+        return saltswap_residue_indices, saltswap_state_pairs, log_ratio
