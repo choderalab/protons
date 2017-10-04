@@ -1635,7 +1635,7 @@ class NCMCProtonDrive(_BaseDrive):
 
 
 
-    def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states):
+    def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from the initial protonation
         states to the final protonation states. This functions changes the system's states and returns the work for the
@@ -1659,6 +1659,13 @@ class NCMCProtonDrive(_BaseDrive):
         final_titration_states :
             The final protonation state of the titration groups
 
+        salt_residue_indices: optional, list of int
+            The indices of saltswap residues that are to be updated during the ncmc protocol.
+
+        salt_states: optional, list of tuples(int,int)
+            The indices of the initial and final states of the specified salt residues.
+
+
         Returns
         -------
         work : float
@@ -1669,6 +1676,16 @@ class NCMCProtonDrive(_BaseDrive):
             self.cm_remover.setFrequency(0)
 
         ncmc_integrator = self.ncmc_integrator
+        update_salt = False
+
+        if salt_residue_indices is not None:
+            if salt_states is None:
+                raise ValueError("Need to provide states of the salt changes when specifying salt indices.")
+        elif salt_states is not None:
+            if salt_residue_indices is None:
+                raise ValueError("Need to specify the salt_residue_indices when specifying salt state changes.")
+        elif salt_residue_indices is not None and salt_states is not None:
+            update_salt = True
 
         # Reset integrator statistics
         try:
@@ -1703,6 +1720,10 @@ class NCMCProtonDrive(_BaseDrive):
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
                                     fractional_titration_state=titration_lambda)
+
+            if update_salt:
+                for salt_residue, (from_state, to_state) in zip(salt_residue_indices, salt_states):
+                    self.swapper.update_fractional_ion(salt_residue, self._ion_parameters[from_state], self._ion_parameters[to_state], titration_lambda)
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(self.context)
 
@@ -1723,6 +1744,7 @@ class NCMCProtonDrive(_BaseDrive):
             self.titrationGroups[titration_group_index].state = final_titration_states[titration_group_index]
 
         # Extracting the final state's weight.
+        # todo do the different salt states have separate weights, or should they all be weighted the same?
         g_final = 0
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
