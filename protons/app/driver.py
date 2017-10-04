@@ -802,6 +802,9 @@ class NCMCProtonDrive(_BaseDrive):
         # The drive should never add cations and anions at the same time.
         self.excess_ions = 0
 
+        # A dict of ion parameters, indexed by integers. Set from the swapper in attach_swapper.
+        self._ion_parameters = None
+
         # The method used to select ions. Should be a subclass of _SaltSwapProposal
         # This variable is set using the `attach_swapper` method.
         self.swap_proposal = None
@@ -927,6 +930,11 @@ class NCMCProtonDrive(_BaseDrive):
             raise TypeError("Please provide a Swapper object.")
 
         self.swapper = swapper
+
+        self._ion_parameters = {0: self.swapper.water_parameters,
+                      1: self.swapper.cation_parameters,
+                      2: self.swapper.anion_parameters}
+
         if proposal is not None:
             self.swap_proposal = proposal
         else:
@@ -1768,20 +1776,28 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
-
         final_titration_states, titration_group_indices, log_p_residue_proposal = proposal.propose_states(self, residue_pool_indices)
         if self.swapper is not None:
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
-            saltswap_residue_indices, saltswap_parameter_pairs, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, net_charge_difference)
-            
+            saltswap_residue_indices, saltswap_states, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, net_charge_difference)
+
         try:
             # Compute work for switching to new protonation states.
 
+            # 0 is the shortcut for instantaneous Monte Carlo
             if self.perturbations_per_trial == 0:
                 # Use instantaneous switching.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], updateParameters=False)
-                    # TODO add ion switch from the saltswap proposal here
+
+                    # If maintaining charge neutrality.
+                    if self.swapper is not None:
+                        for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
+                            from_parameter = self._ion_parameters[from_ion_state]
+                            to_parameter = self._ion_parameters[to_ion_state]
+                            self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 1.0)
+
+                # Push parameter updates to the context
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
 
@@ -1803,6 +1819,11 @@ class NCMCProtonDrive(_BaseDrive):
             log_P_accept = -work
             log_P_accept += log_p_residue_proposal
 
+            # If maintaining charge neutrality using saltswap
+            if self.swapper is not None:
+                # The acceptance criterion is extended with the ratio of salt proposal probabilities (reverse/forward)
+                log_P_accept += salt_proposal_log_ratio
+
             # Only record acceptance statistics for exchanges to different protonation states
             if initial_titration_states != final_titration_states:
                 self.nattempted += 1
@@ -1820,6 +1841,16 @@ class NCMCProtonDrive(_BaseDrive):
                 # If using NCMC, flip velocities to satisfy super-detailed balance.
                 if self.perturbations_per_trial > 0:
                     self.context.setVelocities(-self.context.getState(getVelocities=True).getVelocities(asNumpy=True))
+
+                # If maintaining charge neutrality using saltswap
+                if self.swapper is not None:
+                    # The excess ion count is updated with the change in counterions
+                    self.excess_ions -= net_charge_difference
+                    # The saltswap indices are updated to indicate the change of species
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices,
+                                                                                saltswap_states):
+                        self.swapper.stateVector[saltswap_residue] = to_ion_state
+
             else:
                 # Reject.
                 if initial_titration_states != final_titration_states:
@@ -1827,6 +1858,15 @@ class NCMCProtonDrive(_BaseDrive):
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], updateParameters=False)
+
+                # If maintaining charge neutrality using saltswap
+                if self.swapper is not None:
+                    # Restore the salt species parameters
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
+                        from_parameter = self._ion_parameters[from_ion_state]
+                        to_parameter = self._ion_parameters[to_ion_state]
+                        self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 0.0)
+
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
 
@@ -1845,6 +1885,16 @@ class NCMCProtonDrive(_BaseDrive):
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
                     self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], updateParameters=False)
+
+                # If maintaining charge neutrality using saltswap
+                if self.swapper is not None:
+                    # Restore the salt species parameters
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices,
+                                                                                saltswap_states):
+                        from_parameter = self._ion_parameters[from_ion_state]
+                        to_parameter = self._ion_parameters[to_ion_state]
+                        self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 0.0)
+
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
                 # If using NCMC, restore coordinates and flip velocities.
