@@ -1772,7 +1772,8 @@ class NCMCProtonDrive(_BaseDrive):
         final_titration_states, titration_group_indices, log_p_residue_proposal = proposal.propose_states(self, residue_pool_indices)
         if self.swapper is not None:
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
-
+            saltswap_residue_indices, saltswap_parameter_pairs, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, net_charge_difference)
+            
         try:
             # Compute work for switching to new protonation states.
 
