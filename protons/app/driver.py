@@ -15,7 +15,8 @@ import os
 from simtk import unit
 from simtk import openmm as mm
 import saltswap
-from .proposals import _StateProposal
+from saltswap.swapper import Swapper
+from .proposals import _StateProposal, _SaltSwapProposal, UniformSwapProposal
 from .topology import Topology
 from .pka import available_pkas
 from simtk.openmm import app
@@ -706,12 +707,14 @@ class _BaseDrive(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def attach_swapper(self, swapper):
+    def attach_swapper(self, swapper: Swapper, proposal=None):
         """Attach a saltswap.swapper object that is used for maintaining total charges.
 
-        The swapper will be used for bookkeeping of solvent/buffer ions in the system. In order to
+        The `swapper` will be used for bookkeeping of solvent/buffer ions in the system. In order to
          maintain the charge neutrality of the system, the swapper is used to randomly take water molecules, and
          change it into an anion or a cation.
+
+        It should take an optional argument called `proposal` that determines how ions are selected.
 
         """
 
@@ -791,12 +794,17 @@ class NCMCProtonDrive(_BaseDrive):
         self.context = None
 
         # A salt swap swapper can later be attached to enable counterion coupling to protonation state changes
+        # Using the `attach_swapper` method
         self.swapper = None
         # The total excess charge from ions, applied as counter-charge to protonation state changes.
         # Positive indicates the amount of cations that have been added to the system
         # Negative indicates the amount of anions that have been added to the system
         # The drive should never add cations and anions at the same time.
         self.excess_ions = 0
+
+        # The method used to select ions. Should be a subclass of _SaltSwapProposal
+        # This variable is set using the `attach_swapper` method.
+        self.swap_proposal = None
 
         # Record the forces that need to be switched off for NCMC
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
@@ -821,7 +829,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Keep track of forces and whether they've been cached.
         self.precached_forces = False
 
-         # Determine 14 Coulomb and Lennard-Jones scaling from system.
+        # Determine 14 Coulomb and Lennard-Jones scaling from system.
         self.coulomb14scale = self._get14scaling(system)
 
         # Store list of exceptions that may need to be modified.
@@ -907,7 +915,7 @@ class NCMCProtonDrive(_BaseDrive):
         for force_index, force in enumerate(self.forces_to_update):
             force.updateParametersInContext(self.context)
 
-    def attach_swapper(self, swapper: saltswap.swapper.Swapper):
+    def attach_swapper(self, swapper: Swapper, proposal: _SaltSwapProposal=None):
         """
         Provide a saltswapper to enable maintaining charge neutrality.
 
@@ -915,11 +923,14 @@ class NCMCProtonDrive(_BaseDrive):
         ----------
         swapper - a saltswap.Swapper object that is used for ion manipulation and bookkeeping.
         """
-        if not isinstance(swapper, saltswap.swapper.Swapper):
+        if not isinstance(swapper, Swapper):
             raise TypeError("Please provide a Swapper object.")
 
         self.swapper = swapper
-
+        if proposal is not None:
+            self.swap_proposal = proposal
+        else:
+            self.swap_proposal = UniformSwapProposal()
         return
 
     def define_pools(self, dict_of_pools):
