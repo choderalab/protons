@@ -30,6 +30,7 @@ requirements:
     - matplotlib
     - pandas
     - beautifulsoup4 # for deserialization of html tables
+    - saltswap >=0.5.1 # for counterion coupling
 
   run:
     - python
@@ -48,6 +49,7 @@ requirements:
     - seaborn
     - matplotlib
     - pandas
+    - saltswap >=0.5.1 # for counterion coupling
     - beautifulsoup4 # for deserialization of html tables
 
 test:
