@@ -5,6 +5,7 @@ from .logger import log
 import copy
 import random
 import numpy as np
+from simtk import unit
 from scipy.misc import comb
 
 class _StateProposal(metaclass=ABCMeta):
@@ -193,9 +194,20 @@ class _SaltSwapProposal:
 class UniformSwapProposal(_SaltSwapProposal):
     """Uniformly selects as many water/ions as needed from the array of available waters/ions."""
 
-    def __init__(self):
-        """Instantiate a UniformSwapProposal."""
-        pass
+    def __init__(self, cation_coefficient: float = 0.5):
+        """Instantiate a UniformSwapProposal.
+
+        Parameters
+        ----------
+        cation_coefficient - float, optional. Must be between 0 and 1, default 0.5.
+            The fraction of the chemical potential of a water pair -> salt pair transformation that is attributed to the
+            cation -> water transformation.
+        """
+        if not 0.0 <= cation_coefficient <= 1.0:
+            raise ValueError("The cation coefficient should be between 0 and 1.")
+
+        self._cation_weight = cation_coefficient
+        self._anion_weight = 1.0 - cation_coefficient
 
     @staticmethod
     def _select_ion_water_swaps(drive, charge_to_counter):
@@ -342,6 +354,17 @@ class UniformSwapProposal(_SaltSwapProposal):
         saltswap_state_pairs = list()
         log_ratio = 0.0 # fully symmetrical proposal if no swaps occur.
 
+        # the chemical potential for switching two water molecules into cation + anion
+        chem_potential = drive.swapper.delta_chem
+
+        # If no cost is supplied, use the supplied chemical potential
+
+        # Check the type of the chemical potential, and reduce units if necessary
+        if isinstance(chem_potential, unit.Quantity):
+            chem_potential *= drive.beta
+            if unit.is_quantity(chem_potential):
+                raise ValueError('The chemical potential has irreducible units ({}).'.format(str(chem_potential.unit)))
+
         # If swaps are needed
         if net_charge_difference != 0:
 
@@ -373,6 +396,10 @@ class UniformSwapProposal(_SaltSwapProposal):
                 # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the water_to_cation count), select m
                 log_p_reverse = -np.log(comb(all_cations.size + swaps['water_to_cation'], swaps['water_to_cation'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
+                # Calculate the work of transforming one water molecule into a cation
+                work = chem_potential * self._cation_weight
+                # Subtract the work from the acceptance probability
+                log_ratio -= work
 
             if swaps['water_to_anion'] > 0:
                 for water_index in np.random.choice(a=all_waters, size=swaps['water_to_anion'], replace=False):
@@ -386,6 +413,10 @@ class UniformSwapProposal(_SaltSwapProposal):
                 # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the water_to_anion count), select m
                 log_p_reverse = -np.log(comb(all_anions.size + swaps['water_to_anion'], swaps['water_to_anion'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
+                # Calculate the work of transforming one water into one anion
+                work = chem_potential * self._anion_weight
+                # Subtract the work from the acceptance probability
+                log_ratio -= work
 
             if swaps['cation_to_water'] > 0:
                 for cation_index in np.random.choice(a=all_cations, size=swaps['cation_to_water'], replace=False):
@@ -399,6 +430,10 @@ class UniformSwapProposal(_SaltSwapProposal):
                 # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the anion_to_water count), select m
                 log_p_reverse = -np.log(comb(all_cations.size + swaps['cation_to_water'], swaps['cation_to_water'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
+                # Calculate the work of transforming one cation into one water molecule
+                work = -chem_potential * self._cation_weight
+                # Subtract the work from the acceptance probability
+                log_ratio -= work
 
             if swaps['anion_to_water'] > 0:
                 for anion_index in np.random.choice(a=all_anions, size=swaps['anion_to_water'], replace=False):
@@ -412,5 +447,9 @@ class UniformSwapProposal(_SaltSwapProposal):
                 # 1.0 / (n_water + m choose m); e.g. from water plus m (the anion_to_water count), select m
                 log_p_reverse = -np.log(comb(all_waters.size + swaps['anion_to_water'], swaps['anion_to_water'], exact=True))
                 log_ratio += (log_p_reverse - log_p_forward)
+                # Calculate the work of transforming one anion into water based on the chemical potential
+                work = -chem_potential * self._anion_weight
+                # Subtract the work from the acceptance probability
+                log_ratio -= work
 
         return saltswap_residue_indices, saltswap_state_pairs, log_ratio
