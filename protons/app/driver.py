@@ -1850,7 +1850,8 @@ class NCMCProtonDrive(_BaseDrive):
             if initial_titration_states != final_titration_states:
                 self.nattempted += 1
             # Accept or reject with Metropolis criteria.
-            if (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept)):
+            accept_move = self._accept_reject(log_P_accept)
+            if accept_move:
                 # Accept.
                 if initial_titration_states != final_titration_states:
                     self.naccepted += 1
@@ -1929,6 +1930,10 @@ class NCMCProtonDrive(_BaseDrive):
             self.compound_integrator.setCurrentIntegrator(0)
 
         return
+
+    def _accept_reject(self, log_P_accept) -> bool:
+        """Perform acceptance/rejection check according to the Metropolis-Hastings acceptance criterium."""
+        return (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept))
 
     def _get_acceptance_probability(self):
         """
