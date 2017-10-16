@@ -932,8 +932,9 @@ class NCMCProtonDrive(_BaseDrive):
         self.swapper = swapper
 
         self._ion_parameters = {0: self.swapper.water_parameters,
-                      1: self.swapper.cation_parameters,
-                      2: self.swapper.anion_parameters}
+                                1: self.swapper.cation_parameters,
+                                2: self.swapper.anion_parameters
+                                }
 
         if proposal is not None:
             self.swap_proposal = proposal
@@ -1678,14 +1679,12 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator = self.ncmc_integrator
         update_salt = False
 
-        if salt_residue_indices is not None:
-            if salt_states is None:
-                raise ValueError("Need to provide states of the salt changes when specifying salt indices.")
-        elif salt_states is not None:
-            if salt_residue_indices is None:
-                raise ValueError("Need to specify the salt_residue_indices when specifying salt state changes.")
-        elif salt_residue_indices is not None and salt_states is not None:
+        if salt_residue_indices is not None and salt_states is not None:
             update_salt = True
+        elif salt_residue_indices is not None and salt_states is None:
+                raise ValueError("Need to provide states of the salt changes when specifying salt indices.")
+        elif salt_states is not None and salt_residue_indices is None:
+                raise ValueError("Need to specify the salt_residue_indices when specifying salt state changes.")
 
         # Reset integrator statistics
         try:
