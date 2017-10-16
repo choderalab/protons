@@ -1743,7 +1743,6 @@ class NCMCProtonDrive(_BaseDrive):
             self.titrationGroups[titration_group_index].state = final_titration_states[titration_group_index]
 
         # Extracting the final state's weight.
-        # todo do the different salt states have separate weights, or should they all be weighted the same?
         g_final = 0
         for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
@@ -1828,7 +1827,6 @@ class NCMCProtonDrive(_BaseDrive):
                 # Only perform NCMC when the proposed state is different from the current state
                 if initial_titration_states != final_titration_states:
                     # Run NCMC integration.
-                    # TODO Insert ion changes from the saltswap proposal as arguments to this function.
                     work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states)
                 else:
                     work = 0.0
