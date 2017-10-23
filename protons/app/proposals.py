@@ -160,7 +160,7 @@ class CategoricalProposal(_StateProposal):
         return final_titration_states, titration_group_indices, 0.0
 
 
-class _SaltSwapProposal:
+class SaltSwapProposal:
     """This class is a baseclass for selecting water molecules or ions to maintain charge neutrality."""
 
     def propose_swaps(self, drive, net_charge_difference):
@@ -191,7 +191,7 @@ class _SaltSwapProposal:
         return list(), list(), float()
 
 
-class UniformSwapProposal(_SaltSwapProposal):
+class UniformSwapProposal(SaltSwapProposal):
     """Uniformly selects as many water/ions as needed from the array of available waters/ions."""
 
     def __init__(self, cation_coefficient: float = 0.5):

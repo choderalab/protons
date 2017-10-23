@@ -16,7 +16,7 @@ from simtk import unit
 from simtk import openmm as mm
 import saltswap
 from saltswap.swapper import Swapper
-from .proposals import _StateProposal, _SaltSwapProposal, UniformSwapProposal
+from .proposals import _StateProposal, SaltSwapProposal, UniformSwapProposal
 from .topology import Topology
 from .pka import available_pkas
 from simtk.openmm import app
@@ -805,7 +805,7 @@ class NCMCProtonDrive(_BaseDrive):
         # A dict of ion parameters, indexed by integers. Set from the swapper in attach_swapper.
         self._ion_parameters = None
 
-        # The method used to select ions. Should be a subclass of _SaltSwapProposal
+        # The method used to select ions. Should be a subclass of SaltSwapProposal
         # This variable is set using the `attach_swapper` method.
         self.swap_proposal = None
 
@@ -918,7 +918,7 @@ class NCMCProtonDrive(_BaseDrive):
         for force_index, force in enumerate(self.forces_to_update):
             force.updateParametersInContext(self.context)
 
-    def attach_swapper(self, swapper: Swapper, proposal: _SaltSwapProposal=None):
+    def attach_swapper(self, swapper: Swapper, proposal: SaltSwapProposal=None):
         """
         Provide a saltswapper to enable maintaining charge neutrality.
 
