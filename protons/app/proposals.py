@@ -194,7 +194,7 @@ class SaltSwapProposal:
 class UniformSwapProposal(SaltSwapProposal):
     """Uniformly selects as many water/ions as needed from the array of available waters/ions."""
 
-    def __init__(self, cation_coefficient: float = 0.5):
+    def __init__(self, cation_coefficient: float=0.5):
         """Instantiate a UniformSwapProposal.
 
         Parameters

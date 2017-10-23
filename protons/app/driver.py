@@ -925,6 +925,9 @@ class NCMCProtonDrive(_BaseDrive):
         Parameters
         ----------
         swapper - a saltswap.Swapper object that is used for ion manipulation and bookkeeping.
+        proposal - optional, a SaltSwapProposal derived class that is used to select ions. If not provided it uses
+        the UniformSwapProposal
+
         """
         if not isinstance(swapper, Swapper):
             raise TypeError("Please provide a Swapper object.")
