@@ -7,11 +7,16 @@ from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
+from protons.app.proposals import UniformSwapProposal
 from protons.app import Topology
+from saltswap.swapper import Swapper
+from saltswap.wrappers import Salinator
 from protons.app import ForceField
 from lxml import etree
 from . import get_test_data
-from .utilities import SystemSetup, create_compound_gbaoab_integrator
+from .utilities import SystemSetup, create_compound_gbaoab_integrator, hasCUDA
+import numpy as np
+from collections import Counter
 
 
 class TestAmberTyrosineExplicit(object):
@@ -465,7 +470,7 @@ class TestAmberPeptide(object):
         newdrive.update(UniformProposal(), nattempts=1)
 
 
-class TestForceFieldImidazoleExplicitpHAdjusted(object):
+class TestForceFieldImidazoleExplicitpHAdjusted:
     """Tests for pH adjusting imidazole weights in explict solvent (TIP3P)"""
 
     default_platform = 'CPU'
@@ -515,7 +520,7 @@ class TestForceFieldImidazoleExplicitpHAdjusted(object):
 
     def test_imidazole_instantaneous_wrongpH_adjust(self):
         """
-        Run imidazole in explicit solvent with an instanteneous state switch
+        Run imidazole in explicit solvent with an instanteneous state switch, trying to set to an unavailable pH.
         """
         testsystem = self.setup_imidazole_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
@@ -586,4 +591,146 @@ class TestForceFieldImidazoleExplicitpHAdjusted(object):
         assert before_group == after_group, "The deserialized group does not match what was serialized."
 
 
+class TestForceFieldImidazoleSaltswap:
+    """Tests for saltswap dependent functionality on imidazole in explicit solvent."""
+
+    default_platform = 'CPU'
+    @staticmethod
+    def setup_imidazole_explicit():
+        """
+        Set up a tyrosine in explicit solvent
+        """
+        imidazole_explicit_system = SystemSetup()
+        imidazole_explicit_system.temperature = 300.0 * unit.kelvin
+        imidazole_explicit_system.pressure = 1.0 * unit.atmospheres
+        imidazole_explicit_system.timestep = 1.0 * unit.femtoseconds
+        imidazole_explicit_system.collision_rate = 1.0 / unit.picoseconds
+        imidazole_explicit_system.pH = 9.6
+        testsystems = get_test_data('imidazole_explicit', 'testsystems')
+        imidazole_explicit_system.positions = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.state.xml'.format(testsystems)).read()).getPositions(asNumpy=True)
+        imidazole_explicit_system.system = openmm.XmlSerializer.deserialize(
+            open('{}/imidazole-explicit.sys.xml'.format(testsystems)).read())
+        imidazole_explicit_system.ffxml_filename = os.path.join(testsystems, 'protons-imidazole-ph-feature.xml')
+        imidazole_explicit_system.forcefield = ForceField('gaff.xml', imidazole_explicit_system.ffxml_filename)
+        imidazole_explicit_system.gaff = 'gaff.xml'
+        imidazole_explicit_system.pdbfile = app.PDBFile(
+            os.path.join(testsystems, "imidazole-solvated-minimized.pdb"))
+        imidazole_explicit_system.topology = imidazole_explicit_system.pdbfile.topology
+        imidazole_explicit_system.nsteps_per_ghmc = 1
+        imidazole_explicit_system.constraint_tolerance = 1.e-7
+        return imidazole_explicit_system
+
+    def test_saltswap_incorporation(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure, perturbations_per_trial=0)
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        swapper = Swapper(testsystem.system, testsystem.topology, testsystem.temperature,
+                          317.0 * unit.kilojoule_per_mole, ncmc_integrator=compound_integrator.getIntegrator(1),
+                          pressure=testsystem.pressure, nattempts_per_update=1,npert=1, nprop=0,
+                          work_measurement='internal', waterName="HOH", cationName='Na+', anionName='Cl-'
+                          )
+        driver.attach_swapper(swapper)
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_total_charge(self):
+        """Test if the system charge is neutral when perturbing the system using ncmc, with saltswap."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure=testsystem.pressure, perturbations_per_trial=1)
+
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(context=context, system=testsystem.system, topology=testsystem.topology,
+                              ncmc_integrator=compound_integrator.getIntegrator(1), salt_concentration=0.2 * unit.molar,
+                              pressure=testsystem.pressure, temperature=testsystem.temperature)
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.attach_swapper(swapper)
+
+        driver.adjust_to_ph(7.4)
+        swap_proposal = UniformSwapProposal()
+        old_charge = self.calculate_explicit_solvent_system_charge(driver.system)
+        # The initial state is neutral, the new state is +1
+        net_charge_difference = 1.0
+        # Pick swaps using the proposal method explicitly.
+        saltswap_residue_indices, saltswap_state_pairs, log_ratio = swap_proposal.propose_swaps(driver, net_charge_difference)
+        # First residue is updates from state 0, to state 1, and the previously selected salt swap is added to the protocol
+        driver._perform_ncmc_protocol([0],np.asarray([0]),np.asarray([1]), salt_residue_indices=saltswap_residue_indices, salt_states=saltswap_state_pairs)
+
+        # This should be the same as the old charge
+        new_charge = self.calculate_explicit_solvent_system_charge(driver.system)
+        # Bookkeeping
+        driver.excess_ions -= net_charge_difference
+
+        # The saltswap indices are updated to indicate the change of species
+        for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_state_pairs):
+            swapper.stateVector[saltswap_residue] = to_ion_state
+
+        # If the total charge has changed during the protocol, something is wrong.
+        assert pytest.approx(0.0, rel=0.0, abs=1.e-12) == old_charge - new_charge,\
+            "The total charge changed after NCMC."
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
+    @pytest.mark.skipif(not hasCUDA, reason="This test requires CUDA.")
+    def test_saltswap_accumulation(self):
+        """Using a salinator, update 2500 times and check if ions are exceeding limits.
+
+        Note that this test is too slow without CUDA.
+        """
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure, perturbations_per_trial=2, propagations_per_step=1)
+        platform = openmm.Platform.getPlatformByName("CUDA")
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        salinator = Salinator(context=context,system=testsystem.system, topology=testsystem.topology, ncmc_integrator=compound_integrator.getIntegrator(1), salt_concentration=0.2 * unit.molar, pressure=testsystem.pressure, temperature=testsystem.temperature)
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.attach_swapper(swapper)
+
+        # force accepting
+        driver._accept_reject = lambda logp_accept: True
+        old_status = Counter(list(swapper.stateVector[:]))
+        driver.adjust_to_ph(7.4)
+        for attempt in range(2500):
+            driver.update(UniformProposal())
+        new_status = Counter(list(swapper.stateVector[:]))
+        for mol_type in [0,1,2]:
+            assert abs(old_status[mol_type] - new_status[mol_type]) < 2, "The difference in ions should not be " \
+                                                                         "exceeding one. If it is greater, " \
+                                                                         "ions are accumulating. "
+
+    @staticmethod
+    def calculate_explicit_solvent_system_charge(system):
+        """Calculate the total charge of an explicit solvent system."""
+
+        serializer = openmm.XmlSerializer
+        xml = serializer.serialize(system)
+        tree = etree.fromstring(xml)
+        tot_charge = np.float64(0.0)
+        for q in tree.xpath("/System/Forces/Force[@type='NonbondedForce']/Particles/Particle/@q"):
+            tot_charge += np.float64(q)
+
+        return tot_charge
 
