@@ -931,6 +931,11 @@ class NCMCProtonDrive(_BaseDrive):
 
         self.swapper = swapper
 
+        nwat, ncat, nani = swapper.get_identity_counts()
+
+        # The excess amount of ions, positive if cations, negative if more anions
+        self.excess_ions = ncat - nani
+
         self._ion_parameters = {0: self.swapper.water_parameters,
                                 1: self.swapper.cation_parameters,
                                 2: self.swapper.anion_parameters
@@ -1633,7 +1638,6 @@ class NCMCProtonDrive(_BaseDrive):
                     f_params[force_index]['exceptions'].append(exc_dict)
 
         self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
-
 
 
     def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
