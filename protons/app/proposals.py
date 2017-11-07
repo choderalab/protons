@@ -163,17 +163,18 @@ class CategoricalProposal(_StateProposal):
 class SaltSwapProposal:
     """This class is a baseclass for selecting water molecules or ions to maintain charge neutrality."""
 
-    def propose_swaps(self, drive, net_charge_difference):
+    def propose_swaps(self, drive, initial_charge: int, final_charge: int):
         """Select a series of water molecules/ions to swap.
 
         Parameters
         ----------
 
         drive - a ProtonDrive object with a swapper attached.
-        net_charge_difference - int, the total charge that needs to be countered by ions.
+        initial_charge - the total charge of the changing residue before the state change
+        total_charge - the total charge of the changing residue after the state change
 
-        Nota bene
-        ---------
+        Please note
+        -----------
         The net charge difference will have the opposite charge of the ions that will be added to the system,
         such that the resulting total charge change will be 0.
 
@@ -328,14 +329,15 @@ class UniformSwapProposal(SaltSwapProposal):
         elif swaps['anion_to_water'] != 0 and swaps['water_to_anion'] != 0:
             raise RuntimeError("Anions are being added and removed at the same time. This is a bug in the code.")
 
-    def propose_swaps(self, drive, net_charge_difference):
+    def propose_swaps(self, drive, initial_charge: int, final_charge: int):
         """Select a series of water molecules/ions to swap uniformly from all waters/ions.
 
             Parameters
             ----------
 
             drive - a ProtonDrive object with a swapper attached.
-            net_charge_difference - int, the total charge that needs to be countered.
+            initial_charge - the total charge of the changing residue before the state change
+            total_charge - the total charge of the changing residue after the state change
 
             Returns
             -------
@@ -348,7 +350,7 @@ class UniformSwapProposal(SaltSwapProposal):
 
             float - log (probability of reverse proposal)/(probability of forward proposal)
         """
-
+        net_charge_difference = final_charge - initial_charge
         # Defaults. If no swaps are necessary, this will be all that is needed.
         saltswap_residue_indices = list()
         saltswap_state_pairs = list()
