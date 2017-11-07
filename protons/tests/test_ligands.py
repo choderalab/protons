@@ -124,16 +124,6 @@ class TestLigandParameterizationImplicit(object):
 class TestLigandParameterizationExplicit(object):
     """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
 
-    @pytest.mark.skip(reason="Need a maestro file as input from now on.")
-    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
-                        reason="This test requires Schrodinger's suite, OpenEye, and gaff")
-    def test_imidazole_parametrization(self):
-        """
-        Run epik on a ligand and parametrize its isomers using antechamber
-        """
-
-        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_explicit"), "/tmp/protons-imidazole-parameterization-test-explicit.xml", remove_temp_files=True, pH=7.0, resname="LIG")
-
     @pytest.mark.slowtest
     @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
                             reason="This test requires Schrodinger's suite, OpenEye, and gaff")

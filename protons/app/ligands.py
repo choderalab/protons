@@ -9,7 +9,6 @@ import os
 import shutil
 import tempfile
 from collections import OrderedDict
-
 import openmoltools as omt
 from lxml import etree, objectify
 from openeye import oechem
@@ -978,16 +977,49 @@ def write_ffxml(xml_compiler, filename=None):
         return xmlstring
 
 
-def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files=True, max_penalty=10.0, pH=7.4, resname="LIG"):
+def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: float=10.0, workdir: str=None, tautomerize: bool=False, **kwargs):
+    """Generate protonation states using Epik, with shortcuts to a few useful settings.
+
+    Parameters
+    ----------
+    inputmae - location of a maestro input file for Epik.
+    outputmae - location for the output file containing protonation states
+    pH - the pH value
+    max_penalty - the max energy penalty in kT, default=10.0
+    workdir - Path/directory to place output files, including logs. If `outputmae` is a relative path, it will be placed here.
+    tautomerize = If too, besides protonation states generate tautomers
+
+    Notes
+    -----
+    The supplied mae file needs to have ALL possible atoms included, with unique names.
+    You could attempt to run epik ones, and make sure.
+    If you're not sure which protons to add, better to overprotonate.
+    Epik doesn't retain the input protonation if it's non-relevant.
+
     """
-    Parametrize a ligand for constant-pH simulation using Epik.
+    log.info("Running Epik to detect protomers and tautomers...")
+    inputmae = os.path.abspath(inputmae)
+    oldwd = os.getcwd()
+    try:
+        if workdir is not None:            
+            os.chdir(workdir)
+            log.info("Log files can be found in {}}".format(workdir))
+        omt.schrodinger.run_epik(inputmae, outputmae, ph=pH, min_probability=np.exp(-max_penalty), tautomerize=tautomerize, **kwargs)
+    finally:
+        os.chdir(oldwd)
+
+
+def generate_protons_ffxml(inputmae: str, outputffxml: str, pH: float, resname: str="LIG", remove_temp_files: bool=True):
+    """
+    Compile a protons ffxml file from an Epik output file.
 
     Parameters
     ----------
     inputmae : str
-        location of mae file with all possible atoms included, with unique names.
+        Location of mae file with epik results.
         There currently is no implementation of an atom mapping between protonation states, therefore, you will have to
-        include all potential protons in your input file. Be careful not to change bond orders.
+        ensure that the names of protons matches between protonation states, otherwise you will end up with protons
+        being duplicated erroneously.
 
     outputffxml : str
         location for output xml file containing all ligand states and their parameters
@@ -1004,13 +1036,7 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
         Remove temporary files when done.
     resname : str, optional (default : "LIG")
         Residue name in output files.
-
-    Notes
-    -----
-    The supplied mae file needs to have ALL possible atoms included, with unique names.
-    You could attempt to run epik ones, and make sure.
-    If you're not sure which protons to add, better to overprotonate.
-    Epik doesn't retain the input protonation if it's non-relevant.
+    
 
     TODO
     ----
@@ -1021,22 +1047,8 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
     str : The absolute path of the outputfile
 
     """
-
-    log.info("Running Epik to detect protomers and tautomers...")
-    inputmae = os.path.abspath(inputmae)
-    outputffxml = os.path.abspath(outputffxml)
-    oldwd = os.getcwd()
-    if tmpdir is None:
-        tmpdir = tempfile.mkdtemp()
-    os.chdir(tmpdir)
-    log.debug("Running in {}".format(tmpdir))
-
-    # Using very tolerant settings
-    # 10 KT min prob, no tautomers
-    omt.schrodinger.run_epik(inputmae, "epik.mae", ph=pH, min_probability=np.exp(-max_penalty), tautomerize=False)
-    omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
-    omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
-    log.info("Epik run completed.")
+    omt.schrodinger.run_structconvert(inputmae, "epik.sdf")
+    omt.schrodinger.run_structconvert(inputmae, "epik.mol2")
 
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")
@@ -1076,19 +1088,22 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
     # Open the Epik output into OEMols
     ifs = oechem.oemolistream()
     ifs.open("epik.mol2")
-
+    import pdb
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
+        log.info("ffxml generation for {}".format(isomer_index))
+        pdb.set_trace()
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+        log.info(ffxml)
         isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
+
 
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
     write_ffxml(compiler, outputffxml)
-    os.chdir(oldwd)
+    # os.remove('epik.sdf')
+    # os.remove('epik.mol2')
     log.info("Done!  Your result is located here: {}".format(outputffxml))
-    if remove_temp_files:
-        shutil.rmtree(tmpdir)
 
     return outputffxml
