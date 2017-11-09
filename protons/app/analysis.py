@@ -300,8 +300,8 @@ def plot_residue_state_traces(dataset: netCDF4.Dataset, residue_index: int, ax: 
     return ax
 
 
-def charge_trace(dataset: netCDF4.Dataset):
-    """Return a trace of the total charge for each residue.
+def charge_taut_trace(dataset: netCDF4.Dataset):
+    """Return a trace of the total charge for each residue, and the tautomer of the charge.
 
     Parameters
     ----------
@@ -310,17 +310,42 @@ def charge_trace(dataset: netCDF4.Dataset):
     Returns
     -------
     charges - array of charges indexed as [iteration,residue]
+    tautomers - array of tautomers per charge, indexed as iteration, residue
     """
-    # charge by residue, state
-    charge_data = dataset['Protons/Metadata/total_charge'][:, :]
+    # charge by residue, state, rounded to nearest integer    
+    charge_data = np.rint(dataset['Protons/Metadata/total_charge'][:, :]).astype(int)
+    
+    # tautomer per residue, state, counted per charge
+    # filled in below
+    tautomer_data = np.empty_like(charge_data)
+    
+    for residue in range(tautomer_data.shape[0]):
+        # Keep track of how many times a charge was observed in the states of this residue
+        charge_counts = dict()
+        for state in range(tautomer_data.shape[1]):
+            charge = charge_data[residue, state]
+            # for non-existent states
+            if type(charge) is np.ma.core.MaskedConstant:
+                tautomer_data[residue,state] = 0
+                continue            
+            
+            if charge not in charge_counts:
+                charge_counts[charge] = 0
+            tautomer_data[residue,state] = charge_counts[charge]
+            charge_counts[charge] += 1
+
+    # State per iteration, residue
     titration_states = dataset['Protons/Titration/state'][:, :]
+
     charges = np.empty_like(titration_states)
+    tautomers = np.empty_like(titration_states)
     for iteration in range(titration_states.shape[0]):
         for residue in range(titration_states.shape[1]):
-            residue_state = titration_states[iteration, residue]
-            charges[iteration, residue] = charge_data[residue, residue_state]
+            state = titration_states[iteration, residue]            
+            charges[iteration, residue] = charge_data[residue, state]
+            tautomers[iteration, residue] = tautomer_data[residue, state]
 
-    return charges
+    return charges, tautomers
 
 
 def plot_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, color: str = 'charge', residues: list = None,
@@ -372,7 +397,7 @@ def plot_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, color: str = 'ch
     to_plot = None
     if residues is None:
         if color == 'charge':
-            to_plot = charge_trace(dataset)[:, :]
+            to_plot = charge_taut_trace(dataset)[0][:, :]
         elif color == 'state':
             titration_states = dataset['Protons/Titration/state'][:, :]
             to_plot = titration_states + label_offset
@@ -382,7 +407,7 @@ def plot_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, color: str = 'ch
             residues = [residues]
         residues = np.asarray(residues).astype(np.int)
         if color == 'charge':
-            to_plot = charge_trace(dataset)[:, residues]
+            to_plot = charge_taut_trace(dataset)[0][:, residues]
         elif color == 'state':
             to_plot = dataset['Protons/Titration/state'][:, residues] + label_offset
 
@@ -444,19 +469,19 @@ def plot_tautomer_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, residue
 
     to_plot = None
     if residues is None:
-        to_plot = charge_trace(dataset)[:, :]
-        taut_to_plot = dataset['Protons/Titration/state'][:, :] + label_offset
+        to_plot, taut_to_plot = charge_taut_trace(dataset)        
 
     else:
         if isinstance(residues, int):
             residues = [residues]
         residues = np.asarray(residues).astype(np.int)
-        to_plot = charge_trace(dataset)[:, residues]
-        taut_to_plot = dataset['Protons/Titration/state'][:, residues] + label_offset
+        charges, tauts = charge_taut_trace(dataset)
+        to_plot = charges[:, residues]        
+        taut_to_plot = tauts[:, residues]
 
-    mesh = ax.pcolor(to_plot.T, cmap=cmap, vmin=vmin, vmax=vmax, snap=True, alpha=0.5)
+    mesh = ax.pcolor(to_plot.T, cmap=cmap, vmin=vmin, vmax=vmax, snap=True, alpha=1.0)
     plt.colorbar(mesh, ax=ax, **cbar_kws)
-    taut_mesh = ax.pcolor(taut_to_plot.T, cmap=taut_cmap, vmin=taut_vmin, vmax=taut_vmax, alpha=0.5, snap=True)
+    taut_mesh = ax.pcolor(taut_to_plot.T, cmap=taut_cmap, vmin=taut_vmin, vmax=taut_vmax, alpha=0.1, snap=True)
 
     for residue in range(to_plot.T.shape[0]):
         ax.axhline(residue, lw=0.4, c='w')
