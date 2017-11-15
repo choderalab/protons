@@ -7,7 +7,7 @@ from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
-from protons.app.proposals import UniformSwapProposal
+from protons.app.proposals import OneDirectionChargeProposal
 from protons.app import Topology
 from saltswap.swapper import Swapper
 from saltswap.wrappers import Salinator
@@ -665,19 +665,18 @@ class TestForceFieldImidazoleSaltswap:
         driver.attach_swapper(swapper)
 
         driver.adjust_to_ph(7.4)
-        swap_proposal = UniformSwapProposal()
+        swap_proposal = OneDirectionChargeProposal()
         old_charge = self.calculate_explicit_solvent_system_charge(driver.system)
         # The initial state is neutral, the new state is +1
-        net_charge_difference = 1.0
         # Pick swaps using the proposal method explicitly.
-        saltswap_residue_indices, saltswap_state_pairs, log_ratio = swap_proposal.propose_swaps(driver, net_charge_difference)
+        saltswap_residue_indices, saltswap_state_pairs, log_ratio = swap_proposal.propose_swaps(driver, 0, 1)
         # First residue is updates from state 0, to state 1, and the previously selected salt swap is added to the protocol
         driver._perform_ncmc_protocol([0],np.asarray([0]),np.asarray([1]), salt_residue_indices=saltswap_residue_indices, salt_states=saltswap_state_pairs)
 
         # This should be the same as the old charge
         new_charge = self.calculate_explicit_solvent_system_charge(driver.system)
         # Bookkeeping
-        driver.excess_ions -= net_charge_difference
+        driver.excess_ions -= 1
 
         # The saltswap indices are updated to indicate the change of species
         for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_state_pairs):
