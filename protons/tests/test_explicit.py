@@ -689,40 +689,6 @@ class TestForceFieldImidazoleSaltswap:
         assert pytest.approx(0.0, rel=0.0, abs=1.e-12) == old_charge - new_charge,\
             "The total charge changed after NCMC."
 
-    @pytest.mark.slowtest
-    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
-    @pytest.mark.skipif(not hasCUDA, reason="This test requires CUDA.")
-    def test_saltswap_accumulation(self):
-        """Using a salinator, update 2500 times and check if ions are exceeding limits.
-
-        Note that this test is too slow without CUDA.
-        """
-        testsystem = self.setup_imidazole_explicit()
-        compound_integrator = create_compound_gbaoab_integrator(testsystem)
-        driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure, perturbations_per_trial=2, propagations_per_step=1)
-        platform = openmm.Platform.getPlatformByName("CUDA")
-        context = openmm.Context(testsystem.system, compound_integrator, platform)
-        context.setPositions(testsystem.positions)  # set to minimized positions
-        context.setVelocitiesToTemperature(testsystem.temperature)
-        driver.attach_context(context)
-        salinator = Salinator(context=context,system=testsystem.system, topology=testsystem.topology, ncmc_integrator=compound_integrator.getIntegrator(1), salt_concentration=0.2 * unit.molar, pressure=testsystem.pressure, temperature=testsystem.temperature)
-        salinator.neutralize()
-        salinator.initialize_concentration()
-        swapper = salinator.swapper
-        driver.attach_swapper(swapper)
-
-        # force accepting
-        driver._accept_reject = lambda logp_accept: True
-        old_status = Counter(list(swapper.stateVector[:]))
-        driver.adjust_to_ph(7.4)
-        for attempt in range(2500):
-            driver.update(UniformProposal())
-        new_status = Counter(list(swapper.stateVector[:]))
-        for mol_type in [0,1,2]:
-            assert abs(old_status[mol_type] - new_status[mol_type]) < 2, "The difference in ions should not be " \
-                                                                         "exceeding one. If it is greater, " \
-                                                                         "ions are accumulating. "
-
     @staticmethod
     def calculate_explicit_solvent_system_charge(system):
         """Calculate the total charge of an explicit solvent system."""
