@@ -1008,6 +1008,36 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
     finally:
         os.chdir(oldwd)
 
+def retrieve_states_info(epik_mae: str): -> list:
+    """
+    Retrieve the state populations from the Epik output maestro file
+
+    Parameters
+    ----------
+    epik_mae - location of the Epik output (a maestro file)
+
+    Returns
+    -------
+    list of dicts
+        has the keys log_population, net_charge
+    """
+
+    penalty_tag = "r_epik_State_Penalty"
+    net_charge_tag = "i_epik_Tot_Q"
+    props = omt.schrodinger.run_proplister(epik_mae)
+
+    all_info = list()
+
+    for state in props:
+        state_info = dict()
+        epik_penalty = state[penalty_tag]
+        state_info["log_population"] = epik_penalty / (-298.15 * 1.9872036e-3)
+        state_info['net_charge'] = state[net_charge_tag]
+        all_info.append(state_info)
+
+    return all_info
+
+
 
 def generate_protons_ffxml(inputmae: str, outputffxml: str, pH: float, resname: str="LIG", remove_temp_files: bool=True):
     """
