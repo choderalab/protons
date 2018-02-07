@@ -1003,7 +1003,7 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
     try:
         if workdir is not None:            
             os.chdir(workdir)
-            log.info("Log files can be found in {}}".format(workdir))
+            log.info("Log files can be found in {}".format(workdir))
         omt.schrodinger.run_epik(inputmae, outputmae, ph=pH, min_probability=np.exp(-max_penalty), tautomerize=tautomerize, **kwargs)
     finally:
         os.chdir(oldwd)
