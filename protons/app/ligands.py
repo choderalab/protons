@@ -258,7 +258,7 @@ class _TitratableForceFieldCompiler(object):
                                                  etree.XMLParser(remove_blank_text=True, remove_comments=True)
                                                  )
                                      ]
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             self._xml_parameter_trees.append(state['ffxml'])
 
         # Compile all information into the output structure
@@ -829,7 +829,7 @@ class _TitratableForceFieldCompiler(object):
         Register all bonds.
         """
 
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             for bond in state['ffxml'].xpath('/ForceField/Residues/Residue/Bond'):
                 self._bonds.append(_Bond(bond.attrib['atomName1'], bond.attrib['atomName2']))
         self._unique_bonds()
@@ -849,7 +849,7 @@ class _TitratableForceFieldCompiler(object):
         """
         Registers unique atom names. Store in self._atom_names from Residue
         """
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             for atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
                 atom_name = atom.attrib['name']
                 if atom_name not in self._atom_names:
@@ -862,12 +862,12 @@ class _TitratableForceFieldCompiler(object):
         Store all the properties that are specific to each state
         """
         charges = list()
-        for index, state in self._input_state_data.items():
+        for index, state in enumerate(self._input_state_data):
             net_charge = state['net_charge']
             charges.append(int(net_charge))
             template = _State(index,
                               state['log_population'],
-                              state['epik_penalty'],
+                              0.0, # set g_k defaults to 0 for now
                               net_charge,
                               self._atom_names,
                               state['pH']
@@ -1238,6 +1238,7 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
         log.info(ffxml)
         isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
+        isomers[isomer_index]['pH'] = pH
 
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)

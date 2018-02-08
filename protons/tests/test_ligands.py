@@ -2,15 +2,17 @@ from collections import OrderedDict
 
 import pytest
 from lxml import etree
+from uuid import uuid4
 from openmoltools import forcefield_generators as omtff
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from openmoltools.amber import find_gaff_dat
 from protons import app as protons_app
 from simtk import unit
 from simtk.openmm import app
+from os import path, remove
 
 try:
-    from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, write_ffxml
+    from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, _write_ffxml
     ligands_success = True
 except ImportError:
     ligands_success = False
@@ -25,192 +27,68 @@ try:
 except ValueError:
     found_gaff = False
 
-
-import os
-
 # Ligands module import will fail if OpenEye not present, but this should be optional for pass/failing the code
 pytestmark = pytest.mark.skipif(not ligands_success, reason="These tests can't run if ligands module can't be imported.")
 
 
-@pytest.mark.skip(reason="Currently not supporting implicit solvent until we can add GB parameters for gaff types.")
-class TestLigandParameterizationImplicit(object):
-    """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
+class TestTrypsinLigandParameterization:
+    """Test the parameterization of the 1D ligand"""
+    messy_input = get_test_data("1D_allH.mae", "testsystems/trypsin1d") # typical hand generated input for an epik calculation
+    messy_epik_output = get_test_data("1D_epik.mae", "testsystems/trypsin1d") # some messy epik generated output with scrambled and duplicated hydrogen names
+    preprocessed_mol2 = get_test_data("1D_preprocessed.mol2", "testsystems/trypsin1d") # A cleaned up mol2 file. Parameterization should work for this one
+    ffxml_file = get_test_data("1D.ffxml", "testsystems/trypsin1d") # A cleaned up mol2 file. Parameterization should work for this one
+
+    def test_mapping_states(self):
+        """Test the generation of a clean mol2 file from an epik result."""
+        unique_filename = "{}.mol2".format(str(uuid4()))
+        protons_app.ligands.epik_results_to_mol2(TestTrypsinLigandParameterization.messy_epik_output, unique_filename)
+        assert path.isfile(unique_filename), "No output mol2 file was produced"
+        remove(unique_filename)  # clean up after ourselves
+
     @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
                         reason="This test requires Schrodinger's suite, OpenEye, and gaff")
-    def test_imidazole_parametrization(self):
-        """
-        Run epik on imidazole and parametrize its isomers using antechamber
-        """
+    def test_running_epik(self):
+        """Test if Epik is run successfully on the molecule."""
+        unique_id = str(uuid4())
+        unique_filename = "{}.mae".format(unique_id)
+        log_name = "{}.log".format(unique_id)
+        protons_app.ligands.generate_epik_states(TestTrypsinLigandParameterization.messy_input,
+                                                    unique_filename,
+                                                    pH=7.8,
+                                                    max_penalty= 10.0,
+                                                    workdir= None,
+                                                    tautomerize= False)
 
-        generate_protons_ffxml(get_test_data("imidazole.mol2", "testsystems/imidazole_implicit"), "/tmp/protons-imidazole-parameterization-test-implicit.xml",
-                               pH=7.0)
+        assert path.isfile(unique_filename), "No Epik output file was produced"
+        remove(unique_filename) # clean up after ourselves
+        remove(log_name)
 
     @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
                         reason="This test requires Schrodinger's suite, OpenEye, and gaff")
-    def test_imatinib_parametrization(self):
-        """
-        Run epik on imatinib and parametrize its isomers using antechamber
-        """
+    def test_extracting_epik_results(self):
+        """Test if Epik results can be extracted from file."""
 
-        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"),
-                               "/tmp/protons-imatinib-parameterization-test-implicit.xml",
-                               pH=7.4)
+        result = protons_app.ligands.retrieve_epik_info(TestTrypsinLigandParameterization.messy_epik_output)
+        assert len(result) > 0, "No epik data was found."
+        print(result)
 
-    @pytest.mark.skipif(not hasOpenEye, reason="This test requires OpenEye.")
-    def test_xml_compilation(self):
-        """
-        Compile an xml file for the isomers and read it in OpenMM
-        """
-        from openeye import oechem
-        isomers = OrderedDict()
-        isomer_index = 0
-        store = False
+    @pytest.mark.skipif(not found_gaff or not hasOpenEye, reason="This test requires OpenEye, and gaff")
+    def test_parametrize_molecule(self):
+        """Generate parameters for a series of protonation states."""
+        isomer_dicts = [{'net_charge': 2, 'log_population': -0.20928808598192242},
+                        {'net_charge': 1, 'log_population': -1.7617330979671824},
+                        {'net_charge': 1, 'log_population': -4.334626309828816},
+                        {'net_charge': 0, 'log_population': -6.526412668345948},
+                        {'net_charge': 1, 'log_population': -6.862455070918535},
+                        {'net_charge': 1, 'log_population': -6.862455070918535},
+                        {'net_charge': 0, 'log_population': -8.414900082903793},
+                        {'net_charge': 0, 'log_population': -8.414900082903793}]
 
-        for line in open(get_test_data("epik.sdf", "testsystems/imidazole_implicit"), 'r'):
-            # for line in open('/tmp/tmp3qp7lep7/epik.sdf', 'r'):
-            if store:
-                epik_penalty = line.strip()
+        unique_filename = "{}.ffxml".format(str(uuid4()))
+        protons_app.ligands.generate_protons_ffxml(TestTrypsinLigandParameterization.preprocessed_mol2,
+                                                   isomer_dicts, unique_filename, 7.8, resname="1D")
+        assert path.isfile(unique_filename), "No Epik output file was produced"
+        remove(unique_filename)  # clean up after ourselves
 
-                if store == "log_population":
-                    isomers[isomer_index]['epik_penalty'] = epik_penalty
-                    epik_penalty = float(epik_penalty)
-                    # Epik reports -RT ln p
-                    # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
-                    isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
-
-                # NOTE: relies on state penalty coming before charge
-                if store == "net_charge":
-                    isomers[isomer_index]['net_charge'] = int(epik_penalty)
-                    isomer_index += 1
-
-                store = ""
-
-            elif "r_epik_State_Penalty" in line:
-                # Next line contains epik state penalty
-                store = "log_population"
-                isomers[isomer_index] = dict()
-
-            elif "i_epik_Tot_Q" in line:
-                # Next line contains charge
-                store = "net_charge"
-
-        ifs = oechem.oemolistream()
-        ifs.open(get_test_data("epik.mol2", "testsystems/imidazole_implicit"))
-
-        xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-        for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
-            # generateForceFieldFromMolecules takes a list
-            ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
-            isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
-
-        compiler = _TitratableForceFieldCompiler(isomers)
-        output_xml = '/tmp/imidazole-implicit.cph.xml'
-        compiler.write(output_xml)
-        forcefield = app.ForceField(output_xml)
-
-    def test_reading_validated_xml_file_using_forcefield(self):
-        """
-        Read the xmlfile using app.ForceField
-
-        Notes
-        -----
-        Using a pregenerated, manually validated xml file.
-        This can detect failure because of changes to OpenMM ForceField.
-        """
-        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
-        forcefield = app.ForceField(xmlfile)
-
-
-class TestLigandParameterizationExplicit(object):
-    """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
-
-    @pytest.mark.slowtest
-    @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
-                            reason="This test requires Schrodinger's suite, OpenEye, and gaff")
-    def test_imatinib_parametrization(self):
-        """
-        Run epik on imatinib and parametrize its isomers using antechamber
-        """
-
-        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"), "protons-imatinib-parameterization-test-implicit.xml", pH=7.4)
-
-    @pytest.mark.skipif(not hasOpenEye, reason="This test requires OpenEye.")
-    def test_xml_compilation(self):
-        """
-        Compile an xml file for the isomers and read it in OpenMM
-        """
-        from openeye import oechem
-        isomers = OrderedDict()
-        isomer_index = 0
-        store = False
-
-        for line in open(get_test_data("epik.sdf", "testsystems/imidazole_explicit"), 'r'):
-            # for line in open('/tmp/tmp3qp7lep7/epik.sdf', 'r'):
-            if store:
-                epik_penalty = line.strip()
-
-                if store == "log_population":
-                    isomers[isomer_index]['epik_penalty'] = epik_penalty
-                    epik_penalty = float(epik_penalty)
-                    # Epik reports -RT ln p
-                    # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
-                    isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
-
-                # NOTE: relies on state penalty coming before charge
-                if store == "net_charge":
-                    isomers[isomer_index]['net_charge'] = int(epik_penalty)
-                    isomer_index += 1
-
-                store = ""
-
-            elif "r_epik_State_Penalty" in line:
-                # Next line contains epik state penalty
-                store = "log_population"
-                isomers[isomer_index] = dict()
-
-            elif "i_epik_Tot_Q" in line:
-                # Next line contains charge
-                store = "net_charge"
-
-        ifs = oechem.oemolistream()
-        ifs.open(get_test_data("epik.mol2", "testsystems/imidazole_explicit"))
-
-        xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
-        for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
-            # generateForceFieldFromMolecules takes a list
-            ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
-            isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
-
-        compiler = _TitratableForceFieldCompiler(isomers)
-        output_xml = '/tmp/imidazole-explicit.cph.xml'
-
-        write_ffxml(compiler, filename=output_xml)
-        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
-        forcefield = app.ForceField(gaffpath, output_xml)
-
-    def test_reading_validated_xml_file_using_forcefield(self):
-        """
-        Read the xmlfile using app.ForceField
-
-        Notes
-        -----
-        Using a pregenerated, manually validated xml file.
-        This can detect failure because of changes to OpenMM ForceField.
-        """
-        xmlfile = get_test_data("protons-imidazole.xml", "testsystems/imidazole_explicit")
-        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
-        forcefield = app.ForceField(gaffpath, xmlfile)
-
-    def test_creating_ligand_system(self):
-        """Create an OpenMM system using a pdbfile, and a ligand force field"""
-        xmlfile = get_test_data("protons-imidazole.xml", "testsystems/imidazole_explicit")
-        gaffpath = os.path.join(os.path.dirname(protons_app.__file__), 'data', 'gaff.xml')
-
-        forcefield = app.ForceField(gaffpath, xmlfile, 'amber99sbildn.xml', 'tip3p.xml')
-        pdb = app.PDBFile(get_test_data("imidazole-solvated-minimized.pdb", "testsystems/imidazole_explicit"))
-        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.Ewald,
-                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds,
-                                         rigidWater=False,
-                                         ewaldErrorTolerance=0.0005)
 
 
