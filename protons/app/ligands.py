@@ -229,13 +229,13 @@ class _TitratableForceFieldCompiler(object):
     """
     Compiles intermediate ffxml data to the final constant-ph ffxml file.
     """
-    def __init__(self, input_state_data, gaff_xml=None, residue_name="LIG"):
+    def __init__(self, input_state_data: list, gaff_xml:str=None, residue_name: str="LIG"):
         """
         Compiles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
         Parameters
         ----------
-        input_state_data : OrderedDict
+        input_state_data : list
             Contains the ffxml of the Epik isomers, net charge, and population
         gaff_xml : string, optional
             File location of a gaff.xml file. If specified, read gaff parameters from here.
@@ -954,7 +954,7 @@ def _generate_xml_template(residue_name="LIG"):
     return forcefield
 
 
-def write_ffxml(xml_compiler, filename=None):
+def _write_ffxml(xml_compiler, filename=None):
     """Generate an ffxml file from a compiler object.
 
     Parameters
@@ -994,9 +994,6 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
 
     Notes
     -----
-    The supplied mae file needs to have ALL possible atoms included, with unique names.
-    You could attempt to run epik ones, and make sure.
-    If you're not sure which protons to add, better to overprotonate.
     Epik doesn't retain the input protonation if it's non-relevant.
 
     """
@@ -1042,7 +1039,7 @@ def retrieve_epik_info(epik_mae: str) -> list:
     return all_info
 
 
-def process_epik_states_mol2(epik_mae: str, output_mol2: str):
+def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     """
     Map the hydrogen atoms between Epik states, and return a mol2 file that
     should be ready to parametrize.
@@ -1176,7 +1173,6 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
 
 def _mols_to_file(graphmols: list, output_mol2:str):
     """Take a list of OEGraphMols and write it to a mol2 file."""
-
     ofs = oechem.oemolostream()
     ofs.open(output_mol2)
     for mol in graphmols:
@@ -1192,32 +1188,25 @@ def _visualise_graphs(graph):
     plt.show()
 
 
-
-def generate_protons_ffxml(inputmae: str, outputffxml: str, pH: float, resname: str="LIG", remove_temp_files: bool=True):
+def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str, pH: float, resname: str="LIG"):
     """
-    Compile a protons ffxml file from an Epik output file.
+    Compile a protons ffxml file from a preprocessed mol2 file, and a dictionary of states and charges.
 
     Parameters
     ----------
-    inputmae : str
-        Location of mae file with epik results.
-        There currently is no implementation of an atom mapping between protonation states, therefore, you will have to
-        ensure that the names of protons matches between protonation states, otherwise you will end up with protons
-        being duplicated erroneously.
-
+    inputmol2
+        Location of mol2 file with protonation states results. Ensure that the names of atoms matches between protonation
+         states, otherwise you will end up with atoms being duplicated erroneously. The `epik_results_to_mol2` function
+          provides a handy preprocessing to clean up epik output.
+    isomer_dicts: list of dicts
+        One dict is necessary for every isomer. Dict should contain 'log_population' and 'net_charge' keys.
     outputffxml : str
         location for output xml file containing all ligand states and their parameters
+    pH : float
+        The pH that these states are valid for.
 
     Other Parameters
     ----------------
-    max_penalty : float, (default : 10.0)
-        Maximum energy penalty (in units of kT) for titration states.
-    pH : float
-        The pH that Epik should use to detect states
-    tmpdir : str, optional
-        Temporary directory for storing intermediate files.
-    remove_temp_files : bool, optional (default : True)
-        Remove temporary files when done.
     resname : str, optional (default : "LIG")
         Residue name in output files.
     
@@ -1231,63 +1220,28 @@ def generate_protons_ffxml(inputmae: str, outputffxml: str, pH: float, resname: 
     str : The absolute path of the outputfile
 
     """
-    omt.schrodinger.run_structconvert(inputmae, "epik.sdf")
-    omt.schrodinger.run_structconvert(inputmae, "epik.mol2")
 
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")
-    isomers = OrderedDict()
-    isomer_index = 0
-    store = False
-    for line in open('epik.sdf', 'r'):
-        if store:
-            epik_penalty = line.strip()
-
-            if store == "log_population":
-                isomers[isomer_index]['epik_penalty'] = epik_penalty
-                epik_penalty = float(epik_penalty)
-                # Epik reports -RT ln p
-                # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
-                isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
-
-            # NOTE: relies on state penalty coming before charge
-            if store == "net_charge":
-                isomers[isomer_index]['net_charge'] = int(epik_penalty)
-                isomer_index += 1
-
-            store = ""
-
-        elif "r_epik_State_Penalty" in line:
-            # Next line contains epik state penalty
-            store = "log_population"
-            isomers[isomer_index] = dict(pH=pH)
-
-        elif "i_epik_Tot_Q" in line:
-            # Next line contains charge
-            store = "net_charge"
+    isomers = isomer_dicts
 
     log.info("Parametrizing the isomers...")
     xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
     # Open the Epik output into OEMols
     ifs = oechem.oemolistream()
-    ifs.open("epik.mol2")
-    import pdb
+    ifs.open(inputmol2)
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
         log.info("ffxml generation for {}".format(isomer_index))
-        pdb.set_trace()
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
         log.info(ffxml)
         isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
 
-
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
-    write_ffxml(compiler, outputffxml)
-    # os.remove('epik.sdf')
-    # os.remove('epik.mol2')
+    _write_ffxml(compiler, outputffxml)
     log.info("Done!  Your result is located here: {}".format(outputffxml))
 
     return outputffxml
