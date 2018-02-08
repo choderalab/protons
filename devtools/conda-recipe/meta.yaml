@@ -31,6 +31,7 @@ requirements:
     - pandas
     - beautifulsoup4 # for deserialization of html tables
     - saltswap >=0.5.2 # for counterion coupling
+    - networkx # matching protonation state structures
 
   run:
     - python
@@ -51,6 +52,7 @@ requirements:
     - pandas
     - saltswap >=0.5.2 # for counterion coupling
     - beautifulsoup4 # for deserialization of html tables
+    - networkx # matching protonation state structures
 
 test:
   requires:
