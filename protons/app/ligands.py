@@ -1161,8 +1161,6 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
         counters = {i+1: 0 for i,mol in enumerate(graphmols)}
         for atom, mol_id in zip(atomgraph.nodes, mol_identifiers):
             h_num = h_count + counters[mol_id]
-            # _visualise_graphs(atomgraph)
-            # print(names)
             atom.SetName("H{}".format(h_num))
             counters[mol_id] += 1
 
@@ -1173,7 +1171,7 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
         h_count += extra_h_count
 
     _mols_to_file(graphmols, output_mol2)
-    # os.remove(tmpfilename)
+    os.remove(tmpfilename)
 
 
 def _mols_to_file(graphmols: list, output_mol2:str):
