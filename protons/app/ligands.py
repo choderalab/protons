@@ -1097,7 +1097,6 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
             mcss.SetMinAtoms(oechem.OECount(pattern, oechem.OEIsHeavy()))
             mcss.SetMaxMatches(1)
 
-            # Constrain all heavy atoms
             for at1 in pattern.GetAtoms():
                 if at1.GetAtomicNum() < 2:
                     continue
@@ -1105,12 +1104,12 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
                     if at2.GetAtomicNum() < 2:
                         continue
                     if at1.GetName() == at2.GetName():
-                        pat_idx = pattern.GetAtom(oechem.HasAtomIdx(at1.GetIdx()))
+                        pat_idx = mcss.GetPattern().GetAtom(oechem.HasAtomIdx(at1.GetIdx()))
                         tar_idx = target.GetAtom(oechem.HasAtomIdx(at2.GetIdx()))
                         if not mcss.AddConstraint(oechem.OEMatchPairAtom(pat_idx, tar_idx)):
                             raise ValueError("Could not constrain {} {}.".format(at1.GetName(), at2.GetName()))
-                        else:
-                            raise ValueError("constrain {} {}.".format(at1.GetName(), at2.GetName()))
+                        # else:
+                        #     raise ValueError("constrain {} {}.".format(at1.GetName(), at2.GetName()))
 
             unique = True
             # return the match to the user
