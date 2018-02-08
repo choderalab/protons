@@ -8,6 +8,7 @@ from __future__ import print_function
 import os
 import shutil
 import tempfile
+import uuid
 from collections import OrderedDict
 import openmoltools as omt
 from lxml import etree, objectify
@@ -15,6 +16,8 @@ from openeye import oechem
 from openmoltools import forcefield_generators as omtff
 from .logger import log
 import numpy as np
+import networkx as nx
+
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -1008,9 +1011,9 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
     finally:
         os.chdir(oldwd)
 
-def retrieve_states_info(epik_mae: str): -> list:
+def retrieve_epik_info(epik_mae: str) -> list:
     """
-    Retrieve the state populations from the Epik output maestro file
+    Retrieve the state populations and charges from the Epik output maestro file
 
     Parameters
     ----------
@@ -1031,11 +1034,86 @@ def retrieve_states_info(epik_mae: str): -> list:
     for state in props:
         state_info = dict()
         epik_penalty = state[penalty_tag]
-        state_info["log_population"] = epik_penalty / (-298.15 * 1.9872036e-3)
-        state_info['net_charge'] = state[net_charge_tag]
+        state_info["log_population"] = float(epik_penalty) / (-298.15 * 1.9872036e-3)
+        state_info['net_charge'] = int(state[net_charge_tag])
         all_info.append(state_info)
 
     return all_info
+
+
+def process_epik_states_mol2(epik_mae: str, output_mol2: str):
+    """
+    Map the hydrogen atoms between Epik states, and return a mol2 file that
+    should be ready to parametrize.
+
+    Parameters
+    ----------
+    epik_mae: location of the maestro file produced by Epik.
+
+    Notes
+    -----
+    This renames the hydrogen atoms in your molecule so that
+     no ambiguity can exist between protonation states.
+    """
+
+    # Generate a file format that Openeye can read
+    unique_filename = str(uuid.uuid4())
+    tmpfilename = "{}.mol2".format(unique_filename)
+    omt.schrodinger.run_structconvert(inputmae, tmpfilename)
+
+    ifs = oechem.oemolistream()
+    ifs.open(tmpfilename)
+
+    # make oemols for mapping
+    graphmols = [mol for mol in ifs.GetOEGraphMols()]
+    # Make graph for keeping track of which atoms are the same
+    graph = nx.Graph()
+
+    # add atoms to each graph
+    for ix, mol in enumerate(graphmols):
+        for atom in mol.GetAtoms():
+            graph.add_node(atom, bipartite=ix)
+
+
+    # Connect atoms that are the same
+    # No need to avoid self maps
+    for mol1 in graphmols:
+        for mol2 in graphmols:
+            mol1_atoms = [atom for atom in mol1.GetAtoms()]
+            mol2_atoms = [atom for atom in mol2.GetAtoms()]
+            match = map_atoms(mol1, mol2)
+
+            for ma in match.GetAtoms():
+                idx1 = ma.pattern.GetIdx()
+                idx2 = ma.target.GetIdx()
+                graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+
+
+    # TODO for every connected atom, settle on one name.
+    for c in connected_components(graph):
+        atom = G.subgraph(c)
+        print(atom)
+
+
+def map_atoms(mol1, mol2):
+    """Make an atom map."""
+
+    # operate on a copy to avoid modifying molecule
+    pattern = oechem.OEGraphMol(mol1)
+    target = oechem.OEGraphMol(mol2)
+
+    atomexpr = OEExprOpts_DefaultAtoms
+    bondexpr = OEExprOpts_DefaultBonds
+
+    # create maximum common substructure object
+    mcss = OEMCSSearch(pattern, atomexpr, bondexpr, OEMCSType_Exhaustive)
+    # set scoring function
+    mcss.SetMCSFunc(OEMCSMaxAtoms())
+    unique = True
+    # loop over matches
+    match = next(mcss.Match(target, unique))
+
+    return match
 
 
 
