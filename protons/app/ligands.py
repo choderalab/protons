@@ -1056,7 +1056,8 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
     This renames the hydrogen atoms in your molecule so that
      no ambiguity can exist between protonation states.
     """
-
+    if not output_mol2[-5:] == ".mol2":
+        output_mol2 += ".mol2"
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpfilename = "{}.mol2".format(unique_filename)
@@ -1067,16 +1068,27 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
 
     # make oemols for mapping
     graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
+    ifs.close()
+
     # Make graph for keeping track of which atoms are the same
     graph = nx.Graph()
 
-    # add atoms to each graph
-    for ix, mol in enumerate(graphmols):
+    # Some hydrogens within one molecule may be chemically identical, and would otherwise be indistinguishable
+    # And some hydrogens accidentally get the same name
+    # Therefore, give every hydrogen a unique identifier.
+    # One labelling the molecule, the other labeling the position in the molecule.
+    for imol, mol in enumerate(graphmols):
+        h_count = 0
         for atom in mol.GetAtoms():
-            graph.add_node(atom, bipartite=ix)
+            if atom.GetAtomicNum() == 1:
+                h_count += 1
+                # H for hydrogen, M for mol
+                atom.SetName("H{}-M{}".format(h_count,imol+1))
+                # Add hydrogen atom to the graph
+                graph.add_node(atom, mol=imol)
 
     # Connect atoms that are the same
-    # No need to avoid self maps
+    # No need to avoid self maps for now. Code is fast enough
     for i1, mol1 in enumerate(graphmols):
         for i2, mol2 in enumerate(graphmols):
 
@@ -1087,7 +1099,9 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
             pattern = oechem.OEGraphMol(mol1)
             target = oechem.OEGraphMol(mol2)
 
+            # Element should be enough to map
             atomexpr = oechem.OEExprOpts_AtomicNumber
+            # Ignore aromaticity et cetera
             bondexpr = oechem.OEExprOpts_EqSingleDouble
 
             # create maximum common substructure object
@@ -1095,12 +1109,16 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
             # set scoring function
             mcss.SetMCSFunc(oechem.OEMCSMaxAtoms())
             mcss.SetMinAtoms(oechem.OECount(pattern, oechem.OEIsHeavy()))
-            mcss.SetMaxMatches(1)
+            mcss.SetMaxMatches(10)
 
+            # Constrain all heavy atoms, so the search goes faster.
+            # These should not be different anyways
             for at1 in pattern.GetAtoms():
+                # skip H
                 if at1.GetAtomicNum() < 2:
                     continue
                 for at2 in target.GetAtoms():
+                    # skip H
                     if at2.GetAtomicNum() < 2:
                         continue
                     if at1.GetName() == at2.GetName():
@@ -1108,25 +1126,71 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
                         tar_idx = target.GetAtom(oechem.HasAtomIdx(at2.GetIdx()))
                         if not mcss.AddConstraint(oechem.OEMatchPairAtom(pat_idx, tar_idx)):
                             raise ValueError("Could not constrain {} {}.".format(at1.GetName(), at2.GetName()))
-                        # else:
-                        #     raise ValueError("constrain {} {}.".format(at1.GetName(), at2.GetName()))
 
             unique = True
-            # return the match to the user
             matches = mcss.Match(target, unique)
+            # We should only use the top one match.
             for count, match in enumerate(matches):
                 for ma in match.GetAtoms():
                     idx1 = ma.pattern.GetIdx()
                     idx2 = ma.target.GetIdx()
-                    graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+                    # Add edges between all hydrogens
+                    if mol1_atoms[idx1].GetAtomicNum() == 1:
+                        if mol2_atoms[idx2].GetAtomicNum() == 1:
+                            graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+                        # Sanity check, we should never see two elements mixed
+                        else:
+                            raise RuntimeError("Two atoms of different elements were matched.")
+                # stop after one match
+                break
 
-    # TODO for every connected atom, settle on one name.
-    for c in nx.connected_components(graph):
-        atom = graph.subgraph(c)
-        import matplotlib.pyplot as plt
-        nx.draw(atom, pos=nx.spring_layout(atom))
-        nx.draw_networkx_labels(atom, pos=nx.spring_layout(atom), labels=dict(zip(atom.nodes, [at.GetName() for at in atom.nodes])))
-        plt.figure()
+    # Assign unique but matching ID's per atom/state
+
+    # The current H counter
+    h_count = 0
+
+    for cc in nx.connected_components(graph):
+        # All of these atoms are chemically identical, but there could be more than one per molecule.
+        atomgraph = graph.subgraph(cc)
+        # Keep track of the unique H count
+        h_count += 1
+        names = [at.GetName() for at in atomgraph.nodes]
+        # last part says which molecule the atom belongs to
+        mol_identifiers = [int(name.split('-M')[1]) for name in names ]
+        # Number
+        counters = {i+1: 0 for i,mol in enumerate(graphmols)}
+        for atom, mol_id in zip(atomgraph.nodes, mol_identifiers):
+            h_num = h_count + counters[mol_id]
+            # _visualise_graphs(atomgraph)
+            # print(names)
+            atom.SetName("H{}".format(h_num))
+            counters[mol_id] += 1
+
+        # If more than one hydrogen per mol found, add it to the count.
+        extra_h_count = max(counters.values()) - 1
+        if extra_h_count < 0:
+            raise ValueError("Found 0 hydrogens in graph, is there a bug?")
+        h_count += extra_h_count
+
+    _mols_to_file(graphmols, output_mol2)
+    # os.remove(tmpfilename)
+
+
+def _mols_to_file(graphmols: list, output_mol2:str):
+    """Take a list of OEGraphMols and write it to a mol2 file."""
+
+    ofs = oechem.oemolostream()
+    ofs.open(output_mol2)
+    for mol in graphmols:
+        oechem.OEWriteMol2File(ofs, mol)
+    ofs.close()
+
+
+def _visualise_graphs(graph):
+    """Visualize the connected subcomponents of an atom graph"""
+    import matplotlib.pyplot as plt
+    nx.draw(graph, pos=nx.spring_layout(graph))
+    nx.draw_networkx_labels(graph, pos=nx.spring_layout(graph), labels=dict(zip(graph.nodes, [at.GetName() for at in graph.nodes])))
     plt.show()
 
 
