@@ -1011,6 +1011,7 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
     finally:
         os.chdir(oldwd)
 
+
 def retrieve_epik_info(epik_mae: str) -> list:
     """
     Retrieve the state populations and charges from the Epik output maestro file
@@ -1059,13 +1060,13 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpfilename = "{}.mol2".format(unique_filename)
-    omt.schrodinger.run_structconvert(inputmae, tmpfilename)
+    omt.schrodinger.run_structconvert(epik_mae, tmpfilename)
 
     ifs = oechem.oemolistream()
     ifs.open(tmpfilename)
 
     # make oemols for mapping
-    graphmols = [mol for mol in ifs.GetOEGraphMols()]
+    graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
     # Make graph for keeping track of which atoms are the same
     graph = nx.Graph()
 
@@ -1074,46 +1075,60 @@ def process_epik_states_mol2(epik_mae: str, output_mol2: str):
         for atom in mol.GetAtoms():
             graph.add_node(atom, bipartite=ix)
 
-
     # Connect atoms that are the same
     # No need to avoid self maps
-    for mol1 in graphmols:
-        for mol2 in graphmols:
+    for i1, mol1 in enumerate(graphmols):
+        for i2, mol2 in enumerate(graphmols):
+
             mol1_atoms = [atom for atom in mol1.GetAtoms()]
             mol2_atoms = [atom for atom in mol2.GetAtoms()]
-            match = map_atoms(mol1, mol2)
 
-            for ma in match.GetAtoms():
-                idx1 = ma.pattern.GetIdx()
-                idx2 = ma.target.GetIdx()
-                graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+            # operate on a copy to avoid modifying molecule
+            pattern = oechem.OEGraphMol(mol1)
+            target = oechem.OEGraphMol(mol2)
 
+            atomexpr = oechem.OEExprOpts_AtomicNumber
+            bondexpr = oechem.OEExprOpts_EqSingleDouble
+
+            # create maximum common substructure object
+            mcss = oechem.OEMCSSearch(pattern, atomexpr, bondexpr, oechem.OEMCSType_Approximate)
+            # set scoring function
+            mcss.SetMCSFunc(oechem.OEMCSMaxAtoms())
+            mcss.SetMinAtoms(oechem.OECount(pattern, oechem.OEIsHeavy()))
+            mcss.SetMaxMatches(1)
+
+            # Constrain all heavy atoms
+            for at1 in pattern.GetAtoms():
+                if at1.GetAtomicNum() < 2:
+                    continue
+                for at2 in target.GetAtoms():
+                    if at2.GetAtomicNum() < 2:
+                        continue
+                    if at1.GetName() == at2.GetName():
+                        pat_idx = pattern.GetAtom(oechem.HasAtomIdx(at1.GetIdx()))
+                        tar_idx = target.GetAtom(oechem.HasAtomIdx(at2.GetIdx()))
+                        if not mcss.AddConstraint(oechem.OEMatchPairAtom(pat_idx, tar_idx)):
+                            raise ValueError("Could not constrain {} {}.".format(at1.GetName(), at2.GetName()))
+                        else:
+                            raise ValueError("constrain {} {}.".format(at1.GetName(), at2.GetName()))
+
+            unique = True
+            # return the match to the user
+            matches = mcss.Match(target, unique)
+            for count, match in enumerate(matches):
+                for ma in match.GetAtoms():
+                    idx1 = ma.pattern.GetIdx()
+                    idx2 = ma.target.GetIdx()
+                    graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
 
     # TODO for every connected atom, settle on one name.
-    for c in connected_components(graph):
-        atom = G.subgraph(c)
-        print(atom)
-
-
-def map_atoms(mol1, mol2):
-    """Make an atom map."""
-
-    # operate on a copy to avoid modifying molecule
-    pattern = oechem.OEGraphMol(mol1)
-    target = oechem.OEGraphMol(mol2)
-
-    atomexpr = OEExprOpts_DefaultAtoms
-    bondexpr = OEExprOpts_DefaultBonds
-
-    # create maximum common substructure object
-    mcss = OEMCSSearch(pattern, atomexpr, bondexpr, OEMCSType_Exhaustive)
-    # set scoring function
-    mcss.SetMCSFunc(OEMCSMaxAtoms())
-    unique = True
-    # loop over matches
-    match = next(mcss.Match(target, unique))
-
-    return match
+    for c in nx.connected_components(graph):
+        atom = graph.subgraph(c)
+        import matplotlib.pyplot as plt
+        nx.draw(atom, pos=nx.spring_layout(atom))
+        nx.draw_networkx_labels(atom, pos=nx.spring_layout(atom), labels=dict(zip(atom.nodes, [at.GetName() for at in atom.nodes])))
+        plt.figure()
+    plt.show()
 
 
 
