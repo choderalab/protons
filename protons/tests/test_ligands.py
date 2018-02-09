@@ -91,8 +91,8 @@ class TestTrypsinLigandParameterization:
         remove(unique_filename)  # clean up after ourselves
 
     def test_reading_validated_xml_file_using_forcefield(self):
-        """
-        Read the xmlfile using app.ForceField
+        """Read the xmlfile using app.ForceField
+
         Notes
         -----
         Using a pregenerated, manually validated xml file.
@@ -101,5 +101,13 @@ class TestTrypsinLigandParameterization:
         gaffpath = path.join(path.dirname(protons_app.__file__), 'data', 'gaff.xml')
         forcefield = app.ForceField(gaffpath, TestTrypsinLigandParameterization.ffxml_file)
 
+    def test_creating_hydrogen_definitions(self):
+        """Ensure that the generation of the hydrogen definitions file works."""
 
+        unique_filename = "{}.xml".format(str(uuid4()))
+        protons_app.ligands.create_hydrogen_definitions(TestTrypsinLigandParameterization.ffxml_file, unique_filename)
+
+        assert path.isfile(unique_filename), "A hydrogen definitions xml file should be generated."
+        # Clean up
+        remove(unique_filename)
 
