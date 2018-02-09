@@ -90,5 +90,16 @@ class TestTrypsinLigandParameterization:
         assert path.isfile(unique_filename), "No Epik output file was produced"
         remove(unique_filename)  # clean up after ourselves
 
+    def test_reading_validated_xml_file_using_forcefield(self):
+        """
+        Read the xmlfile using app.ForceField
+        Notes
+        -----
+        Using a pregenerated, manually validated xml file.
+        This can detect failure because of changes to OpenMM ForceField.
+        """
+        gaffpath = path.join(path.dirname(protons_app.__file__), 'data', 'gaff.xml')
+        forcefield = app.ForceField(gaffpath, TestTrypsinLigandParameterization.ffxml_file)
+
 
 
