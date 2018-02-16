@@ -8,6 +8,7 @@ from __future__ import print_function
 import os
 import shutil
 import tempfile
+import mdtraj
 import uuid
 from collections import OrderedDict
 import openmoltools as omt
@@ -18,6 +19,11 @@ from .logger import log
 import numpy as np
 import networkx as nx
 import lxml
+from .. import app
+from simtk.openmm import openmm
+from simtk.unit import *
+from ..app.integrators import GBAOABIntegrator
+
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -1322,3 +1328,61 @@ def _find_hydrogen_types(gafftree: lxml.etree.ElementTree) -> set:
             hydrogen_types.add(atomtype.get('name'))
 
     return hydrogen_types
+
+
+def extract_residue(inputfile:str, outputfile:str, resname:str ):
+    """Extract a specific residue from a file and write to new file. Useful for setting up a calibration.
+
+    Parameters
+    ----------
+    inputfile - A file that is compatible with MDtraj (see mdtraj.org)
+    outputfile - Filename for the output.
+    resname - the residue name in the system
+
+    """
+    input_traj = mdtraj.load(inputfile)
+    res = input_traj.topology.select("resn {}".format(resname))
+    input_traj.restrict_atoms(res)
+    input_traj.save(outputfile)
+
+
+def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml:str, hxml:str):
+    """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
+
+    Note that no salt is added. We use saltswap for this.
+
+    Parameters
+    ----------
+    vacuum_file - a single residue in vacuum to add hydrogens to and solvate.
+    output_file - the basename for an output mmCIF file with the solvated system.
+    ffxml - the forcefield file containing the residue definition
+    hxml - the hydrogen definition xml file
+
+    """
+
+    # Load relevant template definitions for modeller, forcefield and topology
+    app.Modeller.loadHydrogenDefinitions(hxml)
+    forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+
+    pdb = app.PDBFile(vacuum_file)
+    modeller = app.Modeller(pdb.topology, pdb.positions)
+
+    # The system will likely have different hydrogen names.
+    # In this case its easiest to just delete and re-add with the right names based on hydrogen files
+    to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
+    modeller.delete(to_delete)
+
+    modeller.addHydrogens(forcefield=forcefield)
+    modeller.addSolvent(forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False)
+
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0 * nanometers,
+                                     constraints=app.HBonds, rigidWater=True,
+                                     ewaldErrorTolerance=0.0005)
+    system.addForce(openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
+    simulation = app.Simulation(modeller.topology, system, GBAOABIntegrator())
+    simulation.context.setPositions(modeller.positions)
+    simulation.minimizeEnergy()
+
+    app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
+                           open(output_file, 'w'))
+
