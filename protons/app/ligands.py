@@ -1346,7 +1346,7 @@ def extract_residue(inputfile:str, outputfile:str, resname:str ):
     input_traj.save(outputfile)
 
 
-def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml:str, hxml:str):
+def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None):
     """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
 
     Note that no salt is added. We use saltswap for this.
@@ -1355,14 +1355,19 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml:str, hxml
     ----------
     vacuum_file - a single residue in vacuum to add hydrogens to and solvate.
     output_file - the basename for an output mmCIF file with the solvated system.
-    ffxml - the forcefield file containing the residue definition
-    hxml - the hydrogen definition xml file
-
+    ffxml - the forcefield file containing the residue definition,
+        optional for CDEHKY amino acids, required for ligands.
+    hxml - the hydrogen definition xml file,
+        optional for CDEHKY amino acids, required for ligands.
     """
 
     # Load relevant template definitions for modeller, forcefield and topology
-    app.Modeller.loadHydrogenDefinitions(hxml)
-    forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+    if hxml is not None:
+        app.Modeller.loadHydrogenDefinitions(hxml)
+    if ffxml is not None:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+    else:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', 'tip3p.xml', 'ions_tip3p.xml')
 
     pdb = app.PDBFile(vacuum_file)
     modeller = app.Modeller(pdb.topology, pdb.positions)
