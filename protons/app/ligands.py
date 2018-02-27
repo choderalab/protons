@@ -1346,7 +1346,7 @@ def extract_residue(inputfile:str, outputfile:str, resname:str ):
     input_traj.save(outputfile)
 
 
-def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None):
+def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None, delete_old_H:bool=True):
     """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
 
     Note that no salt is added. We use saltswap for this.
@@ -1359,6 +1359,9 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
         optional for CDEHKY amino acids, required for ligands.
     hxml - the hydrogen definition xml file,
         optional for CDEHKY amino acids, required for ligands.
+    delete_old_H - delete old hydrogen atoms and add in new ones.
+        Typically necessary for ligands, where hydrogen names will have changed during parameterization to match up
+        different protonation states.
     """
 
     # Load relevant template definitions for modeller, forcefield and topology
@@ -1374,8 +1377,9 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
 
     # The system will likely have different hydrogen names.
     # In this case its easiest to just delete and re-add with the right names based on hydrogen files
-    to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
-    modeller.delete(to_delete)
+    if delete_old_H:
+        to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
+        modeller.delete(to_delete)
 
     modeller.addHydrogens(forcefield=forcefield)
     modeller.addSolvent(forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False)
