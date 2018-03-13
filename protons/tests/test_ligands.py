@@ -63,6 +63,27 @@ class TestTrypsinLigandParameterization:
         remove(unique_filename) # clean up after ourselves
         remove(log_name)
 
+        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"),
+                               "/tmp/protons-imatinib-parameterization-test-implicit.xml",
+                               pH=7.4)
+
+    def test_reading_validated_xml_file_using_forcefield(self):
+        """
+        Read the xmlfile using app.ForceField
+
+        Notes
+        -----
+        Using a pregenerated, manually validated xml file.
+        This can detect failure because of changes to OpenMM ForceField.
+        """
+        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
+        forcefield = app.ForceField(xmlfile)
+
+
+class TestLigandParameterizationExplicit(object):
+    """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
+
+    @pytest.mark.skip(reason="Need a maestro file as input from now on.")
     @pytest.mark.skipif(not is_schrodinger_suite_installed() or not found_gaff or not hasOpenEye,
                         reason="This test requires Schrodinger's suite, OpenEye, and gaff")
     def test_extracting_epik_results(self):
@@ -110,4 +131,3 @@ class TestTrypsinLigandParameterization:
         assert path.isfile(unique_filename), "A hydrogen definitions xml file should be generated."
         # Clean up
         remove(unique_filename)
-

@@ -16,7 +16,7 @@ from simtk import unit
 from simtk import openmm as mm
 import saltswap
 from saltswap.swapper import Swapper
-from .proposals import _StateProposal, SaltSwapProposal, UniformSwapProposal
+from .proposals import _StateProposal, SaltSwapProposal, OneDirectionChargeProposal
 from .topology import Topology
 from .pka import available_pkas
 from simtk.openmm import app
@@ -926,7 +926,7 @@ class NCMCProtonDrive(_BaseDrive):
         ----------
         swapper - a saltswap.Swapper object that is used for ion manipulation and bookkeeping.
         proposal - optional, a SaltSwapProposal derived class that is used to select ions. If not provided it uses
-        the UniformSwapProposal
+        the OneDirectionChargeProposal
 
         """
         if not isinstance(swapper, Swapper):
@@ -947,7 +947,7 @@ class NCMCProtonDrive(_BaseDrive):
         if proposal is not None:
             self.swap_proposal = proposal
         else:
-            self.swap_proposal = UniformSwapProposal()
+            self.swap_proposal = OneDirectionChargeProposal()
         return
 
     def define_pools(self, dict_of_pools):
@@ -1804,9 +1804,17 @@ class NCMCProtonDrive(_BaseDrive):
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
         final_titration_states, titration_group_indices, log_p_residue_proposal = proposal.propose_states(self, residue_pool_indices)
+        initial_charge = 0
+        final_charge = 0
+        for idx in titration_group_indices:
+            initial_state = initial_titration_states[idx]
+            initial_charge += self.titrationGroups[idx].total_charges[initial_state]
+            final_state = final_titration_states[idx]
+            final_charge += self.titrationGroups[idx].total_charges[final_state]
+
         if self.swapper is not None:
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
-            saltswap_residue_indices, saltswap_states, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, net_charge_difference)
+            saltswap_residue_indices, saltswap_states, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
 
         try:
             # Compute work for switching to new protonation states.
