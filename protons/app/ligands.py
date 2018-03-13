@@ -8,14 +8,22 @@ from __future__ import print_function
 import os
 import shutil
 import tempfile
+import mdtraj
+import uuid
 from collections import OrderedDict
-
 import openmoltools as omt
 from lxml import etree, objectify
 from openeye import oechem
 from openmoltools import forcefield_generators as omtff
 from .logger import log
 import numpy as np
+import networkx as nx
+import lxml
+from .. import app
+from simtk.openmm import openmm
+from simtk.unit import *
+from ..app.integrators import GBAOABIntegrator
+
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -227,13 +235,13 @@ class _TitratableForceFieldCompiler(object):
     """
     Compiles intermediate ffxml data to the final constant-ph ffxml file.
     """
-    def __init__(self, input_state_data, gaff_xml=None, residue_name="LIG"):
+    def __init__(self, input_state_data: list, gaff_xml:str=None, residue_name: str="LIG"):
         """
         Compiles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
         Parameters
         ----------
-        input_state_data : OrderedDict
+        input_state_data : list
             Contains the ffxml of the Epik isomers, net charge, and population
         gaff_xml : string, optional
             File location of a gaff.xml file. If specified, read gaff parameters from here.
@@ -256,7 +264,7 @@ class _TitratableForceFieldCompiler(object):
                                                  etree.XMLParser(remove_blank_text=True, remove_comments=True)
                                                  )
                                      ]
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             self._xml_parameter_trees.append(state['ffxml'])
 
         # Compile all information into the output structure
@@ -827,7 +835,7 @@ class _TitratableForceFieldCompiler(object):
         Register all bonds.
         """
 
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             for bond in state['ffxml'].xpath('/ForceField/Residues/Residue/Bond'):
                 self._bonds.append(_Bond(bond.attrib['atomName1'], bond.attrib['atomName2']))
         self._unique_bonds()
@@ -847,7 +855,7 @@ class _TitratableForceFieldCompiler(object):
         """
         Registers unique atom names. Store in self._atom_names from Residue
         """
-        for state in self._input_state_data.values():
+        for state in self._input_state_data:
             for atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
                 atom_name = atom.attrib['name']
                 if atom_name not in self._atom_names:
@@ -860,12 +868,12 @@ class _TitratableForceFieldCompiler(object):
         Store all the properties that are specific to each state
         """
         charges = list()
-        for index, state in self._input_state_data.items():
+        for index, state in enumerate(self._input_state_data):
             net_charge = state['net_charge']
             charges.append(int(net_charge))
             template = _State(index,
                               state['log_population'],
-                              state['epik_penalty'],
+                              0.0, # set g_k defaults to 0 for now
                               net_charge,
                               self._atom_names,
                               state['pH']
@@ -952,7 +960,7 @@ def _generate_xml_template(residue_name="LIG"):
     return forcefield
 
 
-def write_ffxml(xml_compiler, filename=None):
+def _write_ffxml(xml_compiler, filename=None):
     """Generate an ffxml file from a compiler object.
 
     Parameters
@@ -978,39 +986,236 @@ def write_ffxml(xml_compiler, filename=None):
         return xmlstring
 
 
-def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files=True, max_penalty=10.0, pH=7.4, resname="LIG"):
-    """
-    Parametrize a ligand for constant-pH simulation using Epik.
+def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: float=10.0, workdir: str=None, tautomerize: bool=False, **kwargs):
+    """Generate protonation states using Epik, with shortcuts to a few useful settings.
 
     Parameters
     ----------
-    inputmae : str
-        location of mae file with all possible atoms included, with unique names.
-        There currently is no implementation of an atom mapping between protonation states, therefore, you will have to
-        include all potential protons in your input file. Be careful not to change bond orders.
-
-    outputffxml : str
-        location for output xml file containing all ligand states and their parameters
-
-    Other Parameters
-    ----------------
-    max_penalty : float, (default : 10.0)
-        Maximum energy penalty (in units of kT) for titration states.
-    pH : float
-        The pH that Epik should use to detect states
-    tmpdir : str, optional
-        Temporary directory for storing intermediate files.
-    remove_temp_files : bool, optional (default : True)
-        Remove temporary files when done.
-    resname : str, optional (default : "LIG")
-        Residue name in output files.
+    inputmae - location of a maestro input file for Epik.
+    outputmae - location for the output file containing protonation states
+    pH - the pH value
+    max_penalty - the max energy penalty in kT, default=10.0
+    workdir - Path/directory to place output files, including logs. If `outputmae` is a relative path, it will be placed here.
+    tautomerize = If too, besides protonation states generate tautomers
 
     Notes
     -----
-    The supplied mae file needs to have ALL possible atoms included, with unique names.
-    You could attempt to run epik ones, and make sure.
-    If you're not sure which protons to add, better to overprotonate.
     Epik doesn't retain the input protonation if it's non-relevant.
+
+    """
+    log.info("Running Epik to detect protomers and tautomers...")
+    inputmae = os.path.abspath(inputmae)
+    oldwd = os.getcwd()
+    try:
+        if workdir is not None:            
+            os.chdir(workdir)
+            log.info("Log files can be found in {}".format(workdir))
+        omt.schrodinger.run_epik(inputmae, outputmae, ph=pH, min_probability=np.exp(-max_penalty), tautomerize=tautomerize, **kwargs)
+    finally:
+        os.chdir(oldwd)
+
+
+def retrieve_epik_info(epik_mae: str) -> list:
+    """
+    Retrieve the state populations and charges from the Epik output maestro file
+
+    Parameters
+    ----------
+    epik_mae - location of the Epik output (a maestro file)
+
+    Returns
+    -------
+    list of dicts
+        has the keys log_population, net_charge
+    """
+
+    penalty_tag = "r_epik_State_Penalty"
+    net_charge_tag = "i_epik_Tot_Q"
+    props = omt.schrodinger.run_proplister(epik_mae)
+
+    all_info = list()
+
+    for state in props:
+        state_info = dict()
+        epik_penalty = state[penalty_tag]
+        state_info["log_population"] = float(epik_penalty) / (-298.15 * 1.9872036e-3)
+        state_info['net_charge'] = int(state[net_charge_tag])
+        all_info.append(state_info)
+
+    return all_info
+
+
+def epik_results_to_mol2(epik_mae: str, output_mol2: str):
+    """
+    Map the hydrogen atoms between Epik states, and return a mol2 file that
+    should be ready to parametrize.
+
+    Parameters
+    ----------
+    epik_mae: location of the maestro file produced by Epik.
+
+    Notes
+    -----
+    This renames the hydrogen atoms in your molecule so that
+     no ambiguity can exist between protonation states.
+    """
+    if not output_mol2[-5:] == ".mol2":
+        output_mol2 += ".mol2"
+    # Generate a file format that Openeye can read
+    unique_filename = str(uuid.uuid4())
+    tmpfilename = "{}.mol2".format(unique_filename)
+    omt.schrodinger.run_structconvert(epik_mae, tmpfilename)
+
+    ifs = oechem.oemolistream()
+    ifs.open(tmpfilename)
+
+    # make oemols for mapping
+    graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
+    ifs.close()
+
+    # Make graph for keeping track of which atoms are the same
+    graph = nx.Graph()
+
+    # Some hydrogens within one molecule may be chemically identical, and would otherwise be indistinguishable
+    # And some hydrogens accidentally get the same name
+    # Therefore, give every hydrogen a unique identifier.
+    # One labelling the molecule, the other labeling the position in the molecule.
+    for imol, mol in enumerate(graphmols):
+        h_count = 0
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() == 1:
+                h_count += 1
+                # H for hydrogen, M for mol
+                atom.SetName("H{}-M{}".format(h_count,imol+1))
+                # Add hydrogen atom to the graph
+                graph.add_node(atom, mol=imol)
+
+    # Connect atoms that are the same
+    # No need to avoid self maps for now. Code is fast enough
+    for i1, mol1 in enumerate(graphmols):
+        for i2, mol2 in enumerate(graphmols):
+
+            mol1_atoms = [atom for atom in mol1.GetAtoms()]
+            mol2_atoms = [atom for atom in mol2.GetAtoms()]
+
+            # operate on a copy to avoid modifying molecule
+            pattern = oechem.OEGraphMol(mol1)
+            target = oechem.OEGraphMol(mol2)
+
+            # Element should be enough to map
+            atomexpr = oechem.OEExprOpts_AtomicNumber
+            # Ignore aromaticity et cetera
+            bondexpr = oechem.OEExprOpts_EqSingleDouble
+
+            # create maximum common substructure object
+            mcss = oechem.OEMCSSearch(pattern, atomexpr, bondexpr, oechem.OEMCSType_Approximate)
+            # set scoring function
+            mcss.SetMCSFunc(oechem.OEMCSMaxAtoms())
+            mcss.SetMinAtoms(oechem.OECount(pattern, oechem.OEIsHeavy()))
+            mcss.SetMaxMatches(10)
+
+            # Constrain all heavy atoms, so the search goes faster.
+            # These should not be different anyways
+            for at1 in pattern.GetAtoms():
+                # skip H
+                if at1.GetAtomicNum() < 2:
+                    continue
+                for at2 in target.GetAtoms():
+                    # skip H
+                    if at2.GetAtomicNum() < 2:
+                        continue
+                    if at1.GetName() == at2.GetName():
+                        pat_idx = mcss.GetPattern().GetAtom(oechem.HasAtomIdx(at1.GetIdx()))
+                        tar_idx = target.GetAtom(oechem.HasAtomIdx(at2.GetIdx()))
+                        if not mcss.AddConstraint(oechem.OEMatchPairAtom(pat_idx, tar_idx)):
+                            raise ValueError("Could not constrain {} {}.".format(at1.GetName(), at2.GetName()))
+
+            unique = True
+            matches = mcss.Match(target, unique)
+            # We should only use the top one match.
+            for count, match in enumerate(matches):
+                for ma in match.GetAtoms():
+                    idx1 = ma.pattern.GetIdx()
+                    idx2 = ma.target.GetIdx()
+                    # Add edges between all hydrogens
+                    if mol1_atoms[idx1].GetAtomicNum() == 1:
+                        if mol2_atoms[idx2].GetAtomicNum() == 1:
+                            graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+                        # Sanity check, we should never see two elements mixed
+                        else:
+                            raise RuntimeError("Two atoms of different elements were matched.")
+                # stop after one match
+                break
+
+    # Assign unique but matching ID's per atom/state
+
+    # The current H counter
+    h_count = 0
+
+    for cc in nx.connected_components(graph):
+        # All of these atoms are chemically identical, but there could be more than one per molecule.
+        atomgraph = graph.subgraph(cc)
+        # Keep track of the unique H count
+        h_count += 1
+        names = [at.GetName() for at in atomgraph.nodes]
+        # last part says which molecule the atom belongs to
+        mol_identifiers = [int(name.split('-M')[1]) for name in names ]
+        # Number
+        counters = {i+1: 0 for i,mol in enumerate(graphmols)}
+        for atom, mol_id in zip(atomgraph.nodes, mol_identifiers):
+            h_num = h_count + counters[mol_id]
+            atom.SetName("H{}".format(h_num))
+            counters[mol_id] += 1
+
+        # If more than one hydrogen per mol found, add it to the count.
+        extra_h_count = max(counters.values()) - 1
+        if extra_h_count < 0:
+            raise ValueError("Found 0 hydrogens in graph, is there a bug?")
+        h_count += extra_h_count
+
+    _mols_to_file(graphmols, output_mol2)
+    os.remove(tmpfilename)
+
+
+def _mols_to_file(graphmols: list, output_mol2:str):
+    """Take a list of OEGraphMols and write it to a mol2 file."""
+    ofs = oechem.oemolostream()
+    ofs.open(output_mol2)
+    for mol in graphmols:
+        oechem.OEWriteMol2File(ofs, mol)
+    ofs.close()
+
+
+def _visualise_graphs(graph):
+    """Visualize the connected subcomponents of an atom graph"""
+    import matplotlib.pyplot as plt
+    nx.draw(graph, pos=nx.spring_layout(graph))
+    nx.draw_networkx_labels(graph, pos=nx.spring_layout(graph), labels=dict(zip(graph.nodes, [at.GetName() for at in graph.nodes])))
+    plt.show()
+
+
+def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str, pH: float, resname: str="LIG"):
+    """
+    Compile a protons ffxml file from a preprocessed mol2 file, and a dictionary of states and charges.
+
+    Parameters
+    ----------
+    inputmol2
+        Location of mol2 file with protonation states results. Ensure that the names of atoms matches between protonation
+         states, otherwise you will end up with atoms being duplicated erroneously. The `epik_results_to_mol2` function
+          provides a handy preprocessing to clean up epik output.
+    isomer_dicts: list of dicts
+        One dict is necessary for every isomer. Dict should contain 'log_population' and 'net_charge' keys.
+    outputffxml : str
+        location for output xml file containing all ligand states and their parameters
+    pH : float
+        The pH that these states are valid for.
+
+    Other Parameters
+    ----------------
+    resname : str, optional (default : "LIG")
+        Residue name in output files.
+    
 
     TODO
     ----
@@ -1022,73 +1227,171 @@ def generate_protons_ffxml(inputmae, outputffxml, tmpdir=None, remove_temp_files
 
     """
 
-    log.info("Running Epik to detect protomers and tautomers...")
-    inputmae = os.path.abspath(inputmae)
-    outputffxml = os.path.abspath(outputffxml)
-    oldwd = os.getcwd()
-    if tmpdir is None:
-        tmpdir = tempfile.mkdtemp()
-    os.chdir(tmpdir)
-    log.debug("Running in {}".format(tmpdir))
-
-    # Using very tolerant settings
-    # 10 KT min prob, no tautomers
-    omt.schrodinger.run_epik(inputmae, "epik.mae", ph=pH, min_probability=np.exp(-max_penalty), tautomerize=False)
-    omt.schrodinger.run_structconvert("epik.mae", "epik.sdf")
-    omt.schrodinger.run_structconvert("epik.mae", "epik.mol2")
-    log.info("Epik run completed.")
-
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")
-    isomers = OrderedDict()
-    isomer_index = 0
-    store = False
-    for line in open('epik.sdf', 'r'):
-        if store:
-            epik_penalty = line.strip()
-
-            if store == "log_population":
-                isomers[isomer_index]['epik_penalty'] = epik_penalty
-                epik_penalty = float(epik_penalty)
-                # Epik reports -RT ln p
-                # Divide by -RT in kcal/mol/K at 25 Celsius (Epik default)
-                isomers[isomer_index]['log_population'] = epik_penalty / (-298.15 * 1.9872036e-3)
-
-            # NOTE: relies on state penalty coming before charge
-            if store == "net_charge":
-                isomers[isomer_index]['net_charge'] = int(epik_penalty)
-                isomer_index += 1
-
-            store = ""
-
-        elif "r_epik_State_Penalty" in line:
-            # Next line contains epik state penalty
-            store = "log_population"
-            isomers[isomer_index] = dict(pH=pH)
-
-        elif "i_epik_Tot_Q" in line:
-            # Next line contains charge
-            store = "net_charge"
+    isomers = isomer_dicts
 
     log.info("Parametrizing the isomers...")
     xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
     # Open the Epik output into OEMols
     ifs = oechem.oemolistream()
-    ifs.open("epik.mol2")
-
+    ifs.open(inputmol2)
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
+        log.info("ffxml generation for {}".format(isomer_index))
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+        log.info(ffxml)
         isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
+        isomers[isomer_index]['pH'] = pH
 
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
-    write_ffxml(compiler, outputffxml)
-    os.chdir(oldwd)
+    _write_ffxml(compiler, outputffxml)
     log.info("Done!  Your result is located here: {}".format(outputffxml))
-    if remove_temp_files:
-        shutil.rmtree(tmpdir)
 
     return outputffxml
+
+
+def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_default):
+    """
+    Generates hydrogen definitions for a small molecule residue template.
+
+    Parameters
+    ----------
+    inputfile - a forcefield XML file defined using Gaff atom types
+    outputfile - Name for the XML output file
+    gaff - optional.
+        The location of your gaff.xml file. By default uses the one included with protons.
+    """
+
+    gafftree = etree.parse(gaff, etree.XMLParser(remove_blank_text=True, remove_comments=True))
+    xmltree = etree.parse(inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True))
+    # Output tree
+    hydrogen_definitions_tree = etree.fromstring('<Residues/>')
+    hydrogen_types = _find_hydrogen_types(gafftree)
+
+    for residue in xmltree.xpath('Residues/Residue'):
+        hydrogen_file_residue = etree.fromstring("<Residue/>")
+        hydrogen_file_residue.set('name', residue.get('name'))
+        # enumerate hydrogens in this list
+        hydrogens = list()
+        # Loop through atoms to find all hydrogens
+        for atom in residue.xpath('Atom'):
+            if atom.get('type') in hydrogen_types:
+                # Find the parent atom
+                for bond in residue.xpath('Bond'):
+                    atomname1 = bond.get('atomName1')
+                    atomname2 = bond.get('atomName2')
+                    # There should be only one bond containing this hydrogen
+                    if atom.get('name') == atomname1:
+                        # H is the first, parent is the second atom
+                        hydrogens.append(tuple([atomname1, atomname2]))
+                        break
+                    elif atom.get('name') == atomname2:
+                        # H is the second, parent is the first atom
+                        hydrogens.append(tuple([atomname2, atomname1]))
+                        break
+
+        # Loop through all hydrogens, and create definitions
+        for name, parent in hydrogens:
+            h_xml = etree.fromstring("<H/>")
+            h_xml.set("name", name)
+            h_xml.set("parent", parent)
+            hydrogen_file_residue.append(h_xml)
+        hydrogen_definitions_tree.append(hydrogen_file_residue)
+    # Write output
+    xmlstring = etree.tostring(hydrogen_definitions_tree, encoding="utf-8", pretty_print=True, xml_declaration=False)
+    xmlstring = xmlstring.decode("utf-8")
+    with open(outputfile, 'w') as fstream:
+        fstream.write(xmlstring)
+
+
+def _find_hydrogen_types(gafftree: lxml.etree.ElementTree) -> set:
+    """
+    Find all atom types that describe hydrogen atoms.
+
+    Parameters
+    ----------
+    gafftree - A GAFF input xml file that contains atom type definitions.
+
+    Returns
+    -------
+    set - names of all atom types that correspond to hydrogen
+    """
+
+    # Detect all hydrogen types by element and store them in a set
+    hydrogen_types = set()
+    for atomtype in gafftree.xpath('AtomTypes/Type'):
+        if atomtype.get('element') == "H":
+            hydrogen_types.add(atomtype.get('name'))
+
+    return hydrogen_types
+
+
+def extract_residue(inputfile:str, outputfile:str, resname:str ):
+    """Extract a specific residue from a file and write to new file. Useful for setting up a calibration.
+
+    Parameters
+    ----------
+    inputfile - A file that is compatible with MDtraj (see mdtraj.org)
+    outputfile - Filename for the output.
+    resname - the residue name in the system
+
+    """
+    input_traj = mdtraj.load(inputfile)
+    res = input_traj.topology.select("resn {}".format(resname))
+    input_traj.restrict_atoms(res)
+    input_traj.save(outputfile)
+
+
+def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None, delete_old_H:bool=True):
+    """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
+
+    Note that no salt is added. We use saltswap for this.
+
+    Parameters
+    ----------
+    vacuum_file - a single residue in vacuum to add hydrogens to and solvate.
+    output_file - the basename for an output mmCIF file with the solvated system.
+    ffxml - the forcefield file containing the residue definition,
+        optional for CDEHKY amino acids, required for ligands.
+    hxml - the hydrogen definition xml file,
+        optional for CDEHKY amino acids, required for ligands.
+    delete_old_H - delete old hydrogen atoms and add in new ones.
+        Typically necessary for ligands, where hydrogen names will have changed during parameterization to match up
+        different protonation states.
+    """
+
+    # Load relevant template definitions for modeller, forcefield and topology
+    if hxml is not None:
+        app.Modeller.loadHydrogenDefinitions(hxml)
+    if ffxml is not None:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+    else:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', 'tip3p.xml', 'ions_tip3p.xml')
+
+    pdb = app.PDBFile(vacuum_file)
+    modeller = app.Modeller(pdb.topology, pdb.positions)
+
+    # The system will likely have different hydrogen names.
+    # In this case its easiest to just delete and re-add with the right names based on hydrogen files
+    if delete_old_H:
+        to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
+        modeller.delete(to_delete)
+
+    modeller.addHydrogens(forcefield=forcefield)
+    modeller.addSolvent(forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False)
+
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0 * nanometers,
+                                     constraints=app.HBonds, rigidWater=True,
+                                     ewaldErrorTolerance=0.0005)
+    system.addForce(openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
+    simulation = app.Simulation(modeller.topology, system, GBAOABIntegrator())
+    simulation.context.setPositions(modeller.positions)
+    simulation.minimizeEnergy()
+
+    app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
+                           open(output_file, 'w'))
+
