@@ -97,3 +97,8 @@ class TestPlots:
         """Plot the heatmap of residue charges"""
         with netCDF4.Dataset(self.abl_imatinib_netcdf, 'r') as dataset:
             analysis.plot_tautomer_heatmap(dataset, residues=None)
+    
+    def test_extracting_work(self):
+        """Extract work distributions for a single residue"""
+        with netCDF4.Dataset(self.abl_imatinib_netcdf, 'r') as dataset:
+            analysis.extract_work_distributions(dataset, 0, 1, -1)
