@@ -119,7 +119,7 @@ def extract_work_distributions(dataset: netCDF4.Dataset, state1_idx: int, state2
     as the forward distribution.    
     """
     
-    ncmc = ds["Protons/NCMC"]
+    ncmc = dataset["Protons/NCMC"]
     forward_work = []
     neg_reverse_work = []
     
