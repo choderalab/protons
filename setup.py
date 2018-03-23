@@ -11,7 +11,7 @@ import sys
 from os.path import join as pjoin
 from os.path import relpath
 from setuptools import setup, Extension, find_packages
-
+import versioneer 
 try:
     sys.dont_write_bytecode = True
     sys.path.insert(0, '.')
@@ -33,11 +33,6 @@ def find_package_data(data_root, package_root):
         for fn in filenames:
             files.append(relpath(pjoin(root, fn), package_root))
     return files
-
-VERSION = '0.0.1'
-ISRELEASED = False
-__version__ = VERSION
-
 
 CLASSIFIERS = """\
 Intended Audience :: Science/Research
@@ -64,7 +59,8 @@ setup(
     long_description="\n".join(
         DOCLINES[
             2:]),
-    version=__version__,
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
     url='https://github.com/choderalab/protons',
     platforms=['any'],
     classifiers=CLASSIFIERS.splitlines(),
