@@ -1845,7 +1845,7 @@ class NCMCProtonDrive(_BaseDrive):
                     if self.swapper is not None:
                         self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states, saltswap_residue_indices, saltswap_states)
                     else:
-                        work = 
+                        work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states)
                 else:
                     work = 0.0
                     for step in range(self.perturbations_per_trial):
