@@ -9,7 +9,7 @@ import numpy as np
 class NCMCReporter:
     """NCMCReporter outputs NCMC statistics from a ConstantPHSimulation to a netCDF4 file."""
 
-    def __init__(self, netcdffile, reportInterval, shared=False):
+    def __init__(self, netcdffile, reportInterval: int, cumulativeworkInterval: int=0, shared=False):
         """Create a TitrationReporter.
 
         Parameters
@@ -18,6 +18,9 @@ class NCMCReporter:
             The netcdffile to write to
         reportInterval : int
             The interval (in update steps) at which to write frames
+        cumulativeworkInterval : 
+            Store cumulative work every m perturbation steps (default 1) in the NCMC protocol.
+            Set to 0 for not storing.
         shared: bool, default False
             Indicate whether the netcdf file is shared by other
 
@@ -35,8 +38,8 @@ class NCMCReporter:
         self._hasInitialized = False
         self._update = 0 # Number of updates written to the file.
         self._ngroups = 0 # number of residues
-        self._perturbation_steps = 0 # number of perturbation steps per ncmc trial
-
+        self._perturbation_steps = np.empty([]) # indices of perturbation steps stored per ncmc trial
+        self._cumulative_work_interval = cumulativeworkInterval # store cumulative work ever m perturbations
         if shared:
             self._close_file = False # close the file on deletion of this reporter.
         else:
@@ -106,7 +109,9 @@ class NCMCReporter:
         self._grp['initial_state'][iupdate,:] = drv.last_proposal[0]
         self._grp['proposed_state'][iupdate,:] = drv.last_proposal[1]
         self._grp['total_work'][iupdate,] = drv.last_proposal[2]
-        self._grp['cumulative_work'][iupdate,:] = np.asarray(drv.ncmc_stats_per_step)[:,0]
+        if self._cumulative_work_interval > 0:
+            self._grp['cumulative_work'][iupdate,:] = \
+             np.asarray(drv.ncmc_stats_per_step)[self._perturbation_steps,0]
 
     def _initialize_constants(self, simulation):
         """Initialize a set of constants required for the reports
@@ -117,7 +122,8 @@ class NCMCReporter:
         system = simulation.context.getSystem()
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
-        self._perturbation_steps = driver.perturbations_per_trial
+0       if self._cumulative_work_interval > 0:            
+            self._perturbation_steps = np.arange(0,driver.perturbations_per_trial, self._cumulative_work_interval)
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
@@ -130,7 +136,7 @@ class NCMCReporter:
 
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
-        perturbation_dim = grp.createDimension('perturbation', self._perturbation_steps)
+        
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
@@ -144,9 +150,14 @@ class NCMCReporter:
         total_work = grp.createVariable('total_work', float, ('update',))
         total_work.description = "The work of the protocol, including Δg_k. [update]"
         total_work.unit = "unitless (W/kT)"
-        cumulative_work = grp.createVariable('cumulative_work', float, ('update', 'perturbation',), zlib=True)
-        cumulative_work.description = "Cumulative work at the end of each NCMC perturbation step.[update,perturbation]"
-        cumulative_work.unit = "unitless (W/kT)"
+
+        if self._cumulative_work_interval > 0:
+            perturbation_dim = grp.createDimension('perturbation', len(self._perturbation_steps))
+            cumulative_work = grp.createVariable('cumulative_work', float, ('update', 'perturbation',), zlib=True)
+            cumulative_work.description = "Cumulative work at the end of each NCMC perturbation step.[update,perturbation]"
+            cumulative_work.unit = "unitless (W/kT)"
+            perturbation = grp.createVariable('perturbation', int, ('perturbation',))
+            perturbation.description("The step indices of the NCMC protocol. [perturbation]")
 
         self._grp = grp
         self._out.sync()
@@ -160,6 +171,7 @@ class NCMCReporter:
         ----------
         simulation - ConstantPHSimulation
         """
+        self._grp["perturbation"][:] = self._perturbation_steps[:]
         return
 
     def __del__(self):
