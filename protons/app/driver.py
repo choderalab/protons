@@ -629,6 +629,64 @@ class _TitrationState:
         return True
 
 
+class _TitrationAttemptData(object):
+    """Private class for bookkeeping information regarding a single titration state update."""
+
+    def __init__(self):
+        """Instantiate the class."""
+        pass
+
+    @property
+    def accepted(self) -> bool:
+        """True if the proposal was accepted, false if rejected."""
+        pass
+
+    @property
+    def rejected(self) -> bool:
+        """True if the proposal was rejected, false if accepted."""
+        pass
+
+    @property
+    def initial_states(self) -> np.ndarray:
+        """The titration state at the start of the attempt."""
+        pass
+
+    @property
+    def final_states(self) -> np.ndarray:
+        """The titration state at the end of the attempt."""
+        pass
+
+    @property
+    def work(self) -> np.float64:
+        """The total work performed during the attempt."""
+        pass
+
+    @property
+    def logp_ratio_residue_proposal(self) -> np.float64:
+        """The reverse/forward ratio of the probability of picking the residue, and its state."""
+        pass
+
+    @property
+    def logp_ratio_salt_proposal(self) -> np.float64:
+        """The reverse/forward ratio of the probability of picking a water molecule, and its ionic state."""
+        pass
+
+    @property
+    def logp_accept(self) -> np.float64:
+        """The acceptance probability of the entire proposal."""
+        pass
+    
+    @property
+    def initial_ion_states(self) -> np.ndarray:
+        """The initial state of water molecules treated by saltswap."""
+        pass
+    
+    @property
+    def final_ion_states(self) -> np.ndarray:
+        """The final state of water molecules treated by saltswap."""
+        pass
+
+
 class _BaseDrive(metaclass=ABCMeta):
     """An abstract base class describing the common public interface of Drive-type classes
 

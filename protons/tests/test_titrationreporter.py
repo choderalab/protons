@@ -115,8 +115,7 @@ class TestTitrationReporter(object):
         assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == num_atoms, "There should be {} atoms recorded.".format(num_atoms)
         assert newreporter.ncfile['Protons/Titration'].dimensions['ion_site'].size == 2538, "The system should have 2538 potential ion sites."
         newreporter.ncfile.close()
-
-        
+     
 
     def test_state_reporting(self):
         """Test if the titration state is correctly reported."""
