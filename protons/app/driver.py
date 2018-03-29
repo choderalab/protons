@@ -633,58 +633,136 @@ class _TitrationAttemptData(object):
     """Private class for bookkeeping information regarding a single titration state update."""
 
     def __init__(self):
-        """Instantiate the class."""
+        """Set up all internal variables for tracking."""
+
+        self._accepted = None
+        self._logp_ratio_residue_proposal = None
+        self._logp_ratio_salt_proposal = None
+        self._logp_accept
+        
+        self._initial_positions = None
+        self._initial_velocities = None
+        self._initial_box_vectors = None
+        self._initial_charge = None
+        self._initial_log_likelihood = None  
+        self._initial_potential_energy = None
+        self._initial_kinetic_energy = None
+        self._initial_states = None
+        self._initial_ion_states = None
+
+        self._final_positions = None
+        self._final_velocities = None
+        self._final_box_vectors = None
+        self._final_charge = None
+        self._final_log_likelihood = None
+        self._final_potential_energy = None
+        self._final_kinetic_energy = None
+        self._final_states = None
+        self._final_ion_states = None
+
         pass
+
+    @property
+    def initial_positions(self) -> np.ndarray:
+        """The initial 3D-vector of atomic positions"""
+        return self._initial_positions
+
+    @property
+    def final_positions(self) -> np.ndarray:
+        """The final 3D-vector of atomic positions"""
+        return self._final_positions
+
+    @property
+    def initial_velocities(self) -> np.ndarray:
+        """The initial 3D-vector of atomic velocities"""
+        return self._initial_velocities
+
+    @property
+    def final_velocities(self) -> np.ndarray:
+        """The final 3D-vector of atomic velocities"""
+        return self._final_velocities
+
+    @property
+    def initial_box_vectors(self) -> np.ndarray:
+        """The initial box vectors."""
+        return self._initial_box_vectors
+
+    @property
+    def final_box_vectors(self) -> np.ndarray:
+        """The final box vectors."""
+        return self._final_box_vectors
+
+    @property
+    def initial_charge(self) -> int:
+        """Initial charge of titratable residues."""
+        return int(self._initial_charge)
+
+    @property
+    def final_charge(self) -> int:
+        """Final charge of titratable residues."""
+        return int(self._final_charge)
+
+    @property
+    def initial_log_likelihood(self) -> np.float64:
+        """The initial log likelihood (reduced potential)."""
+        return np.float64(self._initial_log_likelihood)
+    
+    @property
+    def final_log_likelihood(self) -> np.float64:
+        """The final log likelihood (reduced potential)."""
+        return np.float64(self._final_log_likelihood)
 
     @property
     def accepted(self) -> bool:
         """True if the proposal was accepted, false if rejected."""
-        pass
+        return self._accepted
 
     @property
     def rejected(self) -> bool:
         """True if the proposal was rejected, false if accepted."""
-        pass
+        return not self._accepted
 
     @property
     def initial_states(self) -> np.ndarray:
         """The titration state at the start of the attempt."""
-        pass
+        return self._initial_states
 
     @property
     def final_states(self) -> np.ndarray:
         """The titration state at the end of the attempt."""
-        pass
+        return self._final_states
 
     @property
     def work(self) -> np.float64:
         """The total work performed during the attempt."""
-        pass
+        return self._work
 
     @property
     def logp_ratio_residue_proposal(self) -> np.float64:
-        """The reverse/forward ratio of the probability of picking the residue, and its state."""
-        pass
+        """The reverse/forward ratio of the probability of picking the residue,
+         and its state."""
+        return self._logp_ratio_residue_proposal
 
     @property
     def logp_ratio_salt_proposal(self) -> np.float64:
-        """The reverse/forward ratio of the probability of picking a water molecule, and its ionic state."""
-        pass
+        """The reverse/forward ratio of the probability of picking a water 
+        molecule, and its ionic state."""
+        return self._logp_ratio_salt_proposal
 
     @property
     def logp_accept(self) -> np.float64:
         """The acceptance probability of the entire proposal."""
-        pass
+        return self._logp_accept
     
     @property
     def initial_ion_states(self) -> np.ndarray:
         """The initial state of water molecules treated by saltswap."""
-        pass
+        return self._initial_ion_states
     
     @property
     def final_ion_states(self) -> np.ndarray:
         """The final state of water molecules treated by saltswap."""
-        pass
+        return self._final_ion_states
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -836,7 +914,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Keeps track of the last ncmc protocol attempt work.
         self.ncmc_stats_per_step = [None] * perturbations_per_trial
         self.propagations_per_step = propagations_per_step
-        self.last_proposal = [None]
+        self._last_attempt_data = _TitrationAttemptData()
         self.nattempted = 0
         self.naccepted = 0
         self.nrejected = 0
@@ -1835,6 +1913,8 @@ class NCMCProtonDrive(_BaseDrive):
             Reject proposal if NaN. Not recommended since NaN typically indicates issues with the simulation.
 
         """
+        self._last_attempt_data = _TitrationAttemptData()
+
         initial_positions = initial_velocities = initial_box_vectors = None
 
         # If using NCMC, store initial positions.
@@ -1857,7 +1937,7 @@ class NCMCProtonDrive(_BaseDrive):
         # attempts, and to record potential and kinetic energy.
         log_P_initial, pot1, kin1 = self._compute_log_probability()
 
-        log.debug("initial %s   %12.3f kcal/mol" % (str(self.titrationStates), pot1 / unit.kilocalories_per_mole))
+        log.debug("initial %s   %12.3f kcal/mol", (str(self.titrationStates), pot1 / unit.kilocalories_per_mole))
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
@@ -1910,7 +1990,7 @@ class NCMCProtonDrive(_BaseDrive):
                         self.ncmc_stats_per_step[step] = (0.0, 0.0, 0.0)
 
             # Store work history and the initial and
-            self.last_proposal = (initial_titration_states, final_titration_states, work)
+            # raise NotImplementedError (initial_titration_states, final_titration_states, work)
             log_P_accept = -work
             log_P_accept += log_p_residue_proposal
 
