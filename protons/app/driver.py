@@ -642,12 +642,10 @@ class _TitrationAttemptData(object):
         self._work = None
    
         self._initial_charge = None
-        self._initial_log_likelihood = None  
         self._initial_states = None
         self._initial_ion_states = None
 
         self._final_charge = None
-        self._final_log_likelihood = None
         self._final_states = None
         self._final_ion_states = None
 
