@@ -106,9 +106,9 @@ class NCMCReporter:
             self._grp['state'][iupdate,] = residue.state_index
 
         # first array is initial states, second is proposed state, last is work
-        self._grp['initial_state'][iupdate,:] = drv.last_proposal[0]
-        self._grp['proposed_state'][iupdate,:] = drv.last_proposal[1]
-        self._grp['total_work'][iupdate,] = drv.last_proposal[2]
+        self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states
+        self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states
+        self._grp['total_work'][iupdate,] = drv._last_attempt_data.work
         if self._cumulative_work_interval > 0:
             self._grp['cumulative_work'][iupdate,:] = \
              np.asarray(drv.ncmc_stats_per_step)[self._perturbation_steps,0]

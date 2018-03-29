@@ -645,9 +645,9 @@ class _TitrationAttemptData(object):
         self._initial_states = None
         self._initial_ion_states = None
 
-        self._final_charge = None
-        self._final_states = None
-        self._final_ion_states = None
+        self._proposed_charge = None
+        self._proposed_states = None
+        self._proposed_ion_states = None
 
         return
 
@@ -662,14 +662,14 @@ class _TitrationAttemptData(object):
         self._initial_charge = initial_charge
 
     @property
-    def final_charge(self) -> int:
-        """Final charge of titratable residues."""
-        return int(self._final_charge)
+    def proposed_charge(self) -> int:
+        """proposed charge of titratable residues."""
+        return int(self._proposed_charge)
     
-    @final_charge.setter
-    def final_charge(self, final_charge: int):
-        """final charge of titratable residues."""
-        self._final_charge = final_charge
+    @proposed_charge.setter
+    def proposed_charge(self, proposed_charge: int):
+        """proposed charge of titratable residues."""
+        self._proposed_charge = proposed_charge
 
     @property
     def accepted(self) -> bool:
@@ -702,16 +702,16 @@ class _TitrationAttemptData(object):
         self._initial_states = np.asarray(initial_states)
 
     @property
-    def final_states(self) -> np.ndarray:
+    def proposed_states(self) -> np.ndarray:
         """The titration state at the end of the attempt."""
-        return self._final_states
+        return self._proposed_states
 
-    @final_states.setter
-    def final_states(self, final_states: np.ndarray):
+    @proposed_states.setter
+    def proposed_states(self, proposed_states: np.ndarray):
         """
         The titration state at the end of the attempt.
         """
-        self._final_states = np.asarray(final_states)
+        self._proposed_states = np.asarray(proposed_states)
 
     @property
     def work(self) -> np.float64:
@@ -768,14 +768,14 @@ class _TitrationAttemptData(object):
         self._initial_ion_states = np.asarray(initial_ion_states)
 
     @property
-    def final_ion_states(self) -> np.ndarray:
-        """The final state of water molecules treated by saltswap."""
-        return self._final_ion_states
+    def proposed_ion_states(self) -> np.ndarray:
+        """The proposed state of water molecules treated by saltswap."""
+        return self._proposed_ion_states
 
-    @final_ion_states.setter
-    def final_ion_states(self, final_ion_states: np.ndarray):
-        """The final state of water molecules treated by saltswap."""
-        self._final_ion_states = np.asarray(final_ion_states)
+    @proposed_ion_states.setter
+    def proposed_ion_states(self, proposed_ion_states: np.ndarray):
+        """The proposed state of water molecules treated by saltswap."""
+        self._proposed_ion_states = np.asarray(proposed_ion_states)
 
 
 class _BaseDrive(metaclass=ABCMeta):
@@ -1963,8 +1963,8 @@ class NCMCProtonDrive(_BaseDrive):
         
         attempt_data.initial_charge = initial_charge
         attempt_data.initial_states = initial_titration_states
-        attempt_data.final_charge = final_charge
-        attempt_data.final_titration_states = final_titration_states
+        attempt_data.proposed_charge = final_charge
+        attempt_data.proposed_titration_states = final_titration_states
         attempt_data.logp_ratio_residue_proposal = log_p_residue_proposal
 
         if self.swapper is not None:
@@ -1978,7 +1978,7 @@ class NCMCProtonDrive(_BaseDrive):
                         proposed_ion_states[saltswap_residue] = to_ion_state
             
             attempt_data.initial_ion_states = initial_ion_states
-            attempt_data.final_ion_states = proposed_ion_states
+            attempt_data.proposed_ion_states = proposed_ion_states
             attempt_data.logp_ratio_salt_proposal = salt_proposal_log_ratio
         
 
