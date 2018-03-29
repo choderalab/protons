@@ -114,8 +114,13 @@ class TitrationReporter:
         # From simtk.openmm.app.modeller
         self._grp['complex_charge'][iupdate] = self._get_total_charge(self._all_minus_solvent_indices)
 
+        # Store the charge of every residue pool
         for pool,indices in self._pool_indices.items():
             self._grp['{}_charge'.format(pool)][iupdate] = self._get_total_charge(indices)
+
+        # Store salt identities
+        if self._nsaltsites > 0:
+            self._grp['ionic_species'][iupdate,:] = drv.swapper.stateVector[:]
 
     def _get_total_charge(self, particle_indices):
         """Returns total charge as integer for specified particles."""
@@ -141,11 +146,19 @@ class TitrationReporter:
         self._natoms_topology = simulation.topology.getNumAtoms()
         self._nparticles = self.system.getNumParticles()
         self._all_minus_solvent_indices = []
+        # Water/ion sites for saltswap
+        self._nsaltsites = 0
+
+        # If ions are being swapped as part of this simulation
+        if self.driver.swapper is not None:
+            self._nsaltsites = len(self.driver.swapper.stateVector)
+
         # Figure out which residues are not part of the solvent
         for res in self.topology.residues():
             if res.name not in _solvent_names:
                 for atom in res.atoms():
                     self._all_minus_solvent_indices.append(atom.index)
+
         # store the indices of every atom in the pool
         self._pool_indices = dict()
         for pool,resindices in self._residue_pools.items():
@@ -165,13 +178,20 @@ class TitrationReporter:
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
         atom_dim = grp.createDimension('atom', self._natoms_topology)
+        ion_dim = grp.createDimension('ion_site', self._nsaltsites)
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
         update.description = "The iteration of the protonation state update attempt. [update]"
 
+        
         residue_state = grp.createVariable("state", int, ('update', 'residue',))
         residue_state.description = "The present state of the residue. [update,residue]"
+
+        if self._nsaltsites > 0:
+            ion_state = grp.createVariable("ionic_species", int, ('update', 'ion_site',))
+            ion_state.description = "The present state of a water/ion molecule."
+                "Typical saltswap convention: 0 means water, 1 is cation, 2 is anion. [update, ion_site]"
 
         atom_status = grp.createVariable("atom_status", 'u1', ('update', 'atom'), zlib=True)
         atom_status.description = "Byte indicator (1/0) of whether an atom is on/off (charged) at present, where the atom index is equal to the topology.[update,atom]"
