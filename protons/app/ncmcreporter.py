@@ -122,7 +122,7 @@ class NCMCReporter:
         system = simulation.context.getSystem()
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
-0       if self._cumulative_work_interval > 0:            
+        if self._cumulative_work_interval > 0:            
             self._perturbation_steps = np.arange(0,driver.perturbations_per_trial, self._cumulative_work_interval)
 
     def _create_netcdf_structure(self):
