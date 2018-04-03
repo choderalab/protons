@@ -190,7 +190,7 @@ class TitrationReporter:
 
         if self._nsaltsites > 0:
             ion_state = grp.createVariable("ionic_species", int, ('update', 'ion_site',))
-            ion_state.description = "The present state of a water/ion molecule."
+            ion_state.description = "The present state of a water/ion molecule." \
                 "Typical saltswap convention: 0 means water, 1 is cation, 2 is anion. [update, ion_site]"
 
         atom_status = grp.createVariable("atom_status", 'u1', ('update', 'atom'), zlib=True)
