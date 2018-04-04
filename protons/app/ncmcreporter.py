@@ -157,7 +157,7 @@ class NCMCReporter:
             cumulative_work.description = "Cumulative work at the end of each NCMC perturbation step.[update,perturbation]"
             cumulative_work.unit = "unitless (W/kT)"
             perturbation = grp.createVariable('perturbation', int, ('perturbation',))
-            perturbation.description("The step indices of the NCMC protocol. [perturbation]")
+            perturbation.description = "The step indices of the NCMC protocol. [perturbation]"
 
         self._grp = grp
         self._out.sync()
