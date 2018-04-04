@@ -40,6 +40,7 @@ class NCMCReporter:
         self._ngroups = 0 # number of residues
         self._perturbation_steps = np.empty([]) # indices of perturbation steps stored per ncmc trial
         self._cumulative_work_interval = cumulativeworkInterval # store cumulative work ever m perturbations
+        self._has_swapper = False # True if using saltswap
         if shared:
             self._close_file = False # close the file on deletion of this reporter.
         else:
@@ -109,6 +110,14 @@ class NCMCReporter:
         self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states[:]
         self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states[:]
         self._grp['total_work'][iupdate,] = drv._last_attempt_data.work
+        self._grp['logp_ratio_residue_proposal'][iupdate,]= drv._last_attempt_data.logp_ratio_residue_proposal
+
+        if self._has_swapper:
+            logp_ratio_salt = self._grp['logp_ratio_salt_proposal'][iupdate,] = drv._last_attempt_data.logp_ratio_salt_proposal
+            
+        self._grp['logp_accept'][iupdate,] = drv._last_attempt_data.logp_accept
+        
+
         if self._cumulative_work_interval > 0:
             self._grp['cumulative_work'][iupdate,:] = \
              np.asarray(drv.ncmc_stats_per_step)[self._perturbation_steps,0]
@@ -124,6 +133,8 @@ class NCMCReporter:
         self._ngroups = len(simulation.drive.titrationGroups)
         if self._cumulative_work_interval > 0:            
             self._perturbation_steps = np.arange(0,driver.perturbations_per_trial, self._cumulative_work_interval)
+        if driver.swapper is not None:
+            self._has_swapper = True
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
@@ -150,7 +161,15 @@ class NCMCReporter:
         total_work = grp.createVariable('total_work', float, ('update',))
         total_work.description = "The work of the protocol, including Δg_k. [update]"
         total_work.unit = "unitless (W/kT)"
+        logp_ratio_residue = grp.createVariable('logp_ratio_residue_proposal', float, ('update',))
+        logp_ratio_residue.description = "The log P ratio (reverse/forward) of proposing this residue and state. [update]"
+        if self._has_swapper:
+            logp_ratio_salt = grp.createVariable('logp_ratio_salt_proposal', float, ('update',))
+            logp_ratio_salt.description = "The log P ratio (reverse/forward) of proposing this ion swap. [update]"
+        logp_accept = grp.createVariable('logp_accept', float, ('update',))
+        logp_accept.description = "The log P acceptance ratio for accepting the full NCMC move. [update]"
 
+        # Variables written per ncmc step
         if self._cumulative_work_interval > 0:
             perturbation_dim = grp.createDimension('perturbation', len(self._perturbation_steps))
             cumulative_work = grp.createVariable('cumulative_work', float, ('update', 'perturbation',), zlib=True)
