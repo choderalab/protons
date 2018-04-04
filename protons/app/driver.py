@@ -1968,8 +1968,8 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data.logp_ratio_residue_proposal = log_p_residue_proposal
 
         if self.swapper is not None:
-            initial_ion_states = swapper.stateVector[:]
-            proposed_ion_states = swapper.stateVector[:]            
+            initial_ion_states = self.swapper.stateVector[:]
+            proposed_ion_states = self.swapper.stateVector[:]            
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
             saltswap_residue_indices, saltswap_states, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
             
