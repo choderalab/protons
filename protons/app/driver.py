@@ -1964,7 +1964,7 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data.initial_charge = initial_charge
         attempt_data.initial_states = initial_titration_states
         attempt_data.proposed_charge = final_charge
-        attempt_data.proposed_titration_states = final_titration_states
+        attempt_data.proposed_states = final_titration_states
         attempt_data.logp_ratio_residue_proposal = log_p_residue_proposal
 
         if self.swapper is not None:

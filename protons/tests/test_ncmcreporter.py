@@ -59,8 +59,6 @@ class TestNCMCReporter(object):
         with pytest.raises(KeyError) as keyerror:
             newreporter.ncfile['Protons/NCMC'].dimensions['perturbation']
 
-        newreporter.ncfile.close()
-
     def test_reports_every_perturbation(self):
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide, save every perturbation step."""
 
@@ -101,8 +99,6 @@ class TestNCMCReporter(object):
         assert newreporter.ncfile['Protons/NCMC'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
         assert newreporter.ncfile['Protons/NCMC'].dimensions['perturbation'].size == 3, "There should be max 3 perturbations recorded."
 
-        newreporter.ncfile.close()
-
     def test_reports_every_2nd_perturbation(self):
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide, save every 2nd perturbation step."""
 
@@ -142,7 +138,5 @@ class TestNCMCReporter(object):
         assert newreporter.ncfile['Protons/NCMC'].dimensions['update'].size == 2, "There should be 3 updates recorded."
         assert newreporter.ncfile['Protons/NCMC'].dimensions['residue'].size == 2, "There should be 2 residues recorded."
         assert newreporter.ncfile['Protons/NCMC'].dimensions['perturbation'].size == 2, "There should be max 2 perturbations recorded."
-
-        newreporter.ncfile.close()
 
 

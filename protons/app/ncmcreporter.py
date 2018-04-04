@@ -106,8 +106,8 @@ class NCMCReporter:
             self._grp['state'][iupdate,] = residue.state_index
 
         # first array is initial states, second is proposed state, last is work
-        self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states
-        self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states
+        self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states[:]
+        self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states[:]
         self._grp['total_work'][iupdate,] = drv._last_attempt_data.work
         if self._cumulative_work_interval > 0:
             self._grp['cumulative_work'][iupdate,:] = \
@@ -171,7 +171,8 @@ class NCMCReporter:
         ----------
         simulation - ConstantPHSimulation
         """
-        self._grp["perturbation"][:] = self._perturbation_steps[:]
+        if self._cumulative_work_interval > 0:
+            self._grp["perturbation"][:] = self._perturbation_steps[:]
         return
 
     def __del__(self):
