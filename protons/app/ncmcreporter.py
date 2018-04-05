@@ -9,7 +9,7 @@ import numpy as np
 class NCMCReporter:
     """NCMCReporter outputs NCMC statistics from a ConstantPHSimulation to a netCDF4 file."""
 
-    def __init__(self, netcdffile, reportInterval: int, cumulativeworkInterval: int=0, shared=False):
+    def __init__(self, netcdffile, reportInterval: int, cumulativeworkInterval: int=0):
         """Create a TitrationReporter.
 
         Parameters
@@ -21,9 +21,6 @@ class NCMCReporter:
         cumulativeworkInterval : 
             Store cumulative work every m perturbation steps (default 1) in the NCMC protocol.
             Set to 0 for not storing.
-        shared: bool, default False
-            Indicate whether the netcdf file is shared by other
-
         """
         self._reportInterval = reportInterval
         if isinstance(netcdffile, str):
@@ -41,10 +38,6 @@ class NCMCReporter:
         self._perturbation_steps = np.empty([]) # indices of perturbation steps stored per ncmc trial
         self._cumulative_work_interval = cumulativeworkInterval # store cumulative work ever m perturbations
         self._has_swapper = False # True if using saltswap
-        if shared:
-            self._close_file = False # close the file on deletion of this reporter.
-        else:
-            self._close_file = True
 
     @property
     def ncfile(self):
@@ -204,8 +197,3 @@ class NCMCReporter:
         if self._cumulative_work_interval > 0:
             self._grp["perturbation"][:] = self._perturbation_steps[:]
         return
-
-    def __del__(self):
-        """Clean up on deletion of object."""
-        if self._close_file:
-            self._out.close()
