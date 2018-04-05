@@ -399,6 +399,12 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         -------
         dict(water_to_cation, water_to_anion, cation_to_water, anion_to_water)
 
+        Raises
+        ------
+        RuntimeError - if the swaps cannot be resolved within 1000 iterations
+            Usually this means there is a bug in the algorithm, or charges may
+            have been passed in as float (which was a bug in the past).
+
         """
 
         # Note that we don't allow for direct transitions between ions of different charge.
