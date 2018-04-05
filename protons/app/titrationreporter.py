@@ -178,7 +178,8 @@ class TitrationReporter:
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
         atom_dim = grp.createDimension('atom', self._natoms_topology)
-        ion_dim = grp.createDimension('ion_site', self._nsaltsites)
+        if self._nsaltsites > 0:
+            ion_dim = grp.createDimension('ion_site', self._nsaltsites)
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
