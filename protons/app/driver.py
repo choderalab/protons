@@ -405,7 +405,7 @@ class _TitratableResidue:
         return [0 if abs(charge) < 1.e-9 else 1 for charge in self.state.charges]
 
     @property
-    def total_charge(self):
+    def total_charge(self) -> int:
         """Total charge of the current titration state."""
         return self.state.total_charge
 
@@ -509,9 +509,9 @@ class _TitrationState:
         return obj
 
     @property
-    def total_charge(self):
+    def total_charge(self) -> int:
         """Return the total charge of the state."""
-        return sum(self.charges)
+        return int(round(sum(self.charges)))
 
     @property
     def forces(self):
