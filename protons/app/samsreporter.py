@@ -8,7 +8,7 @@ import time
 class SAMSReporter:
     """SamsReporter outputs SAMS data from a ConstantPHCalibration to a netCDF4 file."""
 
-    def __init__(self, netcdffile, reportInterval, shared=False):
+    def __init__(self, netcdffile, reportInterval):
         """Create a TitrationReporter.
 
         Parameters
@@ -17,9 +17,7 @@ class SAMSReporter:
             The netcdffile to write to
         reportInterval : int
             The interval (in adaptation steps) at which to write frames
-        shared: bool, default False
-            Indicate whether the netcdf file is shared by other
-
+        
         """
         self._reportInterval = reportInterval
         if isinstance(netcdffile, str):
@@ -35,11 +33,6 @@ class SAMSReporter:
         self._adaptation = 0 # Number of adaptations written to the file.
         self._group_index = None # group that is being calibrated
         self._nstates = 0 # number of states of the calibration residue
-
-        if shared:
-            self._close_file = False # close the file on deletion of this reporter.
-        else:
-            self._close_file = True
 
     @property
     def ncfile(self):
@@ -185,8 +178,3 @@ class SAMSReporter:
         grp['min_burn'][0] = calibration.min_burn
         grp['flatness_criterion'][0] = calibration.flatness_criterion
         return
-
-    def __del__(self):
-        """Clean up on deletion of object."""
-        if self._close_file:
-            self._out.close()
