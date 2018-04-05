@@ -52,7 +52,7 @@ class TestTitrationReporter(object):
         simulation.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(filename, 2, shared=False)
+        newreporter = tr.TitrationReporter(filename, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -102,7 +102,7 @@ class TestTitrationReporter(object):
         simulation.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(filename, 2, shared=False)
+        newreporter = tr.TitrationReporter(filename, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -146,7 +146,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -198,7 +198,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -260,7 +260,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step

@@ -16,7 +16,7 @@ _solvent_names = ["HOH", "H20", "WAT", "SOL", "TIP3", "TP3", "Li+", "Na+", "K+",
 class TitrationReporter:
     """TitrationReporter outputs protonation states of residues in the system to a netCDF4 file."""
 
-    def __init__(self, netcdffile, reportInterval, shared=False):
+    def __init__(self, netcdffile, reportInterval):
         """Create a TitrationReporter.
 
         Parameters
@@ -24,10 +24,7 @@ class TitrationReporter:
         netcdffile : string
             The netcdffile to write to
         reportInterval : int
-            The interval (in time steps) at which to write frames
-        shared: bool, default False
-            Indicate whether the netcdf file is shared by other reporters. Prevents file closing.
-
+            The interval (in time steps) at which to write frames        
         """
         self._reportInterval = reportInterval
         if isinstance(netcdffile, str):
@@ -41,11 +38,6 @@ class TitrationReporter:
         self._grp = None # netcdf group that will contain all data.
         self._hasInitialized = False
         self._update = 0 # Number of updates written to the file.
-
-        if shared:
-            self._close_file = False # close the file on deletion of this reporter.
-        else:
-            self._close_file = True
 
     @property
     def ncfile(self):
@@ -211,7 +203,3 @@ class TitrationReporter:
 
         return
 
-    def __del__(self):
-        """Clean up on deletion of object."""
-        if self._close_file:
-            self._out.close()
