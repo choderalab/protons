@@ -107,16 +107,17 @@ class NCMCReporter:
             self._grp['state'][iupdate,] = residue.state_index
 
         # first array is initial states, second is proposed state, last is work
-        self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states[:]
-        self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states[:]
+        self._grp['initial_state'][iupdate,:] = drv._last_attempt_data.initial_states
+        self._grp['proposed_state'][iupdate,:] = drv._last_attempt_data.proposed_states
         self._grp['total_work'][iupdate,] = drv._last_attempt_data.work
         self._grp['logp_ratio_residue_proposal'][iupdate,]= drv._last_attempt_data.logp_ratio_residue_proposal
 
         if self._has_swapper:
-            logp_ratio_salt = self._grp['logp_ratio_salt_proposal'][iupdate,] = drv._last_attempt_data.logp_ratio_salt_proposal
-            
+            self._grp['logp_ratio_salt_proposal'][iupdate,] = drv._last_attempt_data.logp_ratio_salt_proposal
+            self._grp['initial_ion_states'][iupdate,:] = drv._last_attempt_data.initial_ion_states
+            self._grp['proposed_ion_states'][iupdate,:] = drv._last_attempt_data.proposed_ion_states
+
         self._grp['logp_accept'][iupdate,] = drv._last_attempt_data.logp_accept
-        
 
         if self._cumulative_work_interval > 0:
             self._grp['cumulative_work'][iupdate,:] = \
@@ -133,8 +134,11 @@ class NCMCReporter:
         self._ngroups = len(simulation.drive.titrationGroups)
         if self._cumulative_work_interval > 0:            
             self._perturbation_steps = np.arange(0,driver.perturbations_per_trial, self._cumulative_work_interval)
+        
+        # If ions are being swapped as part of this simulation
         if driver.swapper is not None:
             self._has_swapper = True
+            self._nsaltsites = len(driver.swapper.stateVector)
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
@@ -147,7 +151,8 @@ class NCMCReporter:
 
         update_dim = grp.createDimension('update')
         residue_dim = grp.createDimension('residue', self._ngroups)
-        
+        if self._has_swapper:
+            ion_dim = grp.createDimension('ion_site', self._nsaltsites)
 
         # Variables written every update
         update = grp.createVariable('update', int, ('update',))
@@ -158,6 +163,12 @@ class NCMCReporter:
         residue_initial_state.description = "The state of the residue, before switching.[update,residue]"
         residue_proposed_state = grp.createVariable('proposed_state', int, ('update', 'residue',))
         residue_proposed_state.description = "The proposed state of the residue. [update,residue]"
+        if self._has_swapper:
+            salt_initial_states = grp.createVariable('initial_ion_states', int, ('update', 'ion_site',))
+            salt_proposed_states = grp.createVariable('proposed_ion_states', int, ('update', 'ion_site',))
+            salt_initial_states.description = "The initial state of water molecules treated by saltswap. [update, ion_site]"
+            salt_proposed_states.description = "The proposed state of water molecules treated by saltswap. [update,ion_site]"
+
         total_work = grp.createVariable('total_work', float, ('update',))
         total_work.description = "The work of the protocol, including Δg_k. [update]"
         total_work.unit = "unitless (W/kT)"
