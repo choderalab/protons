@@ -405,6 +405,7 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         swaps = dict(water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0)
         charge_to_counter = final_charge - initial_charge
 
+        counter = 0
         while abs(charge_to_counter) > 0:
             # The protonation state change annihilates a positive charge
             if (initial_charge > 0 >= final_charge) or (0 < final_charge < initial_charge):
@@ -429,4 +430,8 @@ class OneDirectionChargeProposal(SaltSwapProposal):
                 initial_charge += 1
             else:
                 raise ValueError("Impossible scenario reached.")
+            
+            counter +=1
+            if counter > 1000:
+                raise RuntimeError("Infinite while loop predicted for salt resolution. Bailing out.")
         return swaps
