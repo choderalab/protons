@@ -10,15 +10,13 @@ class MetadataReporter:
     """MetadataReporter outputs protonation state metadata for the system to a netCDF4 file.
     Writes only once at the start of the simulation."""
 
-    def __init__(self, netcdffile, shared=False):
+    def __init__(self, netcdffile):
         """Create a MetadataReporter.
 
         Parameters
         ----------
         netcdffile : string
             The netcdffile to write to
-        shared: bool, default False
-            Indicate whether the netcdf file is shared by other reporters. Prevents file closing.
         """
         if isinstance(netcdffile, str):
             self._out = netCDF4.Dataset(netcdffile, mode="w")
@@ -31,11 +29,6 @@ class MetadataReporter:
         self._grp = None # netcdf group that will contain all data.
         self._hasInitialized = False
         self._update = 0 # Number of updates written to the file.
-
-        if shared:
-            self._close_file = False # close the file on deletion of this reporter.
-        else:
-            self._close_file = True
 
     @property
     def ncfile(self):
@@ -157,8 +150,3 @@ class MetadataReporter:
                 for iatom, charge in enumerate(state.charges):
                     self._grp['charge'][ires, iatom, istate] = charge
         return
-
-    def __del__(self):
-        """Clean up on deletion of object."""
-        if self._close_file:
-            self._out.close()
