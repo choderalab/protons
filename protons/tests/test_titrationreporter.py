@@ -89,9 +89,9 @@ class TestTitrationReporter(object):
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
                                        perturbations_per_trial=0)
 
-        swapper = Swapper(testsystem.system, testsystem.topology, testsystem.temperature,
+        swapper = Swapper(system, pdb.topology, temperature,
                           317.0 * unit.kilojoule_per_mole, ncmc_integrator=compound_integrator.getIntegrator(1),
-                          pressure=testsystem.pressure, nattempts_per_update=1,npert=1, nprop=0,
+                          pressure=pressure, nattempts_per_update=1,npert=1, nprop=0,
                           work_measurement='internal', waterName="HOH", cationName='Na+', anionName='Cl-'
                           )
         driver.attach_swapper(swapper)
@@ -113,7 +113,7 @@ class TestTitrationReporter(object):
         assert newreporter.ncfile['Protons/Titration'].dimensions['update'].size == 3, "There should be 3 updates recorded."
         assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == num_titratable, "There should be {} residues recorded.".format(num_titratable)
         assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == num_atoms, "There should be {} atoms recorded.".format(num_atoms)
-        assert newreporter.ncfile['Protons/Titration'].dimensions['ion_site'].size == 2538, "The system should have 2538 potential ion sites."
+        assert newreporter.ncfile['Protons/Titration'].dimensions['ion_site'].size == 1269, "The system should have 1269 potential ion sites."
         newreporter.ncfile.close()
      
 
