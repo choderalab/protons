@@ -1932,10 +1932,10 @@ class NCMCProtonDrive(_BaseDrive):
 
         # If using NCMC, store initial positions.
         if self.perturbations_per_trial > 0:
-            initial_state = self.context.getState(getPositions=True, getVelocities=True)
-            initial_positions = initial_state.getPositions(asNumpy=True)
-            initial_velocities = initial_state.getVelocities(asNumpy=True)
-            initial_box_vectors = initial_state.getPeriodicBoxVectors(asNumpy=True)
+            initial_openmm_state = self.context.getState(getPositions=True, getVelocities=True)
+            initial_positions = initial_openmm_state.getPositions(asNumpy=True)
+            initial_velocities = initial_openmm_state.getVelocities(asNumpy=True)
+            initial_box_vectors = initial_openmm_state.getPeriodicBoxVectors(asNumpy=True)
 
         # Select which titratible residues to update.
         if residue_pool is None:
@@ -2010,7 +2010,7 @@ class NCMCProtonDrive(_BaseDrive):
                 if initial_titration_states != final_titration_states:
                     # Run NCMC integration.
                     if self.swapper is not None:
-                        self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states, saltswap_residue_indices, saltswap_states)
+                        work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states, saltswap_residue_indices, saltswap_states)
                     else:
                         work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states)
                 else:
