@@ -27,7 +27,6 @@ Table of contents
    modules/introduction   
    modules/system preparation
    modules/simulation instructions
-   modules/calibration
    modules/ligutils
    api
    modules/references
