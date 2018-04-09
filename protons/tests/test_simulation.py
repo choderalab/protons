@@ -62,8 +62,6 @@ class TestConstantPHSimulation(object):
     def test_create_simulation(self):
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
-        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
-
         pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
         forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
 
