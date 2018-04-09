@@ -24,8 +24,7 @@ Table of contents
    :numbered:
 
 
-   modules/introduction
-   modules/installation
+   modules/introduction   
    modules/system preparation
    modules/simulation instructions
    modules/calibration
