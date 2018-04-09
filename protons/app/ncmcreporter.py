@@ -19,7 +19,7 @@ class NCMCReporter:
         reportInterval : int
             The interval (in update steps) at which to write frames
         cumulativeworkInterval : 
-            Store cumulative work every m perturbation steps (default 1) in the NCMC protocol.
+            Store cumulative work every m perturbation steps (default 0) in the NCMC protocol.
             Set to 0 for not storing.
         """
         self._reportInterval = reportInterval
