@@ -1,13 +1,6 @@
 Introduction
 ============
 
-.. toctree::
-   :name: introductiontoc
-   :maxdepth: 3
-   :numbered:
-
-   introduction
-
 What is protons?
 ----------------
 
