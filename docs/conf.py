@@ -136,8 +136,8 @@ html_theme_options = {
     'description' : 'Protonation states and tautomers for OpenMM',
     'pre_bg': '#41323f', # color used for syntax block
     'body_text': "#41323f",
-    "pink_1": "peachpuff"
-
+    "pink_1": "peachpuff",
+    "code_highlight": "#95ea95"
 }
 
 # Add any paths that contain custom themes here, relative to this directory.

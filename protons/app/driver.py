@@ -874,25 +874,8 @@ class NCMCProtonDrive(_BaseDrive):
     """
     The NCMCProtonDrive is a base class Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
 
-    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_.
-
-    References
-    ----------
-
-    .. [Mongan2004] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-        http://dx.doi.org/10.1002/jcc.20139
-
-    .. [Stern2007] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-        http://link.aip.org/link/doi/10.1063/1.2731781
-
-    .. [Nilmeier2011] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-        http://dx.doi.org/10.1073/pnas.1106094108
-
-    .. todo::
-
-      * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-        - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-      * Add automatic tuning of switching times for optimal acceptance.
+    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_, and Chen and Roux [Chen2015]_.
+    
     """
 
     def __init__(self, temperature, topology, system, pressure=None, perturbations_per_trial=0, propagations_per_step=1):
@@ -2266,26 +2249,7 @@ class AmberProtonDrive(NCMCProtonDrive):
     The AmberProtonDrive is a Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
     It relies on Ambertools to set up a simulation system, and requires a ``.cpin`` input file with protonation states.
 
-    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_.
-
-    References
-    ----------
-
-    .. [Mongan2004] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-        http://dx.doi.org/10.1002/jcc.20139
-
-    .. [Stern2007] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-        http://link.aip.org/link/doi/10.1063/1.2731781
-
-    .. [Nilmeier2011] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-        http://dx.doi.org/10.1073/pnas.1106094108
-
-    .. todo::
-
-      * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-        - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-      * Add automatic tuning of switching times for optimal acceptance.
-
+    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_, and Chen and Roux [Chen2015]_.
 
     """
     def __init__(self, temperature, topology, system, cpin_filename, pressure=None,
@@ -2382,33 +2346,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
     The ForceFieldProtonDrive is a Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
     It relies on ffxml files to set up a simulation system.
 
-    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_ and Chen and Roux [Chen2015]_ .
-
-    References
-    ----------
-
-    .. [Mongan2004] Mongan J, Case DA, and McCammon JA. Constant pH molecular dynamics in generalized Born implicit solvent. J Comput Chem 25:2038, 2004.
-        http://dx.doi.org/10.1002/jcc.20139
-
-    .. [Stern2007] Stern HA. Molecular simulation with variable protonation states at constant pH. JCP 126:164112, 2007.
-        http://link.aip.org/link/doi/10.1063/1.2731781
-
-    .. [Nilmeier2011] Nonequilibrium candidate Monte Carlo is an efficient tool for equilibrium simulation. PNAS 108:E1009, 2011.
-        http://dx.doi.org/10.1073/pnas.1106094108
-
-    .. [Chen2015] Chen, Yunjie, and Benoît Roux. "Constant-pH hybrid nonequilibrium molecular dynamics–monte carlo simulation method." Journal of chemical theory and computation 11.8 (2015): 3919-3931.
-
-    .. todo::
-
-      * Add NCMC switching moves to allow this scheme to be efficient in explicit solvent.
-      * Add alternative proposal types, including schemes that avoid proposing self-transitions (or always accept them):
-        - Parallel Monte Carlo schemes: Compute N proposals at once, and pick using Gibbs sampling or Metropolized Gibbs?
-      * Allow specification of probabilities for selecting N residues to change protonation state at once.
-      * Add calibrate() method to automagically adjust relative energies of protonation states of titratable groups in molecule.
-      * Add automatic tuning of switching times for optimal acceptance.
-      * Extend to handle systems set up via OpenMM app Forcefield class.
-      * Make integrator optional if not using NCMC
-
+    Protonation state changes, and additionally, tautomers are treated using the constant-pH dynamics method of Mongan, Case and McCammon [Mongan2004]_, or Stern [Stern2007]_ and NCMC methods from Nilmeier [Nilmeier2011]_ and Chen and Roux [Chen2015]_.
     """
 
     def __init__(self, temperature, topology, system, forcefield, ffxml_files, pressure=None, perturbations_per_trial=0, propagations_per_step=1, residues_by_name=None, residues_by_index=None):
