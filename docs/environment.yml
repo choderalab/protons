@@ -2,7 +2,7 @@ name: protons
 channels:
     - omnia
 dependencies:
-    - python
+    - python >=3.6
     - openmm >=7.2
     - numpy >=1.10
     - scipy >=0.17.0
