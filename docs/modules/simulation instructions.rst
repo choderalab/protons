@@ -8,8 +8,6 @@ This allows for sampling over multiple protonation states and prototropic tautom
 These effects have been shown as important in multiple biological systems ([Czodrowski2007a]_, [Czodrowski2007b]_, [Steuber2007]_, [Neeb2014]_), and now you can include them in OpenMM simulations.
 
 
-
-
 Setting up the :py:class:`AmberProtonDrive` class
 =================================================
 

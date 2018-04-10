@@ -1014,15 +1014,10 @@ class NCMCProtonDrive(_BaseDrive):
         ----------
         context : simtk.openmm.Context
             Context that has a compound integrator bound to it. The integrator with index 1 is used for NCMC.
-
             The NCMC integrator needs to be a CustomIntegrator with the following two properties defined:
             first_step: 0 or 1. 0 indicates the first step in an NCMC protocol and can be used for special actions
-                required such as computing the energy prior to perturbation.
-                protocol_work: double, the protocol work performed by external moves in between steps.
-
-        Returns
-        -------
-
+            required such as computing the energy prior to perturbation.
+            protocol_work: double, the protocol work performed by external moves in between steps.
         """
 
         self.compound_integrator = context._integrator

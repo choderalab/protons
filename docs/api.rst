@@ -17,12 +17,14 @@ NCMCProtonDrive class
     :members:
 
     .. automethod:: NCMCProtonDrive.__init__
+    
     .. automethod:: NCMCProtonDrive.attach_context
     .. automethod:: NCMCProtonDrive.attach_swapper
     .. automethod:: NCMCProtonDrive.update    
     .. automethod:: NCMCProtonDrive.define_pools
     .. automethod:: NCMCProtonDrive.import_gk_values
     .. automethod:: NCMCProtonDrive.adjust_to_ph
+    .. automethod:: NCMCProtonDrive.serialize_titration_groups
 
 AmberProtonDrive class
 ----------------------
@@ -39,6 +41,7 @@ ForceFieldProtonDrive class
 .. autoclass:: protons.app.driver.ForceFieldProtonDrive
 
     :members:
+
     .. automethod:: ForceFieldProtonDrive.__init__
 
 
@@ -61,7 +64,7 @@ ConstantPHSimulation
 
     .. automethod:: ConstantPHSimulation.__init__
     .. automethod:: ConstantPHSimulation.step
-    .. automethod:: ConstantPHSimulation.updates    
+    .. automethod:: ConstantPHSimulation.update    
 
 ConstantPHCalibration
 ---------------------
