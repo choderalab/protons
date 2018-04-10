@@ -635,11 +635,13 @@ class TestForceFieldImidazoleSaltswap:
         context.setVelocitiesToTemperature(testsystem.temperature)
         driver.attach_context(context)
 
-        swapper = Swapper(testsystem.system, testsystem.topology, testsystem.temperature,
-                          317.0 * unit.kilojoule_per_mole, ncmc_integrator=compound_integrator.getIntegrator(1),
-                          pressure=testsystem.pressure, nattempts_per_update=1,npert=1, nprop=0,
-                          work_measurement='internal', waterName="HOH", cationName='Na+', anionName='Cl-'
-                          )
+        # The salinator initializes the system salts
+        salinator = Salinator(context=context, system=testsystem.system, topology=testsystem.topology,
+                              ncmc_integrator=compound_integrator.getIntegrator(1), salt_concentration=0.2 * unit.molar,
+                              pressure=testsystem.pressure, temperature=testsystem.temperature)
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
         driver.attach_swapper(swapper)
 
         driver.adjust_to_ph(7.4)

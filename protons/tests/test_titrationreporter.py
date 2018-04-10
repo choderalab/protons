@@ -11,6 +11,7 @@ import netCDF4
 from math import floor, ceil
 import os
 import pytest
+from saltswap.swapper import Swapper
 
 travis = os.environ.get("TRAVIS", None)
 
@@ -51,7 +52,7 @@ class TestTitrationReporter(object):
         simulation.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(filename, 2, shared=False)
+        newreporter = tr.TitrationReporter(filename, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -63,6 +64,58 @@ class TestTitrationReporter(object):
         assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == num_titratable, "There should be {} residues recorded.".format(num_titratable)
         assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == num_atoms, "There should be {} atoms recorded.".format(num_atoms)
         newreporter.ncfile.close()
+
+    def test_reports_with_salt(self):
+        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide, with salt."""
+
+        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
+        num_atoms = pdb.topology.getNumAtoms()
+        forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
+
+        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
+                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds, rigidWater=True,
+                                         ewaldErrorTolerance=0.0005)
+
+        temperature = 300 * unit.kelvin
+        integrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=False)
+        ncmcintegrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=True)
+
+        compound_integrator = mm.CompoundIntegrator()
+        compound_integrator.addIntegrator(integrator)
+        compound_integrator.addIntegrator(ncmcintegrator)
+        pressure = 1.0 * unit.atmosphere
+
+        system.addForce(mm.MonteCarloBarostat(pressure, temperature))
+        driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
+                                       perturbations_per_trial=0)
+
+        swapper = Swapper(system, pdb.topology, temperature,
+                          317.0 * unit.kilojoule_per_mole, ncmc_integrator=compound_integrator.getIntegrator(1),
+                          pressure=pressure, nattempts_per_update=1,npert=1, nprop=0,
+                          work_measurement='internal', waterName="HOH", cationName='Na+', anionName='Cl-'
+                          )
+        driver.attach_swapper(swapper)
+
+        num_titratable = len(driver.titrationGroups)
+        simulation = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
+        simulation.context.setPositions(pdb.positions)
+        simulation.context.setVelocitiesToTemperature(temperature)
+        filename = uuid.uuid4().hex + ".nc"
+        print("Temporary file: ",filename)
+        newreporter = tr.TitrationReporter(filename, 2)
+        simulation.update_reporters.append(newreporter)
+
+        # Regular MD step
+        simulation.step(1)
+        # Update the titration states using the uniform proposal
+        simulation.update(6)
+        # Basic checks for dimension
+        assert newreporter.ncfile['Protons/Titration'].dimensions['update'].size == 3, "There should be 3 updates recorded."
+        assert newreporter.ncfile['Protons/Titration'].dimensions['residue'].size == num_titratable, "There should be {} residues recorded.".format(num_titratable)
+        assert newreporter.ncfile['Protons/Titration'].dimensions['atom'].size == num_atoms, "There should be {} atoms recorded.".format(num_atoms)
+        assert newreporter.ncfile['Protons/Titration'].dimensions['ion_site'].size == 1269, "The system should have 1269 potential ion sites."
+        newreporter.ncfile.close()
+     
 
     def test_state_reporting(self):
         """Test if the titration state is correctly reported."""
@@ -93,7 +146,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -145,7 +198,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
@@ -207,7 +260,7 @@ class TestTitrationReporter(object):
         filename = uuid.uuid4().hex + ".nc"
         ncfile = netCDF4.Dataset(filename, 'w')
         print("Temporary file: ",filename)
-        newreporter = tr.TitrationReporter(ncfile, 2, shared=False)
+        newreporter = tr.TitrationReporter(ncfile, 2)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step

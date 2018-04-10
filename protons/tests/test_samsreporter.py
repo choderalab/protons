@@ -47,7 +47,7 @@ class TestSAMSReporter(object):
         calibration.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = sr.SAMSReporter(filename, 2, shared=False)
+        newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
 
         # Regular MD step
@@ -98,7 +98,7 @@ class TestSAMSReporter(object):
         calibration.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ", filename)
-        newreporter = sr.SAMSReporter(filename, 2, shared=False)
+        newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
         calibration.stage = "slow-gain"
 

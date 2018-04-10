@@ -26,7 +26,7 @@ class _StateProposal(metaclass=ABCMeta):
             -------
             final_titration_states - list of the final titration state of every residue
             titration_group_indices - the indices of the residues that are changing
-            float, log (probability of reverse proposal)/(probability of forward proposal)
+            logp_ratio_proposal - float (probability of reverse proposal)/(probability of forward proposal)
         """
         return list(), list(), float()
 
@@ -399,12 +399,19 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         -------
         dict(water_to_cation, water_to_anion, cation_to_water, anion_to_water)
 
+        Raises
+        ------
+        RuntimeError - if the swaps cannot be resolved within 1000 iterations
+            Usually this means there is a bug in the algorithm, or charges may
+            have been passed in as float (which was a bug in the past).
+
         """
 
         # Note that we don't allow for direct transitions between ions of different charge.
         swaps = dict(water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0)
         charge_to_counter = final_charge - initial_charge
 
+        counter = 0
         while abs(charge_to_counter) > 0:
             # The protonation state change annihilates a positive charge
             if (initial_charge > 0 >= final_charge) or (0 < final_charge < initial_charge):
@@ -429,4 +436,8 @@ class OneDirectionChargeProposal(SaltSwapProposal):
                 initial_charge += 1
             else:
                 raise ValueError("Impossible scenario reached.")
+            
+            counter +=1
+            if counter > 1000:
+                raise RuntimeError("Infinite while loop predicted for salt resolution. Bailing out.")
         return swaps

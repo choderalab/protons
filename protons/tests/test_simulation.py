@@ -47,9 +47,9 @@ class TestConstantPHSimulation(object):
         # Outputfile for reporters
         newname = uuid4().hex + '.nc'
         ncfile = netCDF4.Dataset(newname, 'w')
-        tr = TitrationReporter(ncfile, 1, shared=True)
-        mr = MetadataReporter(ncfile, shared=True)
-        nr = NCMCReporter(ncfile, 1, shared=True)
+        tr = TitrationReporter(ncfile, 1)
+        mr = MetadataReporter(ncfile)
+        nr = NCMCReporter(ncfile, 1)
         simulation.update_reporters.append(tr)
         simulation.update_reporters.append(mr)
         simulation.update_reporters.append(nr)
@@ -60,8 +60,6 @@ class TestConstantPHSimulation(object):
         simulation.update(1)
 
     def test_create_simulation(self):
-        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
-
         """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
 
         pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
@@ -226,10 +224,10 @@ class TestConstantPHCalibration:
         # Outputfile for reporters
         newname = uuid4().hex + '.nc'
         ncfile = netCDF4.Dataset(newname, 'w')
-        tr = TitrationReporter(ncfile, 1, shared=True)
-        mr = MetadataReporter(ncfile, shared=True)
-        nr = NCMCReporter(ncfile, 1, shared=True)
-        sr = SAMSReporter(ncfile, 1, shared=True)
+        tr = TitrationReporter(ncfile, 1)
+        mr = MetadataReporter(ncfile)
+        nr = NCMCReporter(ncfile, 1)
+        sr = SAMSReporter(ncfile, 1)
         simulation.update_reporters.append(tr)
         simulation.update_reporters.append(mr)
         simulation.update_reporters.append(nr)

@@ -46,7 +46,7 @@ class TestMetadataReporter(object):
         simulation.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
         print("Temporary file: ",filename)
-        newreporter = mr.MetadataReporter(filename, shared=False)
+        newreporter = mr.MetadataReporter(filename)
         simulation.update_reporters.append(newreporter)
 
         # Regular MD step
