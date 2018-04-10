@@ -26,7 +26,7 @@ class _StateProposal(metaclass=ABCMeta):
             -------
             final_titration_states - list of the final titration state of every residue
             titration_group_indices - the indices of the residues that are changing
-            float, log (probability of reverse proposal)/(probability of forward proposal)
+            logp_ratio_proposal - float (probability of reverse proposal)/(probability of forward proposal)
         """
         return list(), list(), float()
 

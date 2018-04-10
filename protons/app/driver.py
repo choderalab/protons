@@ -1952,7 +1952,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
-        final_titration_states, titration_group_indices, log_p_residue_proposal = proposal.propose_states(self, residue_pool_indices)
+        final_titration_states, titration_group_indices, logp_ratio_residue_proposal = proposal.propose_states(self, residue_pool_indices)
         initial_charge = 0
         final_charge = 0
         for idx in titration_group_indices:
@@ -1965,13 +1965,13 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data.initial_states = initial_titration_states
         attempt_data.proposed_charge = final_charge
         attempt_data.proposed_states = final_titration_states
-        attempt_data.logp_ratio_residue_proposal = log_p_residue_proposal
+        attempt_data.logp_ratio_residue_proposal = logp_ratio_residue_proposal
 
         if self.swapper is not None:
             initial_ion_states = self.swapper.stateVector[:]
             proposed_ion_states = self.swapper.stateVector[:]            
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
-            saltswap_residue_indices, saltswap_states, salt_proposal_log_ratio = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
+            saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
             
             # The saltswap indices are updated to indicate the change of species
             for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
@@ -1979,7 +1979,7 @@ class NCMCProtonDrive(_BaseDrive):
             
             attempt_data.initial_ion_states = initial_ion_states
             attempt_data.proposed_ion_states = proposed_ion_states
-            attempt_data.logp_ratio_salt_proposal = salt_proposal_log_ratio
+            attempt_data.logp_ratio_salt_proposal = logp_ratio_salt_proposal
         
 
         try:
@@ -2022,13 +2022,13 @@ class NCMCProtonDrive(_BaseDrive):
             attempt_data.work = work
 
             log_P_accept = -work
-            log_P_accept += log_p_residue_proposal
+            log_P_accept += logp_ratio_residue_proposal
 
 
             # If maintaining charge neutrality using saltswap
             if self.swapper is not None:
                 # The acceptance criterion is extended with the ratio of salt proposal probabilities (reverse/forward)
-                log_P_accept += salt_proposal_log_ratio
+                log_P_accept += logp_ratio_salt_proposal
 
             # Only record acceptance statistics for exchanges to different protonation states
             if initial_titration_states != final_titration_states:
