@@ -999,7 +999,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def serialize_titration_groups(self):
+    def _serialize_titration_groups(self):
         """Store residues handled by the drive as xml.
 
         Returns
@@ -1012,7 +1012,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
 
-    def add_residues_from_serialized_xml(self, xmltree):
+    def _add_residues_from_serialized_xml(self, xmltree):
         """Add residues from previously serialized residues."""
         if type(xmltree) == str:
             xmltree = etree.fromstring(xmltree)
