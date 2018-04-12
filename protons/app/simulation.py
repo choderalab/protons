@@ -3,7 +3,7 @@
 
 from simtk.openmm.app import Simulation
 from simtk import openmm
-from .driver import ForceFieldProtonDrive
+from .driver import ForceFieldProtonDrive, NCMCProtonDrive
 from .calibration import SelfAdjustedMixtureSampling
 from protons.app import proposals
 from protons.app.logger import log
@@ -31,8 +31,9 @@ class ConstantPHSimulation(Simulation):
                 first_step: 0 or 1. 0 indicates the first step in an NCMC protocol and can be used for special actions
                 required such as computing the energy prior to perturbation.
                 protocol_work: double, the protocol work performed by external moves in between steps.
-        drive : protons ProtonDrive
+        drive : protons.NCMCProtonDrive or str
             A ProtonDrive object that can manipulate the protonation states of the system.
+            If str, it is assumed to be the name of a serialized XML proton drive.
         move: StateProposal, default None
             An MC proposal move for updating titration states.
         pools: dict, default is None
@@ -50,7 +51,13 @@ class ConstantPHSimulation(Simulation):
 
         super(ConstantPHSimulation, self).__init__(topology, system, compound_integrator, platform=platform, platformProperties=platformProperties, state=state)
 
-        self.drive = drive
+        if issubclass(drive,NCMCProtonDrive) :
+            self.drive = drive
+            
+        elif type(drive) == str:
+            # Assume drive is path to xml file            
+            self.drive = NCMCProtonDrive.from_xml(drive, system, topology)
+
         self.drive.attach_context(self.context)
 
         if move is None:
