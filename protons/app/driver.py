@@ -1036,46 +1036,46 @@ class NCMCProtonDrive(_BaseDrive):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
 
     @classmethod
-    def from_xml(cls, xml_file: str, system: mm.System, topology: app.Topology):
+    def from_xml(cls, xml_str: str, system: mm.System, topology: app.Topology):
         """Instantiate an NCMC ProtonDrive from a previously serialized drive.
         
         Parameters
         ----------
-        xml_file - Path to an xml file containing the definition of the drive.
+        xml_str - XML formatted string containing the definition of the drive.
         system - An OpenMM system that this drive will be associated with.
         """
-        with open(xml_file, 'r') as inpfile:
-            xmltree = etree.fromstring(inpfile.read())
-            drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
-            temperature = drive_xml.get("temperature_K")
-            if temperature is not None:
-                temperature = unit.Quantity(float(temperature), unit.kelvin)
-            else:
-                raise ValueError("temperature was not defined in this XML file.")
+        
+        xmltree = etree.fromstring(xml_str)
+        drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
+        temperature = drive_xml.get("temperature_K")
+        if temperature is not None:
+            temperature = unit.Quantity(float(temperature), unit.kelvin)
+        else:
+            raise ValueError("temperature was not defined in this XML file.")
 
-            pressure = drive_xml.get("pressure_atm")
-            if pressure is not None:
-                pressure = unit.Quantity(float(pressure), unit.atmosphere)
-            perturbations_per_trial = drive_xml.get("perturbations_per_trial")
-            if perturbations_per_trial is not None:
-                perturbations_per_trial = int(perturbations_per_trial)
-            else:
-                raise ValueError("perturbations_per_trial was not defined in this XML file")
-           
-            propagations_per_step = drive_xml.get("propagations_per_step")            
-            if propagations_per_step is not None:
-                propagations_per_step = int(propagations_per_step)
-            else:
-                raise ValueError("propagations_per_step was not defined in the XML file")
+        pressure = drive_xml.get("pressure_atm")
+        if pressure is not None:
+            pressure = unit.Quantity(float(pressure), unit.atmosphere)
+        perturbations_per_trial = drive_xml.get("perturbations_per_trial")
+        if perturbations_per_trial is not None:
+            perturbations_per_trial = int(perturbations_per_trial)
+        else:
+            raise ValueError("perturbations_per_trial was not defined in this XML file")
+        
+        propagations_per_step = drive_xml.get("propagations_per_step")            
+        if propagations_per_step is not None:
+            propagations_per_step = int(propagations_per_step)
+        else:
+            raise ValueError("propagations_per_step was not defined in the XML file")
 
-            # Instantiate a new class without residues
-            new_cls = cls(temperature, topology, system, pressure=pressure,
-             perturbations_per_trial=perturbations_per_trial, propagations_per_step=propagations_per_step)
+        # Instantiate a new class without residues
+        new_cls = cls(temperature, topology, system, pressure=pressure,
+            perturbations_per_trial=perturbations_per_trial, propagations_per_step=propagations_per_step)
 
-            # Add residues from xml
-            new_cls._add_residues_from_serialized_xml(xmltree)
+        # Add residues from xml
+        new_cls._add_residues_from_serialized_xml(xmltree)
 
-            return new_cls
+        return new_cls
 
     @property
     def titrationStates(self):

@@ -54,8 +54,10 @@ class ConstantPHSimulation(Simulation):
         if issubclass(NCMCProtonDrive, drive) :
             self.drive = drive            
         elif type(drive) == str:
+            with open(drive, 'r') as xmlfile:
+                drive_xml = xmlfile.read()
             # Assume drive is path to xml file            
-            self.drive = NCMCProtonDrive.from_xml(drive, system, topology)
+            self.drive = NCMCProtonDrive.from_xml(drive_xml, system, topology)
         else:
             raise TypeError('Invalid type "{}" for drive.'.format(str(type(drive))))
 
