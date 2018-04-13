@@ -51,12 +51,13 @@ class ConstantPHSimulation(Simulation):
 
         super(ConstantPHSimulation, self).__init__(topology, system, compound_integrator, platform=platform, platformProperties=platformProperties, state=state)
 
-        if issubclass(drive,NCMCProtonDrive) :
-            self.drive = drive
-            
+        if issubclass(NCMCProtonDrive, drive) :
+            self.drive = drive            
         elif type(drive) == str:
             # Assume drive is path to xml file            
             self.drive = NCMCProtonDrive.from_xml(drive, system, topology)
+        else:
+            raise TypeError('Invalid type "{}" for drive.'.format(str(type(drive))))
 
         self.drive.attach_context(self.context)
 
