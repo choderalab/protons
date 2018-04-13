@@ -23,7 +23,7 @@ requirements:
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - joblib
     - lxml
-    - parmed
+    - parmed <=2.7.3
     - pytest
     - pytest-runner
     - pymbar
@@ -45,6 +45,7 @@ requirements:
     - openmoltools >=0.7.5
     - openmmtools >=0.9.3
     - ambermini >=15.0.4
+    - parmed <=2.7.3
     - joblib
     - lxml
     - parmed
