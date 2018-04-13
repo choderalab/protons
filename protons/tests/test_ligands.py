@@ -12,7 +12,7 @@ from simtk.openmm import app
 from os import path, remove
 
 try:
-    from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, _write_ffxml
+    from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, _write_ffxml, retrieve_epik_info
     ligands_success = True
 except ImportError:
     ligands_success = False
@@ -62,10 +62,8 @@ class TestTrypsinLigandParameterization:
         assert path.isfile(unique_filename), "No Epik output file was produced"
         remove(unique_filename) # clean up after ourselves
         remove(log_name)
-
-        generate_protons_ffxml(get_test_data("imatinib.mae", "testsystems/imatinib_explicit"),
-                               "/tmp/protons-imatinib-parameterization-test-implicit.xml",
-                               pH=7.4)
+        epik_data = retrieve_epik_info(unique_filename)
+        assert len(epik_data) > 0, "No Epik data was extracted."
 
     def test_reading_validated_xml_file_using_forcefield(self):
         """
@@ -108,9 +106,27 @@ class TestLigandParameterizationExplicit(object):
         unique_filename = "{}.ffxml".format(str(uuid4()))
         protons_app.ligands.generate_protons_ffxml(TestTrypsinLigandParameterization.preprocessed_mol2,
                                                    isomer_dicts, unique_filename, 7.8, resname="1D")
-        assert path.isfile(unique_filename), "No Epik output file was produced"
+        assert path.isfile(unique_filename), "Protons FFXML file was not generated"
+        results = self._check_num_elements(unique_filename, ["Atom", "Bond", "Protons/State"])
+        assert results['Atom'] >0, "No atoms were found, this template is broken"
+        assert results['Bond'] >0, "No bonds were found, this template is broken"
+        assert results["Protons/State"] == 8, "There should be 8 states in this template."
+
         remove(unique_filename)  # clean up after ourselves
 
+    @staticmethod
+    def _check_num_elements(path_to_xml, elements: list=None) -> int:
+        """Check if a forcefield template has atoms and bonds defined."""
+        with open(path_to_xml, 'r') as xmlfile:
+            xml = xmlfile.read()
+            tree = etree.fromstring(xml)
+
+        results = dict()
+        for key in elements:
+            results[key] =  len(tree.xpath('/ForceField/Residues/Residue/{}'.format(key))[:])
+
+        return results
+        
     def test_reading_validated_xml_file_using_forcefield(self):
         """Read the xmlfile using app.ForceField
 
