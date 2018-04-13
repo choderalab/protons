@@ -1021,11 +1021,13 @@ class NCMCProtonDrive(_BaseDrive):
         """
         Stores the meaningful parameters that were defined in init in the top of the XML.        
         """        
-        xmltree.set("temperature_K", strip_in_unit_system(self.temperature, compatible_with=unit.kelvin ))
+        xmltree.set("temperature_K", "{:f}".format(strip_in_unit_system(self.temperature, compatible_with=unit.kelvin )))
         if self.pressure is not None:
-            xmltree.set("pressure_atm", strip_in_unit_system(self.pressure, compatible_with=unit.atmosphere),)
-        xmltree.set("perturbations_per_trial", self.perturbations_per_trial)
-        xmltree.set("propagations_per_step", self.propagations_per_step)        
+            xmltree.set("pressure_atm", "{:f}".format(strip_in_unit_system(self.pressure, compatible_with=unit.atmosphere),))
+        xmltree.set("perturbations_per_trial", "{:d}".format(self.perturbations_per_trial))
+        xmltree.set("propagations_per_step", "{:d}".format(self.propagations_per_step))
+
+        return
 
     def _add_residues_from_serialized_xml(self, xmltree):
         """Add residues from previously serialized residues."""
@@ -1034,6 +1036,8 @@ class NCMCProtonDrive(_BaseDrive):
         drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
         for res in drive_xml.xpath("TitratableResidue"):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
+        
+        return
 
     @classmethod
     def from_xml(cls, xml_str: str, system: mm.System, topology: app.Topology):
