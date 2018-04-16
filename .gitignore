@@ -42,3 +42,5 @@ benchmarks/
 _build
 # vscode 
 .vscode/
+.env
+
