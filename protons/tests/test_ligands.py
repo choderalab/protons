@@ -3,13 +3,14 @@ from collections import OrderedDict
 import pytest
 from lxml import etree
 from uuid import uuid4
+from protons import app as protons_app
 from openmoltools import forcefield_generators as omtff
 from openmoltools.schrodinger import is_schrodinger_suite_installed
 from openmoltools.amber import find_gaff_dat
-from protons import app as protons_app
 from simtk import unit
-from simtk.openmm import app
+from simtk.openmm import app, Vec3
 from os import path, remove
+import os
 
 try:
     from protons.app.ligands import generate_protons_ffxml, _TitratableForceFieldCompiler, _write_ffxml, retrieve_epik_info
@@ -147,3 +148,45 @@ class TestLigandParameterizationExplicit(object):
         assert path.isfile(unique_filename), "A hydrogen definitions xml file should be generated."
         # Clean up
         remove(unique_filename)
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
+    def test_create_calibration_system(self):
+        """Create a solvated imidazole system."""
+        # An protonated imidazole molecule in vacuum
+        vacuum_file = get_test_data("imidazole.pdb",
+                                    "testsystems/imidazole_explicit")
+        input_xml = get_test_data("protons-imidazole-ph-feature.xml",
+                                  "testsystems/imidazole_explicit")
+        system_file = "{}.cif".format(str(uuid4()))
+        hxml = "{}-h.xml".format(str(uuid4()))
+        protons_app.ligands.create_hydrogen_definitions(input_xml, hxml)
+        protons_app.ligands.prepare_calibration_system(
+            vacuum_file,
+            system_file,
+            ffxml=input_xml,
+            hxml=hxml,
+            delete_old_H=True,
+            minimize=False)
+
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
+    def test_create_calibration_system_with_boxspecs(self):
+        """Create a solvated imidazole system."""
+        # An protonated imidazole molecule in vacuum
+        vacuum_file = get_test_data("imidazole.pdb",
+                                    "testsystems/imidazole_explicit")
+        input_xml = get_test_data("protons-imidazole-ph-feature.xml",
+                                  "testsystems/imidazole_explicit")
+        system_file = "{}.cif".format(str(uuid4()))
+        hxml = "{}-h.xml".format(str(uuid4()))
+        protons_app.ligands.create_hydrogen_definitions(input_xml, hxml)
+        protons_app.ligands.prepare_calibration_system(
+            vacuum_file,
+            system_file,
+            ffxml=input_xml,
+            hxml=hxml,
+            delete_old_H=True,
+            minimize=False,
+            box_size=unit.Quantity(Vec3(1.2, 1.2, 1.2), unit.nanometer))
