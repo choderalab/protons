@@ -173,4 +173,4 @@ class TestLigandParameterizationExplicit(object):
             hxml=hxml,
             delete_old_H=True,
             minimize=False,
-            box_size=unit.Quantity(Vec3(1.0, 1.0, 1.0), unit.nanometer))
+            box_size=unit.Quantity(Vec3(1.2, 1.2, 1.2), unit.nanometer))

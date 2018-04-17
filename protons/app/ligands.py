@@ -1395,8 +1395,14 @@ def prepare_calibration_system(vacuum_file: str,
         modeller.delete(to_delete)
 
     modeller.addHydrogens(forcefield=forcefield)
+    
+    if box_size == None:
+        padding = 1.2 * nanometers
+    else:
+        padding = None
+
     modeller.addSolvent(
-        forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False, boxSize=box_size)
+        forcefield, model='tip3p', padding=padding, neutralize=False, boxSize=box_size)
 
     if minimize:
         system = forcefield.createSystem(
