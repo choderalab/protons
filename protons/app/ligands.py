@@ -23,6 +23,8 @@ from .. import app
 from simtk.openmm import openmm
 from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
+from collections import defaultdict
+
 
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -284,7 +286,9 @@ class _TitratableForceFieldCompiler(object):
         # Interpolate differing atom types between states to create a single template state.
         if chimera:
             # Chimera takes the most populated state, and then adds missing parameters from the other states
-            self._create_chimera_template()
+            #self._create_chimera_template()
+            self._create_chimera_templateV2()
+
         else:
             # Hybrid template does not favor one state over the other, but may not always yield a solution
             self._create_hybrid_template()
@@ -414,6 +418,39 @@ class _TitratableForceFieldCompiler(object):
         for state in self._state_templates:
             state.validate()
 
+    def _create_chimera_templateV2(self):
+        """
+        Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
+        states.
+        
+        Checks if bonded terms exist.
+        If not, creates a new bond type with the properties of the same bond in the state where the atom existed.
+        Bonds, angle, Torsions?
+        """
+
+        possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
+        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
+        # NOTE: MW: atom types  
+
+        # The final, uniform set of atomtypes that will be used
+        atomname_atomtype_mapping = defaultdict(list)
+
+        # Collect all possible types by looping through states
+        for atomname in self._atom_names:
+            for state in self._state_templates:
+                if state.atoms[atomname] is None:
+                    # add dummy atom  
+                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
+                atomname_atomtype_mapping[atomname].append(state.atoms[atomname].atom_type)
+                
+        print(atomname_atomtype_mapping)
+        for atom_type in possible_types_per_atom[atomname]:
+            if atom_type not in available_parameters_per_type.keys():
+                available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
+
+        print(available_parameters_per_type)
+        
+
     def _create_chimera_template(self):
         """
         Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
@@ -425,6 +462,7 @@ class _TitratableForceFieldCompiler(object):
         """
         possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
         available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
+        # NOTE: MW: atom types  
 
         # The final, uniform set of atomtypes that will be used
         final_types = dict()
@@ -541,6 +579,7 @@ class _TitratableForceFieldCompiler(object):
         # Assign the final atom types to each state
         for state_index in range(len(self._state_templates)):
             for atomname in self._atom_names:
+                print('State: ', str(state_index), '; AtomName: ', str(atomname), '; AtomType: ', str(final_types[atomname]))
                 self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
         return
 
@@ -839,6 +878,7 @@ class _TitratableForceFieldCompiler(object):
             for bond in state['ffxml'].xpath('/ForceField/Residues/Residue/Bond'):
                 self._bonds.append(_Bond(bond.attrib['atomName1'], bond.attrib['atomName2']))
         self._unique_bonds()
+        print('Bond names: ' + str(self._bonds))
 
     def _sanitize_ffxml(self):
         """
@@ -861,6 +901,7 @@ class _TitratableForceFieldCompiler(object):
                 if atom_name not in self._atom_names:
                     self._atom_names.append(atom_name)
 
+        print('Atom names: ', self._atom_names)
         return
 
     def _complete_state_registry(self):
@@ -1177,6 +1218,135 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     os.remove(tmpfilename)
 
 
+def prepare_mol2_for_parametrization(input_mol2: str, output_mol2: str):
+    """
+    Map the hydrogen atoms between Epik states, and return a mol2 file that
+    should be ready to parametrize.
+
+    Parameters
+    ----------
+    input_mol2: location of the multistate mol2 file.
+
+    Notes
+    -----
+    This renames the hydrogen atoms in your molecule so that
+     no ambiguity can exist between protonation states.
+    """
+    if not output_mol2[-5:] == ".mol2":
+        output_mol2 += ".mol2"
+    # Generate a file format that Openeye can read
+
+    ifs = oechem.oemolistream()
+    ifs.open(input_mol2)
+
+    # make oemols for mapping
+    graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
+    ifs.close()
+
+    # Make graph for keeping track of which atoms are the same
+    graph = nx.Graph()
+
+    # Some hydrogens within one molecule may be chemically identical, and would otherwise be indistinguishable
+    # And some hydrogens accidentally get the same name
+    # Therefore, give every hydrogen a unique identifier.
+    # One labelling the molecule, the other labeling the position in the molecule.
+    for imol, mol in enumerate(graphmols):
+        h_count = 0
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() == 1:
+                h_count += 1
+                # H for hydrogen, M for mol
+                atom.SetName("H{}-M{}".format(h_count,imol+1))
+                # Add hydrogen atom to the graph
+                graph.add_node(atom, mol=imol)
+
+    # Connect atoms that are the same
+    # No need to avoid self maps for now. Code is fast enough
+    for i1, mol1 in enumerate(graphmols):
+        for i2, mol2 in enumerate(graphmols):
+
+            mol1_atoms = [atom for atom in mol1.GetAtoms()]
+            mol2_atoms = [atom for atom in mol2.GetAtoms()]
+
+            # operate on a copy to avoid modifying molecule
+            pattern = oechem.OEGraphMol(mol1)
+            target = oechem.OEGraphMol(mol2)
+
+            # Element should be enough to map
+            atomexpr = oechem.OEExprOpts_AtomicNumber
+            # Ignore aromaticity et cetera
+            bondexpr = oechem.OEExprOpts_EqSingleDouble
+
+            # create maximum common substructure object
+            mcss = oechem.OEMCSSearch(pattern, atomexpr, bondexpr, oechem.OEMCSType_Approximate)
+            # set scoring function
+            mcss.SetMCSFunc(oechem.OEMCSMaxAtoms())
+            mcss.SetMinAtoms(oechem.OECount(pattern, oechem.OEIsHeavy()))
+            mcss.SetMaxMatches(10)
+
+            # Constrain all heavy atoms, so the search goes faster.
+            # These should not be different anyways
+            for at1 in pattern.GetAtoms():
+                # skip H
+                if at1.GetAtomicNum() < 2:
+                    continue
+                for at2 in target.GetAtoms():
+                    # skip H
+                    if at2.GetAtomicNum() < 2:
+                        continue
+                    if at1.GetName() == at2.GetName():
+                        pat_idx = mcss.GetPattern().GetAtom(oechem.HasAtomIdx(at1.GetIdx()))
+                        tar_idx = target.GetAtom(oechem.HasAtomIdx(at2.GetIdx()))
+                        if not mcss.AddConstraint(oechem.OEMatchPairAtom(pat_idx, tar_idx)):
+                            raise ValueError("Could not constrain {} {}.".format(at1.GetName(), at2.GetName()))
+
+            unique = True
+            matches = mcss.Match(target, unique)
+            # We should only use the top one match.
+            for count, match in enumerate(matches):
+                for ma in match.GetAtoms():
+                    idx1 = ma.pattern.GetIdx()
+                    idx2 = ma.target.GetIdx()
+                    # Add edges between all hydrogens
+                    if mol1_atoms[idx1].GetAtomicNum() == 1:
+                        if mol2_atoms[idx2].GetAtomicNum() == 1:
+                            graph.add_edge(mol1_atoms[idx1], mol2_atoms[idx2])
+                        # Sanity check, we should never see two elements mixed
+                        else:
+                            raise RuntimeError("Two atoms of different elements were matched.")
+                # stop after one match
+                break
+
+    # Assign unique but matching ID's per atom/state
+
+    # The current H counter
+    h_count = 0
+
+    for cc in nx.connected_components(graph):
+        # All of these atoms are chemically identical, but there could be more than one per molecule.
+        atomgraph = graph.subgraph(cc)
+        # Keep track of the unique H count
+        h_count += 1
+        names = [at.GetName() for at in atomgraph.nodes]
+        # last part says which molecule the atom belongs to
+        mol_identifiers = [int(name.split('-M')[1]) for name in names ]
+        # Number
+        counters = {i+1: 0 for i,mol in enumerate(graphmols)}
+        for atom, mol_id in zip(atomgraph.nodes, mol_identifiers):
+            h_num = h_count + counters[mol_id]
+            atom.SetName("H{}".format(h_num))
+            counters[mol_id] += 1
+
+        # If more than one hydrogen per mol found, add it to the count.
+        extra_h_count = max(counters.values()) - 1
+        if extra_h_count < 0:
+            raise ValueError("Found 0 hydrogens in graph, is there a bug?")
+        h_count += extra_h_count
+
+    _mols_to_file(graphmols, output_mol2)
+
+
+
 def _mols_to_file(graphmols: list, output_mol2:str):
     """Take a list of OEGraphMols and write it to a mol2 file."""
     ofs = oechem.oemolostream()
@@ -1227,6 +1397,7 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
 
     """
 
+    # NOTE: MW: entry point
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")
     isomers = isomer_dicts
@@ -1367,6 +1538,7 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
     # Load relevant template definitions for modeller, forcefield and topology
     if hxml is not None:
         app.Modeller.loadHydrogenDefinitions(hxml)
+        
     if ffxml is not None:
         forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
     else:
