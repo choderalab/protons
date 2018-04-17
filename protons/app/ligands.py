@@ -72,10 +72,10 @@ class _BondType(object):
     Private class representing a bond between two atom types.
     """
     def __init__(self, atomtype1, atomtype2):
-            # The exact order does not matter
-            atoms = sorted([atomtype1, atomtype2])
-            self.atomType1 = atoms[0]
-            self.atomType2 = atoms[1]
+        # The exact order does not matter
+        atoms = sorted([atomtype1, atomtype2])
+        self.atomType1 = atoms[0]
+        self.atomType2 = atoms[1]
 
     def __eq__(self, other):
         """Two bonds are the same if all their attributes are the same."""
@@ -1007,7 +1007,7 @@ def generate_epik_states(inputmae: str, outputmae: str, pH: float, max_penalty: 
     inputmae = os.path.abspath(inputmae)
     oldwd = os.getcwd()
     try:
-        if workdir is not None:            
+        if workdir is not None:
             os.chdir(workdir)
             log.info("Log files can be found in {}".format(workdir))
         omt.schrodinger.run_epik(inputmae, outputmae, ph=pH, min_probability=np.exp(-max_penalty), tautomerize=tautomerize, **kwargs)
@@ -1346,7 +1346,13 @@ def extract_residue(inputfile:str, outputfile:str, resname:str ):
     input_traj.save(outputfile)
 
 
-def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None, delete_old_H:bool=True):
+def prepare_calibration_system(vacuum_file: str,
+                               output_file: str,
+                               ffxml: str = None,
+                               hxml: str = None,
+                               delete_old_H: bool = True,
+                               minimize: bool = True,
+                               boxsize: app.modeller.Vec3 = None):
     """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
 
     Note that no salt is added. We use saltswap for this.
@@ -1362,15 +1368,19 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
     delete_old_H - delete old hydrogen atoms and add in new ones.
         Typically necessary for ligands, where hydrogen names will have changed during parameterization to match up
         different protonation states.
+    minimize - perform an energy minimization on the system. Recommended.
+    box_size - Vec3 of box vectors specified as in ``simtk.openmm.app.modeller.addSolvent``. 
     """
 
     # Load relevant template definitions for modeller, forcefield and topology
     if hxml is not None:
         app.Modeller.loadHydrogenDefinitions(hxml)
     if ffxml is not None:
-        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml,
+                                    'tip3p.xml', 'ions_tip3p.xml')
     else:
-        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', 'tip3p.xml', 'ions_tip3p.xml')
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml',
+                                    'tip3p.xml', 'ions_tip3p.xml')
 
     pdb = app.PDBFile(vacuum_file)
     modeller = app.Modeller(pdb.topology, pdb.positions)
@@ -1378,20 +1388,35 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
     # The system will likely have different hydrogen names.
     # In this case its easiest to just delete and re-add with the right names based on hydrogen files
     if delete_old_H:
-        to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
+        to_delete = [
+            atom for atom in modeller.topology.atoms()
+            if atom.element.symbol in ['H']
+        ]
         modeller.delete(to_delete)
 
     modeller.addHydrogens(forcefield=forcefield)
-    modeller.addSolvent(forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False)
+    modeller.addSolvent(
+        forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False, boxSize=box_size)
 
-    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0 * nanometers,
-                                     constraints=app.HBonds, rigidWater=True,
-                                     ewaldErrorTolerance=0.0005)
-    system.addForce(openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
-    simulation = app.Simulation(modeller.topology, system, GBAOABIntegrator())
-    simulation.context.setPositions(modeller.positions)
-    simulation.minimizeEnergy()
+    if minimize:
+        system = forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005)
+        system.addForce(
+            openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
+        simulation = app.Simulation(modeller.topology, system,
+                                    GBAOABIntegrator())
+        simulation.context.setPositions(modeller.positions)
 
-    app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
-                           open(output_file, 'w'))
+        simulation.minimizeEnergy()
+        positions = simulation.context.getState(
+            getPositions=True).getPositions()
+    else:
+        positions = modeller.positions
 
+    app.PDBxFile.writeFile(modeller.topology, positions, open(
+        output_file, 'w'))
