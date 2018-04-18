@@ -37,7 +37,7 @@ class _State(object):
     """
     Private class representing a template of a single isomeric state of the molecule.
     """
-    def __init__(self, index, log_population, g_k, net_charge, atom_list, pH):
+    def __init__(self, index, log_population, g_k, net_charge, atom_list, bond_list, pH):
         """
 
         Parameters
@@ -50,9 +50,10 @@ class _State(object):
             The penalty for this state( i.e. returned from Epik (kcal/mol))
         net_charge - str
             Net charge of the isomeric state
-        atom_list - list of str
+        atom_list - list of Atom Objects
             Atoms that need to be included in this isomer
-
+        bond_list - list of Atom Objects
+            Bonds that need to be included in this isomer
         """
         self.index = index
         self.log_population = log_population
@@ -60,8 +61,8 @@ class _State(object):
         self.net_charge = net_charge
         self.atoms=OrderedDict()
         self.proton_count = -1
-        for atom in atom_list:
-            self.atoms[atom] = None
+        self.atom_list = atom_list
+        self.bond_list = bond_list
         self.pH = pH
 
     def validate(self):
@@ -106,22 +107,6 @@ class _State(object):
                 dummies.append(name)
 
         return dummies
-
-    def set_atom(self, atom):
-        """
-        Set the parameters for a single atom
-
-        Parameters
-        ----------
-        atom : _Atom
-            The parameters of the atom
-        """
-        if not isinstance(atom, _Atom):
-            raise ValueError("Input needs to be an instance of class '_Atom'.")
-
-        if atom.name not in self.atoms.keys():
-            raise ValueError("Atom '{}' could not be found".format(atom.name))
-        self.atoms[atom.name] = atom
 
     def set_number_of_protons(self, min_charge):
         """
@@ -281,17 +266,6 @@ def _mols_to_file(graphmols: list, output_mol2:str):
         oechem.OEWriteMol2File(ofs, mol)
     ofs.close()
 
-    base = output_mol2.split('.')[-2]
-    i = 1
-    for mol in graphmols:
-        ofs = oechem.oemolostream()
-        ofs.open(str(base) + '_' + str(i) + '.mol2')
-        oechem.OEWriteMol2File(ofs, mol)
-        ofs.close()
-        i += 1
-
-
-
 def _visualise_graphs(graph):
     """Visualize the connected subcomponents of an atom graph"""
     import matplotlib.pyplot as plt
@@ -311,8 +285,7 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
          states, otherwise you will end up with atoms being duplicated erroneously. The `epik_results_to_mol2` function
           provides a handy preprocessing to clean up epik output.
     isomer_dicts: list of dicts
-        One dict is necessary for every isomer. Dict should contain 'log_population', 'net_charge' and 'mol_object' keys.
-        Each dict must have a rdkit mol object as value for the mol_object key.
+        One dict is necessary for every isomer. Dict should contain 'log_population' and 'net_charge'
     outputffxml : str
         location for output xml file containing all ligand states and their parameters
     pH : float
@@ -345,21 +318,55 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
     # Open the Epik output into OEMols
     ifs = oechem.oemolistream()
     ifs.open(inputmol2)
+    base = inputmol2.split('.')[-2]
+
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
         log.info("ffxml generation for {}".format(isomer_index))
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
         log.info(ffxml)
-        isomers[isomer_index]['ffxml'] = etree.fromstring(ffxml, parser=xmlparser)
-        isomers[isomer_index]['pH'] = pH
 
+        ffxml_xml = etree.fromstring(ffxml, parser=xmlparser)
+        name_type_mapping = {}
+        for residue in ffxml_xml.xpath('Residues/Residue'):
+            for atom in residue.xpath('Atom'):
+                name_type_mapping[atom.get('name')] = atom.get('type')
+
+
+        isomers[isomer_index]['ffxml'] = ffxml_xml
+        isomers[isomer_index]['pH'] = pH
+        # NOTE: MW: Here I want to write out 
+
+        # write open-eye mol2 file
+        fileIO = str(base) + '_tmp.mol2'
+        ofs = oechem.oemolostream()
+        ofs.open(fileIO)
+        oechem.OEWriteMol2File(ofs, oemolecule)
+        ofs.close()
+        # read in using rdkit
+        rdmol = Chem.MolFromMol2File(fileIO, removeHs=False)
+
+        # set atom-names and types for atoms in rdkit mol
+        for a in oemolecule.GetAtoms():
+            rdmol.GetAtomWithIdx(a.GetIdx()).SetProp('name', a.GetName())
+            rdmol.GetAtomWithIdx(a.GetIdx()).SetProp('type', name_type_mapping[a.GetName()])           
+        
+        # save rdmol in isomers map
+        isomers[isomer_index]['mol'] = rdmol
+    
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
     _write_ffxml(compiler, outputffxml)
     log.info("Done!  Your result is located here: {}".format(outputffxml))
 
     return outputffxml
+
+def generate_rdkit_mol_from_oemol_and_ff(ffxml:str, oemolecule):
+
+
+    pass
+
 
 
 def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_default):
@@ -504,7 +511,7 @@ class _TitratableForceFieldCompiler(object):
     """
     Compiles intermediate ffxml data to the final constant-ph ffxml file.
     """
-    def __init__(self, input_state_data: list, input_mol_objects:list, gaff_xml:str=None, residue_name: str="LIG"):
+    def __init__(self, input_state_data: list, gaff_xml:str=None, residue_name: str="LIG"):
         """
         Compiles the intermediate ffxml files into a constant-pH compatible ffxml file.
 
@@ -521,6 +528,11 @@ class _TitratableForceFieldCompiler(object):
         """
         self._input_state_data = input_state_data
         self._state_templates = list()
+        self._atoms_for_each_state = None
+        self._bonds_for_each_state = None
+
+
+        
         self.ffxml = _generate_xml_template(residue_name=residue_name)
 
         # including gaff file that is included with this package
@@ -543,10 +555,6 @@ class _TitratableForceFieldCompiler(object):
         Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
         """
 
-        # Obtain information about all the atoms
-        self._complete_atom_registry()
-        # Obtain information about all the bonds
-        self._complete_bond_registry()
         # Register the states
         self._complete_state_registry()
         # Interpolate differing atom types between states to create a single template state.
@@ -567,16 +575,6 @@ class _TitratableForceFieldCompiler(object):
         return
 
 
-
-    def _complete_bond_registry(self):
-        """
-        Register all bonds.
-        """
-        for state in self._input_state_data:
-            for bond in state['ffxml'].xpath('/ForceField/Residues/Residue/Bond'):
-                self._bonds.append(_Bond(bond.attrib['atomName1'], bond.attrib['atomName2']))
-        self._unique_bonds()
-
     def _sanitize_ffxml(self):
         """
         Clean up the structure of the ffxml file by removing unnecessary blocks and information.
@@ -588,23 +586,42 @@ class _TitratableForceFieldCompiler(object):
         for empty_block in self.ffxml.xpath('/ForceField/*[count(child::*) = 0]'):
             empty_block.getparent().remove(empty_block)
 
-    def _complete_atom_registry(self):
-        """
-        Registers unique atom names. Store in self._atom_names from Residue
-        """
-        for state in self._input_state_data:
-            for atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
-                atom_name = atom.attrib['name']
-                if atom_name not in self._atom_names:
-                    self._atom_names.append(atom_name)
-
-        print('Atom names: ', self._atom_names)
-        return
-
     def _complete_state_registry(self):
         """
         Store all the properties that are specific to each state
         """
+
+        # get all atoms for individual mols
+        atoms_for_each_state = defaultdict(dict) # -> atoms_for_each_state[state->int][atom_name->str][atom->rd-object]
+        for index, state in enumerate(self._input_state_data):
+            mapping_atom_name_to_charge = {}
+            for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
+                mapping_atom_name_to_charge[xml_atom.attrib['name']] = xml_atom.attrib['charge']
+
+            mol = state['mol']
+            for atom in mol.GetAtoms():
+                atom_name = atom.GetProp('name')
+                atom.SetProp('charge', mapping_atom_name_to_charge[atom_name]) 
+
+                atoms_for_each_state['state' + str(index)][atom_name] = atom 
+
+        # get all bonds for individual mol
+        bonds_for_each_state = defaultdict(dict) # -> bonds_for_each_state[state->int][bond_name->str][bond->rd-object] 
+        for index, state in enumerate(self._input_state_data):
+            mol = state['mol']
+            for bond in mol.GetBonds():
+                a1 = bond.GetBeginAtom()
+                atom_name1 = a1.GetProp('name')
+                a2 = bond.GetEndAtom()
+                atom_name2 = a2.GetProp('name')
+                canonical_bond_name = ''
+                for i in sorted([atom_name2, atom_name1]):
+                    canonical_bond_name += i
+                bonds_for_each_state['state' + str(index)] = bond
+
+        self._atoms_for_each_state = atoms_for_each_state
+        self._bonds_for_each_state = bonds_for_each_state
+
         charges = list()
         for index, state in enumerate(self._input_state_data):
             net_charge = state['net_charge']
@@ -613,18 +630,20 @@ class _TitratableForceFieldCompiler(object):
                               state['log_population'],
                               0.0, # set g_k defaults to 0 for now
                               net_charge,
-                              self._atom_names,
+                              self._atoms_for_each_state['state'+str(index)],
+                              self._bonds_for_each_state['state'+str(index)],
                               state['pH']
                               )
-            for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
-                template.set_atom(_Atom(xml_atom.attrib['name'], xml_atom.attrib['type'], xml_atom.attrib['charge']))
+
+            
+            # TODO: integrate bonds!
 
             self._state_templates.append(template)
 
         min_charge = min(charges)
         for state in self._state_templates:
             state.set_number_of_protons(min_charge)
-
+        #print(self._state_templates)
         return
 
     def _initialize_forcefield_template(self):
@@ -741,6 +760,59 @@ class _TitratableForceFieldCompiler(object):
         for state in self._state_templates:
             state.validate()
 
+
+
+    def _retrieve_atom_type_parameters(self, atom_type_name):
+        """ Look through FFXML files and find all parameters pertaining to the supplied atom type.
+        Returns
+        -------
+        params : dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
+            Dictionary of lists by force type
+        """
+
+        # Storing all the detected parameters here
+        params = dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
+
+        if atom_type_name is None:
+            return params
+
+        # Loop through different sources of parameters
+        for xmltree in self._xml_parameter_trees:
+            # Match the type of the atom in the AtomTypes block
+            for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
+                if atomtype.attrib['name'] == atom_type_name:
+                    params['atomtypes'].append(atomtype)
+
+            # Match the bonds of the atom in the HarmonicBondForce block
+            for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
+                if atom_type_name in (bond.attrib['type1'], bond.attrib['type2']):
+                    params['bonds'].append(bond)
+
+            # Match the angles of the atom in the HarmonicAngleForce block
+            for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
+                if atom_type_name in (angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']):
+                    params['angles'].append(angle)
+
+            # Match proper dihedral of the atom in PeriodicTorsionForce block
+            for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+                if atom_type_name in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']):
+                    params['propers'].append(proper)
+
+            # Match improper dihedral of the atom in PeriodicTorsionForce block
+            for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
+                if atom_type_name in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']):
+                    params['impropers'].append(improper)
+
+            # Match nonbonded type of the atom in NonbondedForce block
+            for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
+                if nonbond.attrib['type'] == atom_type_name:
+                    params['nonbonds'].append(nonbond)
+
+        return params
+
+
+
+
     def _create_chimera_templateV2(self):
         """
         Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
@@ -751,15 +823,18 @@ class _TitratableForceFieldCompiler(object):
         Bonds, angle, Torsions?
         """
 
-        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
-        # NOTE: MW: atom types  
+        # start with atoms
+        # get all parameters for each state and fill it in the rd mol object
 
-        # The final, uniform set of atomtypes that will be used
-        atomname_atomtype_mapping = defaultdict(list)
+        for state in self._atoms_for_each_state.values():
+            for atom in state.values():
+                print(atom)
+                print(self._retrieve_atom_type_parameters(atom.GetProp('type')))
 
 
         # Collect all possible types by looping through states
-        for atomname in self._atom_names:
+        
+        for atomname in self._atom_names['unified']:       
             for state in self._state_templates:
                 if state.atoms[atomname] is None:
                     # add dummy atom  
@@ -774,87 +849,13 @@ class _TitratableForceFieldCompiler(object):
         print(available_parameters_per_type.keys())
 
 
-
-        for atomname in self._atom_names:
-            atom_type = final_types[atomname]
-
-            bonded_to = self._find_bond_partner_types(atomname, final_types)
-            # Search from gaff and frcmod contents for all bonds that contain this atom type
-            list_of_bond_params = self._bonds_including_type(atom_type, available_parameters_per_type)
-
-            # Loop through all bonds to check if the bond types are defined
-            for bond_partner_name, bond_partner_type in bonded_to.items():
-                this_bond_type = _BondType(atom_type, bond_partner_type)
-
-                # If there is no bond definition for these types
-                # propose a change of type to a different type from another state
-                # TODO If hydrogen atom involved,
-                # TODO could try to first update the type of the hydrogen
-                # TODO since that should not affect any of the other bonds in the system.
-                if this_bond_type not in list_of_bond_params:
-                    # Keep track of whether a fix has been proposed
-                    update_made = False
-                    # Change the current atoms type to see if a bond exist
-                    for possible_type in possible_types_per_atom[atomname]:
-                        # Find all bonds that contain this new atom type
-                        alternate_list_of_bond_params = self._bonds_including_type(possible_type, available_parameters_per_type)
-                        if _BondType(possible_type, bond_partner_type) in alternate_list_of_bond_params:
-                            log.debug(
-                                "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
-                                        atomname, atom_type, possible_type, bond_partner_name, bond_partner_type)
-
-                            # Update the current selection
-                            final_types[atomname] = possible_type
-                            update_made = True
-                            break
-
-                    # If the current atom could not be updated, attempt changing the partner
-                    if not update_made:
-
-                        # Loop through types of the bond partner found in each state
-                        for possible_type in possible_types_per_atom[bond_partner_name]:
-                            if _BondType(atom_type, possible_type) in list_of_bond_params:
-                                log.debug(
-                                    "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
-                                    bond_partner_name, bond_partner_type, possible_type, atomname, atom_type)
-
-                                # Update the current selection with the new type
-                                final_types[bond_partner_name] = possible_type
-                                update_made = True
-                                break
-
-                    # If neither current atom, or partner atom types could be updated to match,
-                    # both atoms will need to be changed to facilitate a bond between them
-                    if not update_made:
-
-                        # All possible types from each state
-                        for possible_type_atom in possible_types_per_atom[atomname]:
-                            # Find the bonds to this atom type
-                            alternate_list_of_bond_params = self._bonds_including_type(possible_type_atom, available_parameters_per_type)
-
-                            # All possible types for the partner from each state
-                            for possible_type_partner in possible_types_per_atom[bond_partner_name]:
+        _bonds_including_type
+        _find_bond_partner_types
 
 
-                                if _BondType(possible_type_atom, possible_type_partner) in alternate_list_of_bond_params:
-                                    log.debug(
-                                        "Atom: %s type changed %s -> %s and \n "
-                                        "Atom: %s type changed %s -> %s to facilitate bond.",
-                                        atomname, atom_type, possible_type_atom, bond_partner_name, bond_partner_type, possible_type_partner)
 
-                                    # Update both types with the new selection
-                                    final_types[atomname] = possible_type_atom
-                                    final_types[bond_partner_name] = possible_type_partner
-                                    update_made = True
-                                    break
 
-                        # There are no bond parameters for this bond anywhere
-                        # If you run into this error, likely, GAFF does not cover the protonation state you provided
-                        if not update_made:
-                            raise RuntimeError("Can not resolve bonds between Atoms {} - {}.\n"
-                                               "Gaff types may not suffice to describe this molecule/protonation state.".format(atomname, bond_partner_name))
 
-        
 
     def _create_chimera_template(self):
         """
@@ -984,7 +985,7 @@ class _TitratableForceFieldCompiler(object):
         # Assign the final atom types to each state
         for state_index in range(len(self._state_templates)):
             for atomname in self._atom_names:
-                print('State: ', str(state_index), '; AtomName: ', str(atomname), '; AtomType: ', str(final_types[atomname]))
+                #print('State: ', str(state_index), '; AtomName: ', str(atomname), '; AtomType: ', str(final_types[atomname]))
                 self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
         return
 
@@ -1096,3 +1097,29 @@ class _TitratableForceFieldCompiler(object):
                 self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
 
         return
+
+
+
+
+def _make_xml_object(root_name, **attributes):
+    """
+    Create a new xml root object with a given root name, and attributes
+
+    Parameters
+    ----------
+    root_name - str
+        The name of the xml root.
+    attributes - dict
+        Dictionary of attributes and values (as strings) for the xml file
+
+    Returns
+    -------
+    ObjectifiedElement
+
+    """
+    xml = '<{0}></{0}>'.format(root_name)
+    root = objectify.fromstring(xml)
+    for attribute, value in attributes.items():
+        root.set(attribute, value)
+
+    return root
