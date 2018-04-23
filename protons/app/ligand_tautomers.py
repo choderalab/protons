@@ -25,7 +25,9 @@ from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
 from collections import defaultdict
 from rdkit import Chem
-
+from rdkit.Chem import MCS
+from copy import copy, deepcopy
+from rdkit.Chem import rdMolAlign
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,7 +39,7 @@ class _State(object):
     """
     Private class representing a template of a single isomeric state of the molecule.
     """
-    def __init__(self, index, log_population, g_k, net_charge, atom_list, bond_list, pH):
+    def __init__(self, index, log_population, g_k, atom_name, net_charge, pH):
         """
 
         Parameters
@@ -50,10 +52,6 @@ class _State(object):
             The penalty for this state( i.e. returned from Epik (kcal/mol))
         net_charge - str
             Net charge of the isomeric state
-        atom_list - list of Atom Objects
-            Atoms that need to be included in this isomer
-        bond_list - list of Atom Objects
-            Bonds that need to be included in this isomer
         """
         self.index = index
         self.log_population = log_population
@@ -61,8 +59,6 @@ class _State(object):
         self.net_charge = net_charge
         self.atoms=OrderedDict()
         self.proton_count = -1
-        self.atom_list = atom_list
-        self.bond_list = bond_list
         self.pH = pH
 
     def validate(self):
@@ -336,10 +332,10 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
 
         isomers[isomer_index]['ffxml'] = ffxml_xml
         isomers[isomer_index]['pH'] = pH
-        # NOTE: MW: Here I want to write out 
+        # NOTE: MW: Here I want to write out mols to 
 
         # write open-eye mol2 file
-        fileIO = str(base) + '_tmp.mol2'
+        fileIO = str(base) + '_tmp_'+ str(isomer_index) + '.mol2'
         ofs = oechem.oemolostream()
         ofs.open(fileIO)
         oechem.OEWriteMol2File(ofs, oemolecule)
@@ -504,8 +500,77 @@ def _generate_xml_template(residue_name="LIG"):
 
     return forcefield
 
+class _State_mol(object):
 
+    def __init__(self, mol):
+        self.mol = mol
+    
+    @classmethod
+    def _print_xml_atom_string(self, atom, state):
+        string = '<Atom name="{name}" type="{atom_type}" charge="{charge} sigma={sigma} epsilon={epsilon}"/>'
+        name = atom.GetProp('name')
+        atom_type = atom.GetProp('atom_type_at_state_'+str(state))
+        atom_charge = atom.GetProp('charge_at_state_'+str(state))
+        sigma = atom.GetProp('sigma_at_state_' + str(state))
+        epsilon = atom.GetProp('epsilon_at_state_' + str(state))
+        return string.format(name=name, atom_type=atom_type, charge=atom_charge, sigma=sigma, epsilon=epsilon)
+        
+    @classmethod
+    def _print_xml_bond_string(self, bond, state):
+        string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}" bond_length="{bond_length}" k="{k}" />'
+        atomName1 = bond.GetBeginAtom().GetProp('name')
+        atomName2 = bond.GetEndAtom().GetProp('name')
+        bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+        k = bond.GetProp('k_at_state_' + str(state))
+        return string.format(atomName1=atomName1, atomName2=atomName2, bond_length=bond_length, k=k)
+        
 
+    def _print_state_of_shadow_mol(self):
+        mol = self.mol
+        nr_of_state = int(self.mol.GetProp('nr_of_states'))
+        print('How many states included in shadow clone: ', nr_of_state)
+
+        print('Showing atom name mappings for each state ...')
+        for atom in mol.GetAtoms():
+            print('#################################')
+            
+            print('Atom-Name: ', atom.GetProp('name'))
+            for state in range(nr_of_state):
+                print('State: ', str(state), end=' ')
+                print('Atom-Type: ',atom.GetProp('atom_type_at_state_'+str(state)), end=' ')
+                print('Charge: ', atom.GetProp('charge_at_state_' +str(state)), end=' ')
+                print('Sigma: ', atom.GetProp('sigma_at_state_'+str(state)), end=' ')
+                print('Epsilon: ', atom.GetProp('epsilon_at_state_'+str(state)))
+    
+        print('#################################')
+        print('#################################')
+        for bond in mol.GetBonds():
+            a1 = bond.GetBeginAtom()
+            a2 = bond.GetEndAtom()
+            print('#################################')
+
+            print('Bond: between ', a1.GetProp('name'), 'and ', a2.GetProp('name'))
+            for state in range(nr_of_state):
+                print('State: ', str(state))
+                print('Involved Atom-Types: ',a1.GetProp('atom_type_at_state_'+str(state)), end=' ')
+                print(a2.GetProp('atom_type_at_state_'+str(state)))
+                print('Bond length: ', bond.GetProp('bond_length_at_state_' + str(state)), end=' ')
+                print('K: ', bond.GetProp('k_at_state_' + str(state)))
+
+    def generate_atom_name_list_for_state(self, state):
+
+        atom_list = []
+        for atom in self.mol.GetAtoms():
+            if(atom.GetProp('atom_type_at_state_'+str(state)) == 'dummy'):
+                continue
+            else:
+                atom_list.append(atom.GetProp('name'))
+        return atom_list
+
+    def generate_atom_type_list_for_state(self):
+
+            for atom in self.mol.GetAtoms:
+                pass
 
 class _TitratableForceFieldCompiler(object):
     """
@@ -530,6 +595,8 @@ class _TitratableForceFieldCompiler(object):
         self._state_templates = list()
         self._atoms_for_each_state = None
         self._bonds_for_each_state = None
+        self._mol_for_each_state = defaultdict()
+        self._shadow_clone = None
 
 
         
@@ -557,11 +624,6 @@ class _TitratableForceFieldCompiler(object):
 
         # Register the states
         self._complete_state_registry()
-        # Interpolate differing atom types between states to create a single template state.
-        # Chimera takes the most populated state, and then adds missing parameters from the other states
-        #self._create_chimera_template()
-        self._create_chimera_templateV2()
-
 
         # Set the initial state of the template that is read by OpenMM
         self._initialize_forcefield_template()
@@ -571,7 +633,6 @@ class _TitratableForceFieldCompiler(object):
         self._append_extra_gaff_types()
         # Remove empty blocks, and unnecessary information in the ffxml tree
         self._sanitize_ffxml()
-
         return
 
 
@@ -586,41 +647,233 @@ class _TitratableForceFieldCompiler(object):
         for empty_block in self.ffxml.xpath('/ForceField/*[count(child::*) = 0]'):
             empty_block.getparent().remove(empty_block)
 
+    def _generate_shadow_clone(self, mols:list):
+        # constructs all atom type changes in the atoms relative to a ref
+        # comparing everything to a reference state 
+        ref = mols[0]     
+        state = 0
+        # generate a shadow_mol on which all the work is done
+        shadow_mol = deepcopy(ref)
+        shadow_mol.SetProp('nr_of_states', str(len(mols)))
+        # set reference atom_type in shadow_mol
+        for shadow_atom in shadow_mol.GetAtoms():
+            shadow_atom_type = shadow_atom.GetProp('type')
+            shadow_atom_charge = shadow_atom.GetProp('charge')
+            shadow_atom.SetProp('atom_type_at_state_0', str(shadow_atom_type))
+            shadow_atom.SetProp('charge_at_state_0', str(shadow_atom_charge))
+            a = self._retrieve_parameters(atom_type1=shadow_atom_type)
+            shadow_sigma = a['nonbonds'].attrib['sigma']
+            shadow_epsilon = a['nonbonds'].attrib['epsilon']
+            shadow_atom.SetProp('sigma_at_state_0', str(shadow_sigma))
+            shadow_atom.SetProp('epsilon_at_state_0', str(shadow_epsilon))
+
+
+        # set reference bond parameters in shadow_mol
+        for shadow_bond in shadow_mol.GetBonds():
+            a1 = shadow_bond.GetBeginAtom()
+            a2 = shadow_bond.GetEndAtom()
+            shadow_a1_type = a1.GetProp('type')
+            shadow_a2_type = a2.GetProp('type')
+            a = self._retrieve_parameters(atom_type1=shadow_a1_type, atom_type2=shadow_a2_type)
+            shadow_length = a['bonds'].attrib['length']
+            shadow_k = a['bonds'].attrib['k']
+            shadow_bond.SetProp('bond_length_at_state_0', str(shadow_length))
+            shadow_bond.SetProp('k_at_state_0', str(shadow_k))
+
+        # iterate over all molecules except reference mol
+        for query in mols[1:]:
+            state += 1
+            # starting by finding all atoms that are the same in ref and query mol
+            # and set atom_type_at_state_${state} propertie
+            for shadow_atom in shadow_mol.GetAtoms():
+                shadow_atom_name = shadow_atom.GetProp('name')
+                
+                for query_atom in query.GetAtoms():
+                    query_atom_name = query_atom.GetProp('name')
+                    query_atom_type = query_atom.GetProp('type')
+                    query_atom_type = query_atom.GetProp('type')
+
+                    if (query_atom_name == shadow_atom_name):
+                        query_atom_charge = shadow_atom.GetProp('charge')
+                        # set properties for shadow atom in next state (i.e. query state)
+                        shadow_atom.SetProp('atom_type_at_state_'+str(state), str(query_atom_type))
+                        shadow_atom.SetProp('charge_at_state_'+str(state), str(query_atom_charge))
+                        parmeter = self._retrieve_parameters(atom_type1=shadow_atom_type)
+                        shadow_sigma = parmeter['nonbonds'].attrib['sigma']
+                        shadow_epsilon = parmeter['nonbonds'].attrib['epsilon']
+                        shadow_atom.SetProp('sigma_at_state_'+str(state), str(shadow_sigma))
+                        shadow_atom.SetProp('epsilon_at_state_'+str(state), str(shadow_epsilon))
+            
+            # set also all bonded terms for all atoms that have the same atom name
+            for shadow_bond in shadow_mol.GetBonds():
+                shadow_a1 = shadow_bond.GetBeginAtom()
+                shadow_a2 = shadow_bond.GetEndAtom()
+                shadow_a1_name = shadow_a1.GetProp('name')
+                shadow_a2_name = shadow_a2.GetProp('name')
+
+                
+                for query_bond in query.GetBonds():
+                    query_a1 = query_bond.GetBeginAtom()
+                    query_a2 = query_bond.GetEndAtom()
+                    query_a1_name = query_a1.GetProp('name')
+                    query_a2_name = query_a2.GetProp('name')
+                    query_a1_type = query_a1.GetProp('type')
+                    query_a2_type = query_a2.GetProp('type')
+
+                    if((shadow_a1_name == query_a1_name and shadow_a2_name == query_a2_name) or (shadow_a2_name == query_a1_name and shadow_a1_name == query_a2_name)):
+                        bond_param = self._retrieve_parameters(atom_type1=query_a1_type, atom_type2=query_a2_type)
+                        shadow_length = bond_param['bonds'].attrib['length']
+                        shadow_k = bond_param['bonds'].attrib['k']
+                        shadow_bond.SetProp('bond_length_at_state_'+str(state), str(shadow_length))
+                        shadow_bond.SetProp('k_at_state_'+str(state), str(shadow_k))
+
+
+            # if an atom of the shadow molecule does not have a corresponding atom type 
+            # in this state, then this atom will become a dummy atom in this particular state
+            for shadow_atom in shadow_mol.GetAtoms():
+                if not shadow_atom.HasProp('atom_type_at_state_'+str(state)):
+                    shadow_atom.SetProp('atom_type_at_state_'+str(state), 'dummy')
+                    shadow_atom.SetProp('charge_at_state_'+str(state), str(0))
+                    shadow_atom.SetProp('sigma_at_state_'+str(state), str(0))
+                    shadow_atom.SetProp('epsilon_at_state_'+str(state), str(0))
+
+                    idx = shadow_atom.GetIdx()
+
+                    for shadow_bond in shadow_mol.GetBonds():
+                        if shadow_bond.GetBeginAtomIdx() == idx or shadow_bond.GetEndAtomIdx() == idx:
+                            shadow_bond.SetProp('bond_length_at_state_'+str(state), 'None')
+                            shadow_bond.SetProp('k_at_state_'+str(state), 'None')
+                                     
+        shadow_mol = Chem.RWMol(shadow_mol)
+        shadow_atom_names = [atom.GetProp('name') for atom in shadow_mol.GetAtoms()]
+        
+        state_index = 0
+        for query in mols[1:]:
+            state_index += 1
+            # since I don't want to manually interfer the correct 
+            # 3D coorindates I will use alignemnt to the reference 
+            # atom to get proximatly correct coordinates for the new
+            # atom
+            # NOTE: This might not be the best strategy - since 
+            # I know that only one atom is added I could also 
+            # generate internal coordinates for this atom
+            # and subsequently calculate cartesian coord
+            pyO3A = rdMolAlign.GetO3A(shadow_mol, query)
+            pyO3A.Align()
+
+            for query_atom in query.GetAtoms():
+                # find dummy atom in query mol
+                if query_atom.GetProp('name') not in shadow_atom_names:
+                    # add query atom that is shadow mol at reference state
+                    idx = shadow_mol.AddAtom(query_atom)
+                    shadow_atom = shadow_mol.GetAtomWithIdx(idx)
+                    # set atom type on newly added shadow atom to query atom
+                    shadow_atom.SetProp('atom_type_at_state_' + str(state_index), query_atom.GetProp('type'))
+                    shadow_atom.SetProp('charge_at_state_' + str(state_index), query_atom.GetProp('charge'))
+                    parmeter = self._retrieve_parameters(atom_type1=query_atom.GetProp('type'))
+                    shadow_sigma = parmeter['nonbonds'].attrib['sigma']
+                    shadow_epsilon = parmeter['nonbonds'].attrib['epsilon']
+                    shadow_atom.SetProp('sigma_at_state_'+str(state_index), str(shadow_sigma))
+                    shadow_atom.SetProp('epsilon_at_state_'+str(state_index), str(shadow_epsilon))
+
+                    involved_bond = list(query_atom.GetBonds())[0]
+                    other_atom_bound_to_dummy = involved_bond.GetOtherAtom(query_atom)
+                    new_bond_idx = -1
+                    for shadow_atom in shadow_mol.GetAtoms():
+                        if shadow_atom.GetProp('name') == other_atom_bound_to_dummy.GetProp('name'):
+                            new_bond_idx = shadow_atom.GetIdx()
+                    
+                    # set dummy property in shadow_mol on dummy atom
+                    dummy_shadow_atom = shadow_mol.GetAtomWithIdx(idx)
+                    print(dummy_shadow_atom)
+                    for state in range(len(mols)):
+                        if not dummy_shadow_atom.HasProp('atom_type_at_state_' + str(state)):
+                            dummy_shadow_atom.SetProp('atom_type_at_state_' + str(state), 'dummy')
+                            shadow_atom.SetProp('charge_at_state_' + str(state), str(0))
+                            shadow_atom.SetProp('sigma_at_state_'+str(state), str(0))
+                            shadow_atom.SetProp('epsilon_at_state_'+str(state), str(0))
+
+                    # create dummy-heavy atom bond
+                    shadow_mol.AddBond(new_bond_idx,dummy_shadow_atom.GetIdx())
+                    # get this bond
+                    for shadow_bond in shadow_mol.GetBonds():
+                        if shadow_bond.GetBeginAtomIdx() == new_bond_idx or shadow_bond.GetEndAtomIdx() == new_bond_idx:
+                            for state in range(len(mols)):
+                                a1_type = shadow_bond.GetBeginAtom().GetProp('atom_type_at_state_' + str(state))
+                                a2_type = shadow_bond.GetEndAtom().GetProp('atom_type_at_state_' + str(state))
+                                if( a1_type == 'dummy' or a2_type == 'dummy'):
+                                    shadow_bond.SetProp('bond_length_at_state_' + str(state), 'None')
+                                    shadow_bond.SetProp('k_at_state_'+ str(state), 'None')
+                                else:
+                                    bond_param = self._retrieve_parameters(atom_type1=a1_type, atom_type2=a2_type )
+                                    shadow_length = bond_param['bonds'].attrib['length']
+                                    shadow_k = bond_param['bonds'].attrib['k']
+                                    shadow_bond.SetProp('bond_length_at_state_'+str(state), str(shadow_length))
+                                    shadow_bond.SetProp('k_at_state_'+str(state), str(shadow_k))
+
+
+
+        Chem.MolToPDBFile(shadow_mol, 'shadow_mol.pdb')
+        
+        shadow_mol = _State_mol(shadow_mol)
+        shadow_mol._print_state_of_shadow_mol()
+
+        self._shadow_clone = shadow_mol
+
+
+    def _generate_pdb_for_state(self):
+        # TODO: looks through mol and removes everything with dummy stats at 
+        # this particular state
+        pass
+        
+
+
+    
+    def _return_all_atom_for_state(self, state:int, returnListOfAtomObjects=False):
+
+        if self._shadow_clone == None:
+            print('States have to be registered!')
+            return None
+        
+        mol = self._shadow_clone
+        
+        for atom in mol.GetAtoms():
+            pass
+
+
+
+    def _return_all_bonds_for_state(self, state:int):
+        pass
+        
+    def _return_all_angles_for_state(self, state:int):
+        pass
+        
+    def _return_all_torsion_angles_for_state(self, state:int):
+
+        pass
+
     def _complete_state_registry(self):
         """
         Store all the properties that are specific to each state
         """
 
-        # get all atoms for individual mols
-        atoms_for_each_state = defaultdict(dict) # -> atoms_for_each_state[state->int][atom_name->str][atom->rd-object]
+        # mol array
+        mol_array = []
+        # set charge property for each mol
         for index, state in enumerate(self._input_state_data):
             mapping_atom_name_to_charge = {}
             for xml_atom in state['ffxml'].xpath('/ForceField/Residues/Residue/Atom'):
                 mapping_atom_name_to_charge[xml_atom.attrib['name']] = xml_atom.attrib['charge']
 
             mol = state['mol']
+            self._mol_for_each_state['state' + str(index)] = mol
             for atom in mol.GetAtoms():
                 atom_name = atom.GetProp('name')
                 atom.SetProp('charge', mapping_atom_name_to_charge[atom_name]) 
+            mol_array.append(mol)
 
-                atoms_for_each_state['state' + str(index)][atom_name] = atom 
+        self._generate_shadow_clone(mol_array)
 
-        # get all bonds for individual mol
-        bonds_for_each_state = defaultdict(dict) # -> bonds_for_each_state[state->int][bond_name->str][bond->rd-object] 
-        for index, state in enumerate(self._input_state_data):
-            mol = state['mol']
-            for bond in mol.GetBonds():
-                a1 = bond.GetBeginAtom()
-                atom_name1 = a1.GetProp('name')
-                a2 = bond.GetEndAtom()
-                atom_name2 = a2.GetProp('name')
-                canonical_bond_name = ''
-                for i in sorted([atom_name2, atom_name1]):
-                    canonical_bond_name += i
-                bonds_for_each_state['state' + str(index)] = bond
-
-        self._atoms_for_each_state = atoms_for_each_state
-        self._bonds_for_each_state = bonds_for_each_state
 
         charges = list()
         for index, state in enumerate(self._input_state_data):
@@ -629,21 +882,16 @@ class _TitratableForceFieldCompiler(object):
             template = _State(index,
                               state['log_population'],
                               0.0, # set g_k defaults to 0 for now
+                              self._shadow_clone.generate_atom_name_list_for_state(index),
                               net_charge,
-                              self._atoms_for_each_state['state'+str(index)],
-                              self._bonds_for_each_state['state'+str(index)],
                               state['pH']
                               )
-
-            
-            # TODO: integrate bonds!
 
             self._state_templates.append(template)
 
         min_charge = min(charges)
         for state in self._state_templates:
             state.set_number_of_protons(min_charge)
-        #print(self._state_templates)
         return
 
     def _initialize_forcefield_template(self):
@@ -652,10 +900,16 @@ class _TitratableForceFieldCompiler(object):
         """
 
         residue = self.ffxml.xpath('/ForceField/Residues/Residue')[0]
-        for atom in self._state_templates[0].atoms.values():
-            residue.append(etree.fromstring(str(atom)))
-        for bond in self._bonds:
-            residue.append(etree.fromstring(str(bond)))
+
+        atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}"/>'
+        bond_string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}"/>'
+
+        for atom in self._shadow_clone.mol.GetAtoms():
+            print(etree.fromstring(atom_string.format(name=atom.GetProp('name'), atom_type=atom.GetProp('atom_type_at_state_0'), charge=atom.GetProp('charge_at_state_0'))))
+            residue.append(etree.fromstring(atom_string.format(name=atom.GetProp('name'), atom_type=atom.GetProp('atom_type_at_state_0'), charge=atom.GetProp('charge_at_state_0'))))
+        for bond in self._shadow_clone.mol.GetBonds():
+            print(etree.fromstring(bond_string.format(atomName1=bond.GetBeginAtom().GetProp('name'), atomName2=bond.GetEndAtom().GetProp('name'))))
+            residue.append(etree.fromstring(bond_string.format(atomName1=bond.GetBeginAtom().GetProp('name'), atomName2=bond.GetEndAtom().GetProp('name'))))
 
     def _add_isomers(self):
         """
@@ -668,8 +922,13 @@ class _TitratableForceFieldCompiler(object):
             for isomer_index, isomer in enumerate(self._state_templates):
                 isomer_str = str(isomer)
                 isomer_xml = etree.fromstring(isomer_str)
-                for atom in isomer.atoms.values():
-                    isomer_xml.append(etree.fromstring(str(atom)))
+                for atom in self._shadow_clone.mol.GetAtoms():
+                    print(etree.fromstring(_State_mol._print_xml_atom_string(atom, isomer_index)))
+                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_atom_string(atom, isomer_index)))
+                for bond in self._shadow_clone.mol.GetBonds():
+                    print(etree.fromstring(_State_mol._print_xml_bond_string(bond, isomer_index)))
+                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_bond_string(bond, isomer_index)))
+
                 protonsdata.append(isomer_xml)
             residue.append(protonsdata)
 
@@ -762,232 +1021,97 @@ class _TitratableForceFieldCompiler(object):
 
 
 
-    def _retrieve_atom_type_parameters(self, atom_type_name):
+    def _atom_type_match_angle_types(atom_types, angle_parameter):
+        """ Looks through the given xml element angle_parameter and matches atom_types in correct order.
+        Return true if match.
+        """
+
+        #
+        atom1_to_match = atom_types['atom_type1']
+        atom2_to_match = atom_types['atom_type2']
+        atom3_to_match = atom_types['atom_type3']
+
+        atom1_in_parameter_set = angle_parameter.attrib['type1']
+        atom2_in_parameter_set = angle_parameter.attrib['type2']
+        atom3_in_parameter_set = angle_parameter.attrib['type3']
+
+
+        if atom1_to_match == atom1_in_parameter_set and atom2_to_match == atom2_in_parameter_set and atom3_to_match == atom3_in_parameter_set:
+            print(atom1_to_match, ' - ',atom2_to_match, ' - ',atom3_to_match, ' matches', )
+            return True
+        
+        elif atom3_to_match == atom1_in_parameter_set and atom2_to_match == atom2_in_parameter_set and atom1_to_match == atom3_in_parameter_set:
+            print(atom1_to_match, ' - ',atom2_to_match, ' - ',atom3_to_match, ' matches', )
+            return True
+        else:
+            return False
+        
+
+    def _retrieve_parameters(self, **kwargs):
         """ Look through FFXML files and find all parameters pertaining to the supplied atom type.
         Returns
         -------
-        params : dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
-            Dictionary of lists by force type
+        input : atom_type1:str, atom_type2[opt]:str, atom_type3[opt]:str, atom_type4[opt]:str, 
         """
+        
 
         # Storing all the detected parameters here
-        params = dict(atomtypes=[], bonds=[], angles=[], propers=[], impropers=[], nonbonds=[])
-
-        if atom_type_name is None:
-            return params
+        params = {}
 
         # Loop through different sources of parameters
-        for xmltree in self._xml_parameter_trees:
-            # Match the type of the atom in the AtomTypes block
-            for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
-                if atomtype.attrib['name'] == atom_type_name:
-                    params['atomtypes'].append(atomtype)
-
-            # Match the bonds of the atom in the HarmonicBondForce block
-            for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
-                if atom_type_name in (bond.attrib['type1'], bond.attrib['type2']):
-                    params['bonds'].append(bond)
-
-            # Match the angles of the atom in the HarmonicAngleForce block
-            for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
-                if atom_type_name in (angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']):
-                    params['angles'].append(angle)
-
-            # Match proper dihedral of the atom in PeriodicTorsionForce block
-            for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
-                if atom_type_name in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']):
-                    params['propers'].append(proper)
-
-            # Match improper dihedral of the atom in PeriodicTorsionForce block
-            for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
-                if atom_type_name in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']):
-                    params['impropers'].append(improper)
-
+        
             # Match nonbonded type of the atom in NonbondedForce block
-            for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
-                if nonbond.attrib['type'] == atom_type_name:
-                    params['nonbonds'].append(nonbond)
 
-        return params
+        if len(kwargs) == 1:
+            print('Searching for atom parameters for: ', kwargs['atom_type1'])
+            # Loop through different sources of parameters
+            for xmltree in self._xml_parameter_trees:
+                # Match the type of the atom in the AtomTypes block
+                for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
+                    if atomtype.attrib['name'] == kwargs['atom_type1']:
+                        params['atomtypes'] = atomtype
+                for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
+                    if nonbond.attrib['type'] == kwargs['atom_type1']:
+                        params['nonbonds'] = nonbond
 
+            return params
 
+        elif len(kwargs) == 2:
+            print('Searching for bond parameters for: ', kwargs['atom_type1'], ' - ', kwargs['atom_type2'] )
+            for xmltree in self._xml_parameter_trees:
+                # Match the bonds of the atom in the HarmonicBondForce block
+                for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
+                    if (kwargs['atom_type1'] == bond.attrib['type1'] and kwargs['atom_type2'] == bond.attrib['type2']) or (kwargs['atom_type2'] == bond.attrib['type1'] and kwargs['atom_type1'] == bond.attrib['type2']):
+                        params['bonds'] = bond
+            return params
+                    
 
-
-    def _create_chimera_templateV2(self):
-        """
-        Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
-        states.
+        elif len(kwargs) == 3:
+            for xmltree in self._xml_parameter_trees:
+                # Match the angles of the atom in the HarmonicAngleForce block
+                for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
+                    if _atom_type_match_angle_types(kwargs, angle) == True:
+                            params['angles'] = (angle)
         
-        Checks if bonded terms exist.
-        If not, creates a new bond type with the properties of the same bond in the state where the atom existed.
-        Bonds, angle, Torsions?
-        """
-
-        # start with atoms
-        # get all parameters for each state and fill it in the rd mol object
-
-        for state in self._atoms_for_each_state.values():
-            for atom in state.values():
-                print(atom)
-                print(self._retrieve_atom_type_parameters(atom.GetProp('type')))
-
-
-        # Collect all possible types by looping through states
         
-        for atomname in self._atom_names['unified']:       
-            for state in self._state_templates:
-                if state.atoms[atomname] is None:
-                    # add dummy atom  
-                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
-                atomname_atomtype_mapping[atomname].append(state.atoms[atomname].atom_type)
-            for atom_type in atomname_atomtype_mapping[atomname]:
-                if atom_type not in available_parameters_per_type.keys():
-
-                    available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
-
-        print(atomname_atomtype_mapping)
-        print(available_parameters_per_type.keys())
-
-
-        _bonds_including_type
-        _find_bond_partner_types
-
-
-
-
-
-
-    def _create_chimera_template(self):
-        """
-        Start with atom types from the most populated state, and attempt to fill in the remaining atoms from the other
-        states.
         
-        Checks if bonded terms exist.
-        If not, creates a new bond type with the properties of the same bond in the state where the atom existed.
-        Bonds, angle, Torsions?
-        """
-        possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
-        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
-        # NOTE: MW: atom types  
+        elif len(kwargs) == 4:
+            for xmltree in self._xml_parameter_trees:
+            
+                # Match proper dihedral of the atom in PeriodicTorsionForce block
+                for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+                    if atom_type1 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type2 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type3 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type4 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']):
+                        params['propers'].append(proper)
 
-        # The final, uniform set of atomtypes that will be used
-        final_types = dict()
-
-        # Collect all possible types by looping through states
-        for atomname in self._atom_names:
-            possible_types_per_atom[atomname] = set()
-            for state in self._state_templates:
-                if state.atoms[atomname] is not None:
-                    # Store the atomtype for this state as a possible pick
-                    if atomname not in final_types:
-                        final_types[atomname] = state.atoms[atomname].atom_type
-
-                    # In case we need alternatives later, store potential types
-                    possible_types_per_atom[atomname].add(state.atoms[atomname].atom_type)
-                else:
-                    # add missing atoms, using the placeholder type "dummy' for now and a net charge of 0.0
-                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
-
-            # look up the parameters for the encountered atom types from all available parameter sources
-            for atom_type in possible_types_per_atom[atomname]:
-                if atom_type not in available_parameters_per_type.keys():
-                    available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
-
-        # Make sure we haven't missed any atom types
-        if len(final_types) != len(self._atom_names):
-            missing = set(self._atom_names) - set(final_types.keys())
-            raise RuntimeError("Did not find an atom type for {}".format(', '.join(missing)))
-
-        # Keep looping until solution has not changed, which means all bonds have been found
-        old_types = dict()
-        while old_types != final_types:
-            old_types = dict(final_types)
-            # Validate that bonds exist for the atomtypes that were assigned
-            for atomname in self._atom_names:
-                atom_type = final_types[atomname]
-
-                bonded_to = self._find_bond_partner_types(atomname, final_types)
-                # Search from gaff and frcmod contents for all bonds that contain this atom type
-                list_of_bond_params = self._bonds_including_type(atom_type, available_parameters_per_type)
-
-                # Loop through all bonds to check if the bond types are defined
-                for bond_partner_name, bond_partner_type in bonded_to.items():
-                    this_bond_type = _BondType(atom_type, bond_partner_type)
-
-                    # If there is no bond definition for these types
-                    # propose a change of type to a different type from another state
-                    # TODO If hydrogen atom involved,
-                    # TODO could try to first update the type of the hydrogen
-                    # TODO since that should not affect any of the other bonds in the system.
-                    if this_bond_type not in list_of_bond_params:
-                        # Keep track of whether a fix has been proposed
-                        update_made = False
-                        # Change the current atoms type to see if a bond exist
-                        for possible_type in possible_types_per_atom[atomname]:
-                            # Find all bonds that contain this new atom type
-                            alternate_list_of_bond_params = self._bonds_including_type(possible_type, available_parameters_per_type)
-                            if _BondType(possible_type, bond_partner_type) in alternate_list_of_bond_params:
-                                log.debug(
-                                    "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
-                                          atomname, atom_type, possible_type, bond_partner_name, bond_partner_type)
-
-                                # Update the current selection
-                                final_types[atomname] = possible_type
-                                update_made = True
-                                break
-
-                        # If the current atom could not be updated, attempt changing the partner
-                        if not update_made:
-
-                            # Loop through types of the bond partner found in each state
-                            for possible_type in possible_types_per_atom[bond_partner_name]:
-                                if _BondType(atom_type, possible_type) in list_of_bond_params:
-                                    log.debug(
-                                        "Atom: %s type changed %s -> %s to facilitate binding to Atom: %s, with type %s",
-                                        bond_partner_name, bond_partner_type, possible_type, atomname, atom_type)
-
-                                    # Update the current selection with the new type
-                                    final_types[bond_partner_name] = possible_type
-                                    update_made = True
-                                    break
-
-                        # If neither current atom, or partner atom types could be updated to match,
-                        # both atoms will need to be changed to facilitate a bond between them
-                        if not update_made:
-
-                            # All possible types from each state
-                            for possible_type_atom in possible_types_per_atom[atomname]:
-                                # Find the bonds to this atom type
-                                alternate_list_of_bond_params = self._bonds_including_type(possible_type_atom, available_parameters_per_type)
-
-                                # All possible types for the partner from each state
-                                for possible_type_partner in possible_types_per_atom[bond_partner_name]:
+                # Match improper dihedral of the atom in PeriodicTorsionForce block
+                for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
+                    if atom_type1 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and atom_type2 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and  atom_type3 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and atom_type4 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']):
+                        params['impropers'].append(improper)
 
 
-                                    if _BondType(possible_type_atom, possible_type_partner) in alternate_list_of_bond_params:
-                                        log.debug(
-                                            "Atom: %s type changed %s -> %s and \n "
-                                            "Atom: %s type changed %s -> %s to facilitate bond.",
-                                            atomname, atom_type, possible_type_atom, bond_partner_name, bond_partner_type, possible_type_partner)
 
-                                        # Update both types with the new selection
-                                        final_types[atomname] = possible_type_atom
-                                        final_types[bond_partner_name] = possible_type_partner
-                                        update_made = True
-                                        break
 
-                        # There are no bond parameters for this bond anywhere
-                        # If you run into this error, likely, GAFF does not cover the protonation state you provided
-                        if not update_made:
-                            raise RuntimeError("Can not resolve bonds between Atoms {} - {}.\n"
-                                               "Gaff types may not suffice to describe this molecule/protonation state.".format(atomname, bond_partner_name))
 
-        # Assign the final atom types to each state
-        for state_index in range(len(self._state_templates)):
-            for atomname in self._atom_names:
-                #print('State: ', str(state_index), '; AtomName: ', str(atomname), '; AtomType: ', str(final_types[atomname]))
-                self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
-        return
 
     @staticmethod
     def _bonds_including_type(atom_type, available_parameters_per_type):
@@ -996,109 +1120,6 @@ class _TitratableForceFieldCompiler(object):
         for bond_type in bond_params:
             list_of_bond_params.append(_BondType(bond_type.get('type1'), bond_type.get('type2')))
         return list_of_bond_params
-
-    def _create_hybrid_template(self):
-        """
-        Interpolate differing atom types to create a single template state that has proper bonded terms for all atoms.
-        """
-
-        possible_types_per_atom = dict()  # Dictionary of all possible types for each atom, taken from all isomers
-        available_parameters_per_type = dict()  # The GAFF parameters for all the atomtypes that may be used.
-
-        # Collect all possible types by looping through states
-        for atomname in self._atom_names:
-            possible_types_per_atom[atomname] = set()
-            for state in self._state_templates:
-                if state.atoms[atomname] is not None:
-                    # Store the atomtype for this state as a possible pick
-                    possible_types_per_atom[atomname].add(state.atoms[atomname].atom_type)
-                else:
-                    # add missing atoms, using the placeholder type "dummy' for now and a net charge of 0.0
-                    state.atoms[atomname] = _Atom(atomname, 'dummy', '0.0')
-
-            # look up the parameters for the encountered atom types from all available parameter sources
-            for atom_type in possible_types_per_atom[atomname]:
-                if atom_type not in available_parameters_per_type.keys():
-                    available_parameters_per_type[atom_type] = self._retrieve_atom_type_parameters(atom_type)
-
-        # The final, uniform set of atomtypes that will be used
-        final_types = dict()
-
-        # Keep looping until all types have been assigned
-        number_of_attempts = 0
-        while len(final_types) != len(self._atom_names):
-
-            # Deepcopy
-            old_types = dict(final_types)
-            # For those that need to be resolved
-            for atomname, possible_types_for_this_atom in possible_types_per_atom.items():
-
-                # Already assigned this atom, skip it.
-                if atomname in final_types:
-                    continue
-                # If only one option available
-                elif len(possible_types_for_this_atom) == 1:
-                    final_types[atomname] = next(iter(possible_types_for_this_atom))
-                # Not in the list of final assignments, and still has more than one option
-                else:
-                    # Dictionary of all the bonds that could/would have to be available when picking an atom type
-                    bonded_to = self._find_all_potential_bond_types_to_atom(atomname, final_types, possible_types_per_atom)
-                    # The atom types that could be compatible with at least one of the possible atom types for each atom
-                    solutions = self._resolve_types(bonded_to, available_parameters_per_type,
-                                                    possible_types_for_this_atom)
-                    # Pick a solution
-                    solution_one = next(iter(solutions.values()))
-                    # If there is only one solution, that is the final solution
-                    if len(solutions) == 1:
-                        final_types[atomname] = list(solutions.keys())[0]
-                    elif len(solutions) == 0:
-                        # If this happens, you may manually need to assign atomtypes. The available types won't do.
-                        raise ValueError("Cannot come up with a single set of atom types that describes all states in bonded form.")
-
-                    # If more than one atomtype is possible for this atom, but all partner atom options are the same, just pick one.
-                    elif all(solution_one == solution_value for solution_value in solutions.values()):
-                        final_types[atomname] = list(solutions.keys())[0]
-
-                    else:
-                        # Some partner atoms might still be variable
-                        # kick out invalid ones, and repeat procedure afterwards
-
-                        old_possibilities = dict(possible_types_per_atom)
-                        for partner_name in bonded_to.keys():
-                            if partner_name in final_types.keys():
-                                continue
-                            else:
-                                for partner_type in possible_types_per_atom[partner_name]:
-                                    # if an atomtype in the current list of options did not match
-                                    # any of the possible combinations with our potential solutions for the current atom
-                                    if not any(partner_type in valid_match[partner_name] for valid_match in
-                                               solutions.values()):
-                                        # kick it out of the options
-                                        possible_types_per_atom[partner_name].remove(partner_type)
-
-                        # If this hasn't changed anything, remove an arbitrary option, and see if the molecule can be resolved in the next iteration.
-                        if old_possibilities == possible_types_per_atom:
-                            possible_types_per_atom[atomname].remove(next(iter(possible_types_per_atom[atomname])))
-
-
-            # If there is more than one unique solution to the entire thing, this may result in an infinite loop
-            # It is not completely obvious what would be the right thing to do in such a case.
-            # It takes two iterations, one to identify what atoms are now invalid, and one to check whether the number
-            # of (effective) solutions is equal to 1. If after two iterations, there are no changes, the algorithm is stuck
-            if final_types == old_types and number_of_attempts % 2 == 0 and number_of_attempts > 20:
-                raise RuntimeError("Can't seem to resolve atom types, there might be more than 1 unique solution.")
-            number_of_attempts += 1
-
-        log.debug("Final atom types have been selected.")
-
-        # Assign the final atom types to each state
-        for state_index in range(len(self._state_templates)):
-            for atomname in self._atom_names:
-                self._state_templates[state_index].atoms[atomname].atom_type = final_types[atomname]
-
-        return
-
-
 
 
 def _make_xml_object(root_name, **attributes):
