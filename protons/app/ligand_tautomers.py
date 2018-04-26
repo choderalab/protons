@@ -23,7 +23,6 @@ from .. import app
 from simtk.openmm import openmm
 from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
-from collections import defaultdict
 from rdkit import Chem
 from rdkit.Chem import MCS
 from copy import copy, deepcopy
@@ -60,49 +59,6 @@ class _State(object):
         self.atoms=OrderedDict()
         self.proton_count = -1
         self.pH = pH
-
-    def validate(self):
-        """
-        Checks to see if the isomeric state is valid.
-
-        Raises
-        ------
-        ValueError
-            If any atom has not been instantiated, or is instantiated wrongly.
-
-        """
-        issues = "The following issues need to be resolved:\r\n"
-
-        for atom in self.atoms.values():
-
-            if atom is None:
-                issues += "Atom '{}' has not been instantiated.\r\n".format(atom.name)
-            elif not isinstance(atom, _Atom):
-                issues += "Invalid atom found '{}'.\r\n".format(atom.name)
-            elif atom.is_dummy():
-                issues += "Atom is a dummy, please assign proper types."
-            elif hasattr(atom, 'half_life'):
-                issues += "Atom '{}' is radioactive.\r\n".format(atom.name)
-
-        if self.proton_count < 0:
-            issues += "Invalid number of acidic protons: {}.".format(self.proton_count)
-
-        raise ValueError(issues)
-
-    def get_dummies(self):
-        """
-        Return the list of atoms that currently are None
-        """
-
-        dummies = list()
-
-        for name, atom in self.atoms.items():
-            if atom is None:
-                dummies.append(name)
-            elif atom.is_dummy():
-                dummies.append(name)
-
-        return dummies
 
     def set_number_of_protons(self, min_charge):
         """
@@ -358,12 +314,6 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
 
     return outputffxml
 
-def generate_rdkit_mol_from_oemol_and_ff(ffxml:str, oemolecule):
-
-
-    pass
-
-
 
 def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_default):
     """
@@ -381,7 +331,7 @@ def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_
     xmltree = etree.parse(inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True))
     # Output tree
     hydrogen_definitions_tree = etree.fromstring('<Residues/>')
-    hydrogen_types = _find_hydrogen_types(gafftree)
+    hydrogen_types = _find_hydrogen_types(gafftree, xmltree)
 
     for residue in xmltree.xpath('Residues/Residue'):
         hydrogen_file_residue = etree.fromstring("<Residue/>")
@@ -419,24 +369,32 @@ def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_
         fstream.write(xmlstring)
 
 
-def _find_hydrogen_types(gafftree: lxml.etree.ElementTree) -> set:
+def _find_hydrogen_types(gafftree: lxml.etree.ElementTree, xmlfftree: lxml.etree.ElementTree) -> set:
     """
     Find all atom types that describe hydrogen atoms.
 
     Parameters
     ----------
     gafftree - A GAFF input xml file that contains atom type definitions.
+    xmlfftree - the customized force field template generated that contains the dummy hydrogen definitions
 
     Returns
     -------
     set - names of all atom types that correspond to hydrogen
     """
 
+    print('FIND HYDROGEN TYPES!!!')
     # Detect all hydrogen types by element and store them in a set
     hydrogen_types = set()
     for atomtype in gafftree.xpath('AtomTypes/Type'):
         if atomtype.get('element') == "H":
             hydrogen_types.add(atomtype.get('name'))
+
+    for atomtype in xmlfftree.xpath('AtomTypes/Type'):
+        # adds dummy atome types
+        if atomtype.get('name').startswith("d_"):
+            hydrogen_types.add(atomtype.get('name'))
+
 
     return hydrogen_types
 
@@ -484,6 +442,7 @@ def _generate_xml_template(residue_name="LIG"):
     residues = _make_xml_object("Residues")
     residue = _make_xml_object("Residue")
     atomtypes = _make_xml_object("AtomTypes")
+
     hbondforce = _make_xml_object("HarmonicBondForce")
     hangleforce = _make_xml_object("HarmonicAngleForce")
     pertorsionforce = _make_xml_object("PeriodicTorsionForce")
@@ -504,26 +463,117 @@ class _State_mol(object):
 
     def __init__(self, mol):
         self.mol = mol
-    
-    @classmethod
-    def _print_xml_atom_string(self, atom, state):
-        string = '<Atom name="{name}" type="{atom_type}" charge="{charge} sigma={sigma} epsilon={epsilon}"/>'
+
+    @staticmethod
+    def _get_atom_type_or_dummy_atom_type(atom, state, nr_of_states):
+        atomtype = atom.GetProp('atom_type_at_state_'+str(state))
+        if atomtype == 'dummy':
+            # get real atom type
+            for state in range(int(nr_of_states)):
+                atomtype = atom.GetProp('atom_type_at_state_'+str(state))
+                if atomtype != 'dummy':
+                    # what is earliest real atom type?
+                    real_atom_type = atom.GetProp('atom_type_at_state_'+str(state))
+                    atomtype = 'd_'+atom.GetProp('name')+'_'+real_atom_type
+                    return atomtype
+        else:
+            
+            return atomtype
+
+    @staticmethod
+    def _get_real_atom_type_at_state(atom, state):
+        atomtype = atom.GetProp('atom_type_at_state_'+str(state))           
+        return atomtype
+
+
+
+    @staticmethod
+    def _print_xml_atom_string(atom, state, nr_of_states, string):
+        atom_type = _State_mol._get_atom_type_or_dummy_atom_type(atom, state, nr_of_states)
         name = atom.GetProp('name')
-        atom_type = atom.GetProp('atom_type_at_state_'+str(state))
         atom_charge = atom.GetProp('charge_at_state_'+str(state))
         sigma = atom.GetProp('sigma_at_state_' + str(state))
         epsilon = atom.GetProp('epsilon_at_state_' + str(state))
-        return string.format(name=name, atom_type=atom_type, charge=atom_charge, sigma=sigma, epsilon=epsilon)
-        
-    @classmethod
-    def _print_xml_bond_string(self, bond, state):
-        string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}" bond_length="{bond_length}" k="{k}" />'
+        element = atom.GetSymbol()
+        mass = atom.GetMass()
+        return string.format(name=name, atom_type=atom_type, charge=atom_charge, sigma=sigma, epsilon=epsilon, element=element, mass=mass)
+
+
+
+    @staticmethod
+    def _print_xml_bond_string(bond, state, nr_of_states, string):
         atomName1 = bond.GetBeginAtom().GetProp('name')
         atomName2 = bond.GetEndAtom().GetProp('name')
-        bond_length = bond.GetProp('bond_length_at_state_' + str(state))
-        k = bond.GetProp('k_at_state_' + str(state))
-        return string.format(atomName1=atomName1, atomName2=atomName2, bond_length=bond_length, k=k)
-        
+        atomType1 = bond.GetBeginAtom().GetProp('atom_type_at_state_'+str(state))
+        atomType2 = bond.GetEndAtom().GetProp('atom_type_at_state_'+str(state))
+        if atomType1 == 'dummy' or atomType2 == 'dummy':
+            # get real atom type
+            for state in range(int(nr_of_states)):
+
+                bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+                k = bond.GetProp('k_at_state_' + str(state))
+                if str(bond_length) != 'None' and str(k) != 'None':
+                    break
+        else:
+            bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+            k = bond.GetProp('k_at_state_' + str(state))
+
+        atomType1 = _State_mol._get_atom_type_or_dummy_atom_type(bond.GetBeginAtom(), state, nr_of_states)
+        atomType2 = _State_mol._get_atom_type_or_dummy_atom_type(bond.GetEndAtom(), state, nr_of_states)
+
+        return string.format(atomName1=atomName1, atomName2=atomName2, atomType1=atomType1, atomType2=atomType2,bond_length=bond_length, k=k)
+    
+
+
+    @staticmethod 
+    def _print_xml_angle_string(atomType1, atomType2, atomType3, parameter, string):
+#        angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"\>'
+
+        print(parameter)
+        angle = parameter['angle'].attrib['angle']
+        k = parameter['angle'].attrib['k']
+        print(angle, k)
+        return string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, angle=angle, k=k)
+
+    @staticmethod 
+    def _print_xml_torsion_string(atomType1, atomType2, atomType3, atomType4, parameter, string):
+#        angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"\>'
+
+        print('::::::::::::::::::::::')
+        print(parameter)
+        periodicity = parameter.attrib['periodicity1']
+        phase = parameter.attrib['phase1']
+        k = parameter.attrib['k1']
+        return string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, atomType4=atomType4, phase=phase, periodicity=periodicity, k=k)
+
+
+
+    @staticmethod
+    def _print_xml_bond_string(bond, state, nr_of_states, string):
+        atomName1 = bond.GetBeginAtom().GetProp('name')
+        atomName2 = bond.GetEndAtom().GetProp('name')
+        atomType1 = bond.GetBeginAtom().GetProp('atom_type_at_state_'+str(state))
+        atomType2 = bond.GetEndAtom().GetProp('atom_type_at_state_'+str(state))
+        if atomType1 == 'dummy' or atomType2 == 'dummy':
+            print('Seeing dummy bond ...')
+            for state in range(int(nr_of_states)):
+
+                bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+                print('Bond length: ', bond_length)
+                k = bond.GetProp('k_at_state_' + str(state))
+                if str(bond_length) != 'None' and str(k) != 'None':
+                    break
+        else:
+            bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+            k = bond.GetProp('k_at_state_' + str(state))
+
+        atomType1 = _State_mol._get_atom_type_or_dummy_atom_type(bond.GetBeginAtom(), state, nr_of_states)
+        atomType2 = _State_mol._get_atom_type_or_dummy_atom_type(bond.GetEndAtom(), state, nr_of_states)
+
+        return string.format(atomName1=atomName1, atomName2=atomName2, atomType1=atomType1, atomType2=atomType2,bond_length=bond_length, k=k)
+
+
+
 
     def _print_state_of_shadow_mol(self):
         mol = self.mol
@@ -556,6 +606,8 @@ class _State_mol(object):
                 print(a2.GetProp('atom_type_at_state_'+str(state)))
                 print('Bond length: ', bond.GetProp('bond_length_at_state_' + str(state)), end=' ')
                 print('K: ', bond.GetProp('k_at_state_' + str(state)))
+
+        
 
     def generate_atom_name_list_for_state(self, state):
 
@@ -595,7 +647,7 @@ class _TitratableForceFieldCompiler(object):
         self._state_templates = list()
         self._atoms_for_each_state = None
         self._bonds_for_each_state = None
-        self._mol_for_each_state = defaultdict()
+        self._mol_for_each_state = dict()
         self._shadow_clone = None
 
 
@@ -631,9 +683,140 @@ class _TitratableForceFieldCompiler(object):
         self._add_isomers()
         # Append extra parameters from frcmod
         self._append_extra_gaff_types()
+        # Append dummy parameters
+        self._append_dummy_parameters()
+
         # Remove empty blocks, and unnecessary information in the ffxml tree
         self._sanitize_ffxml()
         return
+
+    def _append_dummy_parameters(self):
+
+        shadow_mol = self._shadow_clone.mol
+
+        # Start with adding all dummy atom type definitions
+        atom_string = '<Type name="{atom_type}" class="{atom_type}" charge="{charge}" element="{element}" mass="{mass}"/>'
+        nb_string = '<Atom type="{atom_type}" sigma="{sigma}" epsilon="{epsilon}" charge="{charge}"/>'
+        # get atom parameters
+        nr_of_states = int(shadow_mol.GetProp('nr_of_states'))
+        for atom in shadow_mol.GetAtoms():
+            for state in range(nr_of_states):
+                if atom.GetProp('atom_type_at_state_'+str(state)) == 'dummy':
+                    # what is earliest real atom type?
+                    print('found dummy atom ...')
+                    element_string= etree.fromstring(_State_mol._print_xml_atom_string(atom, state, nr_of_states, atom_string ))
+                    nb_element_string= etree.fromstring(_State_mol._print_xml_atom_string(atom, state, nr_of_states, nb_string ))
+                    self._add_to_output(element_string, "/ForceField/AtomTypes")
+                    self._add_to_output(nb_element_string, "/ForceField/NonbondedForce")
+        
+        # Now add all dummy bonds
+        bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
+        # get atom parameters
+        for bond in shadow_mol.GetBonds():
+            for state in range(nr_of_states):
+                atom_type1 = bond.GetBeginAtom().GetProp('atom_type_at_state_'+str(state))
+                atom_type2 = bond.GetEndAtom().GetProp('atom_type_at_state_'+str(state))
+                if atom_type1 == 'dummy' or atom_type2 == 'dummy':
+                    # the bond of interest is identified
+                    # now we need to change the state again until every atomType is real
+                    for state in range(nr_of_states):
+                        atom_type1 = bond.GetBeginAtom().GetProp('atom_type_at_state_'+str(state))
+                        atom_type2 = bond.GetEndAtom().GetProp('atom_type_at_state_'+str(state))
+
+                        if atom_type1 != 'dummy' and atom_type2 != 'dummy':                          
+                            element_string= etree.fromstring(_State_mol._print_xml_bond_string(bond, state, nr_of_states, bond_string ))
+                            self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
+
+
+        # Now add all dummy ANGLES
+        angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"/>'
+        # get angles involving dummy atoms
+        patt = Chem.MolFromSmarts('*~*~*')
+        if not shadow_mol.HasSubstructMatch(patt):
+            print('There are troubles ahead - generic smart pattern could not match any of the bonds in the molecule ...')
+        angle_list = shadow_mol.GetSubstructMatches(patt)
+        for state in range(nr_of_states):
+            for angle in angle_list:
+                a1 = shadow_mol.GetAtomWithIdx(angle[0])
+                a2 = shadow_mol.GetAtomWithIdx(angle[1])
+                a3 = shadow_mol.GetAtomWithIdx(angle[2])
+                atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
+                atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
+                atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
+                if atomType1 == 'dummy' or atomType2 == 'dummy' or atomType3 == 'dummy':
+                    # now we need to change the state again until every atomType is real
+                    print('Found dummy angle')
+                    atomType1_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a1, state, nr_of_states)
+                    atomType2_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a2, state, nr_of_states)
+                    atomType3_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a3, state, nr_of_states)
+                    print(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string)
+
+                    for state in range(nr_of_states):
+                        atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
+                        atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
+                        atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
+
+                        if atomType1 != 'dummy' and atomType2 != 'dummy' and atomType3 != 'dummy':                          
+                            print(atomType1, atomType2, atomType3)
+                            parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
+                            element_string= etree.fromstring(_State_mol._print_xml_angle_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, parameter, angle_string))
+                            self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
+                               
+        # Last are all TORSIONS
+        #<PeriodicTorsionForce>
+        #<Proper type1="" type2="c" type3="c" type4="" periodicity1="2" phase1="3.14159265359" k1="1.2552"/>
+        #<Improper type1="c" type2="" type3="" type4="o" periodicity1="2" phase1="3.14159265359" k1="43.932"/>
+
+        proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType3}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
+        improper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType3}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
+        patt = Chem.MolFromSmarts('*~*~*~*')
+        if not shadow_mol.HasSubstructMatch(patt):
+            print('There are troubles ahead - generic smart pattern could not match any of the dihedrals in the molecule ...')
+        dihedrals = shadow_mol.GetSubstructMatches(patt)
+        for state in range(nr_of_states):
+            print('#####################')
+            print(state)
+            print('#####################')
+            for torsion in dihedrals:
+                a1 = shadow_mol.GetAtomWithIdx(torsion[0])
+                a2 = shadow_mol.GetAtomWithIdx(torsion[1])
+                a3 = shadow_mol.GetAtomWithIdx(torsion[2])
+                a4 = shadow_mol.GetAtomWithIdx(torsion[3])
+                atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
+                atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
+                atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
+                atomType4 = a4.GetProp('atom_type_at_state_'+str(state))
+                if atomType1 == 'dummy' or atomType2 == 'dummy' or atomType3 == 'dummy' or atomType4 == 'dummy':
+                    print('Found dummy torsion!')
+                    atomType1_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a1, state, nr_of_states)
+                    atomType2_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a2, state, nr_of_states)
+                    atomType3_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a3, state, nr_of_states)
+                    atomType4_for_parameter_string = _State_mol._get_atom_type_or_dummy_atom_type(a4, state, nr_of_states)
+                    print(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, atomType4_for_parameter_string)
+                    
+                    # now we need to change the state again until every atomType is real
+                    for state in range(nr_of_states):
+                        atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
+                        atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
+                        atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
+                        atomType4 = a4.GetProp('atom_type_at_state_'+str(state))
+
+                        if atomType1 != 'dummy' and atomType2 != 'dummy' and atomType3 != 'dummy' and atomType4 != 'dummy':                          
+                            # proper torsion
+                            print('Looking for parameters: ')
+                            print(atomType1, atomType2, atomType3, atomType4)
+                            parameters = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3, atom_type4=atomType4)
+                            
+                            for torsion_variety in parameters:                              
+                                for parameter in parameters[torsion_variety]:
+                                    if torsion_variety == 'proper':
+                                        element_string= etree.fromstring(_State_mol._print_xml_torsion_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, atomType4_for_parameter_string, parameter, proper_string))
+                                    else:
+                                        element_string= etree.fromstring(_State_mol._print_xml_torsion_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, atomType4_for_parameter_string, parameter, improper_string))
+                                        
+                                    self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
+                            
+        return 1
 
 
     def _sanitize_ffxml(self):
@@ -647,6 +830,7 @@ class _TitratableForceFieldCompiler(object):
         for empty_block in self.ffxml.xpath('/ForceField/*[count(child::*) = 0]'):
             empty_block.getparent().remove(empty_block)
 
+    
     def _generate_shadow_clone(self, mols:list):
         # constructs all atom type changes in the atoms relative to a ref
         # comparing everything to a reference state 
@@ -666,7 +850,6 @@ class _TitratableForceFieldCompiler(object):
             shadow_epsilon = a['nonbonds'].attrib['epsilon']
             shadow_atom.SetProp('sigma_at_state_0', str(shadow_sigma))
             shadow_atom.SetProp('epsilon_at_state_0', str(shadow_epsilon))
-
 
         # set reference bond parameters in shadow_mol
         for shadow_bond in shadow_mol.GetBonds():
@@ -785,7 +968,6 @@ class _TitratableForceFieldCompiler(object):
                     
                     # set dummy property in shadow_mol on dummy atom
                     dummy_shadow_atom = shadow_mol.GetAtomWithIdx(idx)
-                    print(dummy_shadow_atom)
                     for state in range(len(mols)):
                         if not dummy_shadow_atom.HasProp('atom_type_at_state_' + str(state)):
                             dummy_shadow_atom.SetProp('atom_type_at_state_' + str(state), 'dummy')
@@ -816,41 +998,10 @@ class _TitratableForceFieldCompiler(object):
         Chem.MolToPDBFile(shadow_mol, 'shadow_mol.pdb')
         
         shadow_mol = _State_mol(shadow_mol)
-        shadow_mol._print_state_of_shadow_mol()
 
         self._shadow_clone = shadow_mol
 
-
-    def _generate_pdb_for_state(self):
-        # TODO: looks through mol and removes everything with dummy stats at 
-        # this particular state
-        pass
-        
-
-
-    
-    def _return_all_atom_for_state(self, state:int, returnListOfAtomObjects=False):
-
-        if self._shadow_clone == None:
-            print('States have to be registered!')
-            return None
-        
-        mol = self._shadow_clone
-        
-        for atom in mol.GetAtoms():
-            pass
-
-
-
-    def _return_all_bonds_for_state(self, state:int):
-        pass
-        
-    def _return_all_angles_for_state(self, state:int):
-        pass
-        
-    def _return_all_torsion_angles_for_state(self, state:int):
-
-        pass
+ 
 
     def _complete_state_registry(self):
         """
@@ -872,8 +1023,9 @@ class _TitratableForceFieldCompiler(object):
                 atom.SetProp('charge', mapping_atom_name_to_charge[atom_name]) 
             mol_array.append(mol)
 
+        # generate shadow clone of all mols provided and 
+        # save it in self._shadow_clone
         self._generate_shadow_clone(mol_array)
-
 
         charges = list()
         for index, state in enumerate(self._input_state_data):
@@ -905,10 +1057,19 @@ class _TitratableForceFieldCompiler(object):
         bond_string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}"/>'
 
         for atom in self._shadow_clone.mol.GetAtoms():
-            print(etree.fromstring(atom_string.format(name=atom.GetProp('name'), atom_type=atom.GetProp('atom_type_at_state_0'), charge=atom.GetProp('charge_at_state_0'))))
-            residue.append(etree.fromstring(atom_string.format(name=atom.GetProp('name'), atom_type=atom.GetProp('atom_type_at_state_0'), charge=atom.GetProp('charge_at_state_0'))))
+            name = atom.GetProp('name')
+            atom_type = atom.GetProp('atom_type_at_state_0')
+            charge = atom.GetProp('charge_at_state_0')
+
+            if atom.GetProp('atom_type_at_state_0') == 'dummy':
+                #look in other states until a real atom type is found
+                for state in range(int(self._shadow_clone.mol.GetProp('nr_of_states'))):
+                    if atom.GetProp('atom_type_at_state_'+str(state)) != 'dummy':
+                        atom_type = 'd_'+name+'_'+atom.GetProp('atom_type_at_state_'+str(state))
+                        break
+
+            residue.append(etree.fromstring(atom_string.format(name=name, atom_type=atom_type, charge=charge)))
         for bond in self._shadow_clone.mol.GetBonds():
-            print(etree.fromstring(bond_string.format(atomName1=bond.GetBeginAtom().GetProp('name'), atomName2=bond.GetEndAtom().GetProp('name'))))
             residue.append(etree.fromstring(bond_string.format(atomName1=bond.GetBeginAtom().GetProp('name'), atomName2=bond.GetEndAtom().GetProp('name'))))
 
     def _add_isomers(self):
@@ -917,17 +1078,19 @@ class _TitratableForceFieldCompiler(object):
         """
 
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
+            atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}"/>'
+            bond_string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}" />'
+
             protonsdata = etree.fromstring("<Protons/>")
+            nr_of_states = int(len(self._state_templates))
             protonsdata.attrib['number_of_states'] = str(len(self._state_templates))
             for isomer_index, isomer in enumerate(self._state_templates):
                 isomer_str = str(isomer)
                 isomer_xml = etree.fromstring(isomer_str)
                 for atom in self._shadow_clone.mol.GetAtoms():
-                    print(etree.fromstring(_State_mol._print_xml_atom_string(atom, isomer_index)))
-                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_atom_string(atom, isomer_index)))
+                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_atom_string(atom, isomer_index, nr_of_states, atom_string)))
                 for bond in self._shadow_clone.mol.GetBonds():
-                    print(etree.fromstring(_State_mol._print_xml_bond_string(bond, isomer_index)))
-                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_bond_string(bond, isomer_index)))
+                    isomer_xml.append(etree.fromstring(_State_mol._print_xml_bond_string(bond, isomer_index, nr_of_states, bond_string)))
 
                 protonsdata.append(isomer_xml)
             residue.append(protonsdata)
@@ -936,7 +1099,6 @@ class _TitratableForceFieldCompiler(object):
         """
         Add additional parameters generated by antechamber/parmchk for the individual isomers
         """
-
         added_parameters = list()  # for bookkeeping of duplicates
 
         # All xml sources except the entire gaff.xml
@@ -1019,34 +1181,8 @@ class _TitratableForceFieldCompiler(object):
         for state in self._state_templates:
             state.validate()
 
-
-
-    def _atom_type_match_angle_types(atom_types, angle_parameter):
-        """ Looks through the given xml element angle_parameter and matches atom_types in correct order.
-        Return true if match.
-        """
-
-        #
-        atom1_to_match = atom_types['atom_type1']
-        atom2_to_match = atom_types['atom_type2']
-        atom3_to_match = atom_types['atom_type3']
-
-        atom1_in_parameter_set = angle_parameter.attrib['type1']
-        atom2_in_parameter_set = angle_parameter.attrib['type2']
-        atom3_in_parameter_set = angle_parameter.attrib['type3']
-
-
-        if atom1_to_match == atom1_in_parameter_set and atom2_to_match == atom2_in_parameter_set and atom3_to_match == atom3_in_parameter_set:
-            print(atom1_to_match, ' - ',atom2_to_match, ' - ',atom3_to_match, ' matches', )
-            return True
-        
-        elif atom3_to_match == atom1_in_parameter_set and atom2_to_match == atom2_in_parameter_set and atom1_to_match == atom3_in_parameter_set:
-            print(atom1_to_match, ' - ',atom2_to_match, ' - ',atom3_to_match, ' matches', )
-            return True
-        else:
-            return False
-        
-
+      
+    
     def _retrieve_parameters(self, **kwargs):
         """ Look through FFXML files and find all parameters pertaining to the supplied atom type.
         Returns
@@ -1054,22 +1190,19 @@ class _TitratableForceFieldCompiler(object):
         input : atom_type1:str, atom_type2[opt]:str, atom_type3[opt]:str, atom_type4[opt]:str, 
         """
         
-
+        
         # Storing all the detected parameters here
         params = {}
-
         # Loop through different sources of parameters
-        
-            # Match nonbonded type of the atom in NonbondedForce block
 
         if len(kwargs) == 1:
-            print('Searching for atom parameters for: ', kwargs['atom_type1'])
+            #print('Searching for atom parameters for: ', kwargs['atom_type1'])
             # Loop through different sources of parameters
             for xmltree in self._xml_parameter_trees:
                 # Match the type of the atom in the AtomTypes block
                 for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
                     if atomtype.attrib['name'] == kwargs['atom_type1']:
-                        params['atomtypes'] = atomtype
+                        params['type'] = atomtype
                 for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
                     if nonbond.attrib['type'] == kwargs['atom_type1']:
                         params['nonbonds'] = nonbond
@@ -1077,7 +1210,7 @@ class _TitratableForceFieldCompiler(object):
             return params
 
         elif len(kwargs) == 2:
-            print('Searching for bond parameters for: ', kwargs['atom_type1'], ' - ', kwargs['atom_type2'] )
+            #print('Searching for bond parameters for: ', kwargs['atom_type1'], ' - ', kwargs['atom_type2'] )
             for xmltree in self._xml_parameter_trees:
                 # Match the bonds of the atom in the HarmonicBondForce block
                 for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
@@ -1090,36 +1223,93 @@ class _TitratableForceFieldCompiler(object):
             for xmltree in self._xml_parameter_trees:
                 # Match the angles of the atom in the HarmonicAngleForce block
                 for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
-                    if _atom_type_match_angle_types(kwargs, angle) == True:
-                            params['angles'] = (angle)
-        
-        
+                    angle_atom_types_list = sorted([angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']])
+                    search_list = sorted([kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3']])
+                    # every element that is matched will be removed, if list has zero elements every alement matched
+                    if search_list[0] in angle_atom_types_list[0] and search_list[1] in angle_atom_types_list[1] and search_list[2] in angle_atom_types_list[2]:
+                        params['angle'] = angle
+            return params
+            
         
         elif len(kwargs) == 4:
+            params['proper'] = []
+            params['improper'] = []
+            found_torsion = False 
             for xmltree in self._xml_parameter_trees:
-            
                 # Match proper dihedral of the atom in PeriodicTorsionForce block
                 for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
-                    if atom_type1 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type2 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type3 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']) and atom_type4 in (proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']):
-                        params['propers'].append(proper)
+                    
+                    # create matching list of torsion atom types
+                    torsion_types_list = [proper.attrib['type1'], proper.attrib['type2'], proper.attrib['type3'], proper.attrib['type4']]
+                    search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3'], kwargs['atom_type4']]
+                    # Start with matching the two central atoms of the torsion - this could now apply to either wildcard torsion or specific torsions
+                    if search_list[1] == torsion_types_list[1] and search_list[2] == torsion_types_list[2] :
+                        #print('Found possible matching proper')
+                        #print(search_list)
+                        #print(torsion_types_list)
 
+                        if torsion_types_list[0] == '' and torsion_types_list[3] == '':
+                            # found an unspecific torsion! will use it!
+                            print(torsion_types_list)
+                            params['proper'].append(proper)
+                            print('!!!!!!!!!!!!!!!')
+                            print(proper)
+                            print('!!!!!!!!!!!!!!!')
+                            found_torsion = True
+                        elif search_list[0] == torsion_types_list[0] and search_list[3] == torsion_types_list[3]:
+                            # foudn a specific torsion!
+                            #  
+                            print(torsion_types_list)
+                            params['proper'].append(proper)
+                            print('!!!!!!!!!!!!!!!')
+                            print(proper)
+                            print('!!!!!!!!!!!!!!!')
+                            found_torsion = True
+                        else:
+                            continue
+                            #print('False alarm!')
+                        
+                
                 # Match improper dihedral of the atom in PeriodicTorsionForce block
                 for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
-                    if atom_type1 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and atom_type2 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and  atom_type3 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']) and atom_type4 in (improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']):
-                        params['impropers'].append(improper)
+                    # create matching list of torsion atom types
+                    improp_types_list = [improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']]
+                    search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3'], kwargs['atom_type4']]
+                    # Start with matching the two central atoms of the torsion - this could now apply to either wildcard torsion or specific torsions
+                    if search_list[1] in improp_types_list[1] and search_list[2]:
+                        #print('Found possible matching proper')
+                        #print(search_list)
+                        #print(improp_types_list)
+
+                        if improp_types_list[0] == '' and improp_types_list[3] == '':
+                            # found an unspecific improp! will use it!
+                            #print(improp_types_list)
+                            params['improper'].append(proper)
+                            #print('!!!!!!!!!!!!!!!')
+                            #print(proper)
+                            #print('!!!!!!!!!!!!!!!')
+                        elif search_list[0] == improp_types_list[0] and search_list[3] == improp_types_list[3]:
+                            # foudn a specific torsion!
+                            #  
+                            #print(improp_types_list)
+                            params['improper'].append(proper)
+                            #print('!!!!!!!!!!!!!!!')
+                            #print(proper)
+                            #print('!!!!!!!!!!!!!!!')
+                        else:
+                            #print('False alarm!')
+                            continue
 
 
 
 
 
+            if found_torsion == False:
+                print('Could not find torsion parameter for dummy torsion! Trouble ahead!')
 
-    @staticmethod
-    def _bonds_including_type(atom_type, available_parameters_per_type):
-        bond_params = available_parameters_per_type[atom_type]['bonds']
-        list_of_bond_params = list()
-        for bond_type in bond_params:
-            list_of_bond_params.append(_BondType(bond_type.get('type1'), bond_type.get('type2')))
-        return list_of_bond_params
+            return params
+
+
 
 
 def _make_xml_object(root_name, **attributes):
@@ -1144,3 +1334,54 @@ def _make_xml_object(root_name, **attributes):
         root.set(attribute, value)
 
     return root
+
+def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None, hxml:str=None, delete_old_H:bool=True):
+    """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
+
+    Note that no salt is added. We use saltswap for this.
+
+    Parameters
+    ----------
+    vacuum_file - a single residue in vacuum to add hydrogens to and solvate.
+    output_file - the basename for an output mmCIF file with the solvated system.
+    ffxml - the forcefield file containing the residue definition,
+        optional for CDEHKY amino acids, required for ligands.
+    hxml - the hydrogen definition xml file,
+        optional for CDEHKY amino acids, required for ligands.
+    delete_old_H - delete old hydrogen atoms and add in new ones.
+        Typically necessary for ligands, where hydrogen names will have changed during parameterization to match up
+        different protonation states.
+    """
+
+    # Load relevant template definitions for modeller, forcefield and topology
+    if hxml is not None:
+        app.Modeller.loadHydrogenDefinitions(hxml)
+        
+    if ffxml is not None:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', ffxml, 'tip3p.xml', 'ions_tip3p.xml')
+    else:
+        forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', 'tip3p.xml', 'ions_tip3p.xml')
+
+    pdb = app.PDBFile(vacuum_file)
+    modeller = app.Modeller(pdb.topology, pdb.positions)
+
+    # The system will likely have different hydrogen names.
+    # In this case its easiest to just delete and re-add with the right names based on hydrogen files
+    if delete_old_H:
+        to_delete = [atom for atom in modeller.topology.atoms() if atom.element.symbol in ['H']]
+        modeller.delete(to_delete)
+
+    modeller.addHydrogens(forcefield=forcefield)
+    modeller.addSolvent(forcefield, model='tip3p', padding=1.0 * nanometers, neutralize=False)
+
+    system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME, nonbondedCutoff=1.0 * nanometers,
+                                     constraints=app.HBonds, rigidWater=True,
+                                     ewaldErrorTolerance=0.0005)
+    system.addForce(openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
+    simulation = app.Simulation(modeller.topology, system, GBAOABIntegrator())
+    simulation.context.setPositions(modeller.positions)
+    #simulation.minimizeEnergy()
+
+    app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
+                           open(output_file, 'w'))
+    return simulation
