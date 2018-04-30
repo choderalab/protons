@@ -3,7 +3,7 @@
 
 import netCDF4
 import time
-
+from copy import deepcopy
 
 class SAMSReporter:
     """SamsReporter outputs SAMS data from a ConstantPHCalibration to a netCDF4 file."""
@@ -91,7 +91,7 @@ class SAMSReporter:
         iadapt = self._adaptation
         # The iteration of the protonation state update attempt. [update]
         self._grp['adaptation'][iadapt] = calibration.current_adaptation
-        self._grp['g_k'][iadapt,:] = calibration.last_gk[:]
+        self._grp['g_k'][iadapt,:] = deepcopy(calibration.last_gk[:])
         self._grp['flatness'][iadapt] = calibration.last_dev
 
         self._grp['stage'][0] = calibration.stage

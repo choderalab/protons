@@ -1968,8 +1968,8 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data.logp_ratio_residue_proposal = logp_ratio_residue_proposal
 
         if self.swapper is not None:
-            initial_ion_states = self.swapper.stateVector[:]
-            proposed_ion_states = self.swapper.stateVector[:]            
+            initial_ion_states = copy.deepcopy(self.swapper.stateVector)
+            proposed_ion_states = copy.deepcopy(self.swapper.stateVector)        
             net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
             saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
             
@@ -1983,8 +1983,7 @@ class NCMCProtonDrive(_BaseDrive):
         
 
         try:
-            # Compute work for switching to new protonation states.
-
+            # Compute work for switching to new protonation states.            
             # 0 is the shortcut for instantaneous Monte Carlo
             if self.perturbations_per_trial == 0:
                 # Use instantaneous switching.
@@ -1996,8 +1995,8 @@ class NCMCProtonDrive(_BaseDrive):
                         for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
                             from_parameter = self._ion_parameters[from_ion_state]
                             to_parameter = self._ion_parameters[to_ion_state]
-                            self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 1.0)
-
+                            self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 1.0)                
+                
                 # Push parameter updates to the context
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
