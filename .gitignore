@@ -44,3 +44,8 @@ _build
 .vscode/
 .env
 
+# mypy linting
+.mypy_cache/
+
+# py.test test runner
+.pytest_cache/
