@@ -7,6 +7,7 @@ import numpy as np
 from simtk.openmm import NonbondedForce
 from math import floor
 from simtk.unit import elementary_charge
+from copy import deepcopy
 
 # openmm aliases for water in pdbnames
 # ion names from ions xml files in protons.
@@ -102,7 +103,7 @@ class TitrationReporter:
                 if status != 1:
                     topo_index = residue.atom_indices[iatom]
                     all_stat[topo_index] = False
-        self._grp['atom_status'][iupdate, :] = all_stat[:]
+        self._grp['atom_status'][iupdate, :] = deepcopy(all_stat[:])
         # From simtk.openmm.app.modeller
         self._grp['complex_charge'][iupdate] = self._get_total_charge(self._all_minus_solvent_indices)
 
@@ -112,7 +113,7 @@ class TitrationReporter:
 
         # Store salt identities
         if self._nsaltsites > 0:
-            self._grp['ionic_species'][iupdate,:] = drv.swapper.stateVector[:]
+            self._grp['ionic_species'][iupdate,:] = deepcopy(drv.swapper.stateVector[:])
 
     def _get_total_charge(self, particle_indices):
         """Returns total charge as integer for specified particles."""

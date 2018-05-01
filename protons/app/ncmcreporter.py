@@ -4,6 +4,7 @@
 import netCDF4
 import time
 import numpy as np
+from copy import deepcopy
 
 
 class NCMCReporter:
@@ -195,5 +196,5 @@ class NCMCReporter:
         simulation - ConstantPHSimulation
         """
         if self._cumulative_work_interval > 0:
-            self._grp["perturbation"][:] = self._perturbation_steps[:]
+            self._grp["perturbation"][:] = deepcopy(self._perturbation_steps[:])
         return
