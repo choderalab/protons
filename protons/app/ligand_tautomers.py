@@ -865,8 +865,8 @@ class _TitratableForceFieldCompiler(object):
         unison_mol.SetProp('nr_of_states', str(len(mols)))
         # set reference atom_type in unison_mol
         for unison_atom in unison_mol.GetAtoms():
-            atom_parameters = self._retrieve_parameters(atom_type1=unison_atom_type)
             unison_atom_type = unison_atom.GetProp('type')
+            atom_parameters = self._retrieve_parameters(atom_type1=unison_atom_type)
             unison_atom_charge = unison_atom.GetProp('charge')
             unison_atom.SetProp('atom_type_at_state_0', str(unison_atom_type))
             unison_atom.SetProp('charge_at_state_0', str(unison_atom_charge))
@@ -877,11 +877,11 @@ class _TitratableForceFieldCompiler(object):
 
         # set reference bond parameters in unison_mol
         for unison_bond in unison_mol.GetBonds():
-            a = self._retrieve_parameters(atom_type1=unison_a1_type, atom_type2=unison_a2_type)
             a1 = unison_bond.GetBeginAtom()
             a2 = unison_bond.GetEndAtom()
             unison_a1_type = a1.GetProp('type')
             unison_a2_type = a2.GetProp('type')
+            a = self._retrieve_parameters(atom_type1=unison_a1_type, atom_type2=unison_a2_type)
             unison_length = a['bonds'].attrib['length']
             unison_k = a['bonds'].attrib['k']
             unison_bond.SetProp('bond_length_at_state_0', str(unison_length))
