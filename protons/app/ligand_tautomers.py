@@ -1096,7 +1096,7 @@ class _TitratableForceFieldCompiler(object):
 
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
             atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}" epsilon="{epsilon}" sigma="{sigma}" />'
-            bond_string = '<Bond atomName1="{atomName1}" atomName2="{atomName2}" />'
+            bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
 
             protonsdata = etree.fromstring("<Protons/>")
             nr_of_states = int(len(self._state_templates))
