@@ -475,45 +475,51 @@ class _Unison_States_Mol(object):
     """
 
     @staticmethod
-    def _get_atom_type_or_dummy_atom_type(atom, state, nr_of_states):
-        """
-        Takes a rdkit atom object and state as input and returns a atom type string.
-        The atom type is either a generated, unique and consistend dummy atom type if the 
-        original atom type is 'dummy' or the real atom type
-        Parameters
-        ----------
-        atom : rdAtom
-        state : int
-        nr_of_states : int
-            
-        Returns
-        -------
-        An xml string
-        """
+    def _get_real_atom_type(atom, nr_of_states):
+        for state in range(int(nr_of_states)):
+            atomtype = atom.GetProp('atom_type_at_state_'+str(state))
+            if atomtype.startswith('d_'):
+                continue
+            else:
+                return atomtype
+    @staticmethod
+    def _get_real_torsion_type(a1, a2, a3, a4, nr_of_states):
+        found_real_torsion = False
+        for state in range(int(nr_of_states)):
+            type_a1 = a1.GetProp('atom_type_at_state_'+str(state))
+            type_a2 = a2.GetProp('atom_type_at_state_'+str(state))
+            type_a3 = a3.GetProp('atom_type_at_state_'+str(state))
+            type_a4 = a4.GetProp('atom_type_at_state_'+str(state))
 
-        atomtype = atom.GetProp('atom_type_at_state_'+str(state))
-        if atomtype == 'dummy':
-            # get real atom type
-            for state in range(int(nr_of_states)):
-                atomtype = atom.GetProp('atom_type_at_state_'+str(state))
-                if atomtype != 'dummy':
-                    # what is earliest real atom type?
-                    real_atom_type = atom.GetProp('atom_type_at_state_'+str(state))
-                    atomtype = 'd_'+atom.GetProp('name')+'_'+real_atom_type
-                    return atomtype
-        else:
-            
-            return atomtype
+            if type_a1.startswith('d_') or type_a2.startswith('d_') or type_a3.startswith('d_') or type_a4.startswith('d_') :
+                continue
+            else:
+                found_real_torsion = True
+                #print(found_real_angle, type_a1, type_a2, type_a3)
+                return(found_real_torsion, type_a1, type_a2, type_a3, type_a4)
+
+        return(found_real_torsion, type_a1, type_a2, type_a3, type_a4)
+    
+    @staticmethod
+    def _get_real_angle_type(a1, a2, a3, nr_of_states):
+        found_real_angle = False
+        for state in range(int(nr_of_states)):
+            type_a1 = a1.GetProp('atom_type_at_state_'+str(state))
+            type_a2 = a2.GetProp('atom_type_at_state_'+str(state))
+            type_a3 = a3.GetProp('atom_type_at_state_'+str(state))
+
+            if type_a1.startswith('d_') or type_a2.startswith('d_') or type_a3.startswith('d_') :
+                #print(found_real_angle, type_a1, type_a2, type_a3)
+                continue
+            else:
+                found_real_angle = True
+                #print(found_real_angle, type_a1, type_a2, type_a3)
+                return(found_real_angle, type_a1, type_a2, type_a3)
+
+        return(found_real_angle, type_a1, type_a2, type_a3)
 
     @staticmethod
-    def _get_real_atom_type_at_state(atom, state):
-        atomtype = atom.GetProp('atom_type_at_state_'+str(state))           
-        return atomtype
-
-
-
-    @staticmethod
-    def _print_xml_atom_string(atom, state, nr_of_states, string):
+    def _print_xml_atom_string(atom, state, string):
         """
         Generate a populated xml string. Given an rdkit atom and a state it 
         generates either (depending on the atom type of the atom at the given state)
@@ -523,14 +529,13 @@ class _Unison_States_Mol(object):
         ----------
         atom : rdAtom
         state : int
-        nr_of_states : int
         string : string
             
         Returns
         -------
         A formated xml string
         """
-        atom_type = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(atom, state, nr_of_states)
+        atom_type = atom.GetProp('atom_type_at_state_' + str(state))
         name = atom.GetProp('name')
         atom_charge = atom.GetProp('charge_at_state_'+str(state))
         sigma = atom.GetProp('sigma_at_state_' + str(state))
@@ -584,24 +589,13 @@ class _Unison_States_Mol(object):
 
 
     @staticmethod
-    def _print_xml_bond_string(bond, state, nr_of_states, string):
+    def _print_xml_bond_string(bond, state, string):
         atomName1 = bond.GetBeginAtom().GetProp('name')
         atomName2 = bond.GetEndAtom().GetProp('name')
         atomType1 = bond.GetBeginAtom().GetProp('atom_type_at_state_'+str(state))
         atomType2 = bond.GetEndAtom().GetProp('atom_type_at_state_'+str(state))
-        if atomType1 == 'dummy' or atomType2 == 'dummy':
-            for m_state in range(int(nr_of_states)):
-
-                bond_length = bond.GetProp('bond_length_at_state_' + str(m_state))
-                k = bond.GetProp('k_at_state_' + str(m_state))
-                if str(bond_length) != 'None' and str(k) != 'None':
-                    break
-        else:
-            bond_length = bond.GetProp('bond_length_at_state_' + str(state))
-            k = bond.GetProp('k_at_state_' + str(state))
-
-        atomType1 = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(bond.GetBeginAtom(), state, nr_of_states)
-        atomType2 = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(bond.GetEndAtom(), state, nr_of_states)
+        bond_length = bond.GetProp('bond_length_at_state_' + str(state))
+        k = bond.GetProp('k_at_state_' + str(state))
 
         return string.format(atomName1=atomName1, atomName2=atomName2, atomType1=atomType1, atomType2=atomType2,bond_length=bond_length, k=k)
 
@@ -700,7 +694,6 @@ class _TitratableForceFieldCompiler(object):
 
         # Register the states
         self._complete_state_registry()
-
         # Set the initial state of the template that is read by OpenMM
         self._initialize_forcefield_template()
         # Add isomer specific information
@@ -709,7 +702,6 @@ class _TitratableForceFieldCompiler(object):
         self._append_extra_gaff_types()
         # Append dummy parameters
         self._append_dummy_parameters()
-
         # Remove empty blocks, and unnecessary information in the ffxml tree
         self._sanitize_ffxml()
         return
@@ -717,7 +709,6 @@ class _TitratableForceFieldCompiler(object):
     def _append_dummy_parameters(self):
 
         unison_mol = self._unison_clone.mol
-
         print('Append dummy atoms')
         # Start with adding all dummy atom type definitions
         atom_string = '<Type name="{atom_type}" class="{atom_type}" charge="{charge}" element="{element}" mass="{mass}"/>'
@@ -726,31 +717,12 @@ class _TitratableForceFieldCompiler(object):
         nr_of_states = int(unison_mol.GetProp('nr_of_states'))
         for atom in unison_mol.GetAtoms():
             for state in range(nr_of_states):
-                if atom.GetProp('atom_type_at_state_'+str(state)) == 'dummy':
-                    print('found dummy atom ...')
-                    print(atom.GetProp('name'))
-                    element_string= etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, state, nr_of_states, atom_string ))
-                    nb_element_string= etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, state, nr_of_states, nb_string ))
+                if atom.GetProp('atom_type_at_state_'+str(state)).startswith('d_'):
+                    element_string= etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, state, atom_string ))
+                    nb_element_string= etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, state, nb_string ))
                     self._add_to_output(element_string, "/ForceField/AtomTypes")
                     self._add_to_output(nb_element_string, "/ForceField/NonbondedForce")
         
-            if atom.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(atom):
-                dummy_name = 'D'+ atom.GetProp('name')
-                hydrogen_types = self._return_list_of_atom_types_in_different_states(atom)
-                for h_atom_type in hydrogen_types:
-                    for state in range(nr_of_states):
-                        atom_type = atom.GetProp('atom_type_at_state_' + str(state))
-                        if atom_type == h_atom_type:
-                            print('found HYDROGEN dummy atom ...')
-                            print(dummy_name)
-                            element = atom.GetSymbol()
-                            mass = atom.GetMass()
-
-                            h_atom_type = 'd_'+str(dummy_name) + '_' + str(atom_type) 
-                            element_string= etree.fromstring(atom_string.format(atom_type=h_atom_type, charge='0', element=element, mass=mass))
-                            nb_element_string= etree.fromstring(nb_string.format(atom_type=h_atom_type, sigma='0', epsilon='0', charge='0') )
-                            self._add_to_output(element_string, "/ForceField/AtomTypes")
-                            self._add_to_output(nb_element_string, "/ForceField/NonbondedForce")
            
         print('################################')
 
@@ -759,124 +731,81 @@ class _TitratableForceFieldCompiler(object):
         # get bond parameters
         for bond in unison_mol.GetBonds():
             for state in range(nr_of_states):
-                a1 = bond.GetBeginAtom()
-                a2 = bond.GetEndAtom()
+                a1, a2 = bond.GetBeginAtom(), bond.GetEndAtom()
                 atom_type1 = a1.GetProp('atom_type_at_state_'+str(state))
                 atom_type2 = a2.GetProp('atom_type_at_state_'+str(state))
-                if atom_type1 == 'dummy' or atom_type2 == 'dummy':
+                if atom_type1.startswith('d_') or atom_type2.startswith('d_'):
                     # the bond of interest is identified
-                    element_string= etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, state, nr_of_states, bond_string ))
+                    element_string= etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, state, bond_string ))
                     self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
             
-            if(a1.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a1)):
-                hydrogen_types = self._return_list_of_atom_types_in_different_states (a1)
-                for h_atom_type in hydrogen_types:
-                    for state in range(nr_of_states):
-                        if h_atom_type == a1.getProp('atom_type_at_state_' + str(state)):
-                            print('Special Hydrogen dummy bond = 1')
-                            dummy_atom_type = 'd_D' + str(a1.GetProp('name') + '_' + str(h_atom_type))
-                            d_bond_string = '<Bond type1="' + str(dummy_atom_type) + '" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
-                            element_string= etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, state, nr_of_states, d_bond_string ))
-                            print(element_string)
-                            self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
-
-            if(a2.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a2)):
-                print('Needs dummy bond = 2')
-                hydrogen_types = self._return_list_of_atom_types_in_different_states(a2)
-                print(hydrogen_types)
-                for h_atom_type in hydrogen_types:
-                    for state in range(nr_of_states):
-                        if h_atom_type == a2.GetProp('atom_type_at_state_' + str(state)):
-                            dummy_atom_type = 'd_D' + str(a2.GetProp('name') + '_' + str(h_atom_type))
-                            d_bond_string = '<Bond type1="{atomType1}" type2="'+str(dummy_atom_type)+'" length="{bond_length}" k="{k}"/>'
-                            print('Special Hydrogen dummy bond = 2')
-                            element_string= etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, state, nr_of_states, d_bond_string ))
-                            print(element_string)
-                            self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
-
 
 
         # Now add all dummy ANGLES
         angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"/>'
         # get angles involving dummy atoms
         patt = Chem.MolFromSmarts('*~*~*')
-        if not unison_mol.HasSubstructMatch(patt):
-            print('There are troubles ahead - generic smart pattern could not match any of the bonds in the molecule ...')
+
         angle_list = unison_mol.GetSubstructMatches(patt)
         for state in range(nr_of_states):
             for angle in angle_list:
-                a1 = unison_mol.GetAtomWithIdx(angle[0])
-                a2 = unison_mol.GetAtomWithIdx(angle[1])
-                a3 = unison_mol.GetAtomWithIdx(angle[2])
+                a1, a2, a3 = unison_mol.GetAtomWithIdx(angle[0]), unison_mol.GetAtomWithIdx(angle[1]), unison_mol.GetAtomWithIdx(angle[2])
                 atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
                 atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
                 atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
-                if atomType1 == 'dummy' or atomType2 == 'dummy' or atomType3 == 'dummy':
-                    # identified angle with at least one dummy atom
-                    atomType1_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a1, state, nr_of_states)
-                    atomType2_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a2, state, nr_of_states)
-                    atomType3_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a3, state, nr_of_states)
-                    for state in range(nr_of_states):
-                        # in order to get parameters for this angle we will iterate again over all states 
-                        # until every atomType is real
-                        atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
-                        atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
-                        atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
-
-                        if atomType1 != 'dummy' and atomType2 != 'dummy' and atomType3 != 'dummy':                          
-                            # found real angle
-                            # retrieve reall parameters for this angle
-                            parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
-                            # build xml string with real parameters and dummy atom types
-                            element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, parameter, angle_string))
-                            self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
-                               
+                if atomType1.startswith('d_') or atomType2.startswith('d_') or atomType3.startswith('d_'):
+                    real_angle_bool, real_atomType1, real_atomType2, real_atomType3 = _Unison_States_Mol._get_real_angle_type(a1, a2, a3, nr_of_states)
+                    if real_angle_bool:
+                        parameter = self._retrieve_parameters(atom_type1=real_atomType1, atom_type2=real_atomType2, atom_type3=real_atomType3)
+                        # build xml string with real parameters and dummy atom types
+                        element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string))
+                        self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
+                    else:
+                        # there is no real angle between these atom types (because at each state there are dummy atoms)
+                        print('COuld not find real angle atom types')
+                        print(a1.GetProp('name'), ' - ', a2.GetProp('name'), ' - ', a3.GetProp('name') )
+                        angle_specific_string = angle_string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, angle='0.0', k='0.0')
+                        element_string = etree.fromstring(angle_specific_string)
+                        self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
+                                          
         # Last are all TORSIONS
 
         proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType3}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
         improper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType3}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
         patt = Chem.MolFromSmarts('*~*~*~*')
-        if not unison_mol.HasSubstructMatch(patt):
-            print('There are troubles ahead - generic smart pattern could not match any of the dihedrals in the molecule ...')
+
         dihedrals = unison_mol.GetSubstructMatches(patt)
         for state in range(nr_of_states):
             print('#####################')
             print(state)
             print('#####################')
             for torsion in dihedrals:
-                a1 = unison_mol.GetAtomWithIdx(torsion[0])
-                a2 = unison_mol.GetAtomWithIdx(torsion[1])
-                a3 = unison_mol.GetAtomWithIdx(torsion[2])
-                a4 = unison_mol.GetAtomWithIdx(torsion[3])
-                atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
-                atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
-                atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
-                atomType4 = a4.GetProp('atom_type_at_state_'+str(state))
-                if atomType1 == 'dummy' or atomType2 == 'dummy' or atomType3 == 'dummy' or atomType4 == 'dummy':
-                    atomType1_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a1, state, nr_of_states)
-                    atomType2_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a2, state, nr_of_states)
-                    atomType3_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a3, state, nr_of_states)
-                    atomType4_for_parameter_string = _Unison_States_Mol._get_atom_type_or_dummy_atom_type(a4, state, nr_of_states)
-                    
-                    # now we need to change the state again until every atomType is real
-                    for state in range(nr_of_states):
-                        atomType1 = a1.GetProp('atom_type_at_state_'+str(state))
-                        atomType2 = a2.GetProp('atom_type_at_state_'+str(state))
-                        atomType3 = a3.GetProp('atom_type_at_state_'+str(state))
-                        atomType4 = a4.GetProp('atom_type_at_state_'+str(state))
+                a1, a2, a3, a4 = unison_mol.GetAtomWithIdx(torsion[0]), unison_mol.GetAtomWithIdx(torsion[1]), unison_mol.GetAtomWithIdx(torsion[2]), unison_mol.GetAtomWithIdx(torsion[3])
+                atomType1, atomType2, atomType3, atomType4 = a1.GetProp('atom_type_at_state_'+str(state)), a2.GetProp('atom_type_at_state_'+str(state)), a3.GetProp('atom_type_at_state_'+str(state)), a4.GetProp('atom_type_at_state_'+str(state))
+                
+                if atomType1.startswith('d_') or atomType2.startswith('d_') or atomType3.startswith('d_') or atomType4.startswith('d_'):
+                    element_string= etree.fromstring(proper_string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, atomType4=atomType4, periodicity='0', phase='0', k='0'))
+                    self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
 
-                        if atomType1 != 'dummy' and atomType2 != 'dummy' and atomType3 != 'dummy' and atomType4 != 'dummy':                          
-                            # proper torsion
-                            parameters = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3, atom_type4=atomType4)
-                            
-                            for torsion_variety in parameters:                              
-                                for parameter in parameters[torsion_variety]:
-                                    if torsion_variety == 'proper':
-                                        element_string= etree.fromstring(_Unison_States_Mol._print_xml_torsion_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, atomType4_for_parameter_string, parameter, proper_string))
-                                    else:
-                                        element_string= etree.fromstring(_Unison_States_Mol._print_xml_torsion_string(atomType1_for_parameter_string, atomType2_for_parameter_string, atomType3_for_parameter_string, atomType4_for_parameter_string, parameter, improper_string))
-                                        
-                                    self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
+                    real_torsion_bool, real_atomType1, real_atomType2, real_atomType3, real_atomType4 = _Unison_States_Mol._get_real_torsion_type(a1, a2, a3, a4, nr_of_states)
+                    print('Involves dummy ...')
+                    # print(atomType1, ' - ', atomType2, ' - ', atomType3, ' - ', atomType4)
+                    # print(real_atomType1, ' - ', real_atomType2, ' - ', real_atomType3, ' - ', real_atomType4)
+                    # if real_torsion_bool:
+                    #     parameters = self._retrieve_parameters(atom_type1=real_atomType1, atom_type2=real_atomType2, atom_type3=real_atomType3, atom_type4=real_atomType4)                          
+                    #     for torsion_variety in parameters:                              
+                    #         for parameter in parameters[torsion_variety]:
+                    #             if torsion_variety == 'proper':
+                    #                 element_string= etree.fromstring(_Unison_States_Mol._print_xml_torsion_string(atomType1, atomType2, atomType3, atomType4, parameter, proper_string))
+                    #             else:
+                    #                 element_string= etree.fromstring(_Unison_States_Mol._print_xml_torsion_string(atomType1, atomType2, atomType3, atomType4, parameter, improper_string))                                        
+                    #             self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
+
+                    # else:
+                    #     print('Found torsion between dummy atom types ...')
+                        
+                    #     element_string= etree.fromstring(proper_string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, atomType4=atomType4, periodicity='0', phase='0', k='0'))
+                    #     self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
                             
         return 1
 
@@ -907,11 +836,11 @@ class _TitratableForceFieldCompiler(object):
         # constructs all atom type changes in the atoms relative to a ref
         # comparing everything to a reference state 
         ref = mols[0]     
-        state = 0
         # generate a unison_mol on which all the work is done
         unison_mol = deepcopy(ref)
         # set global mol property on unison_mol
-        unison_mol.SetProp('nr_of_states', str(len(mols)))
+        nr_of_states = len(mols)
+        unison_mol.SetProp('nr_of_states', str(nr_of_states))
         # set reference atom_type in unison_mol
         for unison_atom in unison_mol.GetAtoms():
             unison_atom_type = unison_atom.GetProp('type')
@@ -940,6 +869,7 @@ class _TitratableForceFieldCompiler(object):
 
         # iterate over all molecules except reference mol
         # and set atom parameters
+        state = 0
         for query in mols[1:]:
             state += 1
             # starting by finding all atoms that are the same in ref and query mol
@@ -952,11 +882,7 @@ class _TitratableForceFieldCompiler(object):
                     query_atom_name = query_atom.GetProp('name')
                     query_atom_type = query_atom.GetProp('type')
 
-                    # adding parameters for all atoms  
-                    # since it is not possible to change hydrogen bond length (H bonds are constrained) 
-                    # it is necessary to identify every H-X (X=heavy atom) bond that has to change length 
-                    # and set a dummy atom with the new H-X bond length 
-                
+                    # adding parameters for all atoms                 
                     if (query_atom_name == unison_atom_name):
                         parmeter = self._retrieve_parameters(atom_type1=query_atom_type)                       
                         query_atom_charge = query_atom.GetProp('charge')
@@ -966,9 +892,7 @@ class _TitratableForceFieldCompiler(object):
                         query_sigma = parmeter['nonbonds'].attrib['sigma']
                         query_epsilon = parmeter['nonbonds'].attrib['epsilon']
                         unison_atom.SetProp('sigma_at_state_'+str(state), str(query_sigma))
-                        unison_atom.SetProp('epsilon_at_state_'+str(state), str(query_epsilon))
-                      
-                    
+                        unison_atom.SetProp('epsilon_at_state_'+str(state), str(query_epsilon))               
             
             # set also all bonded terms for all atoms that have the same atom name
             for unison_bond in unison_mol.GetBonds():
@@ -998,30 +922,44 @@ class _TitratableForceFieldCompiler(object):
             # in this state, then this atom will become a dummy atom in this particular state
             for unison_atom in unison_mol.GetAtoms():
                 if not unison_atom.HasProp('atom_type_at_state_'+str(state)):
-                    unison_atom.SetProp('atom_type_at_state_'+str(state), 'dummy')
+                    # this if clause is fullfilled if an atom of the reference molecule 
+                    # will become a dummy at this state 
+                    dummy_atom_type = 'd_'+unison_atom.GetProp('name') + '_' + unison_atom.GetProp('atom_type_at_state_0')
+                    print('Hydrogen present in reference state that will become dummy atom: ', str(unison_atom.GetProp('name')))
+                    unison_atom.SetProp('atom_type_at_state_'+str(state), dummy_atom_type)
                     unison_atom.SetProp('charge_at_state_'+str(state), str(0))
                     unison_atom.SetProp('sigma_at_state_'+str(state), str(0))
                     unison_atom.SetProp('epsilon_at_state_'+str(state), str(0))
+                    
+                    bonded_heavy_atom = self._return_bonded_heavy_atom(unison_atom, unison_mol)
+                    unison_bond = unison_mol.GetBondBetweenAtoms(unison_atom.GetIdx(), bonded_heavy_atom.GetIdx())
+                    query_a1 = unison_bond.GetBeginAtom()
+                    query_a2 = unison_bond.GetEndAtom()
+                    atomType_a1 = _Unison_States_Mol._get_real_atom_type(query_a1, nr_of_states )
+                    atomType_a2 = _Unison_States_Mol._get_real_atom_type(query_a2, nr_of_states )
+                    parameter = self._retrieve_parameters(atom_type1=atomType_a1, atom_type2=atomType_a2)
 
-                    idx = unison_atom.GetIdx()
-
-                    for unison_bond in unison_mol.GetBonds():
-                        if unison_bond.GetBeginAtomIdx() == idx or unison_bond.GetEndAtomIdx() == idx:
-                            unison_bond.SetProp('bond_length_at_state_'+str(state), 'None')
-                            unison_bond.SetProp('k_at_state_'+str(state), 'None')
+                    unison_bond.SetProp('bond_length_at_state_'+str(state), parameter['bonds'].attrib['length'])
+                    unison_bond.SetProp('k_at_state_'+str(state), parameter['bonds'].attrib['k'])
 
 
+        # add dummy atom to unison mol, add dummy bonds and set dummy/atom parameters
+        # bonds are retrieved and stored in newly_added_bonds 
         unison_atom_names = [atom.GetProp('name') for atom in unison_mol.GetAtoms()]       
         state_index = 0
-        for query in mols[1:]:
+        newly_added_bonds = []
 
+        for query in mols[1:]:
             state_index += 1
             for query_atom in query.GetAtoms():
                 # find dummy atom in query mol
                 if query_atom.GetProp('name') not in unison_atom_names:
+                    # get atom that binds to atom in query mol
+                    query_bonded_atom = self._return_bonded_heavy_atom(query_atom, query)
                     # add query atom to the unison mol
-                    idx = unison_mol.AddAtom(query_atom)
-                    unison_atom = unison_mol.GetAtomWithIdx(idx)
+                    unison_atom = Chem.Atom('H')
+                    unison_atom.SetProp('name', str(query_atom.GetProp('name')))
+                    print('Dummy atom that will be added to reference state: ', str(unison_atom.GetProp('name')))
                     # set atom type on newly added unison atom - it has to have the same parameters as 
                     # the query atom at this particular satete
                     parmeter = self._retrieve_parameters(atom_type1=query_atom.GetProp('type'))
@@ -1033,51 +971,163 @@ class _TitratableForceFieldCompiler(object):
                     unison_atom.SetProp('sigma_at_state_'+str(state_index), str(unison_sigma))
                     unison_atom.SetProp('epsilon_at_state_'+str(state_index), str(unison_epsilon))
 
-                    # get atom that binds to dummy atom in query mol
-                    involved_bond = list(query_atom.GetBonds())[0]
-                    other_atom_bound_to_dummy = involved_bond.GetOtherAtom(query_atom)
-                    new_bond_idx = -1
-                    for unison_atom in unison_mol.GetAtoms():
-                        if unison_atom.GetProp('name') == other_atom_bound_to_dummy.GetProp('name'):
-                            new_bond_idx = unison_atom.GetIdx()
-                    
                     # set dummy property in unison_mol on dummy atom
-                    dummy_unison_atom = unison_mol.GetAtomWithIdx(idx)
                     for state in range(len(mols)):
-                        if not dummy_unison_atom.HasProp('atom_type_at_state_' + str(state)):
-                            dummy_unison_atom.SetProp('atom_type_at_state_' + str(state), 'dummy')
-                            dummy_unison_atom.SetProp('charge_at_state_' + str(state), str(0))
-                            dummy_unison_atom.SetProp('sigma_at_state_'+str(state), str(0))
-                            dummy_unison_atom.SetProp('epsilon_at_state_'+str(state), str(0))
+                        if not unison_atom.HasProp('atom_type_at_state_' + str(state)):
+                            dummy_atom_type = 'd_'+unison_atom.GetProp('name') + '_' + unison_atom.GetProp('atom_type_at_state_' + str(state_index))
+                            unison_atom.SetProp('atom_type_at_state_' + str(state), dummy_atom_type)
+                            unison_atom.SetProp('charge_at_state_' + str(state), str(0))
+                            unison_atom.SetProp('sigma_at_state_'+str(state), str(0))
+                            unison_atom.SetProp('epsilon_at_state_'+str(state), str(0))
 
-                    # create dummy-heavy atom bond
-                    unison_mol.AddBond(new_bond_idx,dummy_unison_atom.GetIdx())
-                    # get this bond
-                    for unison_bond in unison_mol.GetBonds():
-                        if unison_bond.GetBeginAtomIdx() == new_bond_idx or unison_bond.GetEndAtomIdx() == new_bond_idx:
-                            for state in range(len(mols)):
-                                a1_type = unison_bond.GetBeginAtom().GetProp('atom_type_at_state_' + str(state))
-                                a2_type = unison_bond.GetEndAtom().GetProp('atom_type_at_state_' + str(state))
-                                if( a1_type == 'dummy' or a2_type == 'dummy'):
-                                    unison_bond.SetProp('bond_length_at_state_' + str(state), 'None')
-                                    unison_bond.SetProp('k_at_state_'+ str(state), 'None')
-                                else:
-                                    bond_param = self._retrieve_parameters(atom_type1=a1_type, atom_type2=a2_type )
-                                    unison_length = bond_param['bonds'].attrib['length']
-                                    unison_k = bond_param['bonds'].attrib['k']
-                                    unison_bond.SetProp('bond_length_at_state_'+str(state), str(unison_length))
-                                    unison_bond.SetProp('k_at_state_'+str(state), str(unison_k))
+                    idx = unison_mol.AddAtom(unison_atom)
 
+                    for atom in unison_mol.GetAtoms():
+                        if query_bonded_atom.GetProp('name') == atom.GetProp('name'):
+                            # create dummy-heavy atom bond
+                            unison_mol.AddBond(atom.GetIdx(),idx)
+                            newly_added_bonds.append(unison_mol.GetBondBetweenAtoms(atom.GetIdx(), idx))
+                            break
+                    
+
+        # creat hydrogen dummy atoms for each hydrogen that changes bond length
+        for atom in unison_mol.GetAtoms():
+            print(atom.GetProp('name'))
+            # CASE 1: hydrogens change atom type
+            if atom.GetSymbol() == 'H' and self._check_if_hydrogen_changes_atom_type(atom, len(mols)):
+                # get all hydrogen atom types
+                hydrogen_atom_types = self._return_all_atom_types_in_different_states(atom, 2)
+
+                # get bonded heavy atom
+                bond = atom.GetBonds()[0]
+                bonded_heavy_atom = bond.GetOtherAtom(atom)
+                b1_idx = bonded_heavy_atom.GetIdx()
+
+                newly_added_atoms = []
+                for unique_atom_type in set(hydrogen_atom_types[1:]):
+                    # for each unique hydrogen atom type (except the original) a new hydrogen atom will be generated
+                    # that is bound to the heavy atom
+                    new_atom = Chem.Atom('H')
+
+                    b2_idx = unison_mol.AddAtom(new_atom)
+                    unison_mol.AddBond(b1_idx, b2_idx)
+                    unison_bond = unison_mol.GetBondBetweenAtoms(b1_idx, b2_idx)
+                    newly_added_bonds.append(unison_bond)
+
+                    unison_atom = unison_mol.GetAtomWithIdx(b2_idx)
+                    # the name of the new hydrogen atom is D+the old name+the unique atom type, e.g. (DH5_ha)
+                    unison_atom.SetProp('name', 'D'+str(atom.GetProp('name')) +'_' + str(unique_atom_type))
+                    newly_added_atoms.append(unison_atom)
+
+                for newly_added_atom in newly_added_atoms:
+                    # for every new atom 
+                    for state, unique_atom_type in enumerate(hydrogen_atom_types):
+                        # find the real atom type it represents
+                        dummy_type = newly_added_atom.GetProp('name').split('_')[-1]
+                        if dummy_type != unique_atom_type:
+                            # at this state it is a dummy atom
+                            dummy_atom_type = 'd_D'+atom.GetProp('name') + '_' + dummy_type
+                            newly_added_atom.SetProp('atom_type_at_state_' + str(state), dummy_atom_type)
+                            newly_added_atom.SetProp('charge_at_state_' + str(state), '0')
+                            newly_added_atom.SetProp('sigma_at_state_'+str(state), '0')
+                            newly_added_atom.SetProp('epsilon_at_state_'+str(state), '0')
+                        else:
+                            # this is the real state
+                            parmeter = self._retrieve_parameters(atom_type1=dummy_type)
+                            unison_sigma = parmeter['nonbonds'].attrib['sigma']
+                            unison_epsilon = parmeter['nonbonds'].attrib['epsilon']
+                            newly_added_atom.SetProp('atom_type_at_state_' + str(state), dummy_type)
+                            newly_added_atom.SetProp('sigma_at_state_'+str(state), unison_sigma)
+                            newly_added_atom.SetProp('epsilon_at_state_'+str(state), unison_epsilon)
+                            newly_added_atom.SetProp('charge_at_state_' + str(state), atom.GetProp('charge_at_state_' + str(state)))
+                
+                # this atom will become a dummy at all other states
+                dummy_atom_type = 'd_'+atom.GetProp('name') + '_' + atom.GetProp('atom_type_at_state_' + str(0))
+                for state in range(1, len(mols)):
+                    atom.SetProp('atom_type_at_state_' + str(state), dummy_atom_type)
+                    atom.SetProp('charge_at_state_' + str(state), '0')
+                    atom.SetProp('sigma_at_state_'+str(state), '0')
+                    atom.SetProp('epsilon_at_state_'+str(state), '0')
+                    bonded_atom = self._return_bonded_heavy_atom(atom, unison_mol)
+                    bond = unison_mol.GetBondBetweenAtoms(bonded_atom.GetIdx(), atom.GetIdx())
+                    parameter = self._retrieve_parameters(atom_type1=bonded_atom.GetProp('atom_type_at_state_0'), atom_type2=atom.GetProp('atom_type_at_state_0'))
+
+                    bond.SetProp('bond_length_at_state_'+str(state), parameter['bonds'].attrib['length'])
+                    bond.SetProp('k_at_state_'+str(state), parameter['bonds'].attrib['k'])
+
+
+            # CASE 2: heavy atom changes atom type
+            elif atom.GetSymbol() == 'H' and self._check_if_bond_heavy_atom_changes_atom_type(atom, unison_mol, len(mols)):               
+
+                # generate for each atom type a dummy atom (except for the first, since this is the already present hydrogen atom)
+                for real_state, atom_type in enumerate(self._return_all_bonded_heavy_atom_types(atom, unison_mol, len(mols))[1:]):
+
+                    new_dummy_name = 'D' + atom.GetProp('name') + '_' + atom_type
+                    dummy_atom = Chem.Atom('H')
+                    dummy_atom.SetProp('name', new_dummy_name)
+                    bonded_idx = self._return_bonded_heavy_atom(atom, unison_mol).GetIdx()
+                    dummy_atom_type = 'd_' + atom.GetProp('name') + '_' + atom_type
+
+                    # real atom type does not change
+                    dummy_atom.SetProp('atom_type_at_state_' + str(real_state+1), atom.GetProp('atom_type_at_state_0'))
+                    dummy_atom.SetProp('charge_at_state_' + str(real_state+1), atom.GetProp('charge_at_state_' + str(real_state + 1)))
+                    dummy_atom.SetProp('sigma_at_state_'+str(real_state+1), atom.GetProp('sigma_at_state_' + str(real_state + 1)))
+                    dummy_atom.SetProp('epsilon_at_state_'+str(real_state+1), atom.GetProp('epsilon_at_state_' + str(real_state + 1)))
+
+                    # dummy type for all others
+                    dummy_atom_type = 'd_D' + atom.GetProp('name') + '_' + atom_type
+                    for state in range(len(mols)):
+                        if not dummy_atom.HasProp('atom_type_at_state_' + str(state)):
+                            dummy_atom.SetProp('atom_type_at_state_' + str(state), dummy_atom_type)
+                            dummy_atom.SetProp('charge_at_state_' + str(state), str(0))
+                            dummy_atom.SetProp('sigma_at_state_'+str(state), str(0))
+                            dummy_atom.SetProp('epsilon_at_state_'+str(state), str(0))
+
+                    idx = unison_mol.AddAtom(dummy_atom)
+                    bond_idx = unison_mol.AddBond(idx, bonded_idx)                    
+                    newly_added_bonds.append(unison_mol.GetBondWithIdx(bond_idx-1))
+
+                # for the real atom correct atom and bond parameters
+                dummy_atom_type = 'd_' + atom.GetProp('name') + '_' + atom_type
+
+                for state in range(1, nr_of_states):
+                    atom.SetProp('atom_type_at_state_' + str(state), dummy_atom_type)
+                    atom.SetProp('charge_at_state_' + str(state), '0')
+                    atom.SetProp('sigma_at_state_'+str(state), '0')
+                    atom.SetProp('epsilon_at_state_'+str(state), '0')
+                    bonded_atom = self._return_bonded_heavy_atom(atom, unison_mol)
+                    bond = unison_mol.GetBondBetweenAtoms(bonded_atom.GetIdx(), atom.GetIdx())
+                    parameter = self._retrieve_parameters(atom_type1=bonded_atom.GetProp('atom_type_at_state_0'), atom_type2=atom.GetProp('atom_type_at_state_0'))
+
+                    bond.SetProp('bond_length_at_state_'+str(state), parameter['bonds'].attrib['length'])
+                    bond.SetProp('k_at_state_'+str(state), parameter['bonds'].attrib['k'])
+
+      
+        # set the parameters for all new bonds
+        for bond in newly_added_bonds:
+            a1 = bond.GetBeginAtom()
+            a2 = bond.GetEndAtom()
+            print('Newly added bond ... between: ', a1.GetProp('name'), a2.GetProp('name'))
+            for state in range(len(mols)):
+                atomType_a1 = a1.GetProp('atom_type_at_state_' + str(state))
+                atomType_a2 = a2.GetProp('atom_type_at_state_' + str(state))
+                if atomType_a1.startswith('d_') or atomType_a2.startswith('d_'):
+                    continue
+                else:
+                    parameter = self._retrieve_parameters(atom_type1=atomType_a1, atom_type2=atomType_a2)
+            for state in range(len(mols)):
+                bond.SetProp('bond_length_at_state_'+str(state), parameter['bonds'].attrib['length'])
+                bond.SetProp('k_at_state_'+str(state), parameter['bonds'].attrib['k'])
 
 
         # write out the unison mol as pdb to check sanity
         Chem.MolToPDBFile(unison_mol, 'unison_mol.pdb')
         unison_mol = _Unison_States_Mol(unison_mol)
+        unison_mol._print_state_of_unison_mol()
 
         self._unison_clone = unison_mol
 
  
-
     def _complete_state_registry(self):
         """
         Store all the properties that are specific to each state
@@ -1102,6 +1152,13 @@ class _TitratableForceFieldCompiler(object):
         # save it in self._unison_clone
         self._generate_unison_clone(mol_array)
 
+        for bond in self._unison_clone.mol.GetBonds():
+            a1 = bond.GetBeginAtom()
+            a2 = bond.GetEndAtom()
+            print(a1.GetProp('name') ,' - ', a2.GetProp('name'))
+            
+            
+
         charges = list()
         for index, state in enumerate(self._input_state_data):
             net_charge = state['net_charge']
@@ -1122,35 +1179,67 @@ class _TitratableForceFieldCompiler(object):
         return
 
     
-    def _return_list_of_atom_types_in_different_states(self, atom):
+    def _return_all_atom_types_in_different_states(self, atom, nr_of_states):
 
-        unison_mol = self._unison_clone.mol
-        nr_of_states = int(unison_mol.GetProp('nr_of_states'))
         hydrogen_type = []
         for state in range(nr_of_states):
-            if(atom.GetProp('atom_type_at_state_' + str(state)) == 'dummy'):
-                continue
-            else:
-                hydrogen_type.append(atom.GetProp('atom_type_at_state_' + str(state)))
+            hydrogen_type.append(atom.GetProp('atom_type_at_state_' + str(state)))
 
-
-        hydrogen_type = list(dict.fromkeys(hydrogen_type))[1:]
         return hydrogen_type
 
+    def _return_all_bonded_heavy_atom_types(self, atom, mol, nr_of_states):
+        
+        heavy_atom_types = []
+        heavy_atom_type_changes_flag = False
+        for bond in mol.GetBonds():
+            if atom.GetProp('name') == bond.GetBeginAtom().GetProp('name') or atom.GetProp('name') == bond.GetEndAtom().GetProp('name'):
+                heavy_atom = bond.GetOtherAtom(atom)
+
+        for state in range(nr_of_states):
+            heavy_atom_types.append(heavy_atom.GetProp('atom_type_at_state_' + str(state)))
+       
+        return heavy_atom_types
+
+    def _return_bonded_heavy_atom(self, atom, mol):
+        
+        for bond in mol.GetBonds():
+            if atom.GetProp('name') == bond.GetBeginAtom().GetProp('name') or atom.GetProp('name') == bond.GetEndAtom().GetProp('name'):
+                heavy_atom = bond.GetOtherAtom(atom)
+                return heavy_atom
+        
+        print('WARNING! COULD NOT RETURN HEAVY ATOM!')
 
 
-    def _check_if_hydrogen_needs_dummy_partners(self, atom):
+    def _check_if_bond_heavy_atom_changes_atom_type(self, atom, mol, nr_of_states):
+        
+        heavy_atom_types = []
+        heavy_atom_type_changes_flag = False
+        for bond in mol.GetBonds():
+            if atom.GetProp('name') == bond.GetBeginAtom().GetProp('name') or atom.GetProp('name') == bond.GetEndAtom().GetProp('name'):
+                heavy_atom = bond.GetOtherAtom(atom)
+
+        for state in range(nr_of_states):
+            heavy_atom_types.append(heavy_atom.GetProp('atom_type_at_state_' + str(state)))
+            if atom.GetProp('atom_type_at_state_' + str(state)).startswith('d_'):
+                return False
+
+        if len(set(heavy_atom_types)) != 1:
+            heavy_atom_type_changes_flag = True
+        
+        return heavy_atom_type_changes_flag
+         
+
+    def _check_if_hydrogen_changes_atom_type(self, atom, nr_of_states):
 
         # this method checks if the hydrogen atom type 
         # changes in the different states for a particular 
         # hydorgen
         # dummy atom types are excluded from this check
-        unison_mol = self._unison_clone.mol
-        nr_of_states = int(unison_mol.GetProp('nr_of_states'))
+
         hydrogen_type_changes_flag = False
         hydrogen_type = []
         for state in range(nr_of_states):
-            if(atom.GetProp('atom_type_at_state_' + str(state)) == 'dummy'):
+            if(atom.GetProp('atom_type_at_state_' + str(state)).startswith('d_')):
                 continue
             else:
                 hydrogen_type.append(atom.GetProp('atom_type_at_state_' + str(state)))
@@ -1160,21 +1249,7 @@ class _TitratableForceFieldCompiler(object):
             hydrogen_type_changes_flag = True
         
         return hydrogen_type_changes_flag
-
-    def _add_special_hydrogen_atom_dummies(self, atom, atom_string):
-        name = atom.GetProp('name')
-
-        dummy_name = 'D'+name
-        hydrogen_types = self._return_list_of_atom_types_in_different_states(atom)
-        for h_atom_type in hydrogen_types:
-            for state in range(len(self._state_templates)):
-                atom_type = atom.GetProp('atom_type_at_state_' + str(state))
-                if atom_type == h_atom_type: 
-                    charge = atom.GetProp('charge_at_state_' + str(state))
-                    h_atom_type = 'd_'+str(dummy_name) + '_' + str(atom_type)
-                    return atom_string.format(name=dummy_name, atom_type=h_atom_type, charge='0')
-                    
-
+                  
 
 
     def _initialize_forcefield_template(self):
@@ -1191,10 +1266,7 @@ class _TitratableForceFieldCompiler(object):
             name = atom.GetProp('name')
             atom_type = atom.GetProp('atom_type_at_state_0')
             charge = atom.GetProp('charge_at_state_0')
-            atom_type = self._unison_clone._get_atom_type_or_dummy_atom_type(atom, 0, int(self._unison_clone.mol.GetProp('nr_of_states')))
             residue.append(etree.fromstring(atom_string.format(name=name, atom_type=atom_type, charge=charge)))
-            if atom.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(atom):               
-                residue.append(etree.fromstring(self._add_special_hydrogen_atom_dummies(atom, atom_string)))
   
         
         for bond in self._unison_clone.mol.GetBonds():
@@ -1202,55 +1274,18 @@ class _TitratableForceFieldCompiler(object):
             a2 = bond.GetEndAtom()
             residue.append(etree.fromstring(bond_string.format(atomName1=a1.GetProp('name'), atomName2=a2.GetProp('name'))))
 
-            if(a1.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a1)):
-                dummy_name = 'D'+a1.GetProp('name')
-                residue.append(etree.fromstring(bond_string.format(atomName1=dummy_name, atomName2=a2.GetProp('name'))))
-            if(a2.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a2)):
-                dummy_name = 'D'+a2.GetProp('name')
-                residue.append(etree.fromstring(bond_string.format(atomName1=a1.GetProp('name'), atomName2=dummy_name)))
-
-
-    def _add_specific_hydrogen_atom_dummies(self, atom, isomer_index, atom_string):
-        name = atom.GetProp('name')
-        dummy_name = 'D'+name
-        atom_type = atom.GetProp('atom_type_at_state_' + str(isomer_index))
-        charge = atom.GetProp('charge_at_state_' + str(isomer_index))
-        h_atom_type = 'd_'+str(dummy_name) + '_' + str(atom_type)
-        epsilon = atom.GetProp('epsilon_at_state_' + str(isomer_index))
-        sigma = atom.GetProp('sigma_at_state_' + str(isomer_index))
-        return atom_string.format(name=dummy_name, atom_type=h_atom_type, charge=charge, epsilon=epsilon, sigma=sigma)
-
-    def _add_specific_hydrogen_bond_dummies(self, bond, isomer_index, bond_string):
-        a1 = bond.GetBeginAtom()
-        a2 = bond.GetEndAtom()
-        if (a1.GetSymbol() == 'H'):
-            dummy_name = 'D' +  a1.GetProp('name')
-            atom_type = a1.GetProp('atom_type_at_state_' + str(isomer_index))
-            bond_length = bond.GetProp('bond_length_at_state_' + str(isomer_index))
-            bond_k = bond.GetProp('k_at_state_' + str(isomer_index))
-            h_atom_type = 'd_'+str(dummy_name) + '_' + str(atom_type)
-            atomType2 = a2.GetProp('atom_type_at_state_' + str(isomer_index))
-            return bond_string.format(atomType1=h_atom_type, atomType2=atomType2, length=bond_length, k=bond_k)
-        else:
-            dummy_name = 'D' +  a2.GetProp('name')
-            atom_type = a2.GetProp('atom_type_at_state_' + str(isomer_index))
-            bond_length = bond.GetProp('bond_length_at_state_' + str(isomer_index))
-            bond_k = bond.GetProp('k_at_state_' + str(isomer_index))
-            h_atom_type = 'd_'+str(dummy_name) + '_' + str(atom_type)
-            atomType1 = a1.GetProp('atom_type_at_state_' + str(isomer_index))
-            return bond_string.format(atomType2=h_atom_type, atomType1=atomType1, bond_length=bond_length, k=bond_k)
-
-
-
-
     def _add_isomers(self):
         """
         Add all the isomer specific data to the xml template.
         """
 
+        patt = Chem.MolFromSmarts('*~*~*')
+        unison_mol = self._unison_clone.mol
+        angle_list = unison_mol.GetSubstructMatches(patt)
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
             atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}" epsilon="{epsilon}" sigma="{sigma}" />'
             bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
+            angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"/>'
 
             protonsdata = etree.fromstring("<Protons/>")
             nr_of_states = int(len(self._state_templates))
@@ -1258,18 +1293,24 @@ class _TitratableForceFieldCompiler(object):
             for isomer_index, isomer in enumerate(self._state_templates):
                 isomer_str = str(isomer)
                 isomer_xml = etree.fromstring(isomer_str)
-                for atom in self._unison_clone.mol.GetAtoms():
-                    isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, isomer_index, nr_of_states, atom_string)))
-                    if atom.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(atom):
-                        isomer_xml.append(etree.fromstring(self._add_specific_hydrogen_atom_dummies(atom, isomer_index,  atom_string)))               
+                for atom in unison_mol.GetAtoms():
+                    isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_atom_string(atom, isomer_index, atom_string)))
+
+                for bond in unison_mol.GetBonds():
+                    isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, isomer_index, bond_string)))
 
                 
-                for bond in self._unison_clone.mol.GetBonds():
-                    isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, isomer_index, nr_of_states, bond_string)))
-                    a1 = bond.GetBeginAtom()
-                    a2 = bond.GetEndAtom()
-                    if (a1.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a1)) or (a2.GetSymbol() == 'H' and self._check_if_hydrogen_needs_dummy_partners(a2)):
-                        isomer_xml.append(etree.fromstring(self._add_specific_hydrogen_bond_dummies(bond, isomer_index,  bond_string)))             
+                # for angle in angle_list:
+                #     a1 = unison_mol.GetAtomWithIdx(angle[0])
+                #     a2 = unison_mol.GetAtomWithIdx(angle[1])
+                #     a3 = unison_mol.GetAtomWithIdx(angle[2])
+                #     atomType1 = a1.GetProp('atom_type_at_state_'+str(isomer_index))
+                #     atomType2 = a2.GetProp('atom_type_at_state_'+str(isomer_index))
+                #     atomType3 = a3.GetProp('atom_type_at_state_'+str(isomer_index))
+                #     print('Angle between: ', atomType1, atomType2, atomType3)
+                #     parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
+                #     isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string)))
+
 
 
                 protonsdata.append(isomer_xml)
@@ -1427,6 +1468,7 @@ class _TitratableForceFieldCompiler(object):
                         if torsion_types_list[0] == '' and torsion_types_list[3] == '':
                             params['proper'].append(proper)
                             found_torsion = True
+
                         elif search_list[0] == torsion_types_list[0] and search_list[3] == torsion_types_list[3]:
                             # foudn a specific torsion!
                             #  
@@ -1434,7 +1476,21 @@ class _TitratableForceFieldCompiler(object):
                             found_torsion = True
                         else:
                             continue
-                        
+                            
+                    elif search_list[2] == torsion_types_list[1] and search_list[1] == torsion_types_list[2] :
+
+                        if torsion_types_list[0] == '' and torsion_types_list[3] == '':
+                            params['proper'].append(proper)
+                            found_torsion = True
+
+                        elif search_list[3] == torsion_types_list[0] and search_list[0] == torsion_types_list[3]:
+                            # foudn a specific torsion!
+                            #  
+                            params['proper'].append(proper)
+                            found_torsion = True
+                        else:
+                            continue
+                         
                 
                 # Match improper dihedral of the atom in PeriodicTorsionForce block
                 for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
@@ -1442,7 +1498,18 @@ class _TitratableForceFieldCompiler(object):
                     improp_types_list = [improper.attrib['type1'], improper.attrib['type2'], improper.attrib['type3'], improper.attrib['type4']]
                     search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3'], kwargs['atom_type4']]
                     # Start with matching the two central atoms of the torsion - this could now apply to either wildcard torsion or specific torsions
-                    if search_list[1] in improp_types_list[1] and search_list[2]:
+                    if search_list[1] ==  improp_types_list[1] and search_list[2] ==  improp_types_list[2]:
+
+                        if improp_types_list[0] == '' and improp_types_list[3] == '':
+                            # found an unspecific improp! will use it!
+                            params['improper'].append(proper)
+                        elif search_list[0] == improp_types_list[0] and search_list[3] == improp_types_list[3]:
+                            # foudn a specific torsion!
+                            params['improper'].append(proper)
+                        else:
+                            continue
+
+                    elif search_list[2] ==  improp_types_list[1] and search_list[1] ==  improp_types_list[2]:
 
                         if improp_types_list[0] == '' and improp_types_list[3] == '':
                             # found an unspecific improp! will use it!
@@ -1456,6 +1523,7 @@ class _TitratableForceFieldCompiler(object):
 
             if found_torsion == False:
                 print('Could not find torsion parameter for dummy torsion! Trouble ahead!')
+                print('Looking for: ', search_list)
 
             return params
 
