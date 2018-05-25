@@ -1688,7 +1688,7 @@ class NCMCProtonDrive(_BaseDrive):
                 # Update forces using appropriately blended parameters
 
                 for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
-                    atom = {key: atom_initial[key] for key in ['atom_index']}
+                    atom = {key: atom_initial[key] for key i n ['atom_index']}
 
                     if force_classname == 'NonbondedForce':
                         # TODO : if we ever change LJ parameters, we need to look into softcore potentials
@@ -1722,7 +1722,7 @@ class NCMCProtonDrive(_BaseDrive):
                     
             elif force_classname == 'HarmonicBondForce':
 
-                
+
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
