@@ -1676,6 +1676,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Retrieve cached force parameters fro this titration state.
         cache_initial = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final = self.titrationGroups[titration_group_index][final_titration_state_index].forces
+        titration_group = self.titrationGroups[titration_group_index]
 
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
@@ -1688,7 +1689,7 @@ class NCMCProtonDrive(_BaseDrive):
                 # Update forces using appropriately blended parameters
 
                 for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
-                    atom = {key: atom_initial[key] for key i n ['atom_index']}
+                    atom = {key: atom_initial[key] for key in ['atom_index']}
 
                     if force_classname == 'NonbondedForce':
                         # TODO : if we ever change LJ parameters, we need to look into softcore potentials
@@ -1721,9 +1722,21 @@ class NCMCProtonDrive(_BaseDrive):
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
                     
             elif force_classname == 'HarmonicBondForce':
+                for bond_index, (bond_initial, bond_final) in enumerate(zip(cache_initial[force_index]['bonds'], cache_final[force_index]['bonds'])):
+                    bond = dict()
+                    for parameter_name in ['length', 'k']:
+                        new_parameter = (1.0 - fractional_titration_state) * float(bond_initial[parameter_name]) + fractional_titration_state * float(bond_final[parameter_name])
+                        bond[parameter_name] = new_parameter 
 
+                        if bond_initial[parameter_name] != bond_final[parameter_name]:
+                            print('Updating bond between: ', bond_initial['a1'], ':', bond_initial['a2'])
+                            print('bond initial: ',bond_initial[parameter_name])
+                            print('current state: ', str(bond[parameter_name]))
+                            print('bond final: ', bond_final[parameter_name])
+                    
 
-
+                    force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], bond['length'], bond['k'])
+                        
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
 
@@ -1738,10 +1751,15 @@ class NCMCProtonDrive(_BaseDrive):
         titration_group_index : int
             Index of the group
         titration_state_index : int
-            Index of the titration state of the group
+        titration_group = self.titrationGroups[titration_group_index]
+ion state of the group
+        titration_group = self.titrationGroups[titration_group_index]
 
-        Notes
-        -----
+        titration_group = self.titrationGroups[titration_group_index]
+
+        titration_group = self.titrationGroups[titration_group_index]
+
+        titration_group = self.titrationGroups[titration_group_index]
 
         Call this function to set up the 'forces' information for a single titration state.
         Every titration state has a list called forces, which stores parameters for all forces that need updating.
@@ -1753,16 +1771,25 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
 
+        print('#########################')
+        print('defined in topology ....')
+        print('Titration group index', titration_group_index)
+        print('titration state index', titration_state_index)
+        print('#########################')
+
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index][titration_state_index]
         atom_indices = titration_group.atom_indices
         atom_type_by_atom_index = dict(zip(atom_indices, titration_state.atom_type))
-        # get parameter for each variable at titration state
+        atom_name_by_atom_index = dict(zip(atom_indices, titration_state.atom_name))
+
+        for idx in sorted(atom_type_by_atom_index):
+            print('Index: ', idx, 'Name:', atom_name_by_atom_index[idx], ' Type: ', atom_type_by_atom_index[idx])
+
+
         charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
         epsilon_by_atom_index = dict(zip(atom_indices, titration_state.epsilon))
         sigma_by_atom_index = dict(zip(atom_indices, titration_state.sigma))
-        atom_type_by_atom_index = dict(zip(atom_indices, titration_state.atom_type))
-
         # Store the parameters per individual force
         f_params = list()
         for force_index, force in enumerate(self.forces_to_update):
@@ -1773,7 +1800,6 @@ class NCMCProtonDrive(_BaseDrive):
             # update atom parameters
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 f_params.append(dict(atoms=list()))
-
                 for atom_index in atom_indices:
                     if force_classname == 'GBSAOBCForce':
                         current_parameters = {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
@@ -1787,34 +1813,24 @@ class NCMCProtonDrive(_BaseDrive):
                         f_params[force_index]['atoms'][-1]['epsilon'] = epsilon_by_atom_index[atom_index]
                         f_params[force_index]['atoms'][-1]['sigma'] = sigma_by_atom_index[atom_index]
                         f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
-                        if f_params[force_index]['atoms'][-1]['epsilon'] != epsilon_by_atom_index[atom_index]:
-                            print('Changing epsilon ... ')
-                        if f_params[force_index]['atoms'][-1]['sigma'] != sigma_by_atom_index[atom_index]:
-                            print('Changing sigma ...')                                     
-          
 
             elif force_classname == 'HarmonicBondForce':
                 f_params.append(dict(bonds=list()))
 
+                # only heavy atom - heavy atom bonds are regarded
                 for bond_index in range(force.getNumBonds()):
-                    # get index of bonded partners
-                    a1, a2, l, k = force.getBondParameters(bond_index)                    
+                    a1, a2, l, k = force.getBondParameters(bond_index)     
                     # get particular titration state parameters
-                    l, k = titration_state.bonded_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2]]))]
+                    new_l, new_k = titration_state.bonded_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2]]))]
+
                     # update current parameters with particular titration state
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'length', 'k'], map(strip_in_unit_system, force.getBondParameters(bond_index)))}
                     f_params[force_index]['bonds'].append(current_parameters)
-                    f_params[force_index]['bonds'][-1]['length'] = l
-                    f_params[force_index]['bonds'][-1]['k'] = k
-                    if f_params[force_index]['bonds'][-1]['length'] != l:
-                        print('Changing length ... ')
-                    if f_params[force_index]['bonds'][-1]['k'] != k:
-                        print('Changing k ...')                                     
+                    f_params[force_index]['bonds'][-1]['length'] = float(new_l)
+                    f_params[force_index]['bonds'][-1]['k'] = float(new_k)
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
-
-            #print(f_params)
 
             # Update exceptions
             # TODO: Handle Custom forces.
@@ -2635,7 +2651,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             # Define titration states.
 
-            print(' -- Parameters for the different states')
+            print(' -- Parameters for the different states as defined in ffxml')
             # mw entry point!
                 
             for state_block in protons_block.xpath("State"):
@@ -2650,9 +2666,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 atom_epsilon = []
                 atom_sigma = []
                 bonded_par = dict()
-                atom_id_atom_type_map = dict()
                 atom_type = []
                 atom_name = []
+                print('ATOMS:')
                 for index, atom in enumerate(state_block.xpath("Atom")):
                     print(index, ':', atom.get("name"), atom.get("type"), atom.get("charge"), atom.get("epsilon"), atom.get("sigma"))
                     atom_charges.append(float(atom.get("charge")))
@@ -2661,8 +2677,10 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     atom_type.append(atom.get('type'))
                     atom_name.append(atom.get('name'))
 
+                print('BONDS')
                 # Extract relative energy for this titration state.
                 for index, bond in enumerate(state_block.xpath("Bond")):
+                    print(index, ':', bond.get('type1'), bond.get('type2'))
                     key = tuple(sorted([bond.get('type1'), bond.get('type2')]))
                     bond_length = (bond.get('length'))
                     bond_k = (bond.get('k'))
