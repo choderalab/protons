@@ -1299,17 +1299,35 @@ class _TitratableForceFieldCompiler(object):
                 for bond in unison_mol.GetBonds():
                     isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_bond_string(bond, isomer_index, bond_string)))
 
-                
-                # for angle in angle_list:
-                #     a1 = unison_mol.GetAtomWithIdx(angle[0])
-                #     a2 = unison_mol.GetAtomWithIdx(angle[1])
-                #     a3 = unison_mol.GetAtomWithIdx(angle[2])
-                #     atomType1 = a1.GetProp('atom_type_at_state_'+str(isomer_index))
-                #     atomType2 = a2.GetProp('atom_type_at_state_'+str(isomer_index))
-                #     atomType3 = a3.GetProp('atom_type_at_state_'+str(isomer_index))
-                #     print('Angle between: ', atomType1, atomType2, atomType3)
-                #     parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
-                #     isomer_xml.append(etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string)))
+                for angle in angle_list:
+                    a1 = unison_mol.GetAtomWithIdx(angle[0])
+                    a2 = unison_mol.GetAtomWithIdx(angle[1])
+                    a3 = unison_mol.GetAtomWithIdx(angle[2])
+                    atomType1 = a1.GetProp('atom_type_at_state_'+str(isomer_index))
+                    atomType2 = a2.GetProp('atom_type_at_state_'+str(isomer_index))
+                    atomType3 = a3.GetProp('atom_type_at_state_'+str(isomer_index))
+                    print('Angle between: ', atomType1, atomType2, atomType3)
+                    if atomType1.startswith('d_') or atomType2.startswith('d_') or atomType3.startswith('d_'):
+                        real_angle_bool, real_atomType1, real_atomType2, real_atomType3 = _Unison_States_Mol._get_real_angle_type(a1, a2, a3, nr_of_states)
+                        if real_angle_bool:
+                            parameter = self._retrieve_parameters(atom_type1=real_atomType1, atom_type2=real_atomType2, atom_type3=real_atomType3)
+                            # build xml string with real parameters and dummy atom types
+                            element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string))
+                            isomer_xml.append(element_string)
+                        else:
+                            # there is no real angle between these atom types (because at each state there are dummy atoms)
+                            print('COuld not find real angle atom types')
+                            print(a1.GetProp('name'), ' - ', a2.GetProp('name'), ' - ', a3.GetProp('name') )
+                            angle_specific_string = angle_string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, angle='0.0', k='0.0')
+                            element_string = etree.fromstring(angle_specific_string)
+                            isomer_xml.append(element_string)
+
+                    else:
+                        parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
+                        # build xml string with real parameters and dummy atom types
+                        element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string))
+                        isomer_xml.append(element_string)
+                        
 
 
 
