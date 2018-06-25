@@ -1847,7 +1847,14 @@ class NCMCProtonDrive(_BaseDrive):
                 for angle_index in range(force.getNumAngles()):
                     a1, a2, a3, angle_value, k = force.getAngleParameters(angle_index)
                     # get particular titration state parameters
+                    print('########################')
+                    print(a1, a2, a3)
+                    print(atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3])
+
+                    print('Angle from openMM system: ',angle_value, k)
+
                     new_angle_value, new_k = titration_state.angle_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3]]))]
+                    print('Angle from ffxml:         ', new_angle_value, new_k)
 
                     # update current parameters with particular titration state
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'angle', 'k'], map(strip_in_unit_system, force.getAngleParameters(angle_index)))}

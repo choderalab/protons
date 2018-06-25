@@ -1326,6 +1326,8 @@ class _TitratableForceFieldCompiler(object):
                             # build xml string with real parameters and dummy atom types
                             element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string))
                             isomer_xml.append(element_string)
+                            print(parameter['angle'].attrib)
+
                         else:
                             # there is no real angle between these atom types (because at each state there are dummy atoms)
                             print('Could not find real angle atom types')
@@ -1336,6 +1338,7 @@ class _TitratableForceFieldCompiler(object):
 
                     else:
                         parameter = self._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
+                        print(parameter['angle'].attrib)
                         # build xml string with real parameters and dummy atom types
                         element_string= etree.fromstring(_Unison_States_Mol._print_xml_angle_string(atomType1, atomType2, atomType3, parameter, angle_string))
                         isomer_xml.append(element_string)
@@ -1354,8 +1357,9 @@ class _TitratableForceFieldCompiler(object):
                     atomType2 = a2.GetProp('atom_type_at_state_'+str(isomer_index))
                     atomType3 = a3.GetProp('atom_type_at_state_'+str(isomer_index))
                     atomType4 = a4.GetProp('atom_type_at_state_'+str(isomer_index))
-
                     unique_list_of_torsions[tuple([atomType1, atomType2, atomType3, atomType4])] = torsion
+                    unique_list_of_torsions[tuple([atomType4, atomType3, atomType2, atomType1])] = torsion
+
 
                 for torsion in unique_list_of_torsions.values():
 
@@ -1542,10 +1546,14 @@ class _TitratableForceFieldCompiler(object):
             for xmltree in self._xml_parameter_trees:
                 # Match the angles of the atom in the HarmonicAngleForce block
                 for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
-                    angle_atom_types_list = sorted([angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']])
-                    search_list = sorted([kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3']])
-                    if search_list[0] in angle_atom_types_list[0] and search_list[1] in angle_atom_types_list[1] and search_list[2] in angle_atom_types_list[2]:
+                    angle_atom_types_list = [angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']]
+                    search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3']]
+                    if search_list[0] == angle_atom_types_list[0] and search_list[1] == angle_atom_types_list[1] and search_list[2] == angle_atom_types_list[2]:
                         params['angle'] = angle
+                    elif search_list[2] == angle_atom_types_list[0] and search_list[1] == angle_atom_types_list[1] and search_list[0] == angle_atom_types_list[2]:
+                        params['angle'] = angle
+                    else:
+                        continue
             return params
             
         
