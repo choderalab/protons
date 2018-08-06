@@ -26,7 +26,6 @@ from collections import defaultdict
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree, objectify
-
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
@@ -1008,6 +1007,7 @@ class NCMCProtonDrive(_BaseDrive):
             force = self.system.getForce(force_index)
             if force.__class__.__name__ in force_classes_to_update:
                 self.forces_to_update.append(force)
+            
 
         return
 
@@ -1680,7 +1680,6 @@ class NCMCProtonDrive(_BaseDrive):
         cache_initial = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final = self.titrationGroups[titration_group_index][final_titration_state_index].forces
         titration_group = self.titrationGroups[titration_group_index]
-
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
@@ -1756,11 +1755,14 @@ class NCMCProtonDrive(_BaseDrive):
                             print('angle parameter final: ', angle_final[parameter_name])                  
 
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
-                        
+
+            elif force_classname == 'PeriodicTorsionForce':
+                pass
+
+
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
-
 
 
     def _cache_force(self, titration_group_index, titration_state_index):
@@ -1795,93 +1797,121 @@ class NCMCProtonDrive(_BaseDrive):
         atom_type_by_atom_index = dict(zip(atom_indices, titration_state.atom_type))
         atom_name_by_atom_index = dict(zip(atom_indices, titration_state.atom_name))
 
-        for idx in sorted(atom_type_by_atom_index):
-            print('Index: ', idx, 'Name:', atom_name_by_atom_index[idx], ' Type: ', atom_type_by_atom_index[idx])
-
-
         charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
         epsilon_by_atom_index = dict(zip(atom_indices, titration_state.epsilon))
         sigma_by_atom_index = dict(zip(atom_indices, titration_state.sigma))
         # Store the parameters per individual force
         f_params = list()
+
         for force_index, force in enumerate(self.forces_to_update):
 
             # Get name of force class.
             force_classname = force.__class__.__name__
-            print(force_classname)
             # update atom parameters
+            print('########################')
+            print(force_classname)
+            print('########################')
+
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 f_params.append(dict(atoms=list()))
+                atom_string = 'Atom-ID: {:>3d} Atom-Name: {:>4} Atom-Type: {:>3} Charge: {: 02.4f} Epsilon: {: 02.4f}'
                 for atom_index in atom_indices:
+
                     if force_classname == 'GBSAOBCForce':
                         current_parameters = {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
-                        # update current parameters with particular titration state
                         f_params[force_index]['atoms'].append(current_parameters)
                     else:                        
                         current_parameters = {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
                         # update current parameters with particular titration state
                         f_params[force_index]['atoms'].append(current_parameters)
-                        f_params[force_index]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
-                        f_params[force_index]['atoms'][-1]['epsilon'] = epsilon_by_atom_index[atom_index]
-                        f_params[force_index]['atoms'][-1]['sigma'] = sigma_by_atom_index[atom_index]
-                        f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
+                        # f_params[force_index]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
+                        # f_params[force_index]['atoms'][-1]['epsilon'] = epsilon_by_atom_index[atom_index]
+                        # f_params[force_index]['atoms'][-1]['sigma'] = sigma_by_atom_index[atom_index]
+                        # f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
+                        print(atom_string.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], charge_by_atom_index[atom_index], epsilon_by_atom_index[atom_index]))
 
             elif force_classname == 'HarmonicBondForce':
                 f_params.append(dict(bonds=list()))
+                bond_string_from_ffxml = 'FFXML : Bond-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} length: {: 02.4f} k: {: 02.4f}'
+                bond_string_from_openmm = 'OPENMM: Bond-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} length: {: 02.4f} k: {: 02.4f}'
 
                 # only heavy atom - heavy atom bonds are regarded
                 for bond_index in range(force.getNumBonds()):
                     a1, a2, l, k = force.getBondParameters(bond_index)     
                     # get particular titration state parameters
-                    new_l, new_k = titration_state.bonded_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2]]))]
+                    # new_l, new_k = titration_state.bonded_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2]]))]
+                    # t, c, length, k = force.getBondParameters(bond_index)
 
                     # update current parameters with particular titration state
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'length', 'k'], map(strip_in_unit_system, force.getBondParameters(bond_index)))}
                     f_params[force_index]['bonds'].append(current_parameters)
-                    f_params[force_index]['bonds'][-1]['length'] = float(new_l)
-                    f_params[force_index]['bonds'][-1]['k'] = float(new_k)
+                    # f_params[force_index]['bonds'][-1]['length'] = float(new_l)
+                    # f_params[force_index]['bonds'][-1]['k'] = float(new_k)
+                    # print(bond_string_from_ffxml.format(bond_index, a1, a2, float(new_l), float(new_k)))
+                    # print(bond_string_from_openmm.format(bond_index, a1, a2, float(strip_in_unit_system(length)), float(strip_in_unit_system(k))))
+
 
             elif force_classname == 'HarmonicAngleForce':
                 f_params.append(dict(angles=list()))
+                #angle_string_from_ffxml = 'FFXML : Angle-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} Atom-ID3: {:>3d} angle: {: 02.4f} k: {: 02.4f}'
+                angle_string_from_openmm = 'OPENMM: Angle-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} Atom-ID3: {:>3d} angle: {: 02.4f} k: {: 02.4f}'
 
                 for angle_index in range(force.getNumAngles()):
                     a1, a2, a3, angle_value, k = force.getAngleParameters(angle_index)
                     # get particular titration state parameters
-                    print('########################')
-                    print(a1, a2, a3)
-                    print(atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3])
+                    atomType1, atomType2, atomType3 = atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3]
+                    print(a1, a2, a3, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atomType1, atomType2, atomType3)
 
-                    print('Angle from openMM system: ',angle_value, k)
+                    #parameter = self._compiler._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3)
+                    #new_angle_value, new_k = parameter['angle'].attrib['angle'], parameter['angle'].attrib['k']
 
-                    new_angle_value, new_k = titration_state.angle_par[tuple(sorted([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3]]))]
-                    print('Angle from ffxml:         ', new_angle_value, new_k)
-
+                    #print('Angle from ffxml:         ', new_angle_value, new_k)
                     # update current parameters with particular titration state
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'angle', 'k'], map(strip_in_unit_system, force.getAngleParameters(angle_index)))}
                     f_params[force_index]['angles'].append(current_parameters)
-                    f_params[force_index]['angles'][-1]['angle'] = float(new_angle_value)
-                    f_params[force_index]['angles'][-1]['k'] = float(new_k)
-
+                    #f_params[force_index]['angles'][-1]['angle'] = float(new_angle_value)
+                    #f_params[force_index]['angles'][-1]['k'] = float(new_k)
+           
+            
+            
+            # set torsion parameters
             elif force_classname == 'PeriodicTorsionForce':
+                pass
                 f_params.append(dict(torsion=list()))
+                print('########################')
 
                 for torsion_index in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
-                    print('########################')
-                    print(a1, a2, a3, a4)
-                    print(atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4])
+                    # print('########################')
+                    # print(a1, a2, a3, a4)
+                    # atomType1, atomType2, atomType3, atomType4 = atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4] 
+                    # print('Torsion between: ', atomType1, atomType2, atomType3, atomType4)
 
-                    print('Torsion from openMM system: ',periodicity, phase, k)
+                    # print('Torsion from openMM system: ',periodicity, phase, k)
                     # get particular titration state parameters
-                    for new_periodicity, new_phase, new_k in titration_state.proper_par[tuple([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]])]:
-                        print('Torsion from ffxml:         ', new_periodicity, new_phase, new_k)
+
+                    # if atomType1.startswith('d_') or atomType2.startswith('d_') or atomType3.startswith('d_') or atomType4.startswith('d_'):
+                    #     if tuple(([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]])) in titration_state.proper_par:
+                    #         parameter_list.append(titration_state.proper_par[tuple([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]])])
+                    #     else:
+                    #         # there is no real angle between these atom types (because at each state there are dummy atoms)
+                    #         print('Could not find real torsion proper atom types')
+                    #         proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
+                    #         element_string = proper_string.format(atomType1=atomType1, atomType2=atomType2, atomType3=atomType3, atomType4=atomType4, phase='0.0', k='0.0', periodicity='0')
+                    #         parameter_list.append(etree.fromstring(element_string), "/ForceField/PeriodicTorsionForce")
+                    # else:
+                    #     # real atom types
+                    #     parameter_list = self._compiler._retrieve_parameters(atom_type1=atomType1, atom_type2=atomType2, atom_type3=atomType3, atom_type4=atomType4)
 
                     # update current parameters with particular titration state
+                    # for p in parameter_list['proper']:
+                    #     print(p.attrib)
+
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'a4', 'periodicity', 'phase', 'k'], map(strip_in_unit_system, force.getTorsionParameters(torsion_index)))}
                     f_params[force_index]['torsion'].append(current_parameters)
-                    f_params[force_index]['torsion'][-1]['periodicity'] = float(new_periodicity)
-                    f_params[force_index]['torsion'][-1]['phase'] = float(new_phase)
-                    f_params[force_index]['torsion'][-1]['k'] = float(new_k)
+                    #f_params[force_index]['torsion'][-1]['periodicity'] = float(new_periodicity)
+                    #f_params[force_index]['torsion'][-1]['phase'] = float(new_phase)
+                    #f_params[force_index]['torsion'][-1]['k'] = float(new_k)
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
@@ -2542,7 +2572,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
     """
 
-    def __init__(self, temperature, topology, system, forcefield, ffxml_files, pressure=None, perturbations_per_trial=0, propagations_per_step=1, residues_by_name=None, residues_by_index=None):
+    def __init__(self, temperature, topology, system, forcefield, ffxml_files, compiler, pressure=None, perturbations_per_trial=0, propagations_per_step=1, residues_by_name=None, residues_by_index=None):
 
 
         """
@@ -2623,7 +2653,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
-
+        self._compiler = compiler
         self._add_xml_titration_groups(topology, forcefield, ffxml_residues, selected_residue_indices)
 
         return
@@ -2707,6 +2737,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             print(' -- Parameters for the different states as defined in ffxml')
             # mw entry point!
+
                 
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
@@ -2720,7 +2751,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 atom_epsilon = []
                 atom_sigma = []
                 bonded_par = dict()
-                angle_par = dict()
                 proper_par = defaultdict(list)
                 atom_type = []
                 atom_name = []
@@ -2733,21 +2763,14 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     atom_type.append(atom.get('type'))
                     atom_name.append(atom.get('name'))
 
-                print('BONDS')
-                for index, bond in enumerate(state_block.xpath("Bond")):
-                    print(index, ':', bond.get('type1'), bond.get('type2'))
-                    key = tuple(sorted([bond.get('type1'), bond.get('type2')]))
-                    bond_length = (bond.get('length'))
-                    bond_k = (bond.get('k'))
-                    bonded_par[key] = [bond_length, bond_k]
+                # print('BONDS')
+                # for index, bond in enumerate(state_block.xpath("Bond")):
+                #     key = tuple(sorted([bond.get('type1'), bond.get('type2')]))
+                #     bond_length = (bond.get('length'))
+                #     bond_k = (bond.get('k'))
+                #     print(index, ':', bond.get('type1'), bond.get('type2'), bond_length, bond_k)
+                #     bonded_par[key] = [bond_length, bond_k]
                     
-                print('ANGLES')
-                for index, angle in enumerate(state_block.xpath("Angle")):
-                    print(index, ':', angle.get('type1'), angle.get('type2'), angle.get('type3'))
-                    key = tuple(sorted([angle.get('type1'), angle.get('type2'), angle.get('type3')]))
-                    angle_value = (angle.get('angle'))
-                    angle_k = (angle.get('k'))
-                    angle_par[key] = [angle_value, angle_k]
 
                 print('PROPER')
                 for index, proper in enumerate(state_block.xpath("Proper")):
@@ -2762,7 +2785,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
                 # Create titration state.
-                self._add_titration_state(group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, proton_count)
+                self._add_titration_state(group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, self._angle_par, self._torsion_par, proton_count)
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
@@ -2811,6 +2834,31 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     ffxml_residues[xml_resname] = xml_residue
                 else:
                     raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+
+        angle_par = dict()
+        for xmltree in xmltrees:
+            # All residues that contain a protons block
+            for xml_residue in xmltree.xpath('/ForceField/HarmonicAngleForce'):
+                for angle in (xml_residue):
+                    key = tuple(([angle.get('type1'), angle.get('type2'), angle.get('type3')]))
+                    angle_value = (angle.get('angle'))
+                    angle_k = (angle.get('k'))
+                    angle_par[key] = [angle_value, angle_k]
+
+        torsion_par = defaultdict(list)
+        for xmltree in xmltrees:
+            # All residues that contain a protons block
+            for torsion in xmltree.xpath('/ForceField/PeriodicTorsionForce/Proper'):
+                key = tuple(([torsion.get('type1'), torsion.get('type2'), torsion.get('type3'), torsion.get('type4')]))
+                reverse_key = tuple(([torsion.get('type4'), torsion.get('type3'), torsion.get('type2'), torsion.get('type1')]))
+                
+                torsion_par[key].append(torsion)
+                torsion_par[reverse_key].append(torsion)
+
+        
+        
+        self._angle_par = angle_par
+        self._torsion_par = torsion_par
 
         return ffxml_residues
 
