@@ -555,7 +555,7 @@ class _TitratableForceFieldCompiler(object):
 
         # Now add all dummy bonds
         unique_bond_set = set()
-        bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
+        dummy_bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
         for state in range(len(self.mol_array)):
             for bond in self.network.edges:
                 atomName1 = bond[0]
@@ -589,7 +589,7 @@ class _TitratableForceFieldCompiler(object):
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
 
-                element_string= etree.fromstring(bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
+                element_string= etree.fromstring(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
                 self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
             
 
@@ -658,8 +658,8 @@ class _TitratableForceFieldCompiler(object):
         proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
         improper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
         for state in range(len(self.mol_array)):
-            print('@@@@@@@@@@@@')
 
+            print('@@@@@@@@@@@@')
             print('State: ', state)
 
             list_of_torsion_atom_names, list_of_torsion_atom_types = _get_all_torsion(self.network, self.atom_types_dict, state)
@@ -949,11 +949,16 @@ class _TitratableForceFieldCompiler(object):
         """
 
         atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}" epsilon="{epsilon}" sigma="{sigma}" />'
-        bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
+        bond_string = '<Bond name1="{atomName1}" name2="{atomName2}" length="{bond_length}" k="{k}"/>'
+        angle_string = '<Angle name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" angle="{angle}" k="{k}"/>'
+        proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
+
+        protonsdata = etree.fromstring("<Protons/>")
+        protonsdata.attrib['number_of_states'] = str(len(self._state_templates))
+
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
     
-            protonsdata = etree.fromstring("<Protons/>")
-            protonsdata.attrib['number_of_states'] = str(len(self._state_templates))
+            # atom entries
             for isomer_index, isomer in enumerate(self._state_templates):
                 print('ISOMER: ', isomer_index)
                 isomer_str = str(isomer)
@@ -970,39 +975,102 @@ class _TitratableForceFieldCompiler(object):
                         e = atom_string.format(name=node, atom_type=atom_type, charge=self.atom_charge_dict[node][isomer_index],epsilon=epsilon,sigma=sigma)
                     isomer_xml.append(etree.fromstring(e))
 
-                # bond_set = set()
-                # for bond in self.network.edges:
-                #     atomName1 = bond[0]
-                #     atomName2 = bond[1]
-                #     atom_type1 = self.atom_types_dict[atomName1][isomer_index]
-                #     atom_type2 = self.atom_types_dict[atomName2][isomer_index]
+                # bond entries
+                for bond in self.network.edges:
+                    atomName1 = bond[0]
+                    atomName2 = bond[1]
+                    
+                    atom_type1 = self.atom_types_dict[atomName1][isomer_index]
+                    atom_type2 = self.atom_types_dict[atomName2][isomer_index]
+
+                    if str(atom_type1) == '0':
+                        idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
+                        helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
+                        parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
+                
+                    elif str(atom_type2) == '0':
+                        idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
+                        helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
+                        parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
+                    else:
+                        parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2)
+
+                    length= parm['bonds'].attrib['length']
+                    k= parm['bonds'].attrib['k']
+
+                    e = bond_string.format(atomName1=atomName1, atomName2=atomName2, bond_length=length, k=k)
+                    isomer_xml.append(etree.fromstring(e))
+
+                # angle entries
+                list_of_angles_atom_types, list_of_angles_atom_names = _get_all_angles(self.network, self.atom_types_dict, isomer_index)
+
+                for i, nodes in enumerate(list_of_angles_atom_names):
+                    node1, node2, node3 = nodes
+                    key = hash((node1, node2, node3))
+                    # angle between two dummy atoms
+                    if list_of_angles_atom_types[i].count(0) > 1:
+                        original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
+                        angle= float(0.0)
+                        k= float(0.0)
+                        #print(original_atom_type1, original_atom_type2, original_atom_type3)
+                        e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                        isomer_xml.append(etree.fromstring(e))
+                        continue
+
+                    if 0 in list_of_angles_atom_types[i]:
+                        original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
+                        for angles_types in self.all_angles_at_all_states[key].values():
+                            if 0 in angles_types:
+                                continue
+                            else:
+                                new_atom_type1, new_atom_type2, new_atom_type3 = angles_types
+                                parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
+
+                                if str(original_atom_type1) == '0':
+                                    t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node1)
+                                    original_atom_type1 = 'd' + real_atom_type
+                                elif str(original_atom_type2) == '0':
+                                    t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node2)
+                                    original_atom_type2 = 'd' + real_atom_type
+                                else:
+                                    t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
+                                    original_atom_type3 = 'd' + real_atom_type
 
 
-                #     if str(atom_type1) == '0':
-                #         idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
-                #         helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
-                #         parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
-                #         atom_type1 = 'd'+str(atom_type1)              
-                       
-                #     elif str(atom_type2) == '0':
-                #         idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
-                #         helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
-                #         parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
-                #         atom_type2 = 'd'+str(atom_type2)              
-                #     else:
-                #         parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2)
-                        
-                #     if (atom_type1, atom_type2) in bond_set:
-                #         continue
-                #     else:
-                #         bond_set.add((atom_type1, atom_type2))
-                #     print(atomName1, atom_type1 ,' binds to ' ,atomName2, atom_type2)
+                                angle= parm['angle'].attrib['angle']
+                                k= parm['angle'].attrib['k']
+                                #print(original_atom_type1, original_atom_type2, original_atom_type3)
+                                e= angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                                isomer_xml.append(etree.fromstring(e))
 
-                #     length= parm['bonds'].attrib['length']
-                #     k= parm['bonds'].attrib['k']
+                    else:
+                        original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
+                        parm = self._retrieve_parameters(atom_type1=original_atom_type1, atom_type2=original_atom_type2, atom_type3=original_atom_type3)
+                        angle= parm['angle'].attrib['angle']
+                        k= parm['angle'].attrib['k']
+                        #print(original_atom_type1, original_atom_type2, original_atom_type3)
+                        e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                        isomer_xml.append(etree.fromstring(e))
 
-                #     e = bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k)
-                #     isomer_xml.append(etree.fromstring(e))
+                # torsion entries
+                list_of_torsion_atom_names, list_of_torsion_atom_types = _get_all_torsion(self.network, self.atom_types_dict, isomer_index)
+
+                for i, nodes in enumerate(list_of_torsion_atom_names):
+                    node1, node2, node3, node4 = nodes
+                    key = hash((node1, node2, node3, node4))
+                    # angle between two dummy atoms
+                    if list_of_torsion_atom_types[i].count(0) > 1:
+                        original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4 = list_of_torsion_atom_types[i]
+                        angle= float(0.0)
+                        k= float(0.0)
+                        #print(original_atom_type1, original_atom_type2, original_atom_type3)
+                        e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                        isomer_xml.append(etree.fromstring(e))
+                        continue
+
+
+
+
                
                 protonsdata.append(isomer_xml)
             residue.append(protonsdata)
