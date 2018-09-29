@@ -5,8 +5,10 @@ from .logger import log
 import copy
 import random
 import numpy as np
-from simtk import unit
+import math
+from simtk import unit, openmm
 from scipy.misc import comb
+from typing import Dict
 
 class _StateProposal(metaclass=ABCMeta):
     """An abstract base class describing the common public interface of residue selection moves."""
@@ -441,3 +443,258 @@ class OneDirectionChargeProposal(SaltSwapProposal):
             if counter > 1000:
                 raise RuntimeError("Infinite while loop predicted for salt resolution. Bailing out.")
         return swaps
+
+
+class COOHDummyMover:
+    """This class performs a deterministic moves of the dummy atom in a carboxylic acid among symmetrical directions.
+
+    Notes
+    -----
+    This class performs symmetric moves (meaning `f(f(x)) = x`)  on the dummy atom of a deprotonated carboxylic acid.
+
+    Two moves are available:
+        mirror_oxygens - exchange the two oxygen positions, and mirror + move the dummy hydrogen along to maintain the bond length.
+        mirror_syn_anti - this mirrors the location of the hydrogen between a syn/anti conformation.
+
+    Due the the assymetry of a real carboxylic acid conformation, mirror_oxygens results in the C-O-H angle terms changing.
+    It also can change the dihedral energy terms regarding the hydrogen and oxygen atoms.
+    Likewise mirror_syn_anti could potentially change the dihedral energy of the hydrogen.
+    Bond lengths are NOT affected.
+
+    To facilitate fast computation, the following approximations are made in the energy computation:
+
+    - There is negligible non-bonded interaction between the hydrogen and the rest of the system.
+    - Both oxygen atoms have negligible differences in non-bonded parameters.
+
+    If you don't want to make these approximations, you can still feed the new positions into OpenMM and recompute the full energy.
+
+    Using these approximations, it means the only energy terms that have to be re-evaluated are the few angle and dihedral terms that involve the
+    moving atoms. This is easily and efficiently done outside of OpenMM.
+
+    This is typically true for a deprotonated carboxylic acid with a dummy hydrogen. Be careful if you want to repurpose this
+    class for other classes of molecules.
+
+    Attributes
+    ----------
+    HO - index in the system of the hydroxyl hydrogen.
+    OH - index in the system of the hydroxyl oxygen
+    OC - index in the system of the carbonyl oxygen
+    CO - index in the system of the carbonyl carbon
+    R  - index in the system of the atom "X"  this COOH group is connected to.
+
+    movable - indices of the atoms that can move (OH, HO, OC)
+    angles - list of angle parameters that go into the energy function
+    dihedrals - list of dihedral parameters that go into the energy function
+    """
+
+    # Keep track of which force index corresponds to angles and dihedral between instances
+    angleforceindex = None
+    torsionforceindex = None
+
+    def __init__(self, system: openmm.System, indices: Dict[str, int]):
+        """Instantiate a COOHDummyMover for a single C-COOH moiety in your system.
+
+        Parameters
+        ----------
+        system - The OpenMM system containting the COOH moiety
+        indices - a dictionary labeling the indices of the C-COOH atoms with keys:
+            HO - index in the system of the hydroxyl hydrogen.
+            OH - index in the system of the hydroxyl oxygen
+            OC - index in the system of the carbonyl oxygen
+            CO - index in the system of the carbonyl carbon
+            R -  index in the system of the atom "R"  this COOH group is connected to.
+        """
+
+        # Hydroxyl hydrogen
+        self.HO = indices["HO"]
+        # Hydroxyl oxygen
+        self.OH = indices["OH"]
+        # Carbonyl oxygen
+        self.OC = indices["OC"]
+        # The carbons are used as reference points for reflection
+        self.CO = indices["CO"]
+        self.R = indices["R"]
+
+        # All atoms that this class may decide to move
+        self.movable = [indices["OC"], indices["OH"], indices["HO"]]
+        # The parameters for angles
+        self.angles = []
+        # The parameters for dihedrals
+        self.dihedrals = []
+
+        # Instantiate the class variable
+        # This is to keep track of angle and torsion force indices for all future instances
+        if COOHDummyMover.angleforceindex is None or COOHDummyMover.torsionforceindex is None:
+            for force_index in range(system.getNumForces()):
+                force = system.getForce(force_index)
+                if force.__class__.__name__ == 'HarmonicAngleForce':
+                    COOHDummyMover.angleforceindex = force_index
+                elif force.__class__.__name__ == 'PeriodicTorsionForce':
+                    COOHDummyMover.torsionforceindex = force_index
+            if COOHDummyMover.angleforceindex is None:
+                raise RuntimeError(
+                    "{} requires the system to have a HarmonicAngleForce!".
+                        format(COOHDummyMover.__name__))
+            if COOHDummyMover.torsionforceindex is None:
+                raise RuntimeError(
+                    "{} requires the system to have a PeriodicTorsionForce!".
+                        format(COOHDummyMover.__name__))
+
+        angleforce = system.getForce(COOHDummyMover.angleforceindex)
+        torsionforce = system.getForce(COOHDummyMover.torsionforceindex)
+
+        # Loop through and collect all angle energy terms that include moving atoms
+        for angle_index in range(angleforce.getNumAngles()):
+            *particles, theta0, k = angleforce.getAngleParameters(angle_index)
+            if any(particle in self.movable for particle in particles):
+                # Energy function for this angle.
+                params = [k._value, theta0._value, *particles]
+                log.debug("Found this COOH angle: %s", params)
+                self.angles.append(params)
+
+        # Loop through and collect all torsion energy terms that include moving atoms
+        for torsion_index in range(torsionforce.getNumTorsions()):
+            *particles, n, theta0, k = torsionforce.getTorsionParameters(
+                torsion_index)
+            if any(particle in self.movable for particle in particles):
+                # Energy function for this dihedral.
+                params = [k._value, n, theta0._value, *particles]
+                log.debug("Found this COOH dihedral: %s", params)
+                self.dihedrals.append(params)
+        return
+
+    @staticmethod
+    def e_angle(positions: np.ndarray, k: float, theta0: float, particle1: int,
+                particle2: int, particle3: int) -> float:
+        """Angle energy function as defined in OpenMM documentation."""
+        return 0.5 * k * (COOHDummyMover.angle_between_vectors(
+            positions[particle1] - positions[particle2],
+            positions[particle3] - positions[particle2]) - theta0) ** 2
+
+    @staticmethod
+    def e_dihedral(positions: np.ndarray, k: float, n: int, theta0: float,
+                   particle1: int, particle2: int, particle3: int,
+                   particle4: int) -> float:
+        """Dihedral energy function as defined in OpenMM documentation. Deals with proper and improper equivalently."""
+        return k * (1 + math.cos(n * COOHDummyMover.angle_between_vectors(
+            positions[particle1] - positions[particle2],
+            positions[particle4] - positions[particle3]) - theta0))
+
+    @staticmethod
+    def reflect(n: np.ndarray, x0: np.ndarray, x1: np.ndarray) -> np.ndarray:
+        """Reflect in a mirror with normal vector n.
+
+        Parameters
+        ----------
+        n - normal vector of a mirror
+        x0 - point on mirror.
+        x1 - original point
+
+        Returns
+        -------
+        reflection of x1
+        """
+        v = x0 - x1
+        n /= np.linalg.norm(n)
+        return v + x0 - 2 * (np.dot(v, n) * n)
+
+    def log_probability(self, positions: np.ndarray) -> float:
+        """Return the log probability of the angles and dihedrals for a given set of positions."""
+        e_angles = [
+            COOHDummyMover.e_angle(positions, *params)
+            for params in self.angles
+        ]
+        e_dihedrals = [
+            COOHDummyMover.e_dihedral(positions, *params)
+            for params in self.dihedrals
+        ]
+        log.debug("COOH angle energies: %s", e_angles)
+        log.debug("COOH dihedral energies: %s", e_dihedrals)
+        return -1.0 * (sum(e_angles) + sum(e_dihedrals))
+
+    @staticmethod
+    def angle_between_vectors(v1: np.ndarray, v2: np.ndarray) -> float:
+        """Returns the angle (in radians) between two vectors
+
+        Parameters
+        ----------
+        v1 - first vector
+        v2 - second vector
+        """
+        n_v1 = np.linalg.norm(v1)
+        n_v2 = np.linalg.norm(v2)
+        return np.arccos(np.dot(v1, v2) / (n_v1 * n_v2))
+
+    def mirror_oxygens(self,
+                       positions: np.ndarray) -> Tuple[np.ndarray, float]:
+        """Mirror around the CC bound to swap oxygen positions and move hydrogen along without changing bonds.
+
+        Parameters
+        ----------
+        positions - array of positions of all the atoms in the openmm system
+
+        Returns
+        -------
+        new_positions, log_accept_mirror
+
+        """
+        new_positions = copy.deepcopy(positions)
+        hydroxyl_o = positions[self.OH]
+        carbonyl_o = positions[self.OC]
+        hydroxyl_h = positions[self.HO]
+        carbonyl_c = positions[self.CO]
+        r_group_atom = positions[self.R]
+
+        # Mirror normal vector along c-c bond
+        norm = carbonyl_c - r_group_atom
+        # x0 (carbonyl c) lies on norm
+        # x1 is the atom that needs to be reflected
+        ho_reflection = self.reflect(norm, carbonyl_c, hydroxyl_h)
+        oh_reflection = self.reflect(norm, carbonyl_c, hydroxyl_o)
+        # Correct for assymmetry between oxygen atoms
+        new_positions[self.HO] = ho_reflection - oh_reflection + carbonyl_o
+        new_positions[self.OC] = hydroxyl_o
+        new_positions[self.OH] = carbonyl_o
+
+        new_state_probability = self.log_probability(new_positions)
+        old_state_probability = self.log_probability(positions)
+        logp_accept_mirror = new_state_probability - old_state_probability
+
+        log.debug("%s", new_positions - positions)
+        log.debug("E new: %.10f", new_state_probability)
+        log.debug("E old: %.10f", old_state_probability)
+        return new_positions, logp_accept_mirror
+
+    def mirror_syn_anti(self,
+                        positions: np.ndarray) -> Tuple[np.ndarray, float]:
+        """Mirror around the O-C bond to peform a syn/anti coordinate flip.
+
+        Parameters
+        ----------
+        positions - array of positions of all the atoms in the openmm system
+
+        Returns
+        -------
+        new_positions, log_accept_mirror
+        """
+        new_positions = copy.deepcopy(positions)
+        hydroxyl_o = positions[self.OH]
+        hydroxyl_h = positions[self.HO]
+        carbonyl_c = positions[self.CO]
+
+        # Mirror normal vector along O-C bond
+        norm = hydroxyl_o - carbonyl_c
+        # x0 (hydroxyl O) lies on norm
+        # x1 is the atom that needs to be reflected
+        new_positions[self.HO] = self.reflect(norm, hydroxyl_o, hydroxyl_h)
+
+        new_state_probability = self.log_probability(new_positions)
+        old_state_probability = self.log_probability(positions)
+        logp_accept_mirror = new_state_probability - old_state_probability
+
+        log.debug("%s", new_positions - positions)
+        log.debug("E new: %.10f", new_state_probability)
+        log.debug("E old: %.10f", old_state_probability)
+
+        return new_positions, logp_accept_mirror
+
