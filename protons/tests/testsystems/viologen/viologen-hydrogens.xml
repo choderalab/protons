@@ -1,0 +1,34 @@
+<Residues>
+  <Residue name="VIO">
+    <H name="H2" parent="C4"/>
+    <H name="H1" parent="C4"/>
+    <H name="H3" parent="C5"/>
+    <H name="H4" parent="C5"/>
+    <H name="H5" parent="C6"/>
+    <H name="H6" parent="C6"/>
+    <H name="H8" parent="C7"/>
+    <H name="H7" parent="C7"/>
+    <H name="H9" parent="C8"/>
+    <H name="H10" parent="C8"/>
+    <H name="H11" parent="C10"/>
+    <H name="H12" parent="C11"/>
+    <H name="H13" parent="C12"/>
+    <H name="H14" parent="C13"/>
+    <H name="H15" parent="C16"/>
+    <H name="H16" parent="C17"/>
+    <H name="H17" parent="C19"/>
+    <H name="H18" parent="C20"/>
+    <H name="H20" parent="C21"/>
+    <H name="H19" parent="C21"/>
+    <H name="H21" parent="C22"/>
+    <H name="H22" parent="C22"/>
+    <H name="H24" parent="C23"/>
+    <H name="H23" parent="C23"/>
+    <H name="H25" parent="C24"/>
+    <H name="H26" parent="C24"/>
+    <H name="H28" parent="C25"/>
+    <H name="H27" parent="C25"/>
+    <H name="H29" parent="O1"/>
+    <H name="H30" parent="O28"/>
+  </Residue>
+</Residues>
