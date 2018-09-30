@@ -19,15 +19,21 @@ from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
 from protons.app.proposals import OneDirectionChargeProposal, COOHDummyMover
 from protons.tests import get_test_data
-from protons.tests.utilities import SystemSetup, create_compound_gbaoab_integrator, hasCUDA
+from protons.tests.utilities import (
+    SystemSetup,
+    create_compound_gbaoab_integrator,
+    hasCUDA,
+)
 import logging
 from random import choice, uniform, sample
 from protons.app import log
 from math import exp
+
 log.setLevel(logging.INFO)
 
+
 class TestCarboxylicAcid:
-    default_platform_name = 'CPU'
+    default_platform_name = "CPU"
     platform = openmm.Platform.getPlatformByName(default_platform_name)
 
     @staticmethod
@@ -41,41 +47,47 @@ class TestCarboxylicAcid:
         viologen.timestep = 1.0 * unit.femtoseconds
         viologen.collision_rate = 1.0 / unit.picoseconds
         viologen.pH = 7.0
-        testsystems = get_test_data('viologen', 'testsystems')
-        viologen.ffxml_filename = os.path.join(testsystems, 'viologen-protons.ffxml')
-        viologen.gaff = os.path.join(testsystems, 'gaff.xml')
+        testsystems = get_test_data("viologen", "testsystems")
+        viologen.ffxml_filename = os.path.join(testsystems, "viologen-protons.ffxml")
+        viologen.gaff = os.path.join(testsystems, "gaff.xml")
         viologen.forcefield = ForceField(viologen.gaff, viologen.ffxml_filename)
 
-        viologen.pdbfile = app.PDBFile(
-            os.path.join(testsystems, "viologen-vacuum.pdb"))
+        viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
         viologen.topology = viologen.pdbfile.topology
         viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
         viologen.constraint_tolerance = 1.e-7
 
-        viologen.integrator = openmm.LangevinIntegrator(viologen.temperature, viologen.collision_rate,
-                                               viologen.timestep)
+        viologen.integrator = openmm.LangevinIntegrator(
+            viologen.temperature, viologen.collision_rate, viologen.timestep
+        )
 
         viologen.integrator.setConstraintTolerance(viologen.constraint_tolerance)
-        viologen.system = viologen.forcefield.createSystem(viologen.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds)
-        viologen.cooh1 = { # indices in topology of the first cooh group
-            "HO" : 56,
-            "OH" : 0,
+        viologen.system = viologen.forcefield.createSystem(
+            viologen.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds
+        )
+        viologen.cooh1 = {  # indices in topology of the first cooh group
+            "HO": 56,
+            "OH": 0,
             "CO": 1,
             "OC": 2,
-            "R" : 3
+            "R": 3,
         }
-        viologen.cooh2 = { # indices in topology of the second cooh group
+        viologen.cooh2 = {  # indices in topology of the second cooh group
             "HO": 57,
             "OH": 27,
             "CO": 25,
             "OC": 26,
-            "R": 24
+            "R": 24,
         }
 
-        viologen.simulation = app.Simulation(viologen.topology, viologen.system, viologen.integrator, TestCarboxylicAcid.platform)
+        viologen.simulation = app.Simulation(
+            viologen.topology,
+            viologen.system,
+            viologen.integrator,
+            TestCarboxylicAcid.platform,
+        )
         viologen.simulation.context.setPositions(viologen.positions)
         viologen.context = viologen.simulation.context
-
 
         return viologen
 
@@ -113,7 +125,6 @@ class TestCarboxylicAcid:
 
         return
 
-
     def test_dummy_moving_mc(self) -> None:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
@@ -124,7 +135,13 @@ class TestCarboxylicAcid:
 
         do_nothing = lambda positions: (positions, 0.0)
 
-        moveset = {do_nothing, cooh1.mirror_syn_anti, cooh1.mirror_oxygens, cooh2.mirror_syn_anti, cooh2.mirror_oxygens}
+        moveset = {
+            do_nothing,
+            cooh1.mirror_syn_anti,
+            cooh1.mirror_oxygens,
+            cooh2.mirror_syn_anti,
+            cooh2.mirror_oxygens,
+        }
         n_accept = 0
         for iteration in range(100):
             viologen.simulation.step(10)
@@ -133,18 +150,23 @@ class TestCarboxylicAcid:
             pos = state.getPositions(asNumpy=True)
 
             # perform a move.
-            move = sample(moveset,1)[0]
-            log.info(move.__name__)
+            move = sample(moveset, 1)[0]
+            log.debug(move.__name__)
             new_pos, logp = move(pos)
-            if exp(logp) > uniform(0.0,1.0):
+            if exp(logp) > uniform(0.0, 1.0):
                 log.debug("Accepted: logp %f", logp)
                 viologen.context.setPositions(new_pos)
-                n_accept +=1
+                n_accept += 1
             else:
                 log.debug("Rejected: logp %f", logp)
                 # Resample velocities if rejected to maintain detailed balance
-                # PS: rejection unlikely
                 viologen.context.setVelocitiesToTemperature(viologen.temperature)
 
-        log.info("Acceptance rate was %f", n_accept / iteration )
+        if not logp == pytest.approx(0.0, abs=0.1):
+            raise ValueError("Proposal should be very favorable.")
+
+        acceptance_rate = n_accept / iteration
+        log.info("Acceptance rate was %f", acceptance_rate)
+        if acceptance_rate < 0.9:
+            raise ValueError("Expectance rate was lower than expected.")
         return
