@@ -134,7 +134,9 @@ class TestCarboxylicAcid:
             rigidWater=True,
             ewaldErrorTolerance=0.0005,
         )
-        viologen.system.addForce(openmm.MonteCarloBarostat(viologen.pressure, viologen.temperature, 25))
+        viologen.system.addForce(
+            openmm.MonteCarloBarostat(viologen.pressure, viologen.temperature, 25)
+        )
         viologen.cooh1 = {  # indices in topology of the first cooh group
             "HO": 56,
             "OH": 0,
@@ -261,10 +263,17 @@ class TestCarboxylicAcid:
         total_loops = 25
         viologen = self.setup_viologen_water()
 
-        drive = ForceFieldProtonDrive(viologen.temperature, viologen.topology, viologen.system, viologen.forcefield,
-                                      viologen.ffxml_files, pressure=viologen.pressure,
-                                      perturbations_per_trial=viologen.perturbations_per_trial,
-                                      propagations_per_step=viologen.propagations_per_step, residues_by_name=None,
-                                      residues_by_index=None)
+        drive = ForceFieldProtonDrive(
+            viologen.temperature,
+            viologen.topology,
+            viologen.system,
+            viologen.forcefield,
+            viologen.ffxml_files,
+            pressure=viologen.pressure,
+            perturbations_per_trial=viologen.perturbations_per_trial,
+            propagations_per_step=viologen.propagations_per_step,
+            residues_by_name=None,
+            residues_by_index=None,
+        )
 
         return
