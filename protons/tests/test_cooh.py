@@ -4,6 +4,9 @@ import os
 from collections import Counter
 from copy import deepcopy
 
+import uuid
+
+
 import numpy as np
 import pytest
 from lxml import etree
@@ -91,6 +94,70 @@ class TestCarboxylicAcid:
 
         return viologen
 
+    @staticmethod
+    def setup_viologen_water():
+        """
+        Set up viologen in vacuum
+        """
+        viologen = SystemSetup()
+        viologen.temperature = 300.0 * unit.kelvin
+        viologen.pressure = 1.0 * unit.atmospheres
+        viologen.timestep = 1.0 * unit.femtoseconds
+        viologen.collision_rate = 1.0 / unit.picoseconds
+        viologen.pH = 7.0
+        testsystems = get_test_data("viologen", "testsystems")
+        viologen.ffxml_filename = os.path.join(testsystems, "viologen-protons.ffxml")
+        viologen.gaff = os.path.join(testsystems, "gaff.xml")
+        viologen.forcefield = ForceField(
+            viologen.gaff, viologen.ffxml_filename, "tip3p.xml"
+        )
+
+        viologen.pdbfile = app.PDBFile(
+            os.path.join(testsystems, "viologen-solvated.pdb")
+        )
+        viologen.topology = viologen.pdbfile.topology
+        viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
+        viologen.constraint_tolerance = 1.e-7
+
+        viologen.integrator = openmm.LangevinIntegrator(
+            viologen.temperature, viologen.collision_rate, viologen.timestep
+        )
+
+        viologen.integrator.setConstraintTolerance(viologen.constraint_tolerance)
+        viologen.system = viologen.forcefield.createSystem(
+            viologen.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
+        viologen.cooh1 = {  # indices in topology of the first cooh group
+            "HO": 56,
+            "OH": 0,
+            "CO": 1,
+            "OC": 2,
+            "R": 3,
+        }
+        viologen.cooh2 = {  # indices in topology of the second cooh group
+            "HO": 57,
+            "OH": 27,
+            "CO": 25,
+            "OC": 26,
+            "R": 24,
+        }
+
+        viologen.simulation = app.Simulation(
+            viologen.topology,
+            viologen.system,
+            viologen.integrator,
+            TestCarboxylicAcid.platform,
+        )
+        viologen.simulation.context.setPositions(viologen.positions)
+        viologen.context = viologen.simulation.context
+
+        return viologen
+
     def test_dummy_moving(self) -> None:
         """Move dummies without accepting and evaluate the energy differences."""
 
@@ -128,7 +195,18 @@ class TestCarboxylicAcid:
     def test_dummy_moving_mc(self) -> None:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
+        md_steps_between_mc = 10
+        total_loops = 25
         viologen = self.setup_viologen_vacuum()
+        # viologen = self.setup_viologen_water()
+
+        if log.getEffectiveLevel() == logging.DEBUG:
+            viologen.simulation.reporters.append(
+                app.DCDReporter(
+                    "cooh-viologen-{}.dcd".format(str(uuid.uuid4())),
+                    md_steps_between_mc,
+                )
+            )
 
         cooh1 = COOHDummyMover(viologen.system, viologen.cooh1)
         cooh2 = COOHDummyMover(viologen.system, viologen.cooh2)
@@ -143,8 +221,8 @@ class TestCarboxylicAcid:
             cooh2.mirror_oxygens,
         }
         n_accept = 0
-        for iteration in range(100):
-            viologen.simulation.step(10)
+        for iteration in range(total_loops):
+            viologen.simulation.step(md_steps_between_mc)
 
             state = viologen.context.getState(getPositions=True, getVelocities=True)
             pos = state.getPositions(asNumpy=True)
