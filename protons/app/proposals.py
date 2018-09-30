@@ -9,6 +9,7 @@ import math
 from simtk import unit, openmm
 from scipy.misc import comb
 from typing import Dict, Tuple, Callable, List, Optional
+from lxml import etree
 
 class _StateProposal(metaclass=ABCMeta):
     """An abstract base class describing the common public interface of residue selection moves."""
@@ -697,4 +698,19 @@ class COOHDummyMover:
         log.debug("E old: %.10f", old_state_probability)
 
         return new_positions, logp_accept_mirror
+
+    def to_xml(self):
+        """Return an xml representation of the dummy mover."""
+        tree = etree.fromstring('<COOHDummyMover OH="{}" HO="{}" OC="{}" CO="{}" R="{}"/>'.format(self.OH, self.HO, self.OC, self.CO, self.R))
+        for angle in self.angles:
+            angle_xml = '<Angle k="{}" theta0="{}" particle1="{}"  particle2="{}" particle3="{}"/>'.format(*angle)
+            tree.append(etree.fromstring(angle_xml))
+
+        for dihedral in self.dihedrals:
+            dihedral_xml = '<Dihedral k="{}" n="{}" theta0="{}" particle1="{}" particle2="{}" particle3="{}" particle4="{}" />'.format(*dihedral)
+            tree.append(etree.fromstring(dihedral_xml))
+
+        return etree.tostring(tree, pretty_print=True)
+
+
 
