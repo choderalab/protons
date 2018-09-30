@@ -123,7 +123,7 @@
         <State index="0" log_population="-0.011814650015108523" g_k="0.0" proton_count="0">
           <Condition pH="7.0" log_population="-0.011814650015108523" temperature_kelvin="298.15"/>
           <COOH HO="H29" OH="O1" CO="C2" OC="O3" R="C4"/>
-          <COOH HO="H30" OH="28" CO="C26" OC="27" R="C25"/>
+          <COOH HO="H30" OH="O28" CO="C26" OC="O27" R="C25"/>
           <Atom name="O1" type="o" charge="-0.7376"/>
           <Atom name="C2" type="c" charge="0.9118"/>
           <Atom name="O3" type="o" charge="-0.7373"/>
@@ -185,7 +185,7 @@
         </State>
         <State index="1" log_population="-4.441295721393796" g_k="0.0" proton_count="1">
           <Condition pH="7.0" log_population="-4.441295721393796" temperature_kelvin="298.15"/>
-          <COOH HO="H30" OH="28" CO="C26" OC="27" R="C25"/>
+          <COOH HO="H30" OH="O28" CO="C26" OC="O27" R="C25"/>
           <Atom name="O1" type="o" charge="-0.2911"/>
           <Atom name="C2" type="c" charge="0.3291"/>
           <Atom name="O3" type="o" charge="-0.189"/>

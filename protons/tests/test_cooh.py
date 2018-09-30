@@ -51,9 +51,9 @@ class TestCarboxylicAcid:
         viologen.collision_rate = 1.0 / unit.picoseconds
         viologen.pH = 7.0
         testsystems = get_test_data("viologen", "testsystems")
-        viologen.ffxml_filename = os.path.join(testsystems, "viologen-protons.ffxml")
+        viologen.ffxml_files = os.path.join(testsystems, "viologen-protons.ffxml")
         viologen.gaff = os.path.join(testsystems, "gaff.xml")
-        viologen.forcefield = ForceField(viologen.gaff, viologen.ffxml_filename)
+        viologen.forcefield = ForceField(viologen.gaff, viologen.ffxml_files)
 
         viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
         viologen.topology = viologen.pdbfile.topology
@@ -91,6 +91,8 @@ class TestCarboxylicAcid:
         )
         viologen.simulation.context.setPositions(viologen.positions)
         viologen.context = viologen.simulation.context
+        viologen.perturbations_per_trial = 10
+        viologen.propagations_per_step = 1
 
         return viologen
 
@@ -106,10 +108,10 @@ class TestCarboxylicAcid:
         viologen.collision_rate = 1.0 / unit.picoseconds
         viologen.pH = 7.0
         testsystems = get_test_data("viologen", "testsystems")
-        viologen.ffxml_filename = os.path.join(testsystems, "viologen-protons.ffxml")
+        viologen.ffxml_files = os.path.join(testsystems, "viologen-protons-cooh.ffxml")
         viologen.gaff = os.path.join(testsystems, "gaff.xml")
         viologen.forcefield = ForceField(
-            viologen.gaff, viologen.ffxml_filename, "tip3p.xml"
+            viologen.gaff, viologen.ffxml_files, "tip3p.xml"
         )
 
         viologen.pdbfile = app.PDBFile(
@@ -132,6 +134,7 @@ class TestCarboxylicAcid:
             rigidWater=True,
             ewaldErrorTolerance=0.0005,
         )
+        viologen.system.addForce(openmm.MonteCarloBarostat(viologen.pressure, viologen.temperature, 25))
         viologen.cooh1 = {  # indices in topology of the first cooh group
             "HO": 56,
             "OH": 0,
@@ -155,6 +158,8 @@ class TestCarboxylicAcid:
         )
         viologen.simulation.context.setPositions(viologen.positions)
         viologen.context = viologen.simulation.context
+        viologen.perturbations_per_trial = 1000
+        viologen.propagations_per_step = 1
 
         return viologen
 
@@ -247,4 +252,19 @@ class TestCarboxylicAcid:
         log.info("Acceptance rate was %f", acceptance_rate)
         if acceptance_rate < 0.9:
             raise ValueError("Expectance rate was lower than expected.")
+        return
+
+    def test_dummy_moving_protondrive(self) -> None:
+        """Move dummies within a proton drive."""
+
+        md_steps_between_mc = 10
+        total_loops = 25
+        viologen = self.setup_viologen_water()
+
+        drive = ForceFieldProtonDrive(viologen.temperature, viologen.topology, viologen.system, viologen.forcefield,
+                                      viologen.ffxml_files, pressure=viologen.pressure,
+                                      perturbations_per_trial=viologen.perturbations_per_trial,
+                                      propagations_per_step=viologen.propagations_per_step, residues_by_name=None,
+                                      residues_by_index=None)
+
         return

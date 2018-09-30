@@ -16,7 +16,7 @@ from simtk import unit
 from simtk import openmm as mm
 import saltswap
 from saltswap.swapper import Swapper
-from .proposals import _StateProposal, SaltSwapProposal, OneDirectionChargeProposal
+from .proposals import _StateProposal, SaltSwapProposal, OneDirectionChargeProposal, COOHDummyMover
 from .topology import Topology
 from .pka import available_pkas
 from simtk.openmm import app
@@ -25,7 +25,7 @@ import re
 from .logger import log
 from abc import ABCMeta, abstractmethod
 from lxml import etree, objectify
-
+from typing import Dict, List, Optional, Tuple, Any, Callable
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
@@ -426,9 +426,12 @@ class _TitrationState:
         self.proton_count = None
         self._forces = list()
         self._target_weight = None
+        # MC moves should be functions that take the positions, and return updated positions,
+        # and a log (reverse/forward) proposal probability ratio
+        self._mc_moves = list() # List[Callable[[np.array], Tuple[np.array, float]]]
 
     @classmethod
-    def from_lists(cls, g_k, charges, proton_count):
+    def from_lists(cls, g_k, charges, proton_count, cooh_movers:Optional[List[COOHDummyMover]]=None):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
 
         Returns
@@ -442,6 +445,10 @@ class _TitrationState:
         # Note that forces are to be manually added by force caching functionality in ProtonDrives
         obj._forces = list()
         obj._target_weight = None
+        for mover in cooh_movers:
+            obj._mc_moves.append(mover.mirror_syn_anti)
+            obj._mc_moves.append(mover.mirror_oxygens)
+
         return obj
 
     @classmethod
@@ -1505,7 +1512,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups[titration_group_index])
 
-    def _add_titration_state(self, titration_group_index, relative_energy, charges, proton_count):
+    def _add_titration_state(self, titration_group_index, relative_energy, charges, proton_count: int, cooh_movers:Optional[List[COOHDummyMover]]=None):
         """
         Add a titration state to a titratable group.
 
@@ -1520,6 +1527,7 @@ class NCMCProtonDrive(_BaseDrive):
             the atomic charges for this titration state
         proton_count : int
             number of protons in this titration state
+        cooh_movers : list of COOHDummyMovers that this state can use
 
         Notes
         -----
@@ -1534,7 +1542,7 @@ class NCMCProtonDrive(_BaseDrive):
         if len(charges) != len(self.titrationGroups[titration_group_index].atom_indices):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
-        state = _TitrationState.from_lists(relative_energy * self.beta, copy.deepcopy(charges), proton_count)
+        state = _TitrationState.from_lists(relative_energy * self.beta, copy.deepcopy(charges), proton_count, cooh_movers)
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
@@ -2489,16 +2497,17 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
 
-        self._add_xml_titration_groups(topology, forcefield, ffxml_residues, selected_residue_indices)
+        self._add_xml_titration_groups(topology, system, forcefield, ffxml_residues, selected_residue_indices)
 
         return
 
-    def _add_xml_titration_groups(self, topology, forcefield, ffxml_residues, selected_residue_indices):
+    def _add_xml_titration_groups(self, topology, system, forcefield, ffxml_residues, selected_residue_indices):
         """
         Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
         Parameters
         ----------
         topology - OpenMM Topology object
+        system - OpenMM System object
         forcefield - OpenMM ForceField object
         ffxml_residues - dict of residue ffxml templates
         selected_residue_indices - Residues to treat using Protons.
@@ -2527,10 +2536,14 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 raise ValueError("Could not match residue atoms to template.")
 
             atom_indices = [atom.index for atom in residue.atoms()]
-
+            atom_names = [atom.name for atom in template.atoms]
             # Sort the atom indices in the template in the same order as the topology indices.
             atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
             protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+
+            # forcefield template name as key, topology index as value
+            # Now, the name from the template (not the PDB file) can be used
+            name_index = dict(zip(atom_names, atom_indices))
 
             residue_pka = None
             pka_data = None
@@ -2580,8 +2593,39 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 relative_energy = float(state_block.get("g_k")) * unit.kilocalories_per_mole
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
+
+                # See if state has movable COOH dummy hydrogens
+                cooh_movers = list()
+                cooh_names = ["OH", "CO", "OC", "HO", "R"]
+
+                for cooh_group in state_block.xpath("COOH"):
+                    cooh_indices = cooh_group.attrib
+
+
+
+                    cooh_system_indices = dict()
+                    for key in cooh_names:
+                        try:
+                            template_atom_name = cooh_indices[key]
+                        except KeyError:
+                            not_found = []
+                            for k in cooh_names:
+                                if k not in cooh_indices:
+                                    not_found.append(k)
+                            raise KeyError(
+                            "Invalid COOH block, missing keys: {}".format(not_found))
+
+                        try:
+                            system_index = name_index[template_atom_name]
+                        except KeyError:
+                            raise KeyError("Name '{}' not in ffxml template ({} atom in COOH element).".format(template_atom_name, key))
+
+                        cooh_system_indices[key] = system_index
+
+                    cooh_movers.append(COOHDummyMover(system, cooh_system_indices))
+
                 # Create titration state.
-                self._add_titration_state(group_index, relative_energy, charges, proton_count)
+                self._add_titration_state(group_index, relative_energy, charges, proton_count, cooh_movers)
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.

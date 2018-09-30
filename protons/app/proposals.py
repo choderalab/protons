@@ -8,7 +8,7 @@ import numpy as np
 import math
 from simtk import unit, openmm
 from scipy.misc import comb
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Callable, List, Optional
 
 class _StateProposal(metaclass=ABCMeta):
     """An abstract base class describing the common public interface of residue selection moves."""
