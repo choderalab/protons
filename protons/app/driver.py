@@ -16,7 +16,12 @@ from simtk import unit
 from simtk import openmm as mm
 import saltswap
 from saltswap.swapper import Swapper
-from .proposals import _StateProposal, SaltSwapProposal, OneDirectionChargeProposal, COOHDummyMover
+from .proposals import (
+    _StateProposal,
+    SaltSwapProposal,
+    OneDirectionChargeProposal,
+    COOHDummyMover,
+)
 from .topology import Topology
 from .pka import available_pkas
 from simtk.openmm import app
@@ -28,7 +33,9 @@ from lxml import etree, objectify
 from typing import Dict, List, Optional, Tuple, Any, Callable
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
-kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
+kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(
+    unit.kilojoules_per_mole / unit.kelvin
+)
 np.set_printoptions(precision=15)
 
 
@@ -61,7 +68,9 @@ class _TitratableResidue:
 
     def __eq__(self, other):
 
-        for own_state, other_state in zip(self.titration_states, other.titration_states):
+        for own_state, other_state in zip(
+            self.titration_states, other.titration_states
+        ):
             if own_state != other_state:
                 return False
 
@@ -77,7 +86,7 @@ class _TitratableResidue:
         if self._state != other._state:
             return False
 
-        if self._pka_data is not None and  other._pka_data is not None:
+        if self._pka_data is not None and other._pka_data is not None:
             try:
                 assert_frame_equal(self._pka_data, other._pka_data)
             except AssertionError:
@@ -88,9 +97,17 @@ class _TitratableResidue:
 
         return True
 
-
     @classmethod
-    def from_lists(cls, atom_indices, group_index, name, residue_type, exception_indices, pka_data=None, residue_pka=None):
+    def from_lists(
+        cls,
+        atom_indices,
+        group_index,
+        name,
+        residue_type,
+        exception_indices,
+        pka_data=None,
+        residue_pka=None,
+    ):
         """
         Instantiate a _TitratableResidue from lists and strings that contain all necessary information
 
@@ -150,21 +167,21 @@ class _TitratableResidue:
         # The indices of the residue atoms in the system
         atom_indices = list()
 
-        res = xmltree.xpath('/TitratableResidue')[0]
-        for atom in xmltree.xpath('/TitratableResidue/atom'):
-            atom_indices.append(int(atom.get('index')))
+        res = xmltree.xpath("/TitratableResidue")[0]
+        for atom in xmltree.xpath("/TitratableResidue/atom"):
+            atom_indices.append(int(atom.get("index")))
         obj.atom_indices = atom_indices
 
         # List to store titration states
         obj.titration_states = list()
-        obj.index = int(res.get('index'))
-        obj.name = str(res.get('name'))
+        obj.index = int(res.get("index"))
+        obj.name = str(res.get("name"))
 
-        obj.residue_type = str(res.get('type'))
+        obj.residue_type = str(res.get("type"))
         # NonbondedForce exceptions associated with this titration state
         exception_indices = list()
-        for exception in xmltree.xpath('/TitratableResidue/exception'):
-            exception_indices.append(int(exception.get('index')))
+        for exception in xmltree.xpath("/TitratableResidue/exception"):
+            exception_indices.append(int(exception.get("index")))
 
         obj.exception_indices = exception_indices
         obj._state = None
@@ -172,10 +189,10 @@ class _TitratableResidue:
         obj._residue_pka = None
 
         # parse the pka data block as if an html table
-        pka_data = xmltree.xpath('/TitratableResidue/pka_data')
+        pka_data = xmltree.xpath("/TitratableResidue/pka_data")
         if len(pka_data):
             pka_data = copy.deepcopy(pka_data[0])
-            pka_data.tag = 'table'
+            pka_data.tag = "table"
             obj._pka_data = pd.read_html(etree.tostring(pka_data))[0]
 
         res_pka = res.get("residue_pka")
@@ -185,15 +202,17 @@ class _TitratableResidue:
         if obj._pka_data is not None and obj._residue_pka is not None:
             raise ValueError("You can only provide pka_data, or residue_pka, not both.")
 
-        states = xmltree.xpath('/TitratableResidue/TitrationState')
+        states = xmltree.xpath("/TitratableResidue/TitrationState")
         obj.titration_states = [None] * len(states)
 
         for state in states:
-            state_index = int(state.get('index'))
-            obj.titration_states[state_index] = _TitrationState.from_serialized_xml(state)
+            state_index = int(state.get("index"))
+            obj.titration_states[state_index] = _TitrationState.from_serialized_xml(
+                state
+            )
 
         # Set the titration state of this residue
-        obj.state = int(res.get('state'))
+        obj.state = int(res.get("state"))
 
         return obj
 
@@ -216,25 +235,27 @@ class _TitratableResidue:
             name=self.name,
             type=self.residue_type,
             index=str(self.index),
-            state=str(self.state_index))
+            state=str(self.state_index),
+        )
 
         if self._residue_pka is not None:
             # residue_pka holds a reference to the base class.
             # Storing the name of the type, which can be looked to find it from the available_pkas dict
-            res.set('residue_pka', self.residue_type)
+            res.set("residue_pka", self.residue_type)
 
         for atom_index in self.atom_indices:
-            objectify.SubElement(res, 'atom', index=str(atom_index))
+            objectify.SubElement(res, "atom", index=str(atom_index))
 
         for exception_index in self.exception_indices:
-            objectify.SubElement(res, 'exception', index=str(exception_index))
+            objectify.SubElement(res, "exception", index=str(exception_index))
 
         if self._pka_data is not None:
             res.pka_data = objectify.fromstring(self._pka_data.to_html(index=False))
 
-
         res.TitrationState = E.TitrationState()
-        res.TitrationState[:] = [state.serialize(index) for index,state in enumerate(self.titration_states)][:]
+        res.TitrationState[:] = [
+            state.serialize(index) for index, state in enumerate(self.titration_states)
+        ][:]
 
         return res
 
@@ -263,25 +284,33 @@ class _TitratableResidue:
             for state, group in self._pka_data.groupby("State"):
                 # Get the first element where the pH matches, the temperature potentially matches, and the ionic strenght potentially matches
                 state = int(state)
-                pH_match = (group['pH'] == pH)
+                pH_match = group["pH"] == pH
                 temperature_match = True
                 ionic_strength_match = True
                 if temperature is not None:
-                    temperature_match = (group['Temperature (K)'].isin([temperature, None]))
+                    temperature_match = group["Temperature (K)"].isin(
+                        [temperature, None]
+                    )
 
                 if ionic_strength is not None:
-                    ionic_strength_match = (group['Ionic strength (mM)'].isin(ionic_strength, None))
+                    ionic_strength_match = group["Ionic strength (mM)"].isin(
+                        ionic_strength, None
+                    )
 
                 matches = group.loc[pH_match & temperature_match & ionic_strength_match]
 
                 # If there are no matches, throw an error
                 if len(matches) == 0:
-                    raise ValueError("There is no matching pH/temperature condition available for residue {}.".format(self.name))
+                    raise ValueError(
+                        "There is no matching pH/temperature condition available for residue {}.".format(
+                            self.name
+                        )
+                    )
                 # get the first one
                 else:
                     first_row = next(matches.iterrows())
                     # index 1 is the row values, get the log population
-                    log_population = first_row[1]['log population']
+                    log_population = first_row[1]["log population"]
 
                 log_weights[state] = log_population
 
@@ -293,7 +322,9 @@ class _TitratableResidue:
         # This will be equal if this was never specified previously. See the target_weights property.
         else:
             if strict:
-                raise RuntimeError("Residue is not adjustable by pH. {}".format(self.name))
+                raise RuntimeError(
+                    "Residue is not adjustable by pH. {}".format(self.name)
+                )
             else:
                 log_weights = np.log(np.asarray(self.target_weights))
 
@@ -335,7 +366,9 @@ class _TitratableResidue:
         """
 
         if state > len(self):
-            raise IndexError("Titration state index out of bounds. ( > {}".format(len(self)))
+            raise IndexError(
+                "Titration state index out of bounds. ( > {}".format(len(self))
+            )
         self._state = state
 
     @property
@@ -351,7 +384,9 @@ class _TitratableResidue:
     def target_weights(self, weights):
         """Set sampling target weights for all states."""
         if not len(weights) == len(self):
-            raise ValueError("The number of weights needs to be equal to the number of states.")
+            raise ValueError(
+                "The number of weights needs to be equal to the number of states."
+            )
 
         for id, state in enumerate(self):
             state.target_weight = weights[id]
@@ -365,7 +400,9 @@ class _TitratableResidue:
     def g_k_values(self, g_klist):
         """Set sampling target weights for all states."""
         if not len(g_klist) == len(self):
-            raise ValueError("The number of g_k values needs to be equal to the number of states.")
+            raise ValueError(
+                "The number of g_k values needs to be equal to the number of states."
+            )
 
         for id, state in enumerate(self):
             state.g_k = g_klist[id]
@@ -428,10 +465,16 @@ class _TitrationState:
         self._target_weight = None
         # MC moves should be functions that take the positions, and return updated positions,
         # and a log (reverse/forward) proposal probability ratio
-        self._mc_moves = list() # List[Callable[[np.array], Tuple[np.array, float]]]
+        self._mc_moves = list()  # List[Callable[[np.array], Tuple[np.array, float]]]
 
     @classmethod
-    def from_lists(cls, g_k, charges, proton_count, cooh_movers:Optional[List[COOHDummyMover]]=None):
+    def from_lists(
+        cls,
+        g_k,
+        charges,
+        proton_count,
+        cooh_movers: Optional[List[COOHDummyMover]] = None,
+    ):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
 
         Returns
@@ -469,15 +512,15 @@ class _TitrationState:
 
         # prevent accidental modification
         state = copy.deepcopy(state_element)
-        obj.proton_count = int(state.get('proton_count'))
-        obj._target_weight = np.float64(state.get('target_weight'))
-        obj.g_k = np.float64(state.get('g_k'))
+        obj.proton_count = int(state.get("proton_count"))
+        obj._target_weight = np.float64(state.get("target_weight"))
+        obj.g_k = np.float64(state.get("g_k"))
 
-        charges = state.xpath('charge')
+        charges = state.xpath("charge")
         obj.charges = [None] * len(charges)
         for charge in charges:
             # Get the array index
-            charge_index = int(charge.get('charge_index'))
+            charge_index = int(charge.get("charge_index"))
             charge_value = np.float64(charge.text)
             obj.charges[charge_index] = charge_value
 
@@ -489,28 +532,35 @@ class _TitrationState:
         # Each dictionary contains the parameters for either an atom, or an exception.
         # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
         # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
-        forces = state.xpath('force')
+        forces = state.xpath("force")
         obj._forces = [None] * len(forces)
         for f_index, force in enumerate(forces):
             force_dict = dict(atoms=list(), exceptions=list())
 
-            for atom in force.xpath('atom'):
+            for atom in force.xpath("atom"):
                 atom_dict = dict()
-                for key in ['atom_index', 'charge', 'epsilon', 'sigma']:
-                    if key == 'atom_index':
+                for key in ["atom_index", "charge", "epsilon", "sigma"]:
+                    if key == "atom_index":
                         atom_dict[key] = int(atom.get(key))
                     else:
                         atom_dict[key] = np.float64(atom.get(key))
-                force_dict['atoms'].append(atom_dict)
+                force_dict["atoms"].append(atom_dict)
 
-            for exception in force.xpath('exception'):
+            for exception in force.xpath("exception"):
                 exc_dict = dict()
-                for key in ["chargeProd", "epsilon", "exception_index", "particle1", "particle2" , "sigma"]:
+                for key in [
+                    "chargeProd",
+                    "epsilon",
+                    "exception_index",
+                    "particle1",
+                    "particle2",
+                    "sigma",
+                ]:
                     if key in ["particle1", "particle2", "exception_index"]:
                         exc_dict[key] = int(exception.get(key))
                     else:
                         exc_dict[key] = np.float64(exception.get(key))
-                force_dict['exceptions'].append(exc_dict)
+                force_dict["exceptions"].append(exc_dict)
             obj._forces[f_index] = force_dict
 
         return obj
@@ -547,7 +597,12 @@ class _TitrationState:
         if index is not None:
             index = str(index)
         # Only serializing values that are not properties.
-        state = E.TitrationState(proton_count=str(self.proton_count), target_weight=str(self.target_weight), index=index, g_k=str(self.g_k))
+        state = E.TitrationState(
+            proton_count=str(self.proton_count),
+            target_weight=str(self.target_weight),
+            index=index,
+            g_k=str(self.g_k),
+        )
 
         q_tags = list()
         for q_index, q in enumerate(self.charges):
@@ -567,20 +622,23 @@ class _TitrationState:
         # For atom it contains 'charge', 'sigma', 'epsilon', and 'atom_index'.
         # For exception it contains  'exception_index' 'particle1' 'particle2' 'chargeProd' 'sigma', and 'epsilon'
         for f_index, force in enumerate(self._forces):
-            force_xml = E.force(index=str(f_index), # the force index in the internal state, not the force index in openmm
-                                )
-            atoms = force['atoms']
-            exceptions = force['exceptions']
+            force_xml = E.force(
+                index=str(
+                    f_index
+                )  # the force index in the internal state, not the force index in openmm
+            )
+            atoms = force["atoms"]
+            exceptions = force["exceptions"]
             for atom in atoms:
                 # Convert to string for xml storage
                 atom_strings = dict(atom)
                 for key in atom.keys():
-                    if key == 'atom_index':
+                    if key == "atom_index":
                         atom_strings[key] = str(atom[key])
                     else:
                         # Ensure numpy type for print precision
                         atom_strings[key] = "{:.15f}".format(np.float64(atom[key]))
-                atom_tag = objectify.SubElement(force_xml, 'atom', **atom_strings)
+                atom_tag = objectify.SubElement(force_xml, "atom", **atom_strings)
             for exception in exceptions:
                 exception_strings = dict(exception)
                 for key in exception.keys():
@@ -588,8 +646,12 @@ class _TitrationState:
                         exception_strings[key] = str(exception[key])
                     else:
                         # Ensure numpy type for print precision
-                        exception_strings[key] = "{:.15f}".format(np.float64(exception[key]))
-                exception_tag = objectify.SubElement(force_xml, 'exception', **exception_strings)
+                        exception_strings[key] = "{:.15f}".format(
+                            np.float64(exception[key])
+                        )
+                exception_tag = objectify.SubElement(
+                    force_xml, "exception", **exception_strings
+                )
 
             state.force = force_xml
 
@@ -601,10 +663,14 @@ class _TitrationState:
             return False
 
         float_atol = 1.e-10
-        if not np.isclose(self._target_weight, other._target_weight, rtol=0.0, atol=float_atol):
+        if not np.isclose(
+            self._target_weight, other._target_weight, rtol=0.0, atol=float_atol
+        ):
             return False
 
-        if not np.isclose(self.proton_count, other.proton_count, rtol=0.0, atol=float_atol):
+        if not np.isclose(
+            self.proton_count, other.proton_count, rtol=0.0, atol=float_atol
+        ):
             return False
 
         if not np.isclose(self.g_k, other.g_k, rtol=0.0, atol=float_atol):
@@ -614,22 +680,34 @@ class _TitrationState:
             return False
 
         # Check if all stored charges are equal
-        if not np.all(np.isclose(self.charges, other.charges, atol=float_atol, rtol=0.0)):
+        if not np.all(
+            np.isclose(self.charges, other.charges, atol=float_atol, rtol=0.0)
+        ):
             return False
 
         # check if all force parameters are equal
         for own_force, other_force in zip(self._forces, other._forces):
-            own_atoms, other_atoms = own_force['atoms'], other_force['atoms']
-            own_exceptions, other_exceptions = own_force['exceptions'], other_force['exceptions']
+            own_atoms, other_atoms = own_force["atoms"], other_force["atoms"]
+            own_exceptions, other_exceptions = (
+                own_force["exceptions"],
+                other_force["exceptions"],
+            )
 
             for own_atom, other_atom in zip(own_atoms, other_atoms):
                 for key in own_atom.keys():
-                    if not np.isclose(own_atom[key], other_atom[key], rtol=0.0, atol=float_atol):
+                    if not np.isclose(
+                        own_atom[key], other_atom[key], rtol=0.0, atol=float_atol
+                    ):
                         return False
 
             for own_exception, other_exception in zip(own_exceptions, other_exceptions):
                 for key in own_exception.keys():
-                    if not np.isclose(own_exception[key], other_exception[key], rtol=0.0, atol=float_atol):
+                    if not np.isclose(
+                        own_exception[key],
+                        other_exception[key],
+                        rtol=0.0,
+                        atol=float_atol,
+                    ):
                         return False
 
         # Everything that was checked seems equal.
@@ -647,7 +725,7 @@ class _TitrationAttemptData(object):
         self._logp_ratio_salt_proposal = None
         self._logp_accept = None
         self._work = None
-   
+
         self._initial_charge = None
         self._initial_states = None
         self._initial_ion_states = None
@@ -672,7 +750,7 @@ class _TitrationAttemptData(object):
     def proposed_charge(self) -> int:
         """proposed charge of titratable residues."""
         return int(self._proposed_charge)
-    
+
     @proposed_charge.setter
     def proposed_charge(self, proposed_charge: int):
         """proposed charge of titratable residues."""
@@ -684,7 +762,7 @@ class _TitrationAttemptData(object):
         return self._accepted
 
     @accepted.setter
-    def accepted(self, accepted:bool):
+    def accepted(self, accepted: bool):
         """True if proposal was accepted, false if rejected."""
         self._accepted = accepted
 
@@ -724,9 +802,9 @@ class _TitrationAttemptData(object):
     def work(self) -> np.float64:
         """The total work performed during the attempt."""
         return self._work
-    
+
     @work.setter
-    def work(self,work: np.float64):
+    def work(self, work: np.float64):
         """The total work performed during the attempt."""
         self._work = work
 
@@ -822,7 +900,7 @@ class _BaseDrive(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def attach_context(self,context):
+    def attach_context(self, context):
         """
         Attach a context containing a compoundintegrator for use with NCMC
         Parameters
@@ -902,7 +980,15 @@ class NCMCProtonDrive(_BaseDrive):
       * Add automatic tuning of switching times for optimal acceptance.
     """
 
-    def __init__(self, temperature, topology, system, pressure=None, perturbations_per_trial=0, propagations_per_step=1):
+    def __init__(
+        self,
+        temperature,
+        topology,
+        system,
+        pressure=None,
+        perturbations_per_trial=0,
+        propagations_per_step=1,
+    ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
 
@@ -929,7 +1015,7 @@ class NCMCProtonDrive(_BaseDrive):
         # For more efficient calculation of the work (in multiples of KT) during NCMC
         self.beta_unitless = strip_in_unit_system(self.beta)
         self.pressure = pressure
-        self._attempt_number = 0 # Internal tracker for current iteration attempt
+        self._attempt_number = 0  # Internal tracker for current iteration attempt
         self.perturbations_per_trial = perturbations_per_trial
         # Keeps track of the last ncmc protocol attempt work.
         self.ncmc_stats_per_step = [None] * perturbations_per_trial
@@ -966,12 +1052,14 @@ class NCMCProtonDrive(_BaseDrive):
         self.swap_proposal = None
 
         # Record the forces that need to be switched off for NCMC
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
-                  range(system.getNumForces())}
+        forces = {
+            system.getForce(index).__class__.__name__: system.getForce(index)
+            for index in range(system.getNumForces())
+        }
 
         # Control center mass remover
-        if 'CMMotionRemover' in forces:
-            self.cm_remover = forces['CMMotionRemover']
+        if "CMMotionRemover" in forces:
+            self.cm_remover = forces["CMMotionRemover"]
             self.cm_remover_freq = self.cm_remover.getFrequency()
         else:
             self.cm_remover = None
@@ -979,8 +1067,10 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check that system has MonteCarloBarostat if pressure is specified
         if pressure is not None:
-            if 'MonteCarloBarostat' not in forces:
-                raise Exception("`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`")
+            if "MonteCarloBarostat" not in forces:
+                raise Exception(
+                    "`pressure` is specified, but `system` object lacks a `MonteCarloBarostat`"
+                )
 
         # Initialize titration group records.
         self.titrationGroups = list()
@@ -997,7 +1087,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store force object pointers.
         # TODO: Add Custom forces.
-        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce']
+        force_classes_to_update = ["NonbondedForce", "GBSAOBCForce"]
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -1062,19 +1152,23 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check the attributes of the NCMC integrator
         try:
-            self.ncmc_integrator.getGlobalVariableByName('protocol_work')
+            self.ncmc_integrator.getGlobalVariableByName("protocol_work")
         except:
-            raise ValueError("The NCMC integrator does not have a 'protocol_work' attribute.")
+            raise ValueError(
+                "The NCMC integrator does not have a 'protocol_work' attribute."
+            )
 
         try:
-            self.ncmc_integrator.getGlobalVariableByName('first_step')
+            self.ncmc_integrator.getGlobalVariableByName("first_step")
         except:
-            raise ValueError("The NCMC integrator does not have a 'first_step' attribute.")
+            raise ValueError(
+                "The NCMC integrator does not have a 'first_step' attribute."
+            )
 
         for force_index, force in enumerate(self.forces_to_update):
             force.updateParametersInContext(self.context)
 
-    def attach_swapper(self, swapper: Swapper, proposal: SaltSwapProposal=None):
+    def attach_swapper(self, swapper: Swapper, proposal: SaltSwapProposal = None):
         """
         Provide a saltswapper to enable maintaining charge neutrality.
 
@@ -1095,10 +1189,11 @@ class NCMCProtonDrive(_BaseDrive):
         # The excess amount of ions, positive if cations, negative if more anions
         self.excess_ions = ncat - nani
 
-        self._ion_parameters = {0: self.swapper.water_parameters,
-                                1: self.swapper.cation_parameters,
-                                2: self.swapper.anion_parameters
-                                }
+        self._ion_parameters = {
+            0: self.swapper.water_parameters,
+            1: self.swapper.cation_parameters,
+            2: self.swapper.anion_parameters,
+        }
 
         if proposal is not None:
             self.swap_proposal = proposal
@@ -1138,11 +1233,13 @@ class NCMCProtonDrive(_BaseDrive):
         # Make sure residues exist
         for group, indices in dict_of_pools.items():
 
-            if not(isinstance(indices, list) or isinstance(indices, np.ndarray)):
+            if not (isinstance(indices, list) or isinstance(indices, np.ndarray)):
                 raise ValueError("Indices must be supplied as list or ndarrays.")
 
             if not all(index < len(self.titrationGroups) for index in indices):
-                raise ValueError("Residue in {} specified is outside of range.".format(group))
+                raise ValueError(
+                    "Residue in {} specified is outside of range.".format(group)
+                )
 
         self.residue_pools = dict_of_pools
 
@@ -1201,8 +1298,10 @@ class NCMCProtonDrive(_BaseDrive):
         supplied_residues = set(gk_dict.keys())
         if not supplied_residues <= all_restypes:
             if strict:
-                raise ValueError("Weights were supplied for a residue that was not in the system.\n"
-                                 "{}".format(", ".join(supplied_residues-all_restypes)))
+                raise ValueError(
+                    "Weights were supplied for a residue that was not in the system.\n"
+                    "{}".format(", ".join(supplied_residues - all_restypes))
+                )
 
         for residue_type, weights in gk_dict.items():
             # Set the g_k values to the user supplied values.
@@ -1213,10 +1312,18 @@ class NCMCProtonDrive(_BaseDrive):
                     num_weights = len(weights)
                     num_states = len(self.titrationGroups[group_index])
                     if not num_weights == num_states:
-                        raise ValueError("The number of weights ({}) supplied does not match the number of states ({}) for this residue.".format(num_weights, num_states))
+                        raise ValueError(
+                            "The number of weights ({}) supplied does not match the number of states ({}) for this residue.".format(
+                                num_weights, num_states
+                            )
+                        )
 
-                    for state_index, state in enumerate(self.titrationGroups[group_index]):
-                        self.titrationGroups[group_index][state_index].g_k = gk_dict[residue_type][state_index]
+                    for state_index, state in enumerate(
+                        self.titrationGroups[group_index]
+                    ):
+                        self.titrationGroups[group_index][state_index].g_k = gk_dict[
+                            residue_type
+                        ][state_index]
 
     def reset_statistics(self):
         """
@@ -1264,16 +1371,29 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         # Look for a NonbondedForce.
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
-        force = forces['NonbondedForce']
+        forces = {
+            system.getForce(index).__class__.__name__: system.getForce(index)
+            for index in range(system.getNumForces())
+        }
+        force = forces["NonbondedForce"]
         # Determine coulomb14scale from first exception with nonzero chargeprod.
         for index in range(force.getNumExceptions()):
-            [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+            [
+                particle1,
+                particle2,
+                chargeProd,
+                sigma,
+                epsilon,
+            ] = force.getExceptionParameters(index)
             [charge1, sigma1, epsilon1] = force.getParticleParameters(particle1)
             [charge2, sigma2, epsilon2] = force.getParticleParameters(particle2)
             # Using 1.e-15 as necessary precision for establishing greater than 0
             # Needs to be slightly larger than sys.float_info.epsilon to prevent numerical errors.
-            if (abs(charge1 / (unit.elementary_charge)) > 1.e-15) and (abs(charge2 / unit.elementary_charge) > 1.e-15) and (abs(chargeProd/(unit.elementary_charge ** 2)) > 1.e-15):
+            if (
+                (abs(charge1 / (unit.elementary_charge)) > 1.e-15)
+                and (abs(charge2 / unit.elementary_charge) > 1.e-15)
+                and (abs(chargeProd / (unit.elementary_charge ** 2)) > 1.e-15)
+            ):
                 coulomb14scale = chargeProd / (charge1 * charge2)
                 return coulomb14scale
 
@@ -1305,26 +1425,50 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         # Locate NonbondedForce object.
-        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in range(system.getNumForces())}
-        force = forces['NonbondedForce']
+        forces = {
+            system.getForce(index).__class__.__name__: system.getForce(index)
+            for index in range(system.getNumForces())
+        }
+        force = forces["NonbondedForce"]
         # Build a list of exception indices involving any of the specified particles.
         exception_indices = list()
         for exception_index in range(force.getNumExceptions()):
             # TODO this call to getExceptionParameters is expensive. Perhaps this could be cached somewhere per force.
-            [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
+            [
+                particle1,
+                particle2,
+                chargeProd,
+                sigma,
+                epsilon,
+            ] = force.getExceptionParameters(exception_index)
             if (particle1 in particle_indices) or (particle2 in particle_indices):
-                if (particle2 in self.atomExceptions[particle1]) or (particle1 in self.atomExceptions[particle2]):
+                if (particle2 in self.atomExceptions[particle1]) or (
+                    particle1 in self.atomExceptions[particle2]
+                ):
                     exception_indices.append(exception_index)
                     # BEGIN UGLY HACK
                     # chargeprod and sigma cannot be identically zero or else we risk the error:
                     # Exception: updateParametersInContext: The number of non-excluded exceptions has changed
                     # TODO: Once OpenMM interface permits this, omit this code.
-                    [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(exception_index)
-                    if (2 * chargeProd == chargeProd):
+                    [
+                        particle1,
+                        particle2,
+                        chargeProd,
+                        sigma,
+                        epsilon,
+                    ] = force.getExceptionParameters(exception_index)
+                    if 2 * chargeProd == chargeProd:
                         chargeProd = sys.float_info.epsilon
-                    if (2 * epsilon == epsilon):
+                    if 2 * epsilon == epsilon:
                         epsilon = sys.float_info.epsilon
-                    force.setExceptionParameters(exception_index, particle1, particle2, chargeProd, sigma, epsilon)
+                    force.setExceptionParameters(
+                        exception_index,
+                        particle1,
+                        particle2,
+                        chargeProd,
+                        sigma,
+                        epsilon,
+                    )
                     # END UGLY HACK
 
         return exception_indices
@@ -1344,7 +1488,13 @@ class NCMCProtonDrive(_BaseDrive):
         for force in system.getForces():
             if force.__class__.__name__ == "NonbondedForce":
                 for index in range(force.getNumExceptions()):
-                    [atom1, atom2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+                    [
+                        atom1,
+                        atom2,
+                        chargeProd,
+                        sigma,
+                        epsilon,
+                    ] = force.getExceptionParameters(index)
                     unitless_epsilon = epsilon / unit.kilojoule_per_mole
                     # 1-2 and 1-3 should be 0 for both chargeProd and episilon, whereas a 1-4 interaction is scaled.
                     # Potentially, chargeProd is 0, but epsilon should never be 0.
@@ -1380,48 +1530,48 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         # Read file contents.
-        infile = open(filename, 'r')
+        infile = open(filename, "r")
         lines = infile.readlines()
         infile.close()
 
         # Concatenate all text.
-        contents = ''
+        contents = ""
         for line in lines:
             contents += line.strip()
 
         # Extract section corresponding to keyword.
-        key = '&' + namelist_name
-        terminator = '/'
-        match = re.match(key + '(.*)' + terminator, contents)
+        key = "&" + namelist_name
+        terminator = "/"
+        match = re.match(key + "(.*)" + terminator, contents)
         contents = match.groups(1)[0]
 
         # Parse contents.
         # These regexp match strings come from fortran-namelist from Stephane Chamberland (stephane.chamberland@ec.gc.ca) [LGPL].
-        valueInt = re.compile(r'[+-]?[0-9]+')
-        valueReal = re.compile(r'[+-]?([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)')
-        valueString = re.compile(r'^[\'\"](.*)[\'\"]$')
+        valueInt = re.compile(r"[+-]?[0-9]+")
+        valueReal = re.compile(r"[+-]?([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)")
+        valueString = re.compile(r"^[\'\"](.*)[\'\"]$")
 
         # Parse contents.
         namelist = dict()
         while len(contents) > 0:
             # Peel off variable name.
-            match = re.match(r'^([^,]+)=(.+)$', contents)
+            match = re.match(r"^([^,]+)=(.+)$", contents)
             if not match:
                 break
             name = match.group(1).strip()
             contents = match.group(2).strip()
 
             # Peel off value, which extends to either next variable name or end of section.
-            match = re.match(r'^([^=]+),([^,]+)=(.+)$', contents)
+            match = re.match(r"^([^=]+),([^,]+)=(.+)$", contents)
             if match:
                 value = match.group(1).strip()
-                contents = match.group(2) + '=' + match.group(3)
+                contents = match.group(2) + "=" + match.group(3)
             else:
                 value = contents
-                contents = ''
+                contents = ""
 
             # Split value on commas.
-            elements = value.split(',')
+            elements = value.split(",")
             value = list()
             for element in elements:
                 if valueReal.match(element):
@@ -1430,7 +1580,7 @@ class NCMCProtonDrive(_BaseDrive):
                     element = int(element)
                 elif valueString.match(element):
                     element = element[1:-1]
-                if element != '':
+                if element != "":
                     value.append(element)
             if len(value) == 1:
                 value = value[0]
@@ -1453,7 +1603,9 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups)
 
-    def _add_titratable_group(self, atom_indices, residue_type, name='', residue_pka=None, pka_data=None):
+    def _add_titratable_group(
+        self, atom_indices, residue_type, name="", residue_pka=None, pka_data=None
+    ):
         """
         Define a new titratable group.
 
@@ -1480,12 +1632,22 @@ class NCMCProtonDrive(_BaseDrive):
         # Check to make sure the requested group does not share atoms with any existing titration group.
         for group in self.titrationGroups:
             if set(group.atom_indices).intersection(atom_indices):
-                raise Exception("Titration groups cannot share atoms. The requested atoms of new titration group (%s) share atoms with another group (%s)." % (
-                    str(atom_indices), str(group.atom_indices)))
+                raise Exception(
+                    "Titration groups cannot share atoms. The requested atoms of new titration group (%s) share atoms with another group (%s)."
+                    % (str(atom_indices), str(group.atom_indices))
+                )
 
         # Define the new group.
         group_index = len(self.titrationGroups) + 1
-        group = _TitratableResidue.from_lists(list(atom_indices), group_index, name, residue_type, self._get14exceptions(self.system, atom_indices), residue_pka=residue_pka, pka_data=pka_data)
+        group = _TitratableResidue.from_lists(
+            list(atom_indices),
+            group_index,
+            name,
+            residue_type,
+            self._get14exceptions(self.system, atom_indices),
+            residue_pka=residue_pka,
+            pka_data=pka_data,
+        )
         self.titrationGroups.append(group)
         return group_index
 
@@ -1507,12 +1669,21 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
-                            (titration_group_index, self._get_num_titratable_groups()))
+            raise Exception(
+                "Invalid titratable group requested.  Requested %d, valid groups are in range(%d)."
+                % (titration_group_index, self._get_num_titratable_groups())
+            )
 
         return len(self.titrationGroups[titration_group_index])
 
-    def _add_titration_state(self, titration_group_index, relative_energy, charges, proton_count: int, cooh_movers:Optional[List[COOHDummyMover]]=None):
+    def _add_titration_state(
+        self,
+        titration_group_index,
+        relative_energy,
+        charges,
+        proton_count: int,
+        cooh_movers: Optional[List[COOHDummyMover]] = None,
+    ):
         """
         Add a titration state to a titratable group.
 
@@ -1537,12 +1708,23 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check input arguments.
         if titration_group_index not in range(self._get_num_titratable_groups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
-                            (titration_group_index, self._get_num_titratable_groups()))
-        if len(charges) != len(self.titrationGroups[titration_group_index].atom_indices):
-            raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
+            raise Exception(
+                "Invalid titratable group requested.  Requested %d, valid groups are in range(%d)."
+                % (titration_group_index, self._get_num_titratable_groups())
+            )
+        if len(charges) != len(
+            self.titrationGroups[titration_group_index].atom_indices
+        ):
+            raise Exception(
+                "The number of charges must match the number (and order) of atoms in the defined titration group."
+            )
 
-        state = _TitrationState.from_lists(relative_energy * self.beta, copy.deepcopy(charges), proton_count, cooh_movers)
+        state = _TitrationState.from_lists(
+            relative_energy * self.beta,
+            copy.deepcopy(charges),
+            proton_count,
+            cooh_movers,
+        )
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
@@ -1564,12 +1746,16 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
-                            (titration_group_index, self._get_num_titratable_groups()))
+            raise Exception(
+                "Invalid titratable group requested.  Requested %d, valid groups are in range(%d)."
+                % (titration_group_index, self._get_num_titratable_groups())
+            )
 
         return self.titrationGroups[titration_group_index].state_index
 
-    def _get_titration_state_total_charge(self, titration_group_index, titration_state_index):
+    def _get_titration_state_total_charge(
+        self, titration_group_index, titration_state_index
+    ):
         """
         Return the total charge for the specified titration state.
 
@@ -1591,7 +1777,9 @@ class NCMCProtonDrive(_BaseDrive):
         """
         self._validate_indices(titration_group_index, titration_state_index)
 
-        return self.titrationGroups[titration_group_index][titration_state_index].total_charge
+        return self.titrationGroups[titration_group_index][
+            titration_state_index
+        ].total_charge
 
     def _validate_indices(self, titration_group_index, titration_state_index):
         """
@@ -1606,13 +1794,24 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
         if titration_group_index not in range(self._get_num_titratable_groups()):
-            raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
-                            (titration_group_index, self._get_num_titratable_groups()))
-        if titration_state_index not in range(len(self.titrationGroups[titration_group_index])):
-            raise Exception("Invalid titration state requested.  Requested %d, valid states are in range(%d)." %
-                            (titration_state_index, self.get_num_titration_states(titration_group_index)))
+            raise Exception(
+                "Invalid titratable group requested.  Requested %d, valid groups are in range(%d)."
+                % (titration_group_index, self._get_num_titratable_groups())
+            )
+        if titration_state_index not in range(
+            len(self.titrationGroups[titration_group_index])
+        ):
+            raise Exception(
+                "Invalid titration state requested.  Requested %d, valid states are in range(%d)."
+                % (
+                    titration_state_index,
+                    self.get_num_titration_states(titration_group_index),
+                )
+            )
 
-    def _set_titration_state(self, titration_group_index, titration_state_index, updateParameters=True):
+    def _set_titration_state(
+        self, titration_group_index, titration_state_index, updateParameters=True
+    ):
         """
         Change the titration state of the designated group for the provided state.
 
@@ -1637,7 +1836,13 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0):
+    def _update_forces(
+        self,
+        titration_group_index,
+        final_titration_state_index,
+        initial_titration_state_index=None,
+        fractional_titration_state=1.0,
+    ):
         """
         Update the force parameters to a new titration state by reading them from the cache.
 
@@ -1672,8 +1877,12 @@ class NCMCProtonDrive(_BaseDrive):
             initial_titration_state_index = final_titration_state_index
 
         # Retrieve cached force parameters fro this titration state.
-        cache_initial = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
-        cache_final = self.titrationGroups[titration_group_index][final_titration_state_index].forces
+        cache_initial = self.titrationGroups[titration_group_index][
+            initial_titration_state_index
+        ].forces
+        cache_final = self.titrationGroups[titration_group_index][
+            final_titration_state_index
+        ].forces
 
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
@@ -1682,33 +1891,68 @@ class NCMCProtonDrive(_BaseDrive):
             # Get atom indices and charges.
 
             # Update forces using appropriately blended parameters
-            for (atom_initial, atom_final) in zip(cache_initial[force_index]['atoms'], cache_final[force_index]['atoms']):
-                atom = {key: atom_initial[key] for key in ['atom_index']}
-                if force_classname == 'NonbondedForce':
+            for (atom_initial, atom_final) in zip(
+                cache_initial[force_index]["atoms"], cache_final[force_index]["atoms"]
+            ):
+                atom = {key: atom_initial[key] for key in ["atom_index"]}
+                if force_classname == "NonbondedForce":
                     # TODO : if we ever change LJ parameters, we need to look into softcore potentials
                     # and separate out the changes in charge, and sigma/eps into different steps.
-                    for parameter_name in ['charge', 'sigma', 'epsilon']:
-                        atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                            fractional_titration_state * atom_final[parameter_name]
-                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
-                elif force_classname == 'GBSAOBCForce':
-                    for parameter_name in ['charge', 'radius', 'scaleFactor']:
-                        atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                            fractional_titration_state * atom_final[parameter_name]
-                    force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
+                    for parameter_name in ["charge", "sigma", "epsilon"]:
+                        atom[parameter_name] = (
+                            (1.0 - fractional_titration_state)
+                            * atom_initial[parameter_name]
+                            + fractional_titration_state * atom_final[parameter_name]
+                        )
+                    force.setParticleParameters(
+                        atom["atom_index"],
+                        atom["charge"],
+                        atom["sigma"],
+                        atom["epsilon"],
+                    )
+                elif force_classname == "GBSAOBCForce":
+                    for parameter_name in ["charge", "radius", "scaleFactor"]:
+                        atom[parameter_name] = (
+                            (1.0 - fractional_titration_state)
+                            * atom_initial[parameter_name]
+                            + fractional_titration_state * atom_final[parameter_name]
+                        )
+                    force.setParticleParameters(
+                        atom["atom_index"],
+                        atom["charge"],
+                        atom["radius"],
+                        atom["scaleFactor"],
+                    )
                 else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
+                    raise Exception(
+                        "Don't know how to update force type '%s'" % force_classname
+                    )
 
             # Update exceptions
             # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                for (exc_initial, exc_final) in zip(cache_initial[force_index]['exceptions'], cache_final[force_index]['exceptions']):
-                    exc = {key: exc_initial[key] for key in ['exception_index', 'particle1', 'particle2']}
-                    for parameter_name in ['chargeProd', 'sigma', 'epsilon']:
-                        exc[parameter_name] = (1.0 - fractional_titration_state) * exc_initial[parameter_name] + \
-                            fractional_titration_state * exc_final[parameter_name]
+            if force_classname == "NonbondedForce":
+                for (exc_initial, exc_final) in zip(
+                    cache_initial[force_index]["exceptions"],
+                    cache_final[force_index]["exceptions"],
+                ):
+                    exc = {
+                        key: exc_initial[key]
+                        for key in ["exception_index", "particle1", "particle2"]
+                    }
+                    for parameter_name in ["chargeProd", "sigma", "epsilon"]:
+                        exc[parameter_name] = (
+                            (1.0 - fractional_titration_state)
+                            * exc_initial[parameter_name]
+                            + fractional_titration_state * exc_final[parameter_name]
+                        )
                     force.setExceptionParameters(
-                        exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
+                        exc["exception_index"],
+                        exc["particle1"],
+                        exc["particle2"],
+                        exc["chargeProd"],
+                        exc["sigma"],
+                        exc["epsilon"],
+                    )
 
     def _cache_force(self, titration_group_index, titration_state_index):
         """
@@ -1735,7 +1979,9 @@ class NCMCProtonDrive(_BaseDrive):
         """
 
         titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index][titration_state_index]
+        titration_state = self.titrationGroups[titration_group_index][
+            titration_state_index
+        ]
 
         # Store the parameters per individual force
         f_params = list()
@@ -1752,34 +1998,66 @@ class NCMCProtonDrive(_BaseDrive):
             # Update charges.
             # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
             for atom_index in atom_indices:
-                if force_classname == 'NonbondedForce':
-                    f_params[force_index]['atoms'].append(
-                        {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
-                elif force_classname == 'GBSAOBCForce':
-                    f_params[force_index]['atoms'].append(
-                        {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))})
+                if force_classname == "NonbondedForce":
+                    f_params[force_index]["atoms"].append(
+                        {
+                            key: value
+                            for (key, value) in zip(
+                                ["charge", "sigma", "epsilon"],
+                                map(
+                                    strip_in_unit_system,
+                                    force.getParticleParameters(atom_index),
+                                ),
+                            )
+                        }
+                    )
+                elif force_classname == "GBSAOBCForce":
+                    f_params[force_index]["atoms"].append(
+                        {
+                            key: value
+                            for (key, value) in zip(
+                                ["charge", "radius", "scaleFactor"],
+                                map(
+                                    strip_in_unit_system,
+                                    force.getParticleParameters(atom_index),
+                                ),
+                            )
+                        }
+                    )
                 else:
-                    raise Exception("Don't know how to update force type '%s'" % force_classname)
-                f_params[force_index]['atoms'][-1]['charge'] = charge_by_atom_index[atom_index]
-                f_params[force_index]['atoms'][-1]['atom_index'] = atom_index
+                    raise Exception(
+                        "Don't know how to update force type '%s'" % force_classname
+                    )
+                f_params[force_index]["atoms"][-1]["charge"] = charge_by_atom_index[
+                    atom_index
+                ]
+                f_params[force_index]["atoms"][-1]["atom_index"] = atom_index
 
             # Update exceptions
             # TODO: Handle Custom forces.
-            if force_classname == 'NonbondedForce':
-                f_params[force_index]['exceptions'] = list()
-                for e_ix, exception_index in enumerate(titration_group.exception_indices):
+            if force_classname == "NonbondedForce":
+                f_params[force_index]["exceptions"] = list()
+                for e_ix, exception_index in enumerate(
+                    titration_group.exception_indices
+                ):
                     [particle1, particle2, chargeProd, sigma, epsilon] = map(
-                        strip_in_unit_system, force.getExceptionParameters(exception_index))
+                        strip_in_unit_system,
+                        force.getExceptionParameters(exception_index),
+                    )
 
                     # Deal with exceptions between atoms outside of titratable residue
                     try:
                         charge_1 = charge_by_atom_index[particle1]
                     except KeyError:
-                        charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
+                        charge_1 = strip_in_unit_system(
+                            force.getParticleParameters(particle1)[0]
+                        )
                     try:
                         charge_2 = charge_by_atom_index[particle2]
                     except KeyError:
-                        charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
+                        charge_2 = strip_in_unit_system(
+                            force.getParticleParameters(particle2)[0]
+                        )
 
                     chargeProd = self.coulomb14scale * charge_1 * charge_2
 
@@ -1793,14 +2071,29 @@ class NCMCProtonDrive(_BaseDrive):
 
                     # store specific local variables in dict by name
                     exc_dict = dict()
-                    for i in ('exception_index', 'particle1', 'particle2', 'chargeProd', 'sigma', 'epsilon'):
+                    for i in (
+                        "exception_index",
+                        "particle1",
+                        "particle2",
+                        "chargeProd",
+                        "sigma",
+                        "epsilon",
+                    ):
                         exc_dict[i] = locals()[i]
-                    f_params[force_index]['exceptions'].append(exc_dict)
+                    f_params[force_index]["exceptions"].append(exc_dict)
 
-        self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
+        self.titrationGroups[titration_group_index][
+            titration_state_index
+        ].forces = f_params
 
-
-    def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
+    def _perform_ncmc_protocol(
+        self,
+        titration_group_indices,
+        initial_titration_states,
+        final_titration_states,
+        salt_residue_indices=None,
+        salt_states=None,
+    ):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from the initial protonation
         states to the final protonation states. This functions changes the system's states and returns the work for the
@@ -1846,15 +2139,23 @@ class NCMCProtonDrive(_BaseDrive):
         if salt_residue_indices is not None and salt_states is not None:
             update_salt = True
         elif salt_residue_indices is not None and salt_states is None:
-                raise ValueError("Need to provide states of the salt changes when specifying salt indices.")
+            raise ValueError(
+                "Need to provide states of the salt changes when specifying salt indices."
+            )
         elif salt_states is not None and salt_residue_indices is None:
-                raise ValueError("Need to specify the salt_residue_indices when specifying salt state changes.")
+            raise ValueError(
+                "Need to specify the salt_residue_indices when specifying salt state changes."
+            )
 
         # Reset integrator statistics
         try:
             # This case covers the GHMCIntegrator
-            ncmc_integrator.setGlobalVariableByName("ntrials", 0)  # Reset the internally accumulated work
-            ncmc_integrator.setGlobalVariableByName("naccept", 0)  # Reset the GHMC acceptance rate counter
+            ncmc_integrator.setGlobalVariableByName(
+                "ntrials", 0
+            )  # Reset the internally accumulated work
+            ncmc_integrator.setGlobalVariableByName(
+                "naccept", 0
+            )  # Reset the GHMC acceptance rate counter
 
         # Not a GHMCIntegrator
         except:
@@ -1863,11 +2164,16 @@ class NCMCProtonDrive(_BaseDrive):
                 ncmc_integrator.setGlobalVariableByName("first_step", 0)
                 ncmc_integrator.setGlobalVariableByName("protocol_work", 0)
             except:
-                raise RuntimeError("Could not reset the integrator work, this integrator is not supported.")
+                raise RuntimeError(
+                    "Could not reset the integrator work, this integrator is not supported."
+                )
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
         g_initial = 0
-        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+        for (
+            titration_group_index,
+            (titration_group, titration_state_index),
+        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
             g_initial += titration_state.g_k
 
@@ -1880,13 +2186,25 @@ class NCMCProtonDrive(_BaseDrive):
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
             # perturbation
             for titration_group_index in titration_group_indices:
-                self._update_forces(titration_group_index, final_titration_states[titration_group_index],
-                                    initial_titration_state_index=initial_titration_states[titration_group_index],
-                                    fractional_titration_state=titration_lambda)
+                self._update_forces(
+                    titration_group_index,
+                    final_titration_states[titration_group_index],
+                    initial_titration_state_index=initial_titration_states[
+                        titration_group_index
+                    ],
+                    fractional_titration_state=titration_lambda,
+                )
 
             if update_salt:
-                for salt_residue, (from_state, to_state) in zip(salt_residue_indices, salt_states):
-                    self.swapper.update_fractional_ion(salt_residue, self._ion_parameters[from_state], self._ion_parameters[to_state], titration_lambda)
+                for salt_residue, (from_state, to_state) in zip(
+                    salt_residue_indices, salt_states
+                ):
+                    self.swapper.update_fractional_ion(
+                        salt_residue,
+                        self._ion_parameters[from_state],
+                        self._ion_parameters[to_state],
+                        titration_lambda,
+                    )
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(self.context)
 
@@ -1895,25 +2213,43 @@ class NCMCProtonDrive(_BaseDrive):
 
             # logging of statistics
             if isinstance(ncmc_integrator, GHMCIntegrator):
-                self.ncmc_stats_per_step[step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))
+                self.ncmc_stats_per_step[step] = (
+                    ncmc_integrator.getGlobalVariableByName("protocol_work")
+                    * self.beta_unitless,
+                    ncmc_integrator.getGlobalVariableByName("naccept"),
+                    ncmc_integrator.getGlobalVariableByName("ntrials"),
+                )
             else:
-                self.ncmc_stats_per_step[step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, 0, 0)
+                self.ncmc_stats_per_step[step] = (
+                    ncmc_integrator.getGlobalVariableByName("protocol_work")
+                    * self.beta_unitless,
+                    0,
+                    0,
+                )
 
         # Extract the internally calculated work from the integrator
-        work = ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless
+        work = (
+            ncmc_integrator.getGlobalVariableByName("protocol_work")
+            * self.beta_unitless
+        )
 
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:
-            self.titrationGroups[titration_group_index].state = final_titration_states[titration_group_index]
+            self.titrationGroups[titration_group_index].state = final_titration_states[
+                titration_group_index
+            ]
 
         # Extracting the final state's weight.
         g_final = 0
-        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+        for (
+            titration_group_index,
+            (titration_group, titration_state_index),
+        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
             g_final += titration_state.g_k
 
         # Extract the internally calculated work from the integrator
-        work += (g_final - g_initial)
+        work += g_final - g_initial
 
         # Turn center of mass remover on again
         if self.cm_remover is not None:
@@ -1940,10 +2276,14 @@ class NCMCProtonDrive(_BaseDrive):
 
         # If using NCMC, store initial positions.
         if self.perturbations_per_trial > 0:
-            initial_openmm_state = self.context.getState(getPositions=True, getVelocities=True)
+            initial_openmm_state = self.context.getState(
+                getPositions=True, getVelocities=True
+            )
             initial_positions = initial_openmm_state.getPositions(asNumpy=True)
             initial_velocities = initial_openmm_state.getVelocities(asNumpy=True)
-            initial_box_vectors = initial_openmm_state.getPeriodicBoxVectors(asNumpy=True)
+            initial_box_vectors = initial_openmm_state.getPeriodicBoxVectors(
+                asNumpy=True
+            )
 
         # Select which titratible residues to update.
         if residue_pool is None:
@@ -1952,7 +2292,9 @@ class NCMCProtonDrive(_BaseDrive):
             try:
                 residue_pool_indices = self.residue_pools[residue_pool]
             except KeyError:
-                raise KeyError("The residue pool '{}' does not exist.".format(residue_pool))
+                raise KeyError(
+                    "The residue pool '{}' does not exist.".format(residue_pool)
+                )
 
         # Compute initial probability of this protonation state. Used in the acceptance test for instantaneous
         # attempts, and to record potential and kinetic energy.
@@ -1960,7 +2302,9 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
-        final_titration_states, titration_group_indices, logp_ratio_residue_proposal = proposal.propose_states(self, residue_pool_indices)
+        final_titration_states, titration_group_indices, logp_ratio_residue_proposal = proposal.propose_states(
+            self, residue_pool_indices
+        )
         initial_charge = 0
         final_charge = 0
         for idx in titration_group_indices:
@@ -1968,7 +2312,7 @@ class NCMCProtonDrive(_BaseDrive):
             initial_charge += self.titrationGroups[idx].total_charges[initial_state]
             final_state = final_titration_states[idx]
             final_charge += self.titrationGroups[idx].total_charges[final_state]
-        
+
         attempt_data.initial_charge = initial_charge
         attempt_data.initial_states = initial_titration_states
         attempt_data.proposed_charge = final_charge
@@ -1977,60 +2321,84 @@ class NCMCProtonDrive(_BaseDrive):
 
         if self.swapper is not None:
             initial_ion_states = copy.deepcopy(self.swapper.stateVector)
-            proposed_ion_states = copy.deepcopy(self.swapper.stateVector)        
-            net_charge_difference = self._calculate_charge_differences(initial_titration_states, final_titration_states, titration_group_indices)
-            saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(self, initial_charge, final_charge)
-            
+            proposed_ion_states = copy.deepcopy(self.swapper.stateVector)
+            net_charge_difference = self._calculate_charge_differences(
+                initial_titration_states,
+                final_titration_states,
+                titration_group_indices,
+            )
+            saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(
+                self, initial_charge, final_charge
+            )
+
             # The saltswap indices are updated to indicate the change of species
-            for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
-                        proposed_ion_states[saltswap_residue] = to_ion_state
-            
+            for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                saltswap_residue_indices, saltswap_states
+            ):
+                proposed_ion_states[saltswap_residue] = to_ion_state
+
             attempt_data.initial_ion_states = initial_ion_states
             attempt_data.proposed_ion_states = proposed_ion_states
             attempt_data.logp_ratio_salt_proposal = logp_ratio_salt_proposal
-        
 
         try:
-            # Compute work for switching to new protonation states.            
+            # Compute work for switching to new protonation states.
             # 0 is the shortcut for instantaneous Monte Carlo
             if self.perturbations_per_trial == 0:
                 # Use instantaneous switching.
                 for titration_group_index in titration_group_indices:
-                    self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], updateParameters=False)
+                    self._set_titration_state(
+                        titration_group_index,
+                        final_titration_states[titration_group_index],
+                        updateParameters=False,
+                    )
 
                     # If maintaining charge neutrality.
                     if self.swapper is not None:
-                        for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
+                        for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                            saltswap_residue_indices, saltswap_states
+                        ):
                             from_parameter = self._ion_parameters[from_ion_state]
                             to_parameter = self._ion_parameters[to_ion_state]
-                            self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 1.0)                
-                
+                            self.swapper.update_fractional_ion(
+                                saltswap_residue, from_parameter, to_parameter, 1.0
+                            )
+
                 # Push parameter updates to the context
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
 
                 log_P_final, pot2, kin2 = self._compute_log_probability()
-                work = - (log_P_final - log_P_initial)
+                work = -(log_P_final - log_P_initial)
 
             else:
                 # Only perform NCMC when the proposed state is different from the current state
                 if initial_titration_states != final_titration_states:
                     # Run NCMC integration.
                     if self.swapper is not None:
-                        work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states, saltswap_residue_indices, saltswap_states)
+                        work = self._perform_ncmc_protocol(
+                            titration_group_indices,
+                            initial_titration_states,
+                            final_titration_states,
+                            saltswap_residue_indices,
+                            saltswap_states,
+                        )
                     else:
-                        work = self._perform_ncmc_protocol(titration_group_indices, initial_titration_states, final_titration_states)
+                        work = self._perform_ncmc_protocol(
+                            titration_group_indices,
+                            initial_titration_states,
+                            final_titration_states,
+                        )
                 else:
                     work = 0.0
                     for step in range(self.perturbations_per_trial):
                         self.ncmc_stats_per_step[step] = (0.0, 0.0, 0.0)
 
-            # Store work history                        
+            # Store work history
             attempt_data.work = work
 
             log_P_accept = -work
             log_P_accept += logp_ratio_residue_proposal
-
 
             # If maintaining charge neutrality using saltswap
             if self.swapper is not None:
@@ -2040,7 +2408,7 @@ class NCMCProtonDrive(_BaseDrive):
             # Only record acceptance statistics for exchanges to different protonation states
             if initial_titration_states != final_titration_states:
                 self.nattempted += 1
-            
+
             # Accept or reject with Metropolis criteria.
             attempt_data.logp_accept = log_P_accept
             accept_move = self._accept_reject(log_P_accept)
@@ -2052,21 +2420,30 @@ class NCMCProtonDrive(_BaseDrive):
                     self.naccepted += 1
                 # Update titration states.
                 for titration_group_index in titration_group_indices:
-                    self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], updateParameters=False)
+                    self._set_titration_state(
+                        titration_group_index,
+                        final_titration_states[titration_group_index],
+                        updateParameters=False,
+                    )
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
 
                 # If using NCMC, flip velocities to satisfy super-detailed balance.
                 if self.perturbations_per_trial > 0:
-                    self.context.setVelocities(-self.context.getState(getVelocities=True).getVelocities(asNumpy=True))
+                    self.context.setVelocities(
+                        -self.context.getState(getVelocities=True).getVelocities(
+                            asNumpy=True
+                        )
+                    )
 
                 # If maintaining charge neutrality using saltswap
                 if self.swapper is not None:
                     # The excess ion count is updated with the change in counterions
                     self.excess_ions -= net_charge_difference
                     # The saltswap indices are updated to indicate the change of species
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices,
-                                                                                saltswap_states):
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                        saltswap_residue_indices, saltswap_states
+                    ):
                         self.swapper.stateVector[saltswap_residue] = to_ion_state
 
             else:
@@ -2075,15 +2452,23 @@ class NCMCProtonDrive(_BaseDrive):
                     self.nrejected += 1
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
-                    self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], updateParameters=False)
+                    self._set_titration_state(
+                        titration_group_index,
+                        initial_titration_states[titration_group_index],
+                        updateParameters=False,
+                    )
 
                 # If maintaining charge neutrality using saltswap
                 if self.swapper is not None:
                     # Restore the salt species parameters
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices, saltswap_states):
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                        saltswap_residue_indices, saltswap_states
+                    ):
                         from_parameter = self._ion_parameters[from_ion_state]
                         to_parameter = self._ion_parameters[to_ion_state]
-                        self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 0.0)
+                        self.swapper.update_fractional_ion(
+                            saltswap_residue, from_parameter, to_parameter, 0.0
+                        )
 
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
@@ -2095,23 +2480,30 @@ class NCMCProtonDrive(_BaseDrive):
                     self.context.setPeriodicBoxVectors(*initial_box_vectors)
 
         except Exception as err:
-            if str(err) == 'Particle coordinate is nan' and reject_on_nan:
+            if str(err) == "Particle coordinate is nan" and reject_on_nan:
                 logging.warning("NaN during NCMC move, rejecting")
                 # Reject.
                 if initial_titration_states != final_titration_states:
                     self.nrejected += 1
                 # Restore titration states.
                 for titration_group_index in titration_group_indices:
-                    self._set_titration_state(titration_group_index, initial_titration_states[titration_group_index], updateParameters=False)
+                    self._set_titration_state(
+                        titration_group_index,
+                        initial_titration_states[titration_group_index],
+                        updateParameters=False,
+                    )
 
                 # If maintaining charge neutrality using saltswap
                 if self.swapper is not None:
                     # Restore the salt species parameters
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(saltswap_residue_indices,
-                                                                                saltswap_states):
+                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                        saltswap_residue_indices, saltswap_states
+                    ):
                         from_parameter = self._ion_parameters[from_ion_state]
                         to_parameter = self._ion_parameters[to_ion_state]
-                        self.swapper.update_fractional_ion(saltswap_residue, from_parameter, to_parameter, 0.0)
+                        self.swapper.update_fractional_ion(
+                            saltswap_residue, from_parameter, to_parameter, 0.0
+                        )
 
                 for force_index, force in enumerate(self.forces_to_update):
                     force.updateParametersInContext(self.context)
@@ -2166,16 +2558,25 @@ class NCMCProtonDrive(_BaseDrive):
         pot_energy = state.getPotentialEnergy()
         kin_energy = state.getKineticEnergy()
         total_energy = pot_energy + kin_energy
-        log_P = - self.beta * total_energy
+        log_P = -self.beta * total_energy
 
         if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = self.context.getState().getPeriodicBoxVolume()
-            log.debug('beta = %s, pressure = %s, volume = %s, multiple = %s', str(self.beta), str(self.pressure), str(volume), str(-self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA))
+            log.debug(
+                "beta = %s, pressure = %s, volume = %s, multiple = %s",
+                str(self.beta),
+                str(self.pressure),
+                str(volume),
+                str(-self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA),
+            )
             log_P -= self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA
 
         # Add reference free energy contributions.
-        for titration_group_index, (titration_group, titration_state_index) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+        for (
+            titration_group_index,
+            (titration_group, titration_state_index),
+        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
             g_k = titration_state.g_k
             log.debug("g_k: %.2f", g_k)
@@ -2263,7 +2664,10 @@ class NCMCProtonDrive(_BaseDrive):
             group = self.titrationGroups[index]
             from_state = from_states[index]
             to_state = to_states[index]
-            charge += group.titration_states[to_state].proton_count - group.titration_states[from_state].proton_count
+            charge += (
+                group.titration_states[to_state].proton_count
+                - group.titration_states[from_state].proton_count
+            )
 
         return charge
 
@@ -2295,8 +2699,17 @@ class AmberProtonDrive(NCMCProtonDrive):
 
 
     """
-    def __init__(self, temperature, topology, system, cpin_filename, pressure=None,
-                 perturbations_per_trial=0, propagations_per_step=1):
+
+    def __init__(
+        self,
+        temperature,
+        topology,
+        system,
+        cpin_filename,
+        pressure=None,
+        perturbations_per_trial=0,
+        propagations_per_step=1,
+    ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
 
@@ -2323,63 +2736,85 @@ class AmberProtonDrive(NCMCProtonDrive):
 
         """
 
-        super(AmberProtonDrive, self).__init__(temperature, topology, system, pressure, perturbations_per_trial=perturbations_per_trial, propagations_per_step=propagations_per_step)
+        super(AmberProtonDrive, self).__init__(
+            temperature,
+            topology,
+            system,
+            pressure,
+            perturbations_per_trial=perturbations_per_trial,
+            propagations_per_step=propagations_per_step,
+        )
 
         # Load AMBER cpin file defining protonation states.
-        namelist = self._parse_fortran_namelist(cpin_filename, 'CNSTPH')
+        namelist = self._parse_fortran_namelist(cpin_filename, "CNSTPH")
 
         # Make sure RESSTATE is a list.
-        if type(namelist['RESSTATE']) == int:
-            namelist['RESSTATE'] = [namelist['RESSTATE']]
+        if type(namelist["RESSTATE"]) == int:
+            namelist["RESSTATE"] = [namelist["RESSTATE"]]
 
         # Make sure RESNAME is a list.
-        if type(namelist['RESNAME']) == str:
-            namelist['RESNAME'] = [namelist['RESNAME']]
+        if type(namelist["RESNAME"]) == str:
+            namelist["RESNAME"] = [namelist["RESNAME"]]
 
         # Extract number of titratable groups.
-        ngroups = len(namelist['RESSTATE'])
+        ngroups = len(namelist["RESSTATE"])
         # Define titratable groups and titration states.
         for group_index in range(ngroups):
             # Extract information about this titration group.
-            name = namelist['RESNAME'][group_index + 1]
-            first_atom = namelist['STATEINF(%d)%%FIRST_ATOM' % group_index] - 1
-            first_charge = namelist['STATEINF(%d)%%FIRST_CHARGE' % group_index]
-            first_state = namelist['STATEINF(%d)%%FIRST_STATE' % group_index]
-            num_atoms = namelist['STATEINF(%d)%%NUM_ATOMS' % group_index]
-            num_states = namelist['STATEINF(%d)%%NUM_STATES' % group_index]
+            name = namelist["RESNAME"][group_index + 1]
+            first_atom = namelist["STATEINF(%d)%%FIRST_ATOM" % group_index] - 1
+            first_charge = namelist["STATEINF(%d)%%FIRST_CHARGE" % group_index]
+            first_state = namelist["STATEINF(%d)%%FIRST_STATE" % group_index]
+            num_atoms = namelist["STATEINF(%d)%%NUM_ATOMS" % group_index]
+            num_states = namelist["STATEINF(%d)%%NUM_STATES" % group_index]
 
             # Define titratable group.
             atom_indices = range(first_atom, first_atom + num_atoms)
-            residue_type = str.split(name)[1] #  Should grab AS4
+            residue_type = str.split(name)[1]  #  Should grab AS4
             if not len(residue_type) == 3:
-                example = 'Residue: AS4 2'
-                log.warn("Residue type '{}' has unusual length, verify residue name"
-                         " in CPIN file has format like this one: '{}'".format(residue_type, example))
+                example = "Residue: AS4 2"
+                log.warn(
+                    "Residue type '{}' has unusual length, verify residue name"
+                    " in CPIN file has format like this one: '{}'".format(
+                        residue_type, example
+                    )
+                )
             if residue_type in available_pkas:
                 residue_pka = available_pkas[residue_type]
             else:
                 residue_pka = None
 
-            self._add_titratable_group(atom_indices, residue_type, name=name, residue_pka=residue_pka)
+            self._add_titratable_group(
+                atom_indices, residue_type, name=name, residue_pka=residue_pka
+            )
 
             # Define titration states.
             for titration_state in range(num_states):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
-                charges = namelist['CHRGDAT'][(first_charge+num_atoms*titration_state):(first_charge+num_atoms*(titration_state+1))]
+                charges = namelist["CHRGDAT"][
+                    (first_charge + num_atoms * titration_state) : (
+                        first_charge + num_atoms * (titration_state + 1)
+                    )
+                ]
 
                 # Extract relative energy for this titration state.
-                relative_energy = namelist['STATENE'][first_state + titration_state] * unit.kilocalories_per_mole
+                relative_energy = (
+                    namelist["STATENE"][first_state + titration_state]
+                    * unit.kilocalories_per_mole
+                )
                 relative_energy = 0.0 * unit.kilocalories_per_mole
                 # Get proton count.
-                proton_count = namelist['PROTCNT'][first_state + titration_state]
+                proton_count = namelist["PROTCNT"][first_state + titration_state]
                 # Create titration state.
 
-                self._add_titration_state(group_index, relative_energy, charges, proton_count)
+                self._add_titration_state(
+                    group_index, relative_energy, charges, proton_count
+                )
                 self._cache_force(group_index, titration_state)
             # Set default state for this group.
 
-            self._set_titration_state(group_index, namelist['RESSTATE'][group_index])
+            self._set_titration_state(group_index, namelist["RESSTATE"][group_index])
 
         return
 
@@ -2418,8 +2853,19 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
     """
 
-    def __init__(self, temperature, topology, system, forcefield, ffxml_files, pressure=None, perturbations_per_trial=0, propagations_per_step=1, residues_by_name=None, residues_by_index=None):
-
+    def __init__(
+        self,
+        temperature,
+        topology,
+        system,
+        forcefield,
+        ffxml_files,
+        pressure=None,
+        perturbations_per_trial=0,
+        propagations_per_step=1,
+        residues_by_name=None,
+        residues_by_index=None,
+    ):
 
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
@@ -2462,7 +2908,14 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             if not isinstance(residues_by_index, list):
                 raise TypeError("residues_by_index needs to be a list")
 
-        super(ForceFieldProtonDrive, self).__init__(temperature, topology, system, pressure, perturbations_per_trial=perturbations_per_trial, propagations_per_step=propagations_per_step)
+        super(ForceFieldProtonDrive, self).__init__(
+            temperature,
+            topology,
+            system,
+            pressure,
+            perturbations_per_trial=perturbations_per_trial,
+            propagations_per_step=propagations_per_step,
+        )
 
         ffxml_residues = self._parse_ffxml_files(ffxml_files)
 
@@ -2475,14 +2928,22 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             for residue_index in residues_by_index:
                 residue = all_residues[residue_index]
                 if residue.name not in ffxml_residues:
-                    raise ValueError("Residue '{}:{}' is not treatable using protons. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue.name, residue.index))
+                    raise ValueError(
+                        "Residue '{}:{}' is not treatable using protons. Please provide Protons parameters using an ffxml file, or deselect it.".format(
+                            residue.name, residue.index
+                        )
+                    )
             selected_residue_indices.extend(residues_by_index)
 
         # Validate user specified residue names
         if residues_by_name is not None:
             for residue_name in residues_by_name:
                 if residue_name not in ffxml_residues:
-                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue_name))
+                    raise ValueError(
+                        "Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.".format(
+                            residue_name
+                        )
+                    )
 
             for residue in all_residues:
                 if residue.name in residues_by_name:
@@ -2497,11 +2958,15 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         # Remove duplicate indices and sort
         selected_residue_indices = sorted(list(set(selected_residue_indices)))
 
-        self._add_xml_titration_groups(topology, system, forcefield, ffxml_residues, selected_residue_indices)
+        self._add_xml_titration_groups(
+            topology, system, forcefield, ffxml_residues, selected_residue_indices
+        )
 
         return
 
-    def _add_xml_titration_groups(self, topology, system, forcefield, ffxml_residues, selected_residue_indices):
+    def _add_xml_titration_groups(
+        self, topology, system, forcefield, ffxml_residues, selected_residue_indices
+    ):
         """
         Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
         Parameters
@@ -2530,7 +2995,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
             template = forcefield._templates[residue.name]
             # Find the system indices of the template atoms for this residue
-            matches = app.forcefield._matchResidue(residue, template, bonded_to_atoms_list)
+            matches = app.forcefield._matchResidue(
+                residue, template, bonded_to_atoms_list
+            )
 
             if matches is None:
                 raise ValueError("Could not match residue atoms to template.")
@@ -2539,7 +3006,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             atom_names = [atom.name for atom in template.atoms]
             # Sort the atom indices in the template in the same order as the topology indices.
             atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
-            protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
+            protons_block = ffxml_residues[residue.name].xpath("Protons")[0]
 
             # forcefield template name as key, topology index as value
             # Now, the name from the template (not the PDB file) can be used
@@ -2551,35 +3018,58 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             if residue.name in available_pkas:
                 residue_pka = available_pkas[residue.name]
 
-            if len(protons_block.findall('State/Condition')) > 0 and residue_pka is None:
-                pka_data = DataFrame(columns=["pH", 'Temperature (K)', 'Ionic strength (mM)', 'log population'])
-                for state_index, state_block in enumerate(protons_block.xpath('State')):
-                    for condition in state_block.xpath('Condition'):
+            if (
+                len(protons_block.findall("State/Condition")) > 0
+                and residue_pka is None
+            ):
+                pka_data = DataFrame(
+                    columns=[
+                        "pH",
+                        "Temperature (K)",
+                        "Ionic strength (mM)",
+                        "log population",
+                    ]
+                )
+                for state_index, state_block in enumerate(protons_block.xpath("State")):
+                    for condition in state_block.xpath("Condition"):
                         row = dict(State=state_index)
                         try:
-                            row['pH'] = float(condition.get('pH'))
+                            row["pH"] = float(condition.get("pH"))
                         except TypeError:
-                            row['pH'] = None
+                            row["pH"] = None
                         try:
-                            row['Temperature (K)'] = float(condition.get('temperature_kelvin'))
+                            row["Temperature (K)"] = float(
+                                condition.get("temperature_kelvin")
+                            )
                         except TypeError:
-                            row['Temperature (K)'] = None
+                            row["Temperature (K)"] = None
                         try:
-                            row['Ionic strength (mM)'] = float(condition.get('ionic_strength_mM'))
+                            row["Ionic strength (mM)"] = float(
+                                condition.get("ionic_strength_mM")
+                            )
                         except TypeError:
-                            row['Ionic strength (mM)'] = None
-                        logpop = condition.get('log_population')
+                            row["Ionic strength (mM)"] = None
+                        logpop = condition.get("log_population")
                         try:
-                            row['log population'] = float(logpop)
+                            row["log population"] = float(logpop)
                         except TypeError:
-                            raise ValueError("The log population provided can not be converted to a number :'{}'".format(logpop))
+                            raise ValueError(
+                                "The log population provided can not be converted to a number :'{}'".format(
+                                    logpop
+                                )
+                            )
                         pka_data = pka_data.append(row, ignore_index=True)
 
             # Create a new group with the given indices
-            self._add_titratable_group(atom_indices,
-                                       residue.name,
-                                       name="Chain {} Residue {} {}".format(residue.chain.id, residue.name, residue.id),
-                                       residue_pka=residue_pka, pka_data=pka_data)
+            self._add_titratable_group(
+                atom_indices,
+                residue.name,
+                name="Chain {} Residue {} {}".format(
+                    residue.chain.id, residue.name, residue.id
+                ),
+                residue_pka=residue_pka,
+                pka_data=pka_data,
+            )
 
             # Define titration states.
 
@@ -2588,9 +3078,13 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 # is defined in elementary_charge units
                 state_index = int(state_block.get("index"))
                 # Original charges for each state from the template
-                charges = [float(atom.get("charge")) for atom in state_block.xpath("Atom")]
+                charges = [
+                    float(atom.get("charge")) for atom in state_block.xpath("Atom")
+                ]
                 # Extract relative energy for this titration state.
-                relative_energy = float(state_block.get("g_k")) * unit.kilocalories_per_mole
+                relative_energy = (
+                    float(state_block.get("g_k")) * unit.kilocalories_per_mole
+                )
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
 
@@ -2600,8 +3094,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
                 for cooh_group in state_block.xpath("COOH"):
                     cooh_indices = cooh_group.attrib
-
-
 
                     cooh_system_indices = dict()
                     for key in cooh_names:
@@ -2613,24 +3105,30 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                                 if k not in cooh_indices:
                                     not_found.append(k)
                             raise KeyError(
-                            "Invalid COOH block, missing keys: {}".format(not_found))
+                                "Invalid COOH block, missing keys: {}".format(not_found)
+                            )
 
                         try:
                             system_index = name_index[template_atom_name]
                         except KeyError:
-                            raise KeyError("Name '{}' not in ffxml template ({} atom in COOH element).".format(template_atom_name, key))
+                            raise KeyError(
+                                "Name '{}' not in ffxml template ({} atom in COOH element).".format(
+                                    template_atom_name, key
+                                )
+                            )
 
                         cooh_system_indices[key] = system_index
 
                     cooh_movers.append(COOHDummyMover(system, cooh_system_indices))
 
                 # Create titration state.
-                self._add_titration_state(group_index, relative_energy, charges, proton_count, cooh_movers)
+                self._add_titration_state(
+                    group_index, relative_energy, charges, proton_count, cooh_movers
+                )
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
             self._set_titration_state(group_index, 0)
-
 
     def _parse_ffxml_files(self, ffxml_files):
         """
@@ -2661,19 +3159,23 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 tree = etree.parse(file)
                 xmltrees.append(tree)
             except IOError:
-                full_path = os.path.join(os.path.dirname(__file__), 'data', file)
+                full_path = os.path.join(os.path.dirname(__file__), "data", file)
                 tree = etree.parse(full_path)
                 xmltrees.append(tree)
 
         for xmltree in xmltrees:
             # All residues that contain a protons block
-            for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
+            for xml_residue in xmltree.xpath("/ForceField/Residues/Residue[Protons]"):
                 xml_resname = xml_residue.get("name")
                 if not xml_resname in ffxml_residues:
                     # Store the protons block of the residue
                     ffxml_residues[xml_resname] = xml_residue
                 else:
-                    raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+                    raise ValueError(
+                        "Duplicate residue name found in parameters: {}".format(
+                            xml_resname
+                        )
+                    )
 
         return ffxml_residues
 
