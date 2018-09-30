@@ -11,6 +11,7 @@ from scipy.misc import comb
 from typing import Dict, Tuple, Callable, List, Optional
 from lxml import etree
 
+
 class _StateProposal(metaclass=ABCMeta):
     """An abstract base class describing the common public interface of residue selection moves."""
 
@@ -63,7 +64,9 @@ class UniformProposal(_StateProposal):
         # Select new titration states.
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
-            titration_state_index = random.choice(range(drive.get_num_titration_states(titration_group_index)))
+            titration_state_index = random.choice(
+                range(drive.get_num_titration_states(titration_group_index))
+            )
             final_titration_states[titration_group_index] = titration_state_index
         return final_titration_states, titration_group_indices, 0.0
 
@@ -109,7 +112,9 @@ class DoubleProposal(_StateProposal):
         # Update one residue by default
         ndraw = 1
         # Draw two residues with some probability
-        if (len(residue_pool_indices) > 1) and (random.random() < self.simultaneous_proposal_probability):
+        if (len(residue_pool_indices) > 1) and (
+            random.random() < self.simultaneous_proposal_probability
+        ):
             ndraw = 2
 
         log.debug("Updating %i residues.", ndraw)
@@ -118,7 +123,9 @@ class DoubleProposal(_StateProposal):
         # Select new titration states.
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
-            titration_state_index = random.choice(range(drive.get_num_titration_states(titration_group_index)))
+            titration_state_index = random.choice(
+                range(drive.get_num_titration_states(titration_group_index))
+            )
             final_titration_states[titration_group_index] = titration_state_index
         return final_titration_states, titration_group_indices, 0.0
 
@@ -157,7 +164,9 @@ class CategoricalProposal(_StateProposal):
         # Select new titration states.
         for titration_group_index in titration_group_indices:
             # Choose a titration state with uniform probability (even if it is the same as the current state).
-            titration_state_index = random.choice(range(drive.get_num_titration_states(titration_group_index)))
+            titration_state_index = random.choice(
+                range(drive.get_num_titration_states(titration_group_index))
+            )
             final_titration_states[titration_group_index] = titration_state_index
 
         return final_titration_states, titration_group_indices, 0.0
@@ -204,14 +213,22 @@ class SaltSwapProposal:
             The error message will detail what the conflict is.
         """
 
-        if swaps['water_to_cation'] != 0 and swaps['water_to_anion'] != 0:
-            raise RuntimeError("Opposing charge ions are added. This is a bug in the code.")
-        elif swaps['cation_to_water'] != 0 and swaps['anion_to_water'] != 0:
-            raise RuntimeError("Opposing charge ions are removed. This is a bug in the code.")
-        elif swaps['cation_to_water'] != 0 and swaps['water_to_cation'] != 0:
-            raise RuntimeError("Cations are being added and removed at the same time. This is a bug in the code.")
-        elif swaps['anion_to_water'] != 0 and swaps['water_to_anion'] != 0:
-            raise RuntimeError("Anions are being added and removed at the same time. This is a bug in the code.")
+        if swaps["water_to_cation"] != 0 and swaps["water_to_anion"] != 0:
+            raise RuntimeError(
+                "Opposing charge ions are added. This is a bug in the code."
+            )
+        elif swaps["cation_to_water"] != 0 and swaps["anion_to_water"] != 0:
+            raise RuntimeError(
+                "Opposing charge ions are removed. This is a bug in the code."
+            )
+        elif swaps["cation_to_water"] != 0 and swaps["water_to_cation"] != 0:
+            raise RuntimeError(
+                "Cations are being added and removed at the same time. This is a bug in the code."
+            )
+        elif swaps["anion_to_water"] != 0 and swaps["water_to_anion"] != 0:
+            raise RuntimeError(
+                "Anions are being added and removed at the same time. This is a bug in the code."
+            )
 
 
 class OneDirectionChargeProposal(SaltSwapProposal):
@@ -219,7 +236,7 @@ class OneDirectionChargeProposal(SaltSwapProposal):
     This is an implementation of the method outlined in Chen and Roux 2015
     """
 
-    def __init__(self, cation_coefficient: float=0.5, err_on_depletion: bool=True):
+    def __init__(self, cation_coefficient: float = 0.5, err_on_depletion: bool = True):
         """Instantiate a UniformSwapProposal.
 
         Parameters
@@ -240,7 +257,15 @@ class OneDirectionChargeProposal(SaltSwapProposal):
 
         self._err_on_depletion = err_on_depletion
 
-    def select_ions(self, chem_potential: float, drive, log_ratio: float, saltswap_residue_indices:list, saltswap_state_pairs:list, swaps: dict):
+    def select_ions(
+        self,
+        chem_potential: float,
+        drive,
+        log_ratio: float,
+        saltswap_residue_indices: list,
+        saltswap_state_pairs: list,
+        swaps: dict,
+    ):
         """
 
         Parameters
@@ -263,70 +288,106 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         # The sanity check should prevent the same waters/ions from being selected twice.
         # individual types of swaps should be completely independent for the purpose of calculating
         # the proposal probabilities.
-        if swaps['water_to_cation'] > 0:
-            for water_index in np.random.choice(a=all_waters, size=swaps['water_to_cation'], replace=False):
+        if swaps["water_to_cation"] > 0:
+            for water_index in np.random.choice(
+                a=all_waters, size=swaps["water_to_cation"], replace=False
+            ):
                 saltswap_residue_indices.append(water_index)
                 saltswap_state_pairs.append(tuple([0, 1]))
 
             # Forward: choose m water to change into cations, probability of one pick is
             # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_cation count).
-            log_p_forward = -np.log(comb(all_waters.size, swaps['water_to_cation'], exact=True))
+            log_p_forward = -np.log(
+                comb(all_waters.size, swaps["water_to_cation"], exact=True)
+            )
             # Reverse: choose m cations to change into water, probability of one pick is
             # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the water_to_cation count), select m
             log_p_reverse = -np.log(
-                comb(all_cations.size + swaps['water_to_cation'], swaps['water_to_cation'], exact=True))
-            log_ratio += (log_p_reverse - log_p_forward)
+                comb(
+                    all_cations.size + swaps["water_to_cation"],
+                    swaps["water_to_cation"],
+                    exact=True,
+                )
+            )
+            log_ratio += log_p_reverse - log_p_forward
             # Calculate the work of transforming one water molecule into a cation
             work = chem_potential * self._cation_weight
             # Subtract the work from the acceptance probability
             log_ratio -= work
-        if swaps['water_to_anion'] > 0:
-            for water_index in np.random.choice(a=all_waters, size=swaps['water_to_anion'], replace=False):
+        if swaps["water_to_anion"] > 0:
+            for water_index in np.random.choice(
+                a=all_waters, size=swaps["water_to_anion"], replace=False
+            ):
                 saltswap_residue_indices.append(water_index)
                 saltswap_state_pairs.append(tuple([0, 2]))
 
             # Forward: probability of one pick is
             # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_anion count).
-            log_p_forward = -np.log(comb(all_waters.size, swaps['water_to_anion'], exact=True))
+            log_p_forward = -np.log(
+                comb(all_waters.size, swaps["water_to_anion"], exact=True)
+            )
             # Reverse: probability of one pick is
             # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the water_to_anion count), select m
             log_p_reverse = -np.log(
-                comb(all_anions.size + swaps['water_to_anion'], swaps['water_to_anion'], exact=True))
-            log_ratio += (log_p_reverse - log_p_forward)
+                comb(
+                    all_anions.size + swaps["water_to_anion"],
+                    swaps["water_to_anion"],
+                    exact=True,
+                )
+            )
+            log_ratio += log_p_reverse - log_p_forward
             # Calculate the work of transforming one water into one anion
             work = chem_potential * self._anion_weight
             # Subtract the work from the acceptance probability
             log_ratio -= work
-        if swaps['cation_to_water'] > 0:
-            for cation_index in np.random.choice(a=all_cations, size=swaps['cation_to_water'], replace=False):
+        if swaps["cation_to_water"] > 0:
+            for cation_index in np.random.choice(
+                a=all_cations, size=swaps["cation_to_water"], replace=False
+            ):
                 saltswap_residue_indices.append(cation_index)
                 saltswap_state_pairs.append(tuple([1, 0]))
 
             # Forward: choose m cations to change into water, probability of one pick is
             # 1.0 / (n_cations choose m); e.g. from all cations select m (the cation_to_water count).
-            log_p_forward = -np.log(comb(all_cations.size, swaps['cation_to_water'], exact=True))
+            log_p_forward = -np.log(
+                comb(all_cations.size, swaps["cation_to_water"], exact=True)
+            )
             # Reverse: choose m water to change into cations, probability of one pick is
             # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the anion_to_water count), select m
             log_p_reverse = -np.log(
-                comb(all_cations.size + swaps['cation_to_water'], swaps['cation_to_water'], exact=True))
-            log_ratio += (log_p_reverse - log_p_forward)
+                comb(
+                    all_cations.size + swaps["cation_to_water"],
+                    swaps["cation_to_water"],
+                    exact=True,
+                )
+            )
+            log_ratio += log_p_reverse - log_p_forward
             # Calculate the work of transforming one cation into one water molecule
             work = -chem_potential * self._cation_weight
             # Subtract the work from the acceptance probability
             log_ratio -= work
-        if swaps['anion_to_water'] > 0:
-            for anion_index in np.random.choice(a=all_anions, size=swaps['anion_to_water'], replace=False):
+        if swaps["anion_to_water"] > 0:
+            for anion_index in np.random.choice(
+                a=all_anions, size=swaps["anion_to_water"], replace=False
+            ):
                 saltswap_residue_indices.append(anion_index)
                 saltswap_state_pairs.append(tuple([2, 0]))
 
             # Forward: probability of one pick is
             # 1.0 / (n_anions choose m); e.g. from all anions select m (the anion_to_water count).
-            log_p_forward = -np.log(comb(all_anions.size, swaps['anion_to_water'], exact=True))
+            log_p_forward = -np.log(
+                comb(all_anions.size, swaps["anion_to_water"], exact=True)
+            )
             # Reverse: probability of one pick is
             # 1.0 / (n_water + m choose m); e.g. from water plus m (the anion_to_water count), select m
             log_p_reverse = -np.log(
-                comb(all_waters.size + swaps['anion_to_water'], swaps['anion_to_water'], exact=True))
-            log_ratio += (log_p_reverse - log_p_forward)
+                comb(
+                    all_waters.size + swaps["anion_to_water"],
+                    swaps["anion_to_water"],
+                    exact=True,
+                )
+            )
+            log_ratio += log_p_reverse - log_p_forward
             # Calculate the work of transforming one anion into water based on the chemical potential
             work = -chem_potential * self._anion_weight
             # Subtract the work from the acceptance probability
@@ -358,7 +419,7 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         # Defaults. If no swaps are necessary, this will be all that is needed.
         saltswap_residue_indices = list()
         saltswap_state_pairs = list()
-        log_ratio = 0.0 # fully symmetrical proposal if no swaps occur.
+        log_ratio = 0.0  # fully symmetrical proposal if no swaps occur.
 
         # the chemical potential for switching two water molecules into cation + anion
         chem_potential = drive.swapper.delta_chem
@@ -369,7 +430,11 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         if isinstance(chem_potential, unit.Quantity):
             chem_potential *= drive.beta
             if unit.is_quantity(chem_potential):
-                raise ValueError('The chemical potential has irreducible units ({}).'.format(str(chem_potential.unit)))
+                raise ValueError(
+                    "The chemical potential has irreducible units ({}).".format(
+                        str(chem_potential.unit)
+                    )
+                )
 
         # If swaps are needed
         if net_charge_difference != 0:
@@ -380,8 +445,14 @@ class OneDirectionChargeProposal(SaltSwapProposal):
             # Apply sanity checks
             SaltSwapProposal._validate_swaps(swaps)
 
-            log_ratio = self.select_ions(chem_potential, drive, log_ratio, saltswap_residue_indices,
-                                         saltswap_state_pairs, swaps)
+            log_ratio = self.select_ions(
+                chem_potential,
+                drive,
+                log_ratio,
+                saltswap_residue_indices,
+                saltswap_state_pairs,
+                swaps,
+            )
 
         return saltswap_residue_indices, saltswap_state_pairs, log_ratio
 
@@ -411,38 +482,50 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         """
 
         # Note that we don't allow for direct transitions between ions of different charge.
-        swaps = dict(water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0)
+        swaps = dict(
+            water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0
+        )
         charge_to_counter = final_charge - initial_charge
 
         counter = 0
         while abs(charge_to_counter) > 0:
             # The protonation state change annihilates a positive charge
-            if (initial_charge > 0 >= final_charge) or (0 < final_charge < initial_charge):
-                swaps['water_to_cation'] += 1
+            if (initial_charge > 0 >= final_charge) or (
+                0 < final_charge < initial_charge
+            ):
+                swaps["water_to_cation"] += 1
                 charge_to_counter += 1
-                initial_charge -= 1 # One part of the initial charge has been countered
+                initial_charge -= 1  # One part of the initial charge has been countered
 
             # The protonation state change annihilates a negative charge
-            elif initial_charge < 0 <= final_charge or (0 > final_charge > initial_charge):
-                swaps['water_to_anion'] += 1
+            elif initial_charge < 0 <= final_charge or (
+                0 > final_charge > initial_charge
+            ):
+                swaps["water_to_anion"] += 1
                 charge_to_counter -= 1
                 initial_charge += 1
             # The protonation state change adds a negative charge
-            elif initial_charge == 0 > final_charge or (0 > initial_charge > final_charge):
-                swaps['anion_to_water'] += 1
+            elif initial_charge == 0 > final_charge or (
+                0 > initial_charge > final_charge
+            ):
+                swaps["anion_to_water"] += 1
                 charge_to_counter += 1
                 initial_charge -= 1
             # The protonation state adds a positive charge
-            elif (initial_charge == 0 < final_charge) or (0 < initial_charge < final_charge):
-                swaps['cation_to_water'] += 1
+            elif (initial_charge == 0 < final_charge) or (
+                0 < initial_charge < final_charge
+            ):
+                swaps["cation_to_water"] += 1
                 charge_to_counter -= 1
                 initial_charge += 1
             else:
                 raise ValueError("Impossible scenario reached.")
-            
-            counter +=1
+
+            counter += 1
             if counter > 1000:
-                raise RuntimeError("Infinite while loop predicted for salt resolution. Bailing out.")
+                raise RuntimeError(
+                    "Infinite while loop predicted for salt resolution. Bailing out."
+                )
         return swaps
 
 
@@ -525,21 +608,28 @@ class COOHDummyMover:
 
         # Instantiate the class variable
         # This is to keep track of angle and torsion force indices for all future instances
-        if COOHDummyMover.angleforceindex is None or COOHDummyMover.torsionforceindex is None:
+        if (
+            COOHDummyMover.angleforceindex is None
+            or COOHDummyMover.torsionforceindex is None
+        ):
             for force_index in range(system.getNumForces()):
                 force = system.getForce(force_index)
-                if force.__class__.__name__ == 'HarmonicAngleForce':
+                if force.__class__.__name__ == "HarmonicAngleForce":
                     COOHDummyMover.angleforceindex = force_index
-                elif force.__class__.__name__ == 'PeriodicTorsionForce':
+                elif force.__class__.__name__ == "PeriodicTorsionForce":
                     COOHDummyMover.torsionforceindex = force_index
             if COOHDummyMover.angleforceindex is None:
                 raise RuntimeError(
-                    "{} requires the system to have a HarmonicAngleForce!".
-                        format(COOHDummyMover.__name__))
+                    "{} requires the system to have a HarmonicAngleForce!".format(
+                        COOHDummyMover.__name__
+                    )
+                )
             if COOHDummyMover.torsionforceindex is None:
                 raise RuntimeError(
-                    "{} requires the system to have a PeriodicTorsionForce!".
-                        format(COOHDummyMover.__name__))
+                    "{} requires the system to have a PeriodicTorsionForce!".format(
+                        COOHDummyMover.__name__
+                    )
+                )
 
         angleforce = system.getForce(COOHDummyMover.angleforceindex)
         torsionforce = system.getForce(COOHDummyMover.torsionforceindex)
@@ -555,8 +645,7 @@ class COOHDummyMover:
 
         # Loop through and collect all torsion energy terms that include moving atoms
         for torsion_index in range(torsionforce.getNumTorsions()):
-            *particles, n, theta0, k = torsionforce.getTorsionParameters(
-                torsion_index)
+            *particles, n, theta0, k = torsionforce.getTorsionParameters(torsion_index)
             if any(particle in self.movable for particle in particles):
                 # Energy function for this dihedral.
                 params = [k._value, n, theta0._value, *particles]
@@ -565,21 +654,51 @@ class COOHDummyMover:
         return
 
     @staticmethod
-    def e_angle(positions: np.ndarray, k: float, theta0: float, particle1: int,
-                particle2: int, particle3: int) -> float:
+    def e_angle(
+        positions: np.ndarray,
+        k: float,
+        theta0: float,
+        particle1: int,
+        particle2: int,
+        particle3: int,
+    ) -> float:
         """Angle energy function as defined in OpenMM documentation."""
-        return 0.5 * k * (COOHDummyMover.angle_between_vectors(
-            positions[particle1] - positions[particle2],
-            positions[particle3] - positions[particle2]) - theta0) ** 2
+        return (
+            0.5
+            * k
+            * (
+                COOHDummyMover.angle_between_vectors(
+                    positions[particle1] - positions[particle2],
+                    positions[particle3] - positions[particle2],
+                )
+                - theta0
+            )
+            ** 2
+        )
 
     @staticmethod
-    def e_dihedral(positions: np.ndarray, k: float, n: int, theta0: float,
-                   particle1: int, particle2: int, particle3: int,
-                   particle4: int) -> float:
+    def e_dihedral(
+        positions: np.ndarray,
+        k: float,
+        n: int,
+        theta0: float,
+        particle1: int,
+        particle2: int,
+        particle3: int,
+        particle4: int,
+    ) -> float:
         """Dihedral energy function as defined in OpenMM documentation. Deals with proper and improper equivalently."""
-        return k * (1 + math.cos(n * COOHDummyMover.angle_between_vectors(
-            positions[particle1] - positions[particle2],
-            positions[particle4] - positions[particle3]) - theta0))
+        return k * (
+            1
+            + math.cos(
+                n
+                * COOHDummyMover.angle_between_vectors(
+                    positions[particle1] - positions[particle2],
+                    positions[particle4] - positions[particle3],
+                )
+                - theta0
+            )
+        )
 
     @staticmethod
     def reflect(n: np.ndarray, x0: np.ndarray, x1: np.ndarray) -> np.ndarray:
@@ -602,12 +721,10 @@ class COOHDummyMover:
     def log_probability(self, positions: np.ndarray) -> float:
         """Return the log probability of the angles and dihedrals for a given set of positions."""
         e_angles = [
-            COOHDummyMover.e_angle(positions, *params)
-            for params in self.angles
+            COOHDummyMover.e_angle(positions, *params) for params in self.angles
         ]
         e_dihedrals = [
-            COOHDummyMover.e_dihedral(positions, *params)
-            for params in self.dihedrals
+            COOHDummyMover.e_dihedral(positions, *params) for params in self.dihedrals
         ]
         log.debug("COOH angle energies: %s", e_angles)
         log.debug("COOH dihedral energies: %s", e_dihedrals)
@@ -626,8 +743,7 @@ class COOHDummyMover:
         n_v2 = np.linalg.norm(v2)
         return np.arccos(np.dot(v1, v2) / (n_v1 * n_v2))
 
-    def mirror_oxygens(self,
-                       positions: np.ndarray) -> Tuple[np.ndarray, float]:
+    def mirror_oxygens(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
         """Mirror around the CC bound to swap oxygen positions and move hydrogen along without changing bonds.
 
         Parameters
@@ -666,8 +782,7 @@ class COOHDummyMover:
         log.debug("E old: %.10f", old_state_probability)
         return new_positions, logp_accept_mirror
 
-    def mirror_syn_anti(self,
-                        positions: np.ndarray) -> Tuple[np.ndarray, float]:
+    def mirror_syn_anti(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
         """Mirror around the O-C bond to peform a syn/anti coordinate flip.
 
         Parameters
@@ -701,16 +816,21 @@ class COOHDummyMover:
 
     def to_xml(self):
         """Return an xml representation of the dummy mover."""
-        tree = etree.fromstring('<COOHDummyMover OH="{}" HO="{}" OC="{}" CO="{}" R="{}"/>'.format(self.OH, self.HO, self.OC, self.CO, self.R))
+        tree = etree.fromstring(
+            '<COOHDummyMover OH="{}" HO="{}" OC="{}" CO="{}" R="{}"/>'.format(
+                self.OH, self.HO, self.OC, self.CO, self.R
+            )
+        )
         for angle in self.angles:
-            angle_xml = '<Angle k="{}" theta0="{}" particle1="{}"  particle2="{}" particle3="{}"/>'.format(*angle)
+            angle_xml = '<Angle k="{}" theta0="{}" particle1="{}"  particle2="{}" particle3="{}"/>'.format(
+                *angle
+            )
             tree.append(etree.fromstring(angle_xml))
 
         for dihedral in self.dihedrals:
-            dihedral_xml = '<Dihedral k="{}" n="{}" theta0="{}" particle1="{}" particle2="{}" particle3="{}" particle4="{}" />'.format(*dihedral)
+            dihedral_xml = '<Dihedral k="{}" n="{}" theta0="{}" particle1="{}" particle2="{}" particle3="{}" particle4="{}" />'.format(
+                *dihedral
+            )
             tree.append(etree.fromstring(dihedral_xml))
 
         return etree.tostring(tree, pretty_print=True)
-
-
-
