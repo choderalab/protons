@@ -431,7 +431,7 @@ class _TitrationState:
         self.bonded_par = None
 
     @classmethod
-    def from_lists(cls, g_k, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, proton_count):
+    def from_lists(cls, g_k, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, improper_par, proton_count):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
 
         Returns
@@ -448,7 +448,7 @@ class _TitrationState:
         obj.atom_name = copy.deepcopy(atom_name)
         obj.angle_par = copy.deepcopy(angle_par)
         obj.proper_par = copy.deepcopy(proper_par)
-        
+        obj.improper_par = copy.deepcopy(improper_par)
         obj.proton_count = proton_count
         # Note that forces are to be manually added by force caching functionality in ProtonDrives
         obj._forces = list()
@@ -1517,7 +1517,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups[titration_group_index])
 
-    def _add_titration_state(self, titration_group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, proton_count):
+    def _add_titration_state(self, titration_group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, improper_par, proton_count):
         """
         Add a titration state to a titratable group.
 
@@ -1547,7 +1547,7 @@ class NCMCProtonDrive(_BaseDrive):
         if len(atom_charges) != len(self.titrationGroups[titration_group_index].atom_indices):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
-        state = _TitrationState.from_lists(relative_energy * self.beta, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, proton_count)
+        state = _TitrationState.from_lists(relative_energy * self.beta, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, improper_par, proton_count)
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
@@ -1824,7 +1824,8 @@ class NCMCProtonDrive(_BaseDrive):
 
         bonded_par = titration_state.bonded_par
         angle_par = titration_state.angle_par
-
+        proper_par = titration_state.proper_par
+        improper_par = titration_state.improper_par
 
         charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
         # Store the parameters per individual force
@@ -1907,14 +1908,38 @@ class NCMCProtonDrive(_BaseDrive):
             # set torsion parameters
             elif force_classname == 'PeriodicTorsionForce':
                 f_params.append(dict(torsion=list()))
-                torsion_string_from_openmm = 'Torsion-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} Atom-ID3: {:>3d} Atom-ID4: {:>3d} periodicity: {: 02.4f} phase: {: 02.4f} k: {: 02.4f}'
+                proper_string_from_openmm = 'Proper-ID: {:>3d} Atom-ID1: {:>2d} Atom-ID2: {:>2d} Atom-ID3: {:>2d} Atom-ID4: {:>2d} periodicity: {: 02.4f} phase: {: 02.4f} k: {: 02.4f}'
 
                 for torsion_index in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
 
                     current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'a4', 'periodicity', 'phase', 'k'], map(strip_in_unit_system, force.getTorsionParameters(torsion_index)))}
+                    
+                    a1_atom_name = atom_name_by_atom_index[a1]
+                    a2_atom_name = atom_name_by_atom_index[a2]
+                    a3_atom_name = atom_name_by_atom_index[a3]
+                    a4_atom_name = atom_name_by_atom_index[a4]
+                    if tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]) in proper_par:
+                        periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
+                        phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
+                        k = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
+                    elif tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]) in improper_par:
+                        periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
+                        phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
+                        k = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
+                    else:
+                        print('Torsion could not be found')
+                        raise Exception("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
+
+                    
+                    current_parameters['periodicity1'] = periodicity
+                    current_parameters['phase1'] = phase
+                    current_parameters['k1'] = k
+
+
+
                     f_params[force_index]['torsion'].append(current_parameters)
-                    print(torsion_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
+                    print(proper_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
@@ -2749,6 +2774,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             bonded_par = dict()
             angle_par = dict()
             torsion_par = dict()
+            proper_par = dict()
+            improper_par = dict()
+
                 
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
@@ -2761,7 +2789,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 atom_charges = []
                 atom_epsilon = []
                 atom_sigma = []
-                proper_par = defaultdict(list)
                 atom_type = []
                 atom_name = []
                 print('ATOMS:')
@@ -2798,18 +2825,31 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
                 print('PROPER')
                 for index, proper in enumerate(state_block.xpath("Proper")):
-                    print(index, ':', proper.get('type1'), proper.get('type2'), proper.get('type3'), proper.get('type4'))
-                    key = tuple(([proper.get('type1'), proper.get('type2'), proper.get('type3'), proper.get('type4')]))
-                    proper_periodicity = (proper.get('periodicity1'))
-                    proper_phase = (proper.get('phase1'))
-                    proper_k = (proper.get('k1'))
-                    proper_par[key].append([proper_periodicity, proper_phase, proper_k])
+                    print(index, ':', proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4'))
+                    key = tuple(([proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4')]))
+                    d = dict()
+
+                    d['periodicity1'] = (proper.get('periodicity1'))
+                    d['phase1'] = (proper.get('phase1'))
+                    d['k1'] = (proper.get('k1'))
+                    proper_par[key] = d
+
+                print('IMPROPER')
+                for index, improper in enumerate(state_block.xpath("Improper")):
+                    print(index, ':', improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4'))
+                    key = tuple(([improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4')]))
+                    d = dict()
+
+                    d['periodicity1'] = (improper.get('periodicity1'))
+                    d['phase1'] = (improper.get('phase1'))
+                    d['k1'] = (improper.get('k1'))
+                    improper_par[key] = d
 
                 relative_energy = float(state_block.get("g_k")) * unit.kilocalories_per_mole
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
                 # Create titration state.
-                self._add_titration_state(group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, torsion_par, proton_count)
+                self._add_titration_state(group_index, relative_energy, atom_charges, atom_epsilon, atom_sigma, atom_type, atom_name, bonded_par, angle_par, proper_par, improper_par, proton_count)
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
