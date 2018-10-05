@@ -18,8 +18,6 @@ PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 class Modeller(modeller.Modeller):
     """A modification of the simtk.openmm.app Modeller class.
-
-
     Credits
     -------
     The original class was written by Peter Eastman.
@@ -33,46 +31,34 @@ class Modeller(modeller.Modeller):
 
     def addHydrogens(self, forcefield=None, pH=None, variants=None, platform=None):
         """Add missing hydrogens to the model.
-
         This function automatically changes compatible residues into their constant-pH variant if no variant is specified.:
-
-        Aspartic acid:krabbelnde
+        Aspartic acid:
             AS4: Form with a 2 hydrogens on each one of the delta oxygens (syn,anti)
                 It has 5 titration states.
-
             Alternative:
             AS2: Has 2 hydrogens (syn, anti) on one of the delta oxygens
                 It has 3 titration states.
-
         Cysteine:
             CYS: Neutral form with a hydrogen on the sulfur
             CYX: No hydrogen on the sulfur (either negatively charged, or part of a disulfide bond)
-
         Glutamic acid:
             GL4: Form with a 2 hydrogens on each one of the epsilon oxygens (syn,anti)
                 It has 5 titration states.
-
         Histidine:
             HIP: Positively charged form with hydrogens on both ND1 and NE2
                 It has 3 titration states.
-
         The variant to use for each residue is determined by the following rules:
-
         1. Any Cysteine that participates in a disulfide bond uses the CYX variant regardless of pH.
         2. Other residues are all set to maximally protonated state, which can be updated using a proton drive
-
         You can override these rules by explicitly specifying a variant for any residue.  To do that, provide a list for the
         'variants' parameter, and set the corresponding element to the name of the variant to use.
-
         A special case is when the model already contains a hydrogen that should not be present in the desired variant.
         If you explicitly specify a variant using the 'variants' parameter, the residue will be modified to match the
         desired variant, removing hydrogens if necessary.  On the other hand, for residues whose variant is selected
         automatically, this function will only add hydrogens.  It will never remove ones that are already present in the
         model.
-
         Definitions for standard amino acids and nucleotides are built in.  You can call loadHydrogenDefinitions() to load
         additional definitions for other residue types.
-
         Parameters
         ----------
         forcefield : ForceField=None
@@ -90,18 +76,14 @@ class Modeller(modeller.Modeller):
         platform : Platform=None
             the Platform to use when computing the hydrogen atom positions.  If
             this is None, the default Platform will be used.
-
         Returns
         -------
         list
              a list of what variant was actually selected for each residue,
              in the same format as the variants parameter
-
         Notes
         -----
-
         This function does not use a pH specification. The argument is kept for compatibility reasons.
-
         """
         # Check the list of variants.
 
@@ -155,98 +137,60 @@ class Modeller(modeller.Modeller):
                 newResidue = newTopology.addResidue(residue.name, newChain, residue.id)
                 isNTerminal = (residue == chain._residues[0])
                 isCTerminal = (residue == chain._residues[-1])
-                
                 if residue.name in Modeller._residueHydrogens:
                     # Add hydrogens.  First select which variant to use.
 
                     spec = Modeller._residueHydrogens[residue.name]
                     variant = variants[residue.index]
                     if variant is None:
-                        
                         if residue.name == 'CYS':
                             # If this is part of a disulfide, use CYX.
 
                             sulfur = [atom for atom in residue.atoms() if atom.element == elem.sulfur]
                             if len(sulfur) == 1 and any((atom.residue != residue for atom in bonded[sulfur[0]])):
                                 variant = 'CYX'
-                        
                         if residue.name == 'HIS':
                             variant = 'HIP'
-                        
                         if residue.name == 'GLU':
                             variant = 'GL4'
-                        
                         if residue.name == 'ASP':
                             variant = 'AS4'
-                    
                     if variant is not None and variant not in spec.variants:
                         raise ValueError('Illegal variant for %s residue: %s' % (residue.name, variant))
-                    
                     actualVariants[residue.index] = variant
-                    print('Variant used: ', variant)
                     removeExtraHydrogens = (variants[residue.index] is not None)
 
                     # Make a list of hydrogens that should be present in the residue.
 
-                    parents = []
-                    for atom in residue.atoms():
-                        if atom.element != elem.hydrogen:
-                            parents.append(atom)
-
+                    parents = [atom for atom in residue.atoms() if atom.element != elem.hydrogen]
                     parentNames = [atom.name for atom in parents]
-
                     hydrogens = [h for h in spec.hydrogens if
                                  (variant is None) or (h.variants is None) or (
                                  h.variants is not None and variant in h.variants)]
-                                
-                    # print('Len of hydrogens: ' + str(len(hydrogens)))
-                    # hydrogens = [h for h in hydrogens if h.terminal is None or (isNTerminal and h.terminal == 'N') or (
-                    # isCTerminal and h.terminal == 'C')]
-                    # print('Len of hydrogens: ' + str(len(hydrogens)))
-
-                    # hydrogens = [h for h in hydrogens if h.parent in parentNames]
-                    # print('Len of hydrogens: ' + str(len(hydrogens)))
-
-                    hydrogens = set()
-                    # NOTE: MW: strange, every condition is true for every hydrogen 
-                    for hydrogen in spec.hydrogens:
-                        if((variant is None) or 
-                            (hydrogen.variants is None) or 
-                            (hydrogen.variants is not None and variant in hydrogen.variants)):
-                                hydrogens.add(hydrogen)
-
-                        if (hydrogen.terminal is None or 
-                            (isNTerminal and hydrogen.terminal == 'N') or 
-                            (isCTerminal and hydrogen.terminal == 'C')):
-                                hydrogens.add(hydrogen)
-
-                        if hydrogen.parent in parentNames:
-                            hydrogens.add(hydrogen)
-                    hydrogens = list(hydrogens)
+                    hydrogens = [h for h in hydrogens if h.terminal is None or (isNTerminal and h.terminal == 'N') or (
+                    isCTerminal and h.terminal == 'C')]
+                    hydrogens = [h for h in hydrogens if h.parent in parentNames]
 
                     # Loop over atoms in the residue, adding them to the new topology along with required hydrogens.
                     for parent in residue.atoms():
-                    # Check whether this is a hydrogen that should be removed.
+                        # Check whether this is a hydrogen that should be removed.
 
                         if removeExtraHydrogens and parent.element == elem.hydrogen and not any(
                                         parent.name == h.name for h in hydrogens):
-                            print('Wants to remove ... ' + str(parent.element))
                             continue
 
                         # Add the atom.
                         newAtom = newTopology.addAtom(parent.name, parent.element, newResidue)
-                        # NOTE: MW: everything all right so far
                         newAtoms[parent] = newAtom
                         newPositions.append(deepcopy(self.positions[parent.index]))
-                        
                         if parent in parents:
                             # Match expected hydrogens with existing ones and find which ones need to be added.
 
                             existing = [atom for atom in bonded[parent] if atom.element == elem.hydrogen]
                             expected = [h for h in hydrogens if h.parent == parent.name]
-
                             if len(existing) < len(expected):
                                 # Try to match up existing hydrogens to expected ones.
+
                                 matches = []
                                 for e in existing:
                                     match = [h for h in expected if h.name == e.name]
@@ -260,7 +204,6 @@ class Modeller(modeller.Modeller):
 
                                 for i in range(len(matches)):
                                     if matches[i] is None:
-                                        print('Were some atomes not matched ..?')
                                         matches[i] = expected[-1]
                                         expected.remove(expected[-1])
 
@@ -295,8 +238,6 @@ class Modeller(modeller.Modeller):
 
         if forcefield is not None:
             # Use the ForceField the user specified.
-            # NOTE: MW: This fails ...
-
 
             system = forcefield.createSystem(newTopology, rigidWater=False)
             atoms = list(newTopology.atoms())

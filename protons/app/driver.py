@@ -1825,7 +1825,6 @@ class NCMCProtonDrive(_BaseDrive):
         bonded_par = titration_state.bonded_par
         angle_par = titration_state.angle_par
         proper_par = titration_state.proper_par
-        improper_par = titration_state.improper_par
 
         charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
         # Store the parameters per individual force
@@ -1923,24 +1922,15 @@ class NCMCProtonDrive(_BaseDrive):
                         periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
                         phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
                         k = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
-                    elif tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]) in improper_par:
-                        periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
-                        phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
-                        k = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
                     else:
-                        print('Torsion could not be found')
-                        raise Exception("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
-
-                    
+                        print("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
+                        print('Assuming this is an improper - using the Parameters openMM assigned.')
+                                   
                     current_parameters['periodicity1'] = periodicity
                     current_parameters['phase1'] = phase
                     current_parameters['k1'] = k
-
-
-
                     f_params[force_index]['torsion'].append(current_parameters)
                     print(proper_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
-
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
 
