@@ -573,9 +573,9 @@ class COOHDummyMover:
 
     # Keep track of which force index corresponds to angles and dihedral between instances
     angleforceindex = None
-    torsionforceindex = None
+    dihedralforceindex = None
 
-    def __init__(self, system: openmm.System, indices: Dict[str, int]):
+    def __init__(self):
         """Instantiate a COOHDummyMover for a single C-COOH moiety in your system.
 
         Parameters
@@ -590,41 +590,73 @@ class COOHDummyMover:
         """
 
         # Hydroxyl hydrogen
-        self.HO = indices["HO"]
+        self.HO = None
         # Hydroxyl oxygen
-        self.OH = indices["OH"]
+        self.OH = None
         # Carbonyl oxygen
-        self.OC = indices["OC"]
+        self.OC = None
         # The carbons are used as reference points for reflection
-        self.CO = indices["CO"]
-        self.R = indices["R"]
+        self.CO = None
+        self.R = None
 
         # All atoms that this class may decide to move
-        self.movable = [indices["OC"], indices["OH"], indices["HO"]]
+        self.movable = []
         # The parameters for angles
         self.angles = []
         # The parameters for dihedrals
         self.dihedrals = []
 
+    @classmethod
+    def from_system(cls, system: openmm.System, indices: Dict[str, int]):
+        """Instantiate a COOHDummyMover for a single C-COOH moiety in your system.
+
+        Parameters
+        ----------
+        system - The OpenMM system containting the COOH moiety
+        indices - a dictionary labeling the indices of the C-COOH atoms with keys:
+            HO - index in the system of the hydroxyl hydrogen.
+            OH - index in the system of the hydroxyl oxygen
+            OC - index in the system of the carbonyl oxygen
+            CO - index in the system of the carbonyl carbon
+            R -  index in the system of the atom "R"  this COOH group is connected to.
+        """
+        obj = cls()
+        # Hydroxyl hydrogen
+        obj.HO = indices["HO"]
+        # Hydroxyl oxygen
+        obj.OH = indices["OH"]
+        # Carbonyl oxygen
+        obj.OC = indices["OC"]
+        # The carbons are used as reference points for reflection
+        obj.CO = indices["CO"]
+        obj.R = indices["R"]
+
+        # All atoms that this class may decide to move
+        obj.movable = [indices["OC"], indices["OH"], indices["HO"]]
+        # The parameters for angles
+        obj.angles = []
+        # The parameters for dihedrals
+        obj.dihedrals = []
+
         # Instantiate the class variable
         # This is to keep track of angle and torsion force indices for all future instances
         if (
             COOHDummyMover.angleforceindex is None
-            or COOHDummyMover.torsionforceindex is None
+            or COOHDummyMover.dihedralforceindex is None
         ):
             for force_index in range(system.getNumForces()):
                 force = system.getForce(force_index)
                 if force.__class__.__name__ == "HarmonicAngleForce":
                     COOHDummyMover.angleforceindex = force_index
                 elif force.__class__.__name__ == "PeriodicTorsionForce":
-                    COOHDummyMover.torsionforceindex = force_index
+                    COOHDummyMover.dihedralforceindex = force_index
             if COOHDummyMover.angleforceindex is None:
                 raise RuntimeError(
                     "{} requires the system to have a HarmonicAngleForce!".format(
                         COOHDummyMover.__name__
                     )
                 )
-            if COOHDummyMover.torsionforceindex is None:
+            if COOHDummyMover.dihedralforceindex is None:
                 raise RuntimeError(
                     "{} requires the system to have a PeriodicTorsionForce!".format(
                         COOHDummyMover.__name__
@@ -632,26 +664,26 @@ class COOHDummyMover:
                 )
 
         angleforce = system.getForce(COOHDummyMover.angleforceindex)
-        torsionforce = system.getForce(COOHDummyMover.torsionforceindex)
+        torsionforce = system.getForce(COOHDummyMover.dihedralforceindex)
 
         # Loop through and collect all angle energy terms that include moving atoms
         for angle_index in range(angleforce.getNumAngles()):
             *particles, theta0, k = angleforce.getAngleParameters(angle_index)
-            if any(particle in self.movable for particle in particles):
+            if any(particle in obj.movable for particle in particles):
                 # Energy function for this angle.
                 params = [k._value, theta0._value, *particles]
                 log.debug("Found this COOH angle: %s", params)
-                self.angles.append(params)
+                obj.angles.append(params)
 
         # Loop through and collect all torsion energy terms that include moving atoms
         for torsion_index in range(torsionforce.getNumTorsions()):
             *particles, n, theta0, k = torsionforce.getTorsionParameters(torsion_index)
-            if any(particle in self.movable for particle in particles):
+            if any(particle in obj.movable for particle in particles):
                 # Energy function for this dihedral.
                 params = [k._value, n, theta0._value, *particles]
                 log.debug("Found this COOH dihedral: %s", params)
-                self.dihedrals.append(params)
-        return
+                obj.dihedrals.append(params)
+        return obj
 
     @staticmethod
     def e_angle(
@@ -814,6 +846,27 @@ class COOHDummyMover:
 
         return new_positions, logp_accept_mirror
 
+    def no_transformation(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
+        """Propose not changing anything.
+
+        Parameters
+        ----------
+        positions - array of positions of all the atoms in the openmm system
+
+        Returns
+        -------
+        new_positions, log_accept_mirror
+        """
+        log.debug("COOH no transformation.")
+        return positions, 0.0
+
+    def mirror_both(self,positions: np.ndarray) -> Tuple[np.ndarray, float]:
+        """Perform a double switch."""
+        log.debug("COOH mirroring both.")
+        new_pos, first_logp = self.mirror_syn_anti(positions)
+        final_pos, final_logp = self.mirror_oxygens(new_pos)
+        return final_pos, first_logp + final_logp
+
     def to_xml(self):
         """Return an xml representation of the dummy mover."""
         tree = etree.fromstring(
@@ -821,6 +874,9 @@ class COOHDummyMover:
                 self.OH, self.HO, self.OC, self.CO, self.R
             )
         )
+        tree.set("AngleForceIndex", str(self.angleforceindex))
+        tree.set("DihedralForceIndex", str(self.dihedralforceindex))
+
         for angle in self.angles:
             angle_xml = '<Angle k="{}" theta0="{}" particle1="{}"  particle2="{}" particle3="{}"/>'.format(
                 *angle
@@ -834,3 +890,39 @@ class COOHDummyMover:
             tree.append(etree.fromstring(dihedral_xml))
 
         return etree.tostring(tree, pretty_print=True)
+
+    @classmethod
+    def from_xml(cls, xmltree: etree.Element):
+        """Instantiate a COOHDummyMover class from an lxml Element."""
+        obj = cls()
+        if not xmltree.tag == "COOHDummyMover":
+            raise ValueError("Wrong xml element provided, was expecting a COOHDummyMover")
+        obj.OH = int(xmltree.get("OH"))
+        obj.HO = int(xmltree.get("HO"))
+        obj.OC = int(xmltree.get("OC"))
+        obj.CO = int(xmltree.get("CO"))
+        obj.R = int(xmltree.get("R"))
+        cls.angleforceindex = int(xmltree.get("AngleForceIndex"))
+        cls.dihedralforceindex = int(xmltree.get("DihedralForceIndex"))
+
+        for angle in xmltree.xpath('//Angle'):
+            angle_params = []
+            for param, ptype in [("k", float), ("theta0", float), ("particle1", int),("particle2", int),("particle3", int),] :
+                angle_params.append(ptype(angle.get(param)))
+            obj.angles.append(angle_params)
+
+        for dihedral in xmltree.xpath("//Dihedral"):
+            dihedral_params = []
+            for param, ptype in [("k", float), ("n", int), ("theta0", float), ("particle1", int), ("particle2", int),
+                                 ("particle3", int), ("particle4", int)]:
+                dihedral_params.append(ptype(dihedral.get(param)))
+            obj.dihedrals.append(dihedral_params)
+
+        return obj
+
+    def random_move(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
+        choices = [self.no_transformation, self.mirror_oxygens, self.mirror_syn_anti, self.mirror_both]
+        move = np.random.choice(choices)
+        # Since every option is just as likely, forward and reverse cancel out in logp,
+        # only take the logp produced by the move itself
+        return move(positions)

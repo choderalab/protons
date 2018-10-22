@@ -88,7 +88,7 @@ class _TitratableResidue:
 
         if self._pka_data is not None and other._pka_data is not None:
             try:
-                assert_frame_equal(self._pka_data, other._pka_data)
+                assert_frame_equal(self._pka_data, other._pka_data, check_less_precise=4)
             except AssertionError:
                 return False
 
@@ -465,7 +465,7 @@ class _TitrationState:
         self._target_weight = None
         # MC moves should be functions that take the positions, and return updated positions,
         # and a log (reverse/forward) proposal probability ratio
-        self._mc_moves = list()  # List[Callable[[np.array], Tuple[np.array, float]]]
+        self._mc_moves = dict()  # Dict[str, List[Callable[[np.array], Tuple[np.array, float]]]]
 
     @classmethod
     def from_lists(
@@ -488,9 +488,11 @@ class _TitrationState:
         # Note that forces are to be manually added by force caching functionality in ProtonDrives
         obj._forces = list()
         obj._target_weight = None
-        for mover in cooh_movers:
-            obj._mc_moves.append(mover.mirror_syn_anti)
-            obj._mc_moves.append(mover.mirror_oxygens)
+        if cooh_movers is not None:
+            for mover in cooh_movers:
+                if "COOH" not in obj._mc_moves:
+                    obj._mc_moves["COOH"] = list()
+                obj._mc_moves["COOH"].append(mover)
 
         return obj
 
@@ -513,7 +515,8 @@ class _TitrationState:
         # prevent accidental modification
         state = copy.deepcopy(state_element)
         obj.proton_count = int(state.get("proton_count"))
-        obj._target_weight = np.float64(state.get("target_weight"))
+        target_weight = state.get("target_weight")
+        obj._target_weight = np.float64(target_weight)
         obj.g_k = np.float64(state.get("g_k"))
 
         charges = state.xpath("charge")
@@ -562,6 +565,24 @@ class _TitrationState:
                         exc_dict[key] = np.float64(exception.get(key))
                 force_dict["exceptions"].append(exc_dict)
             obj._forces[f_index] = force_dict
+
+        # instantiate supported MCMoves from xml
+        # throws KeyError if there is an unimplemented move present
+        for mcmove in state.xpath("MCMoves"):
+            for child in mcmove:
+                if child.tag == "COOH":
+                    for grandchild in child:
+                        if grandchild.tag == "COOHDummyMover":
+                            mover = COOHDummyMover.from_xml(grandchild)
+                            try:
+                                obj._mc_moves["COOH"].append(mover)
+                            except KeyError:
+                                obj._mc_moves["COOH"] = [mover]
+                        else:
+                            raise KeyError("Unknown COOH movetype found in XML: {}".format(grandchild.tag))
+                else:
+                    raise KeyError("Unsupported MC movetype found in XML: {}".format(child.tag))
+            pass
 
         return obj
 
@@ -654,6 +675,15 @@ class _TitrationState:
                 )
 
             state.force = force_xml
+
+        # Titration state specific MCMoves are serialized using their to_xml method
+        mcmoves = objectify.SubElement(state, "MCMoves")
+        for mcmove, mcmovelist in self._mc_moves.items():
+            mcmovexml = objectify.fromstring("<{}/>".format(mcmove))
+            for submove in mcmovelist:
+                submovexml = objectify.fromstring(submove.to_xml())
+                mcmovexml.append(submovexml)
+            mcmoves.append(mcmovexml)
 
         return state
 
@@ -1265,18 +1295,55 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
 
-        if not issubclass(type(proposal), _StateProposal):
-            raise ValueError("Move needs to be a _StateProposal derived class.")
+        if proposal == "COOH":
+            moves = []
+            for residue in self.titrationGroups:
+                state = residue.state
+                try:
+                    moves.extend(state._mc_moves["COOH"])
+                except KeyError:
+                    pass # residue current state has no moves.
 
-        if self.context is None:
-            raise RuntimeError("Driver has no context attached.")
+            state = self.context.getState(getPositions=True)
+            pos = state.getPositions(asNumpy=True)
 
-        # Perform a number of protonation state update trials.
-        for attempt in range(nattempts):
-            self._attempt_number = attempt
-            self._attempt_state_change(proposal, residue_pool=residue_pool)
+            # perform a move.
+            if len(moves) == 0:
+                # no flippable cooh, return
+                return
+            else:
+                for attempt in range(nattempts):
+                    # random move performs a random combination of mirroring oxygens, and syn anti.
+                    # nothing is moved,
+                    # one of either
+                    # or both
+                    move = random.sample(moves, 1)[0].random_move
+                    # TODO recalculate the energy using openmm optionally, for moves that don't have
+                    # Access to the context, but change the nonbonded interactions
+                    log.debug(move.__name__)
+                    new_pos, logp = move(pos)
+                    if math.exp(logp) > random.uniform(0.0, 1.0):
+                        log.debug("Accepted COOH update: logp %f", logp)
+                        self.context.setPositions(new_pos)
+                    else:
+                        log.debug("Rejected COOH update: logp %f", logp)
+                        # Resample velocities if rejected to maintain detailed balance
+                        self.context.setVelocitiesToTemperature(self.temperature)
 
-        return
+        else:
+
+            if not issubclass(type(proposal), _StateProposal):
+                raise ValueError("Move needs to be a _StateProposal derived class.")
+
+            if self.context is None:
+                raise RuntimeError("Driver has no context attached.")
+
+            # Perform a number of protonation state update trials.
+            for attempt in range(nattempts):
+                self._attempt_number = attempt
+                self._attempt_state_change(proposal, residue_pool=residue_pool)
+
+            return
 
     def import_gk_values(self, gk_dict, strict=False):
         """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
@@ -1290,6 +1357,7 @@ class NCMCProtonDrive(_BaseDrive):
         strict: bool, default False
             If True, raises an error if gk values are specified for nonexistent residue.
 
+        TODO read calibration data from an xml file?
         """
 
         all_restypes = {group.residue_type for group in self.titrationGroups}
@@ -3119,7 +3187,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
                         cooh_system_indices[key] = system_index
 
-                    cooh_movers.append(COOHDummyMover(system, cooh_system_indices))
+                    cooh_movers.append(COOHDummyMover.from_system(system, cooh_system_indices))
 
                 # Create titration state.
                 self._add_titration_state(
