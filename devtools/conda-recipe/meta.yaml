@@ -16,14 +16,14 @@ requirements:
     - numpy >=1.10
     - scipy >=0.17.0
     - mdtraj # For extracting trajectory parts
-    - openmoltools >=0.7.5
+    - openmoltools ==0.7.5
     - openmmtools >=0.9.3
     - ambermini >=15.0.4
     - netcdf4 >=1.2.4
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - joblib
     - lxml
-    - parmed <=2.7.3
+    - parmed <=2.7.3 # Newer versions break parameter generation
     - pytest
     - pytest-runner
     - pymbar

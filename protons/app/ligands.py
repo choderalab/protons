@@ -23,6 +23,8 @@ from .. import app
 from simtk.openmm import openmm
 from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
+from distutils.version import StrictVersion
+import parmed
 
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -1226,6 +1228,8 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
     str : The absolute path of the outputfile
 
     """
+    if StrictVersion(parmed.version) > StrictVersion("2.7.3"):
+        raise ImportError("Parameterization depends on an older version of Parmed (<=2.7.3).")
 
     # Grab data from sdf file and make a file containing the charge and penalty
     log.info("Processing Epik output...")

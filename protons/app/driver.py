@@ -1318,8 +1318,6 @@ class NCMCProtonDrive(_BaseDrive):
                     # one of either
                     # or both
                     move = random.sample(moves, 1)[0].random_move
-                    # TODO recalculate the energy using openmm optionally, for moves that don't have
-                    # Access to the context, but change the nonbonded interactions
                     log.debug(move.__name__)
                     new_pos, logp = move(pos)
                     if math.exp(logp) > random.uniform(0.0, 1.0):
