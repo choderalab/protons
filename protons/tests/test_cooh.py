@@ -20,6 +20,7 @@ from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
 from protons.app import SelfAdjustedMixtureSampling
 from protons.app import UniformProposal
+from protons.app.template_patches import patch_cooh
 from protons.app.proposals import OneDirectionChargeProposal, COOHDummyMover
 from protons.tests import get_test_data
 from protons.tests.utilities import (
@@ -399,3 +400,15 @@ class TestCarboxylicAcid:
         newdrive.update(UniformProposal(), nattempts=1)
 
         return
+
+    def test_residue_patch(self):
+        """Add COOH statements and fix COOH atom types for small molecules."""
+        viologen = self.setup_viologen_vacuum()
+        source = viologen.ffxml_files
+        output = patch_cooh(source, "VIO")
+        tree = etree.fromstring(output)
+        assert len([cooh for cooh in tree.xpath('//COOH')]) == 4, "There should be a total of 4 COOH statements for viologen."
+        atoms = [atom.get('type') for atom in tree.xpath('//Atom') ]
+        assert atoms.count('oh') == 20, "There should be 20 atoms with oh types total (4 per state, and 4 in the main template)."
+
+
