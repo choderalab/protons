@@ -3,7 +3,7 @@ from lxml import etree, objectify
 import networkx as nx
 import math
 
-def patch_cooh(source:str, residue_name:str) -> str:
+def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
     """Add COOH statements to protons ffxml templates and fix hydroxy atom types.
 
     Parameters
@@ -11,6 +11,8 @@ def patch_cooh(source:str, residue_name:str) -> str:
 
     source - location of the original ffxml file
     residue_name - name of the residue to patch
+    oh_type - atomtype to use for hydroxy oxygen
+    ho_type - atomtype to use for hydroxy hydrogen
 
     Returns
     -------
@@ -37,13 +39,13 @@ def patch_cooh(source:str, residue_name:str) -> str:
         G.add_node(atom.get("name"), type=atom.get('type'), charge=float(atom.get("charge")))
 
         # For convenience, assume only hydroxy hydrogen types are part of lowercase COOH
-        if atom.attrib['type'] == 'ho':
+        if atom.attrib['type'] == ho_type:
             hydrogens.append(atom.get('name'))
         # No restriction besides the first letter in the type should be an lowercase  o
-        elif atom.attrib['type'][0] == 'o':
+        elif atom.attrib['type'][0].lower() == 'o':
             oxygens.append(atom.get('name'))
         # No restriction on carbon type besides first letter should be a lowercase c
-        elif atom.attrib['type'][0] == 'c':
+        elif atom.attrib['type'][0].lower() == 'c':
             carbons.append(atom.get('name'))
 
     # Add edges to graph using the bond records
@@ -86,14 +88,14 @@ def patch_cooh(source:str, residue_name:str) -> str:
             # Ensure oxygens have same type in deprotonated state.
             # Using oh because otherwise this results in lack of a C-O-H angle term
             if atom.get("name") in (cooh["OH"], cooh["OC"]):
-                atom.set("type", 'oh')
+                atom.set("type", oh_type)
 
         for state in ffxml.xpath("/ForceField/Residues/Residue[@name='{}']/Protons/State".format(residue_name)):
             for atom in state.xpath('Atom'):
                 # Ensure oxygens have same type in deprotonated state.
                 # Using oh because otherwise this results in lack of a C-O-H angle term
                 if atom.get("name") in (cooh["OH"], cooh["OC"]):
-                    atom.set("type", 'oh')
+                    atom.set("type", oh_type)
 
                 elif atom.get("name") == cooh["HO"]:
                     # Determine whether the hydrogen is a dummy in this particular state.
@@ -112,7 +114,7 @@ def patch_cooh(source:str, residue_name:str) -> str:
     result = etree.tostring(ffxml, pretty_print=True, encoding="UTF-8").decode()
     # reread and reprint to remove messy syntax
     re_tree = etree.fromstring(result,etree.XMLParser(remove_blank_text=True, remove_comments=False))
-    result = etree.tostring(re_tree, pretty_print=True, encoding="UTF-8").decode()
+    result = etree.tostring(re_tree, pretty_print=True, encoding="UTF-8").decode("utf-8")
 
     return result
 

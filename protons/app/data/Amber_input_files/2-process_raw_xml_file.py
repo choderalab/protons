@@ -14,7 +14,7 @@ for key in titratable_residues.titratable_residues:
     residue_objects[key] = getattr(titratable_residues, key)
 
 from simtk.openmm import app, openmm
-
+from protons.app.template_patches import patch_cooh
 # Validate that the initial file can be parsed by openmm
 x = app.ForceField('Amber_input_files/raw-amber10-constph-tmp.xml')
 
@@ -121,12 +121,66 @@ for residue in xmltree.xpath('/ForceField/Residues/Residue'):
         for atom in reversed(atoms):
             residue.insert(0, atom)
 
+# Add two special carboxylic acid definitions for ASP and GLU
+# Replaces regular protonated residues.
+# ( residue to replace, (template, protonation states to keep, {atom, name to assign, or False if to be deleted} )
+special_residues = {
+    "GLH" : ("GL4", [0,1], {"HE11": False, "HE22" : False, "HE21": "HE2", "HE12": False}),
+    "ASH" : ("AS4", [0,1], {"HD11": False, "HD22" : False, "HD21": "HD2", "HD12": False})
+}
+
+
+for replace_residue, (template_residue, template_states, atom_refactors) in special_residues.items():
+    # Delete the old residue entirely.
+    for old_res in xmltree.xpath("/ForceField/Residues/Residue[@name='{}']".format(replace_residue)):
+        old_res.getparent().remove(old_res)
+
+    new_res = deepcopy(xmltree.xpath("/ForceField/Residues/Residue[@name='{}']".format(template_residue))[0])
+    new_res.set("name", replace_residue)
+    total_count = len(template_states)
+    # Counter for new state indices
+    new_res.xpath("Protons")[0].set("number_of_states", str(total_count))
+
+    new_index = 0
+    for state in new_res.xpath("Protons/State"):
+        if int(state.get("index")) in template_states:
+            state.set("index", str(new_index))
+            new_index += 1
+        else:
+            state.getparent().remove(state)
+
+    for atom in new_res.xpath("//Atom"):
+        aname = atom.get("name")
+        if aname in atom_refactors:
+            if atom_refactors[aname] == False:
+                atom.getparent().remove(atom)
+            else:
+                atom.set("name", atom_refactors[aname])
+
+    for bond in new_res.xpath("Bond"):
+        for atom in ["atomName1", "atomName2"]:
+            aname = bond.get(atom)
+            if aname in atom_refactors:
+                if atom_refactors[aname] == False:
+                    bond.getparent().remove(bond)
+                else:
+                    bond.set(atom, atom_refactors[aname])
+
+    xmltree.xpath("/ForceField/Residues")[0].append(new_res)
+
+
 # Write out to file
 xmlstring = etree.tostring(xmltree,encoding="utf-8", pretty_print=True, xml_declaration=False)
 xmlstring = xmlstring.decode("utf-8")
 
 with open('amber10-constph-tmp.xml', 'w') as fstream:
     fstream.write(xmlstring)
+
+# Patch COOH templates
+for residue_name in ("GLH", "ASH"):
+    new_xml = patch_cooh('amber10-constph-tmp.xml', residue_name, oh_type="OH", ho_type="HO")
+    with open('amber10-constph-tmp.xml', 'w') as fstream:
+        fstream.write(new_xml)
 
 # Validate that the resulting file can be read by openmm
 y = app.ForceField('amber10-constph-tmp.xml')
