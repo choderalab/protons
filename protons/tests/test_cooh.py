@@ -100,7 +100,7 @@ class TestCarboxylicAcid:
     @staticmethod
     def setup_viologen_water():
         """
-        Set up viologen in vacuum
+        Set up viologen in water
         """
         viologen = SystemSetup()
         viologen.temperature = 300.0 * unit.kelvin
@@ -163,6 +163,58 @@ class TestCarboxylicAcid:
         viologen.propagations_per_step = 1
 
         return viologen
+
+    @staticmethod
+    def setup_amino_acid_water(three_letter_code):
+        """
+        Set up glutamic acid in water
+        """
+        if three_letter_code not in ["glh", "ash"]:
+            raise ValueError("Amino acid not available.")
+
+        aa = SystemSetup()
+        aa.temperature = 300.0 * unit.kelvin
+        aa.pressure = 1.0 * unit.atmospheres
+        aa.timestep = 1.0 * unit.femtoseconds
+        aa.collision_rate = 1.0 / unit.picoseconds
+        aa.pH = 7.0
+        testsystems = get_test_data("amino_acid", "testsystems")
+        aa.ffxml_files = "amber10-constph.xml"
+        aa.forcefield = ForceField(aa.ffxml_files, "tip3p.xml")
+
+        aa.pdbfile = app.PDBFile(os.path.join(testsystems, "{}.pdb".format(three_letter_code))
+        )
+        aa.topology = aa.pdbfile.topology
+        aa.positions = aa.pdbfile.getPositions(asNumpy=True)
+        aa.constraint_tolerance = 1.e-7
+
+        aa.integrator = create_compound_gbaoab_integrator(aa)
+
+        aa.integrator.setConstraintTolerance(aa.constraint_tolerance)
+        aa.system = aa.forcefield.createSystem(
+            aa.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
+        aa.system.addForce(
+            openmm.MonteCarloBarostat(aa.pressure, aa.temperature, 25)
+        )
+
+        aa.simulation = app.Simulation(
+            aa.topology,
+            aa.system,
+            aa.integrator,
+            TestCarboxylicAcid.platform,
+        )
+        aa.simulation.context.setPositions(aa.positions)
+        aa.context = aa.simulation.context
+        aa.perturbations_per_trial = 1000
+        aa.propagations_per_step = 1
+
+        return aa
 
     def test_dummy_moving(self) -> None:
         """Move dummies without accepting and evaluate the energy differences."""
@@ -410,5 +462,26 @@ class TestCarboxylicAcid:
         assert len([cooh for cooh in tree.xpath('//COOH')]) == 4, "There should be a total of 4 COOH statements for viologen."
         atoms = [atom.get('type') for atom in tree.xpath('//Atom') ]
         assert atoms.count('oh') == 20, "There should be 20 atoms with oh types total (4 per state, and 4 in the main template)."
+
+    def test_glutamic_acid_cooh(self):
+        """Use the dummy mover with the amino acid glutamic acid"""
+
+        glh = self.setup_amino_acid_water("ash")
+        drive = ForceFieldProtonDrive(
+            glh.temperature,
+            glh.topology,
+            glh.system,
+            glh.forcefield,
+            glh.ffxml_files,
+            pressure=glh.pressure,
+            perturbations_per_trial=glh.perturbations_per_trial,
+            propagations_per_step=glh.propagations_per_step,
+            residues_by_name=None,
+            residues_by_index=None,
+        )
+
+        drive.attach_context(glh.context)
+        drive.adjust_to_ph(4.6)
+        return
 
 

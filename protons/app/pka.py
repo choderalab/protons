@@ -102,6 +102,43 @@ class GL4(SynAntiAcidType):
     pka = 4.4
 
 
+class AcidType(PopulationCalculator):
+    """
+    Amber constant-pH acid residue residue state weights at given pH
+    """
+    pka = 0.0
+
+    def __init__(self, pH):
+        self.k = pow(10.0, pH - self.pka)
+
+    def protonated_concentration(self):
+        """
+        Concentration of protonated form
+        """
+        return 1.0/(self.k + 1.0)
+
+    def deprotonated_concenration(self):
+        """
+        Concentration of deprotonated form
+        """
+        return self.k / (self.k + 1.0)
+
+    def populations(self):
+        """
+        Returns
+        -------
+        list of float : state weights in order of AMBER cpH residue
+        """
+        return [self.deprotonated_concenration(), self.protonated_concentration()]
+
+class GLH(AcidType):
+    "Glutamic acid residue"
+    pka = 4.4
+
+class ASH(AcidType):
+    "Aspartic acid residue"
+    pka = 4.0
+
 class BasicType(PopulationCalculator):
     """
     Amber constant-pH basic residue (e.g. LYS) state weights at given pH
@@ -150,6 +187,8 @@ class CYS(BasicType):
 
 
 available_pkas = {
+    "ASH" : ASH,
+    "GLH": GLH,
     "AS4": AS4,
     "GL4": GL4,
     "CYS": CYS,
