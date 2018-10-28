@@ -1001,7 +1001,8 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store force object pointers.
         # TODO: Add Custom forces.
-        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
+        #force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
+        force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -1781,6 +1782,27 @@ class NCMCProtonDrive(_BaseDrive):
 
             elif force_classname == 'PeriodicTorsionForce':
                 pass
+                print('#######################')
+                print('#######################')
+
+                for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
+                    angle = dict()
+
+                    for parameter_name in ['angle', 'k']:
+                        new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
+                        angle[parameter_name] = new_parameter
+                    
+                    if float(angle_initial['angle']) == 0.0:
+                        angle['angle'] = float(angle_final['angle'])
+                    elif float(angle_final['angle']) == 0.0:
+                        angle['angle'] = float(angle_initial['angle'])
+                    
+                    if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
+                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
+                        print('angle current: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle['angle']), float(angle['k'])))                  
+
+
+                    force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
 
             else:
@@ -1922,15 +1944,31 @@ class NCMCProtonDrive(_BaseDrive):
                         periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
                         phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
                         k = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
+
+                        current_parameters['periodicity1'] = periodicity
+                        current_parameters['phase1'] = phase
+                        current_parameters['k1'] = k
+                        f_params[force_index]['torsion'].append(current_parameters)
+                        print(proper_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
+
+
                     else:
+                        # improper parameters
                         print("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
+                        print(a1, a2, a3, a4)
+                        print(str([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]]))
                         print('Assuming this is an improper - using the Parameters openMM assigned.')
-                                   
-                    current_parameters['periodicity1'] = periodicity
-                    current_parameters['phase1'] = phase
-                    current_parameters['k1'] = k
-                    f_params[force_index]['torsion'].append(current_parameters)
-                    print(proper_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
+
+                        #periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
+                        #phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
+                        #k = improper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
+                        #print('Periodicity: {} phase: {} k: {}'.format(periodicity, phase, k))
+
+                        current_parameters['periodicity1'] = 0
+                        current_parameters['phase1'] = 0.0
+                        current_parameters['k1'] = 0.0
+                        f_params[force_index]['torsion'].append(current_parameters)
+
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
 
@@ -2781,41 +2819,41 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 atom_sigma = []
                 atom_type = []
                 atom_name = []
-                print('ATOMS:')
+                #print('ATOMS:')
                 for index, atom in enumerate(state_block.xpath("Atom")):
-                    print(index, ':', atom.get("name"), atom.get("type"), atom.get("charge"), atom.get("epsilon"), atom.get("sigma"))
+                    #print(index, ':', atom.get("name"), atom.get("type"), atom.get("charge"), atom.get("epsilon"), atom.get("sigma"))
                     atom_charges.append(float(atom.get("charge")))
                     atom_epsilon.append(float(atom.get("epsilon")))
                     atom_sigma.append(float(atom.get("sigma")))
                     atom_type.append(atom.get('type'))
                     atom_name.append(atom.get('name'))
 
-                print('BONDS')
+                #print('BONDS')
                 for index, bond in enumerate(state_block.xpath("Bond")):
                     key = tuple([bond.get('name1'), bond.get('name2')])
                     bond_length = (bond.get('length'))
                     bond_k = (bond.get('k'))
-                    print(index, ':', bond.get('name1'), bond.get('name2'), bond_length, bond_k)
+                    #print(index, ':', bond.get('name1'), bond.get('name2'), bond_length, bond_k)
                     d = dict()
                     d['bond_length'] = bond_length
                     d['bond_k'] = bond_k
                     bonded_par[key] = d
 
-                print('Angle')
+                #print('Angle')
                 for index, angle in enumerate(state_block.xpath("Angle")):
                     key = tuple([angle.get('name1'), angle.get('name2'), angle.get('name3')])
                     angle_value = (angle.get('angle'))
                     angle_k = (angle.get('k'))
-                    print(index, ':', angle.get('name1'), angle.get('name2'), angle.get('name3'), angle_value, angle_k)
+                    #print(index, ':', angle.get('name1'), angle.get('name2'), angle.get('name3'), angle_value, angle_k)
                     d = dict()
                     d['angle'] = angle_value
                     d['k'] = angle_k
                     angle_par[key] = d
 
 
-                print('PROPER')
+                #print('PROPER')
                 for index, proper in enumerate(state_block.xpath("Proper")):
-                    print(index, ':', proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4'))
+                    #print(index, ':', proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4'))
                     key = tuple(([proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4')]))
                     d = dict()
 
@@ -2824,9 +2862,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     d['k1'] = (proper.get('k1'))
                     proper_par[key] = d
 
-                print('IMPROPER')
+                #print('IMPROPER')
                 for index, improper in enumerate(state_block.xpath("Improper")):
-                    print(index, ':', improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4'))
+                    #print(index, ':', improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4'))
                     key = tuple(([improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4')]))
                     d = dict()
 
