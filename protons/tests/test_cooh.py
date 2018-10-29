@@ -37,7 +37,11 @@ log.setLevel(logging.DEBUG)
 
 
 class TestCarboxylicAcid:
-    default_platform_name = "OpenCL"
+    if hasCUDA:
+        default_platform_name = "CUDA"
+    else:
+        default_platform_name = "CPU"
+
     platform = openmm.Platform.getPlatformByName(default_platform_name)
 
     @staticmethod
@@ -55,6 +59,63 @@ class TestCarboxylicAcid:
         viologen.ffxml_files = os.path.join(testsystems, "viologen-protons.ffxml")
         viologen.gaff = os.path.join(testsystems, "gaff.xml")
         viologen.forcefield = ForceField(viologen.gaff, viologen.ffxml_files)
+
+        viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
+        viologen.topology = viologen.pdbfile.topology
+        viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
+        viologen.constraint_tolerance = 1.e-7
+
+        viologen.integrator = openmm.LangevinIntegrator(
+            viologen.temperature, viologen.collision_rate, viologen.timestep
+        )
+
+        viologen.integrator.setConstraintTolerance(viologen.constraint_tolerance)
+        viologen.system = viologen.forcefield.createSystem(
+            viologen.topology, nonbondedMethod=app.NoCutoff, constraints=app.HBonds
+        )
+        viologen.cooh1 = {  # indices in topology of the first cooh group
+            "HO": 56,
+            "OH": 0,
+            "CO": 1,
+            "OC": 2,
+            "R": 3,
+        }
+        viologen.cooh2 = {  # indices in topology of the second cooh group
+            "HO": 57,
+            "OH": 27,
+            "CO": 25,
+            "OC": 26,
+            "R": 24,
+        }
+
+        viologen.simulation = app.Simulation(
+            viologen.topology,
+            viologen.system,
+            viologen.integrator,
+            TestCarboxylicAcid.platform,
+        )
+        viologen.simulation.context.setPositions(viologen.positions)
+        viologen.context = viologen.simulation.context
+        viologen.perturbations_per_trial = 10
+        viologen.propagations_per_step = 1
+
+        return viologen
+
+    @staticmethod
+    def setup_viologen_implicit():
+        """
+        Set up viologen in implicit solvent
+        """
+        viologen = SystemSetup()
+        viologen.temperature = 300.0 * unit.kelvin
+        viologen.pressure = 1.0 * unit.atmospheres
+        viologen.timestep = 1.0 * unit.femtoseconds
+        viologen.collision_rate = 1.0 / unit.picoseconds
+        viologen.pH = 7.0
+        testsystems = get_test_data("viologen", "testsystems")
+        viologen.ffxml_files = os.path.join(testsystems, "viologen-protons.ffxml")
+        viologen.gaff = os.path.join(testsystems, "gaff.xml")
+        viologen.forcefield = ForceField(viologen.gaff, "gaff-obc2.xml", viologen.ffxml_files)
 
         viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
         viologen.topology = viologen.pdbfile.topology
@@ -216,6 +277,52 @@ class TestCarboxylicAcid:
 
         return aa
 
+    @staticmethod
+    def setup_amino_acid_implicit(three_letter_code):
+        """
+        Set up glutamic acid in water
+        """
+        if three_letter_code not in ["glh", "ash"]:
+            raise ValueError("Amino acid not available.")
+
+        aa = SystemSetup()
+        aa.temperature = 300.0 * unit.kelvin
+        aa.timestep = 1.0 * unit.femtoseconds
+        aa.collision_rate = 1.0 / unit.picoseconds
+        aa.pH = 7.0
+        testsystems = get_test_data("amino_acid", "testsystems")
+        aa.ffxml_files = "amber10-constph.xml"
+        aa.forcefield = ForceField(aa.ffxml_files, "amber10-constph-obc2.xml")
+
+        aa.pdbfile = app.PDBFile(os.path.join(testsystems, "{}_vacuum.pdb".format(three_letter_code))
+                                 )
+        aa.topology = aa.pdbfile.topology
+        aa.positions = aa.pdbfile.getPositions(asNumpy=True)
+        aa.constraint_tolerance = 1.e-7
+
+        aa.integrator = create_compound_gbaoab_integrator(aa)
+
+        aa.integrator.setConstraintTolerance(aa.constraint_tolerance)
+        aa.system = aa.forcefield.createSystem(
+            aa.topology,
+            nonbondedMethod=app.NoCutoff,
+            constraints=app.HBonds,
+            rigidWater=True,
+        )
+
+        aa.simulation = app.Simulation(
+            aa.topology,
+            aa.system,
+            aa.integrator,
+            TestCarboxylicAcid.platform,
+        )
+        aa.simulation.context.setPositions(aa.positions)
+        aa.context = aa.simulation.context
+        aa.perturbations_per_trial = 1000
+        aa.propagations_per_step = 1
+
+        return aa
+
     def test_dummy_moving(self) -> None:
         """Move dummies without accepting and evaluate the energy differences."""
 
@@ -314,21 +421,21 @@ class TestCarboxylicAcid:
     def test_dummy_moving_mc(self) -> None:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
-        md_steps_between_mc = 1000
-        total_loops = 250
-        viologen = self.setup_viologen_vacuum()
-        # viologen = self.setup_viologen_water()
+        md_steps_between_mc = 100
+        total_loops = 100
+        # viologen = self.setup_viologen_vacuum()
+        viologen = self.setup_viologen_water()
 
         if log.getEffectiveLevel() == logging.DEBUG:
             viologen.simulation.reporters.append(
                 app.DCDReporter(
                     "cooh-viologen-{}.dcd".format(str(uuid.uuid4())),
-                    md_steps_between_mc,
+                    md_steps_between_mc // 10,
                 )
             )
 
-        cooh1 = COOHDummyMover(viologen.system, viologen.cooh1)
-        cooh2 = COOHDummyMover(viologen.system, viologen.cooh2)
+        cooh1 = COOHDummyMover.from_system(viologen.system, viologen.cooh1)
+        cooh2 = COOHDummyMover.from_system(viologen.system, viologen.cooh2)
 
         do_nothing = lambda positions: (positions, 0.0)
 
@@ -365,7 +472,7 @@ class TestCarboxylicAcid:
         acceptance_rate = n_accept / (iteration + 1)
         log.info("Acceptance rate was %f", acceptance_rate)
         if acceptance_rate < 0.9:
-            raise ValueError("Expectance rate was lower than expected.")
+            raise ValueError("Acceptance rate was lower than expected.")
         return
 
     def test_dummy_moving_protondrive(self) -> None:
@@ -427,6 +534,7 @@ class TestCarboxylicAcid:
             viologen.integrator.step(100)
             drive.update("COOH", nattempts=1)
 
+
         x = drive.serialize_titration_groups()
         newdrive = NCMCProtonDrive(viologen.temperature, viologen.topology, viologen.system,
                                    pressure=viologen.pressure, perturbations_per_trial=viologen.perturbations_per_trial)
@@ -466,7 +574,10 @@ class TestCarboxylicAcid:
     def test_glutamic_acid_cooh(self):
         """Use the dummy mover with the amino acid glutamic acid"""
 
-        glh = self.setup_amino_acid_water("ash")
+        md_steps_between_mc = 1000
+        total_loops = 50
+
+        glh = self.setup_amino_acid_water("glh")
         drive = ForceFieldProtonDrive(
             glh.temperature,
             glh.topology,
@@ -480,8 +591,21 @@ class TestCarboxylicAcid:
             residues_by_index=None,
         )
 
+        if log.getEffectiveLevel() == logging.DEBUG:
+            glh.simulation.reporters.append(
+                app.DCDReporter(
+                    "cooh-glh-{}.dcd".format(str(uuid.uuid4())),
+                    md_steps_between_mc // 100,
+                    enforcePeriodicBox=True
+                )
+            )
+
         drive.attach_context(glh.context)
         drive.adjust_to_ph(4.6)
-        return
 
+        for iteration in range(total_loops):
+            glh.simulation.step(md_steps_between_mc)
+            drive.update("COOH", nattempts=1)
+
+        return
 

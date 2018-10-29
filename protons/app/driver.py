@@ -1103,7 +1103,7 @@ class NCMCProtonDrive(_BaseDrive):
                 )
 
         # Initialize titration group records.
-        self.titrationGroups = list()
+        self.titrationGroups: List[_TitratableResidue] = list()
 
         # Keep track of forces and whether they've been cached.
         self.precached_forces = False
@@ -1296,6 +1296,9 @@ class NCMCProtonDrive(_BaseDrive):
         """
 
         if proposal == "COOH":
+            # TODO support residue pool for COOH?
+            if residue_pool is not None:
+                raise NotImplementedError("Residue pooling has not yet been implemented for COOH moves.")
             moves = []
             for residue in self.titrationGroups:
                 state = residue.state
@@ -2235,13 +2238,7 @@ class NCMCProtonDrive(_BaseDrive):
                 )
 
         # The "work" in the acceptance test has a contribution from the titratable group weights.
-        g_initial = 0
-        for (
-            titration_group_index,
-            (titration_group, titration_state_index),
-        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
-            titration_state = titration_group[titration_state_index]
-            g_initial += titration_state.g_k
+        g_initial = self.sum_of_gk()
 
         # PROPAGATION
         ncmc_integrator.step(self.propagations_per_step)
@@ -2306,13 +2303,7 @@ class NCMCProtonDrive(_BaseDrive):
             ]
 
         # Extracting the final state's weight.
-        g_final = 0
-        for (
-            titration_group_index,
-            (titration_group, titration_state_index),
-        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
-            titration_state = titration_group[titration_state_index]
-            g_final += titration_state.g_k
+        g_final = self.sum_of_gk()
 
         # Extract the internally calculated work from the integrator
         work += g_final - g_initial
@@ -2322,6 +2313,15 @@ class NCMCProtonDrive(_BaseDrive):
             self.cm_remover.setFrequency(self.cm_remover_freq)
 
         return work
+
+    def sum_of_gk(self):
+        """Calculate the total weight of the current titration state."""
+        g_total = 0
+        for (titration_group_index, (titration_group, titration_state_index),) in enumerate(
+                zip(self.titrationGroups, self.titrationStates)):
+            titration_state = titration_group[titration_state_index]
+            g_total += titration_state.g_k
+        return g_total
 
     def _attempt_state_change(self, proposal, residue_pool=None, reject_on_nan=False):
         """
@@ -2639,14 +2639,10 @@ class NCMCProtonDrive(_BaseDrive):
             log_P -= self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA
 
         # Add reference free energy contributions.
-        for (
-            titration_group_index,
-            (titration_group, titration_state_index),
-        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
-            titration_state = titration_group[titration_state_index]
-            g_k = titration_state.g_k
-            log.debug("g_k: %.2f", g_k)
-            log_P -= g_k
+        g_k = self.sum_of_gk()
+
+        log.debug("g_k: %.2f", g_k)
+        log_P -= g_k
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
@@ -2954,9 +2950,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
         propagations_per_step : int, optional, default=1
             Number of propagation steps in between perturbation steps.
-        residues_by_index : list of int
+        residues_by_index : list of int, optional
             Residues in topology by index that should be treated as titratable
-        residues_by_name : list of str
+        residues_by_name : list of str, optional
             Residues by name in topology that should be treated as titratable
 
         Notes

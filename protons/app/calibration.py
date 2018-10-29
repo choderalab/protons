@@ -6,6 +6,79 @@ import simtk.unit as units
 from .logger import log
 from scipy.misc import logsumexp
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
+from enum import Enum
+from typing import Optional, Union, List
+
+
+class SAMSApproach(Enum):
+    """Various ways of running SAMS for a titration drive."""
+    ONESITE = 0
+    MULTISITE = 1
+
+class WeightTable:
+    """A table to contain SAMS weights (g_k/zeta) for constant-pH residues."""
+    def __init__(self, driver: NCMCProtonDrive, approach: SAMSApproach):
+        """Set up tracking for SAMS calibration weights.
+
+        Parameters
+        ----------
+        driver - A proton drive object with titratable residues.
+        approach - one of the available ways of running SAMS (see ``SAMSApproach``)
+        """
+        self._gk_table = None
+        if not isinstance(approach, SAMSApproach):
+            raise TypeError("Please provide a SAMSApproach.")
+
+
+        self.approach = approach
+
+        if approach is SAMSApproach.ONESITE:
+            # Every value in the table is the sams weight of one independent titration state
+            self._gk_table = list()
+            for residue in driver.titrationGroups:
+                self._gk_table.append(np.asarray(residue.g_k_values))
+            self._gk_table = np.asarray(self._gk_table)
+
+        elif approach is SAMSApproach.MULTISITE:
+            dims = []
+            for residue in driver.titrationGroups:
+                dims.append(len(residue.titration_states))
+
+            # Every value in the table is the sams weight of one joint titration state
+            self._gk_table = np.zeros(dims, dtype=np.float64)
+
+    def weight(self, titration_states: List[int]):
+        """Return the sams weight value for the current set of titration states."""
+        weight = 0
+
+        # In case of the one site sams approach, the sams weight is the total weight of every titration state
+        if self.approach is SAMSApproach.ONESITE:
+            if len(titration_states) != len(self._gk_table):
+                raise ValueError("The number of titration states in the table does not match what was provided.")
+            for row, state in enumerate(titration_states):
+                weight += self._gk_table[row][state]
+
+        # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
+        elif self.approach is SAMSApproach.MULTISITE:
+            if len(titration_states) != len(self._gk_table.shape):
+                raise ValueError("The number of titration states provided does not match the dimensionality of the table.")
+
+            weight = self._gk_table[titration_states]
+
+        return weight
+
+    def __len__(self) -> int:
+        """Returns the number of g_k valuesp resent inside this table."""
+        size = 0
+        if self.approach is SAMSApproach.ONESITE:
+            for row in self._gk_table:
+                size += row.size
+
+        elif self.approach is SAMSApproach.MULTISITE:
+            size = self._gk_table.size
+
+        return size
+
 
 
 class SelfAdjustedMixtureSampling:
