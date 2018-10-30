@@ -461,6 +461,8 @@ def _generate_xml_template(residue_name="LIG"):
     forcefield.append(pertorsionforce)
     forcefield.append(nonbondforce)
 
+    print('forcefield')
+    print(type(forcefield))
     return forcefield
 
 
@@ -501,8 +503,6 @@ class _TitratableForceFieldCompiler(object):
         for state in self._input_state_data:
             self._xml_parameter_trees.append(state['ffxml'])
 
-        self.tmp_xml_parameter_trees = deepcopy(self._xml_parameter_trees)
-
         # Compile all information into the output structure
         self._make_output_tree()
 
@@ -516,16 +516,19 @@ class _TitratableForceFieldCompiler(object):
         self._complete_state_registry()
         # Set the initial state of the template that is read by OpenMM
         self._initialize_forcefield_template()
-        # Append extra parameters from frcmod
-        improper_dict = self._append_extra_gaff_types()
+
         # Add isomer specific information
-        self._add_isomers(improper_dict)
+        self._add_isomers()
+
+        # Append extra parameters from frcmod
+        self._append_extra_gaff_types()
+
         # Append dummy parameters
         self._append_dummy_parameters()
+
         # Remove empty blocks, and unnecessary information in the ffxml tree
         self._sanitize_ffxml()
 
-        print(improper_dict)
         return
 
     def _append_dummy_parameters(self):
@@ -608,7 +611,7 @@ class _TitratableForceFieldCompiler(object):
                 key = hash((node1, node2, node3))
                 # angle between two dummy atoms
                 if list_of_angles_atom_types[i].count(0) > 1:
-                    print('Dummy to dummy')
+                    #print('Dummy to dummy')
                     continue
                 # only one dummy atom
                 elif 0 in list_of_angles_atom_types[i]:
@@ -661,15 +664,15 @@ class _TitratableForceFieldCompiler(object):
 
                 # torsion between two dummy atoms
                 if list_of_torsion_atom_types[i].count(0) > 1:
-                    print('##############')
-                    print(node1, node2, node3, node4)
+                    #print('##############')
+                    #print(node1, node2, node3, node4)
 
-                    print('Dummy to dummy')
+                    #print('Dummy to dummy')
                     continue
 
                 elif 0 in list_of_torsion_atom_types[i]:
-                    print('##############')
-                    print(node1, node2, node3, node4)
+                    #print('##############')
+                    #print(node1, node2, node3, node4)
 
                     original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4 = list_of_torsion_atom_types[i]
                     for torsion_types in self.all_torsionss_at_all_states[key].values():
@@ -693,7 +696,7 @@ class _TitratableForceFieldCompiler(object):
                                 original_atom_type4 = 'd' + real_atom_type
 
                             if (original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4) in unique_torsion_set:
-                                print('Repetition!')
+                                #print('Repetition!')
                                 continue
                             else:
                                 unique_torsion_set.add((original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4))
@@ -868,7 +871,6 @@ class _TitratableForceFieldCompiler(object):
         charges = list()
         for index, state in enumerate(self._input_state_data):
             net_charge = state['net_charge']
-            print(net_charge)
             charges.append(int(net_charge))
             template = _State(index,
                               state['log_population'],
@@ -924,7 +926,7 @@ class _TitratableForceFieldCompiler(object):
 
             residue.append(etree.fromstring(bond_string.format(atomName1=atomName1, atomName2=atomName2)))
 
-    def _add_isomers(self, improper_dict):
+    def _add_isomers(self):
         """
         Add all the isomer specific data to the xml template.
         """
@@ -936,7 +938,7 @@ class _TitratableForceFieldCompiler(object):
         atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}" epsilon="{epsilon}" sigma="{sigma}" />'
         bond_string = '<Bond name1="{atomName1}" name2="{atomName2}" length="{bond_length}" k="{k}"/>'
         angle_string = '<Angle name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" angle="{angle}" k="{k}"/>'
-        proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
+        proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" periodicity6="{periodicity6}" phase6="{phase6}" k6="{k6}" />'      
         improper_string = '<Improper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
 
 
@@ -953,6 +955,7 @@ class _TitratableForceFieldCompiler(object):
                 print('Atom entries ...')
 
                 isomer_str = str(isomer)
+                print(isomer_str)
                 isomer_xml = etree.fromstring(isomer_str)
 
 
@@ -967,12 +970,10 @@ class _TitratableForceFieldCompiler(object):
                         epsilon = parm['nonbonds'].attrib['epsilon']
                         e = atom_string.format(name=node, atom_type=atom_type, charge=self.atom_charge_dict[node][isomer_index],epsilon=epsilon,sigma=sigma)
                     
-                    print(' :', e)
                     isomer_xml.append(etree.fromstring(e))
 
                 ##############################################
                 # bond entries
-                print('Bond entries ...')
                 for bond in self.network.edges:
                     atomName1 = bond[0]
                     atomName2 = bond[1]
@@ -996,12 +997,10 @@ class _TitratableForceFieldCompiler(object):
                     k= parm['bonds'].attrib['k']
 
                     e = bond_string.format(atomName1=atomName1, atomName2=atomName2, bond_length=length, k=k)
-                    print(' :', e)
                     isomer_xml.append(etree.fromstring(e))
 
                 ##############################################
                 # angle entries
-                print('Angle entries ...')
                 angle_string_for_debug = dict()
                 angle_string_for_debug['no-dummy'] = []
                 angle_string_for_debug['one-dummy'] = []
@@ -1049,9 +1048,10 @@ class _TitratableForceFieldCompiler(object):
 
                 # printing debug info
                 for k in angle_string_for_debug:
-                    print(' - Angles ', k, ' ...')
+                    #print(' - Angles ', k, ' ...')
                     for e in angle_string_for_debug[k]:
-                        print('  :', e)
+                        pass
+                        #print('  :', e)
 
                 ##############################################
                 # torsion entries
@@ -1068,23 +1068,51 @@ class _TitratableForceFieldCompiler(object):
                     key = hash((node1, node2, node3, node4))
                     # torsion between two dummy atoms
                     if list_of_torsion_atom_types[i].count(0) > 1:
-                        periodicity = float(0.0)
-                        phase = float(0.0)
-                        k = float(0.0)
-                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, periodicity=str(periodicity), phase=str(phase), k=str(k))
+                        periodicity_list = [0.0] * 6
+                        phase_list = [0.0] * 6
+                        k_list = [0.0] * 6
+
+                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
+                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]) )
+
                         proper_string_for_debug['two-dummy'].append(e)
                         isomer_xml.append(etree.fromstring(e))
+
                     # torsion between real atoms
                     elif 0 not in list_of_torsion_atom_types[i]:
                         atom_type1, atom_type2, atom_type3, atom_type4 = list_of_torsion_atom_types[i]
                         parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2, atom_type3=atom_type3, atom_type4=atom_type4)
+
+                        periodicity_list = [0.0] * 6
+                        phase_list = [0.0] * 6
+                        k_list = [0.0] * 6
+                        offset = 0
+                        #print(node1, node2, node3, node4)
+                        #print(parm['proper'])
                         for par in parm['proper']:
-                            periodicity = par.attrib['periodicity1']
-                            phase = par.attrib['phase1']
-                            k = par.attrib['k1']
-                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, periodicity=str(periodicity), phase=str(phase), k=str(k))
-                            isomer_xml.append(etree.fromstring(e))
-                            proper_string_for_debug['no-dummy'].append(e)
+                            nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
+                            #print(nr_of_par)                       
+                            for i in range(1, nr_of_par+1):
+                                periodicity_list[offset + i-1] = (par.attrib['periodicity' + str(i)])
+                                phase_list[offset+i-1] = (par.attrib['phase' + str(i)])
+                                k_list[offset+i-1] = (par.attrib['k' + str(i)])
+                            offset = nr_of_par
+                        
+                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
+                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
+
+                        isomer_xml.append(etree.fromstring(e))
+                        proper_string_for_debug['no-dummy'].append(e)
 
                     # torsion which includes a single dummy atom
                     else:
@@ -1097,39 +1125,56 @@ class _TitratableForceFieldCompiler(object):
                                 new_atom_type1, new_atom_type2, new_atom_type3, new_atom_type4 = torsion_types
                                 parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3, atom_type4=new_atom_type4)
 
-                                for par in parm['proper']:
-                                    periodicity = par.attrib['periodicity1']
-                                    phase = par.attrib['phase1']
-                                    k = par.attrib['k1']
+                        periodicity_list = [0.0] * 10
+                        phase_list = [0.0] * 10
+                        k_list = [0.0] * 10
+                        offset = 0
+                        for par in parm['proper']:
+                            nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
+                            for i in range(1, nr_of_par+1):
+                                periodicity_list[offset + i-1] = (par.attrib['periodicity' + str(i)])
+                                phase_list[offset+i-1] = (par.attrib['phase' + str(i)])
+                                k_list[offset+i-1] = (par.attrib['k' + str(i)])
+                            offset = nr_of_par
+                                                  
+                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
+                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
 
-                                    e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, periodicity=str(periodicity), phase=str(phase), k=str(k))
-                                    proper_string_for_debug['one-dummy'].append(e)
-                                    isomer_xml.append(etree.fromstring(e))
+                        isomer_xml.append(etree.fromstring(e))
+                        proper_string_for_debug['one-dummy'].append(e)
                            
                         # there might be 4 atoms that always contain a dummy at each state
                         # - these torsions are not real therefore everything is set to zero
                         if found_real_torsion == False:
-                            periodicity = float(0.0)
-                            phase = float(0.0)
-                            k = float(0.0)
-                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, periodicity=str(periodicity), phase=str(phase), k=str(k))
+                            periodicity_list = [0.0] * 10
+                            phase_list = [0.0] * 10
+                            k_list = [0.0] * 10
+
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                            periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
+                            periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
                             proper_string_for_debug['always-dummy'].append(e)
                             isomer_xml.append(etree.fromstring(e))
 
 
 
                 for k in proper_string_for_debug:
-                    print(' - Proper ', k, ' ...')
+                    #print(' - Proper ', k, ' ...')
                     for e in proper_string_for_debug[k]:
-                        print('  :', e)
+                        pass
+                        #print('  :', e)
 
 
-                for idx in improper_dict:
-                    #http://alma.karlov.mff.cuni.cz/bio/99_Studenti/00_Dalsi/ParamFit/2013_ParamFit_AmberTools13.pdf
-                    print('Index: ' + str(idx))
-                    print(improper_dict[idx])
-
-                print(self.atom_types_dict)
+                #http://alma.karlov.mff.cuni.cz/bio/99_Studenti/00_Dalsi/ParamFit/2013_ParamFit_AmberTools13.pdf
 
                 #list_of_improper_atom_names, list_of_improper_atom_types = _get_all_improper(self.network, self.atom_types_dict, isomer_index)
                 # print('############')
@@ -1173,11 +1218,15 @@ class _TitratableForceFieldCompiler(object):
         Add additional parameters generated by antechamber/parmchk for the individual isomers
         """
         added_parameters = list()  # for bookkeeping of duplicates
-
         improper_dict = dict()
 
+        # in order to avoid overwriting the proper and improper parameter entries 
+        # in self._xml_parameter_trees a copy is created
+        # mw: I have no idea, why this overwrites, this is a ugly hack to avoid this issue
+        xml_trees = deepcopy(self._xml_parameter_trees)
+
         # All xml sources except the entire gaff.xml
-        for idx, xmltree in enumerate(self._xml_parameter_trees[1:]):
+        for idx, xmltree in enumerate(xml_trees[1:]):
             improper_dict[idx] = []
             # Match the type of the atom in the AtomTypes block
             for atomtype in xmltree.xpath("/ForceField/AtomTypes/Type"):
@@ -1206,6 +1255,16 @@ class _TitratableForceFieldCompiler(object):
                     added_parameters.append(angle_element)
                     self._add_to_output(angle, "/Forcefield/HarmonicAngleForce")
 
+
+            #print('#####################')
+            #print('First iteration')
+            #for xmltree in self._xml_parameter_trees[1:]:
+            #    for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+            #        items = set(proper.items())
+            #        proper_element = tuple(["PeriodicTorsionForce", "Proper", items])
+            #        print(proper_element)
+            #print('!!!!!!!!!!!!!!')
+
             # Match proper dihedral of the atom in PeriodicTorsionForce block
             for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
                 items = set(proper.items())
@@ -1214,6 +1273,19 @@ class _TitratableForceFieldCompiler(object):
                 if proper_element not in added_parameters:
                     added_parameters.append(proper_element)
                     self._add_to_output(proper, "/ForceField/PeriodicTorsionForce")
+                self._add_to_output(proper, "/ForceField/PeriodicTorsionForce")
+                pass
+
+            #print('#####################')
+            #print('Second iteration')
+            #for xmltree in self._xml_parameter_trees[1:]:
+            #    for proper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Proper"):
+            #        items = set(proper.items())
+            #        proper_element = tuple(["PeriodicTorsionForce", "Proper", items])
+            #        print(proper_element)
+            #print('!!!!!!!!!!!!!!')
+            #print('#####################')
+
 
             # Match improper dihedral of the atom in PeriodicTorsionForce block
             for improper in xmltree.xpath("/ForceField/PeriodicTorsionForce/Improper"):
@@ -1229,7 +1301,6 @@ class _TitratableForceFieldCompiler(object):
                     self._add_to_output(improper, "/ForceField/PeriodicTorsionForce")
                     improper_dict[idx].append(g)
 
-
             # Match nonbonded type of the atom in NonbondedForce block
             for nonbond in xmltree.xpath("/ForceField/NonbondedForce/Atom"):
                 items = set(nonbond.items())
@@ -1239,7 +1310,9 @@ class _TitratableForceFieldCompiler(object):
                     added_parameters.append(nb_element)
                     self._add_to_output(nonbond, "/ForceField/NonbondedForce")
         
-        return improper_dict
+
+
+
 
     def _add_to_output(self, element, xpath):
         """
@@ -1257,6 +1330,8 @@ class _TitratableForceFieldCompiler(object):
         for item in self.ffxml.xpath(xpath):
             item.append(element)
         return
+
+
 
     def _validate_states(self):
         """
@@ -1320,12 +1395,17 @@ class _TitratableForceFieldCompiler(object):
             
         
         elif len(kwargs) == 4:
+            #for xmltree in self._xml_parameter_trees[1:]:
+            #   # Match proper dihedral of the atom in PeriodicTorsionForce block
+            #    print('all propers that I see')
+            #    print(etree.tostring(xmltree))
+            #    print('$$$$$$$$$')
 
             # match torsion parameters
             par = []
             generic = []
             search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3'], kwargs['atom_type4']]
-            for xmltree in self.tmp_xml_parameter_trees:
+            for xmltree in self._xml_parameter_trees:
                 # Match proper dihedral of the atom in PeriodicTorsionForce block
                 for proper in xmltree.xpath("*/Proper"):
                     # create matching list of torsion atom types
@@ -1344,6 +1424,10 @@ class _TitratableForceFieldCompiler(object):
                             generic.append(proper)
                             
             params['proper'] = generic + par
+            #print('$$$$$$$$$$$$$$$$$$')
+            #for i in generic + par:
+            #    print(etree.tostring(i))
+            #print('$$$$$$$$$$$$$$$$$$')
 
             for xmltree in self._xml_parameter_trees:
 
