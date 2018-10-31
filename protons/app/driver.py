@@ -1711,6 +1711,7 @@ class NCMCProtonDrive(_BaseDrive):
                                 fractional_titration_state * atom_final[parameter_name]
                         
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
+                            print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
                             print('Atom-ID: {:3d} atom-current: {:01.4f} {:01.4f} {:01.4f} atom-final: {:01.4f} {:01.4f} {:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
@@ -1718,16 +1719,13 @@ class NCMCProtonDrive(_BaseDrive):
                         # Update exceptions
                         # TODO: Handle Custom forces.
                         for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]['exceptions'], cache_final_forces[force_index]['exceptions']):
-                            
-                            
+                                                    
                             exc = {key: exc_initial[key] for key in ['exception_index', 'particle1', 'particle2']}
                             for parameter_name in ['chargeProd', 'sigma', 'epsilon']:
                                 exc[parameter_name] = (1.0 - fractional_titration_state) * exc_initial[parameter_name] + \
                                     fractional_titration_state * exc_final[parameter_name]
                             force.setExceptionParameters(
                                 exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
-                    
-                    
                     
                     elif force_classname == 'GBSAOBCForce':
                         print('Is this happening? - GBSAOBCForce')
@@ -1871,7 +1869,7 @@ class NCMCProtonDrive(_BaseDrive):
                         f_params[force_index]['atoms'].append(current_parameters)
                     else:                        
                         charge, sigma, epsilon = map(strip_in_unit_system, force.getParticleParameters(atom_index))
-                        print(atom_string.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], charge, epsilon))
+                        print(atom_string.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], atom_charge_by_atom_index[atom_index], atom_epsilon_by_atom_index[atom_index]))
 
                         current_parameters = {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
                         current_parameters['atom_index'] = atom_index
