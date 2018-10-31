@@ -15,7 +15,7 @@ from simtk import unit, openmm
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
-from protons.app import SelfAdjustedMixtureSampling
+from protons.app import SelfAdjustedMixtureSampler
 from protons.app import UniformProposal
 from protons.app.proposals import OneDirectionChargeProposal
 from . import get_test_data
@@ -106,7 +106,7 @@ class TestAmberTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver, 0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -124,7 +124,7 @@ class TestAmberTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver,0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -284,7 +284,7 @@ class TestForceFieldImidazoleExplicit(object):
         driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology,
                                        testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure=testsystem.pressure,
                                        perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver,0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -305,7 +305,7 @@ class TestForceFieldImidazoleExplicit(object):
         driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology,
                                        testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure,
                                        perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver,0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -386,7 +386,7 @@ class TestAmberPeptide(object):
         testsystem = self.setup_edchky_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver, 4)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 4)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions

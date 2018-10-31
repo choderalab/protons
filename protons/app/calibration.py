@@ -1,87 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from .driver import NCMCProtonDrive
+from .driver import NCMCProtonDrive, _SAMSState, SAMSApproach
+from warnings import warn
 import simtk.unit as units
 from .logger import log
-from scipy.misc import logsumexp
+from scipy.special import logsumexp
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 from enum import Enum
 from typing import Optional, Union, List
 
 
-class SAMSApproach(Enum):
-    """Various ways of running SAMS for a titration drive."""
-    ONESITE = 0
-    MULTISITE = 1
+class SelfAdjustedMixtureSampler:
 
-class WeightTable:
-    """A table to contain SAMS weights (g_k/zeta) for constant-pH residues."""
-    def __init__(self, driver: NCMCProtonDrive, approach: SAMSApproach):
-        """Set up tracking for SAMS calibration weights.
-
-        Parameters
-        ----------
-        driver - A proton drive object with titratable residues.
-        approach - one of the available ways of running SAMS (see ``SAMSApproach``)
-        """
-        self._gk_table = None
-        if not isinstance(approach, SAMSApproach):
-            raise TypeError("Please provide a SAMSApproach.")
-
-
-        self.approach = approach
-
-        if approach is SAMSApproach.ONESITE:
-            # Every value in the table is the sams weight of one independent titration state
-            self._gk_table = list()
-            for residue in driver.titrationGroups:
-                self._gk_table.append(np.asarray(residue.g_k_values))
-            self._gk_table = np.asarray(self._gk_table)
-
-        elif approach is SAMSApproach.MULTISITE:
-            dims = []
-            for residue in driver.titrationGroups:
-                dims.append(len(residue.titration_states))
-
-            # Every value in the table is the sams weight of one joint titration state
-            self._gk_table = np.zeros(dims, dtype=np.float64)
-
-    def weight(self, titration_states: List[int]):
-        """Return the sams weight value for the current set of titration states."""
-        weight = 0
-
-        # In case of the one site sams approach, the sams weight is the total weight of every titration state
-        if self.approach is SAMSApproach.ONESITE:
-            if len(titration_states) != len(self._gk_table):
-                raise ValueError("The number of titration states in the table does not match what was provided.")
-            for row, state in enumerate(titration_states):
-                weight += self._gk_table[row][state]
-
-        # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
-        elif self.approach is SAMSApproach.MULTISITE:
-            if len(titration_states) != len(self._gk_table.shape):
-                raise ValueError("The number of titration states provided does not match the dimensionality of the table.")
-
-            weight = self._gk_table[titration_states]
-
-        return weight
-
-    def __len__(self) -> int:
-        """Returns the number of g_k valuesp resent inside this table."""
-        size = 0
-        if self.approach is SAMSApproach.ONESITE:
-            for row in self._gk_table:
-                size += row.size
-
-        elif self.approach is SAMSApproach.MULTISITE:
-            size = self._gk_table.size
-
-        return size
-
-
-
-class SelfAdjustedMixtureSampling:
     """Implementation of self-adjusted mixture sampling for calibrating titratable residues or ligands.
 
     Attributes
@@ -325,3 +256,195 @@ class SelfAdjustedMixtureSampling:
         return np.diag(gain)
 
 
+
+class Stage(Enum):
+    """Two stages of a sams run."""
+    BURNIN = 0
+    SLOWGAIN = 1
+
+
+class UpdateRule(Enum):
+    """SAMS update rule."""
+    BINARY = 0
+    GLOBAL = 1
+
+
+class MultiSiteSAMSSampler:
+    """An implementation of Self Adjusted mixture sampling that can sample multiple sites at once."""
+
+    def __init__(self, driver: NCMCProtonDrive):
+        """
+        Initialize a Self-adjusted mixture sampling (SAMS) simulation engine for a given ProtonDrive object.
+
+        Parameters
+        ----------
+        driver : NCMCProtonDrive derived class
+        approach : The SAMS approach (SAMSApproach.ONESITE or SAMSApproach.MULTISITE)
+        group_index : int
+            Index of the titration group that is being sampled.
+
+        """
+        # Type checks
+        assert issubclass(type(driver), NCMCProtonDrive)
+
+        if driver.calibration_state is None:
+            raise ValueError("Drive has not been prepared for calibration. Please call driver.attach_calibration.")
+
+        self.driver = driver
+        self.n_adaptations = 0
+        self.approach: SAMSApproach = driver.calibration_state.approach
+        self.group_index = driver.calibration_state.group_index
+        self._calibration_state: _SAMSState = driver.calibration_state
+        self.nstates = len(self._calibration_state.free_energies)
+        self.state_counts = np.zeros(self.nstates, np.float64)
+        log.debug('There are %d titration states', self.nstates)
+        return
+
+    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage=Stage.SLOWGAIN, end_of_burnin: int=0):
+        """
+        Update the relative free energy of titration states of the specified titratable group
+        using self-adjusted mixture sampling (SAMS)
+
+        Parameters
+        ----------
+        update_rule : str, optional (default : 'binary')
+            Scheme from Tan paper ('binary' or 'global').
+        b : float, optional (default : 0.85)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        stage:
+            Sams two-stage phase. Options : "burn-in" or "slow-gain"
+        end_of_burnin: int, optional (default : 0)
+            Iteration at which burn-in phase was ended.
+        Returns
+        -------
+        target_deviation - np.array of the deviation of the sampled histogram weights from the target pi_j's
+
+        """
+        self.n_adaptations += 1
+
+        # zeta^{t-1}
+        zeta = self._calibration_state.free_energies
+
+        if update_rule == UpdateRule.BINARY:
+            update = self._binary_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
+        elif update_rule == UpdateRule.GLOBAL:
+            if self.approach is SAMSApproach.MULTISITE:
+                raise NotImplementedError("Global updates only implemented for one site at this time.")
+            update = self._global_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
+        else:
+            raise ValueError("Unknown adaptation update_rule: {}!".format(update_rule))
+
+        # zeta^{t-1/2}
+        zeta += update
+        # zeta^{t} = zeta^{t-1/2} - zeta_1^{t-1/2}
+        zeta_t = zeta - zeta[0]
+
+        # Set reference free energy based on new zeta
+        self._calibration_state.free_energies=(zeta_t)
+
+        Nk = self.state_counts / self.state_counts.sum()
+        target = self._calibration_state.targets
+        target_deviation = sum(abs(target - Nk))
+        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation * 100))
+        return target_deviation
+
+    def _binary_update(self, group_index: int=0, b:float=1.0, stage=Stage.SLOWGAIN, end_of_burnin:int=0):
+        """
+        Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
+
+        Parameters
+        ----------
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        stage : Sams two-stage phase. Options : Stage.BURNIN or Stage.SLOWGAIN
+        end_of_burnin: int, optional (default : 0)
+            Iteration at which burn-in phase was ended.
+        Returns
+        -------
+        np.ndarray - free energy updates
+        """
+        # [1/pi_1...1/pi_i]
+        update = np.asarray(list(map(lambda x: 1 / x, self._calibration_state.targets)))
+        # delta(Lt)
+        delta = np.zeros_like(update)
+        current_state = self._calibration_state.state_index(self.driver.titrationStates)
+        delta[current_state] = 1
+        update *= delta
+        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_burnin=end_of_burnin), update)
+
+        # Update count of current state weights.
+        #  Use sqrt to make recent states count more
+        self.state_counts[current_state] += np.sqrt(self.n_adaptations)
+
+        return update
+
+    def _global_update(self, b=1.0, stage:Stage=Stage.SLOWGAIN, end_of_burnin=0, group_index=0):
+        """
+        Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
+
+        Parameters
+        ----------
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        stage : Stage, optional (default : "burn-in")
+            Sams two-stage phase. Options : "burn-in" or "slow-gain"
+        end_of_burnin: int, optional (default : 0)
+            Iteration at which burn-in phase was ended.
+        group_index : int, optional
+            Index of the group that needs updating, defaults to 0.
+        Returns
+        -------
+        np.ndarray : free energy updates
+        """
+        zeta = self._calibration_state.free_energies
+        pi_j = self._calibration_state.targets
+        # [1/pi_1...1/pi_i]
+        update = 1.0 / pi_j
+        ub_j = self.driver._get_reduced_potentials(group_index)
+        # w_j(X;ζ⁽ᵗ⁻¹⁾)
+        log_w_j = np.log(pi_j) - zeta - ub_j
+        log_w_j -= logsumexp(log_w_j)
+        w_j = np.exp(log_w_j)
+        update *= w_j / pi_j
+        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_burnin=end_of_burnin), update)
+
+        # Update count of current state weights.
+        #  Use sqrt to make recent states count more
+        self.state_counts += np.sqrt(self.n_adaptations) * w_j
+
+        return update
+
+    def _gain_factor(self, b=1.0, stage=Stage.SLOWGAIN, end_of_burnin=0):
+        """
+        Two stage update scheme (equation 15) from DOI: 10.1080/10618600.2015.1113975
+
+        Parameters
+        ----------
+        b : float, optional (default : 1.0)
+             Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
+        stage : Sams two-stage phase. Options : Stage.BURNIN or Stage.SLOWGAIN
+        end_of_burnin: int, optional (default : 0)
+            Iteration at which burn-in phase was ended.
+
+        Returns
+        -------
+        np.ndarray - gain factor matrix
+        """
+
+        if not 0.5 <= b <= 1.0:
+            raise ValueError("β needs to be between 1/2 and 1")
+
+        pi_j = self._calibration_state.targets
+
+        gain = np.zeros_like(pi_j)
+        for j in range(gain.size):
+            if stage is Stage.BURNIN:
+                gain[j] = min(pi_j[j], 1.0/pow(self.n_adaptations, b))
+            elif stage is Stage.SLOWGAIN:
+                gain[j] = min(pi_j[j], 1.0/(self.n_adaptations - end_of_burnin + pow(end_of_burnin, b)))
+            else:
+                raise ValueError("Invalid SAMS adaptation stage specified %s. Choose Stage.BURNIN or Stage.SLOWGAIN.")
+
+        return np.diag(gain)

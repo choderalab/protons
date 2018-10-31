@@ -18,7 +18,7 @@ from simtk import unit, openmm
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
-from protons.app import SelfAdjustedMixtureSampling
+from protons.app import SelfAdjustedMixtureSampler
 from protons.app import UniformProposal
 from protons.app.template_patches import patch_cooh
 from protons.app.proposals import OneDirectionChargeProposal, COOHDummyMover

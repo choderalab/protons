@@ -15,7 +15,7 @@ from protons import ForceFieldProtonDrive
 from protons.app.proposals import UniformProposal
 from protons import app as protonsapp
 
-from protons import SelfAdjustedMixtureSampling
+from protons import SelfAdjustedMixtureSampler
 from . import get_test_data
 from .utilities import create_compound_gbaoab_integrator, SystemSetup
 
@@ -311,7 +311,7 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
     pools = {'glu' : [0], 'his': [1],  'glu-his' : [0,1] }
 
     driver.define_pools(pools)
-    sams_sampler = SelfAdjustedMixtureSampling(driver, 1) # SAMS on HIS
+    sams_sampler = SelfAdjustedMixtureSampler(driver, 1) # SAMS on HIS
     simulation = app.Simulation(
         topology,
         system,

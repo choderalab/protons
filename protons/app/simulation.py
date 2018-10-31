@@ -4,7 +4,7 @@
 from simtk.openmm.app import Simulation
 from simtk import openmm
 from .driver import ForceFieldProtonDrive
-from .calibration import SelfAdjustedMixtureSampling
+from .calibration import SelfAdjustedMixtureSampler
 from protons.app import proposals
 from protons.app.logger import log
 import sys
@@ -162,7 +162,7 @@ class ConstantPHCalibration(ConstantPHSimulation):
         """
 
         super(ConstantPHCalibration, self).__init__(topology, system, compound_integrator, drive,  move=move, pools=pools, platform=platform, platformProperties=platformProperties, state=state)
-        self.sams = SelfAdjustedMixtureSampling(self.drive, group_index=group_index)
+        self.sams = SelfAdjustedMixtureSampler(self.drive, group_index=group_index)
 
         self.group_index = group_index
         self.scheme = "binary"

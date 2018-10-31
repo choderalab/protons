@@ -8,7 +8,7 @@ from simtk import unit, openmm
 from simtk.openmm import app
 
 from protons.app.driver import AmberProtonDrive
-from protons.app.calibration import SelfAdjustedMixtureSampling
+from protons.app.calibration import SelfAdjustedMixtureSampler
 from protons.app.proposals import UniformProposal
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator, create_compound_ghmc_integrator
@@ -83,7 +83,7 @@ class TestAmberTyrosineImplicit(object):
         testsystem = self.setup_tyrosine_implicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver, 0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -102,7 +102,7 @@ class TestAmberTyrosineImplicit(object):
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system,
                                   testsystem.cpin_filename, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver,0)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -199,7 +199,7 @@ class TestAmberPeptideImplicit(object):
         testsystem = self.setup_edchky_implicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampling(driver, 4)
+        sams_sampler = SelfAdjustedMixtureSampler(driver, 4)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
