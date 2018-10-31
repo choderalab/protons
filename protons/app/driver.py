@@ -1643,7 +1643,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0):
+    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, verbose=0, fractional_titration_state=1.0):
         """
         Update the force parameters to a new titration state by reading them from the cache.
 
@@ -1689,11 +1689,12 @@ class NCMCProtonDrive(_BaseDrive):
             force_classname = force.__class__.__name__
             # Get atom indices and charges.
 
-            print('#######################')
-            print('Driver - update force:')
-            print(force_classname)
+            if verbose != 1:
+                print('#######################')
+                print('Driver - update force:')
+                print(force_classname)
+                print('#######################')
 
-            print('#######################')
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 # Update forces using appropriately blended parameters
                 #print('#######################')
@@ -1711,9 +1712,10 @@ class NCMCProtonDrive(_BaseDrive):
                                 fractional_titration_state * atom_final[parameter_name]
                         
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
-                            print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                            print('Atom-ID: {:3d} atom-current: {:01.4f} {:01.4f} {:01.4f} atom-final: {:01.4f} {:01.4f} {:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-
+                            if verbose != 0:
+                                print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
+                                print('Atom-ID: {:3d} atom-current: {:01.4f} {:01.4f} {:01.4f} atom-final: {:01.4f} {:01.4f} {:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                           
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
 
                         # Update exceptions
@@ -1737,8 +1739,9 @@ class NCMCProtonDrive(_BaseDrive):
                     
             
             elif force_classname == 'HarmonicBondForce':
-                print('#######################')
-                print('#######################')
+                if verbose != 0:
+                    print('#######################')
+                    print('#######################')
 
                 for bond_index, (bond_initial, bond_final) in enumerate(zip(cache_initial_forces[force_index]['bonds'], cache_final_forces[force_index]['bonds'])):
                     bond = dict()
@@ -1748,8 +1751,9 @@ class NCMCProtonDrive(_BaseDrive):
                         bond[parameter_name] = new_parameter 
 
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
-                        print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
-                        print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
+                        if verbose != 0:
+                            print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
+                            print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
 
                     # set new parameters using atom indices
                     force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], bond['length'], bond['k'])
