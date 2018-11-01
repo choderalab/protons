@@ -2273,6 +2273,7 @@ class NCMCProtonDrive(_BaseDrive):
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], updateParameters=False)
                 for force in self.forces_to_update:
                     force.updateParametersInContext(self.context)
+                print(self.titrationStates)
 
                 # If using NCMC, flip velocities to satisfy super-detailed balance.
                 if self.perturbations_per_trial > 0:
@@ -2314,7 +2315,9 @@ class NCMCProtonDrive(_BaseDrive):
                     self.context.setPeriodicBoxVectors(*initial_box_vectors)
 
         except Exception as err:
+            print("nan found")
             if str(err) == 'Particle coordinate is nan' and reject_on_nan:
+
                 logging.warning("NaN during NCMC move, rejecting")
                 # Reject.
                 if initial_titration_states != final_titration_states:
