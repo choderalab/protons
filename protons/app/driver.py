@@ -28,7 +28,7 @@ from abc import ABCMeta, abstractmethod
 from lxml import etree, objectify
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
-kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilocalorie_per_mole  kilojoules_per_mole / unit.kelvin)
+kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilocalorie_per_mole  / unit.kelvin)
 np.set_printoptions(precision=15)
 
 
@@ -1680,7 +1680,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Retrieve cached force parameters fro this titration state.
         cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
-        if verbose != 1:
+        if verbose != 0:
             print('#######################')
             print('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
             print('#######################')
@@ -1690,7 +1690,7 @@ class NCMCProtonDrive(_BaseDrive):
             force_classname = force.__class__.__name__
             # Get atom indices and charges.
 
-            if verbose != 1:
+            if verbose != 0:
                 print('#######################')
                 print('Driver - update force:')
                 print(force_classname)
@@ -2012,6 +2012,64 @@ class NCMCProtonDrive(_BaseDrive):
         self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
 
 
+def log_progress(sequence, every=None, size=None, name='Items'):
+    from ipywidgets import IntProgress, HTML, VBox
+    from IPython.display import display
+
+    is_iterator = False
+    if size is None:
+        try:
+            size = len(sequence)
+        except TypeError:
+            is_iterator = True
+    if size is not None:
+        if every is None:
+            if size <= 200:
+                every = 1
+            else:
+                every = int(size / 200)     # every 0.5%
+    else:
+        assert every is not None, 'sequence is iterator, set every'
+
+    if is_iterator:
+        progress = IntProgress(min=0, max=1, value=1)
+        progress.bar_style = 'info'
+    else:
+        progress = IntProgress(min=0, max=size, value=0)
+    label = HTML()
+    box = VBox(children=[label, progress])
+    display(box)
+
+    index = 0
+    try:
+        for index, record in enumerate(sequence, 1):
+            if index == 1 or index % every == 0:
+                if is_iterator:
+                    label.value = '{name}: {index} / ?'.format(
+                        name=name,
+                        index=index
+                    )
+                else:
+                    progress.value = index
+                    label.value = u'{name}: {index} / {size}'.format(
+                        name=name,
+                        index=index,
+                        size=size
+                    )
+            yield record
+    except:
+        progress.bar_style = 'danger'
+        raise
+    else:
+        progress.bar_style = 'success'
+        progress.value = index
+        label.value = "{name}: {index}".format(
+            name=name,
+            index=str(index or '?')
+        )
+
+
+
     def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from the initial protonation
@@ -2087,15 +2145,15 @@ class NCMCProtonDrive(_BaseDrive):
 
         # PROPAGATION
         ncmc_integrator.step(self.propagations_per_step)
-        print(titration_group_indices)
-        print(final_titration_states)
+        print('Initial titration state: ', str(initial_titration_states))
+        print('Final titration state: ', str(final_titration_states))
 
-        for step in range(self.perturbations_per_trial):
+        for step in log_progress(range(self.perturbations_per_trial)):
 
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
             # perturbation
-            print(titration_lambda,)
+            print(titration_lambda, end=', ')
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
