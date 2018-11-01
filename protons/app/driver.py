@@ -28,7 +28,7 @@ from abc import ABCMeta, abstractmethod
 from lxml import etree, objectify
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
-kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole / unit.kelvin)
+kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilocalorie_per_mole  kilojoules_per_mole / unit.kelvin)
 np.set_printoptions(precision=15)
 
 
@@ -1680,9 +1680,10 @@ class NCMCProtonDrive(_BaseDrive):
         # Retrieve cached force parameters fro this titration state.
         cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
-        print('#######################')
-        print('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
-        print('#######################')
+        if verbose != 1:
+            print('#######################')
+            print('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
+            print('#######################')
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
@@ -2088,15 +2089,13 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator.step(self.propagations_per_step)
         print(titration_group_indices)
         print(final_titration_states)
-        print(final_titration_states)
 
         for step in range(self.perturbations_per_trial):
 
             # Get the fractional stage of the the protocol
-            # NOTE: look at this again!
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
-            print(titration_lambda)
             # perturbation
+            print(titration_lambda,)
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
