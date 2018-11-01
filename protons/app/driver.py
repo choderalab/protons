@@ -1633,6 +1633,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check parameters for validity.
         self._validate_indices(titration_group_index, titration_state_index)
+        print('Titration group index: ', str(titration_group_index), 'Titration state index:', str(titration_state_index), 'update parameter flag: ', str(updateParameters))
 
         self._update_forces(titration_group_index, titration_state_index)
         # The context needs to be updated after the force parameters are updated
@@ -2012,64 +2013,6 @@ class NCMCProtonDrive(_BaseDrive):
         self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
 
 
-def log_progress(sequence, every=None, size=None, name='Items'):
-    from ipywidgets import IntProgress, HTML, VBox
-    from IPython.display import display
-
-    is_iterator = False
-    if size is None:
-        try:
-            size = len(sequence)
-        except TypeError:
-            is_iterator = True
-    if size is not None:
-        if every is None:
-            if size <= 200:
-                every = 1
-            else:
-                every = int(size / 200)     # every 0.5%
-    else:
-        assert every is not None, 'sequence is iterator, set every'
-
-    if is_iterator:
-        progress = IntProgress(min=0, max=1, value=1)
-        progress.bar_style = 'info'
-    else:
-        progress = IntProgress(min=0, max=size, value=0)
-    label = HTML()
-    box = VBox(children=[label, progress])
-    display(box)
-
-    index = 0
-    try:
-        for index, record in enumerate(sequence, 1):
-            if index == 1 or index % every == 0:
-                if is_iterator:
-                    label.value = '{name}: {index} / ?'.format(
-                        name=name,
-                        index=index
-                    )
-                else:
-                    progress.value = index
-                    label.value = u'{name}: {index} / {size}'.format(
-                        name=name,
-                        index=index,
-                        size=size
-                    )
-            yield record
-    except:
-        progress.bar_style = 'danger'
-        raise
-    else:
-        progress.bar_style = 'success'
-        progress.value = index
-        label.value = "{name}: {index}".format(
-            name=name,
-            index=str(index or '?')
-        )
-
-
-
     def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from the initial protonation
@@ -2153,7 +2096,6 @@ def log_progress(sequence, every=None, size=None, name='Items'):
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
             # perturbation
-            print(titration_lambda, end=', ')
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
@@ -2323,6 +2265,7 @@ def log_progress(sequence, every=None, size=None, name='Items'):
 
             if accept_move:
                 # Accept.
+                print('accept ncmc titration state change ...')
                 if initial_titration_states != final_titration_states:
                     self.naccepted += 1
                 # Update titration states.
@@ -2346,6 +2289,7 @@ def log_progress(sequence, every=None, size=None, name='Items'):
 
             else:
                 # Reject.
+                print('reject ncmc titration state change ...')
                 if initial_titration_states != final_titration_states:
                     self.nrejected += 1
                 # Restore titration states.
@@ -3011,3 +2955,61 @@ def strip_in_unit_system(quant, unit_system=unit.md_unit_system, compatible_with
         return quant.value_in_unit_system(unit_system)
     else:
         return quant
+
+
+
+def log_progress(sequence, every=None, size=None, name='Items'):
+    from ipywidgets import IntProgress, HTML, VBox
+    from IPython.display import display
+
+    is_iterator = False
+    if size is None:
+        try:
+            size = len(sequence)
+        except TypeError:
+            is_iterator = True
+    if size is not None:
+        if every is None:
+            if size <= 200:
+                every = 1
+            else:
+                every = int(size / 200)     # every 0.5%
+    else:
+        assert every is not None, 'sequence is iterator, set every'
+
+    if is_iterator:
+        progress = IntProgress(min=0, max=1, value=1)
+        progress.bar_style = 'info'
+    else:
+        progress = IntProgress(min=0, max=size, value=0)
+    label = HTML()
+    box = VBox(children=[label, progress])
+    display(box)
+
+    index = 0
+    try:
+        for index, record in enumerate(sequence, 1):
+            if index == 1 or index % every == 0:
+                if is_iterator:
+                    label.value = '{name}: {index} / ?'.format(
+                        name=name,
+                        index=index
+                    )
+                else:
+                    progress.value = index
+                    label.value = u'{name}: {index} / {size}'.format(
+                        name=name,
+                        index=index,
+                        size=size
+                    )
+            yield record
+    except:
+        progress.bar_style = 'danger'
+        raise
+    else:
+        progress.bar_style = 'success'
+        progress.value = index
+        label.value = "{name}: {index}".format(
+            name=name,
+            index=str(index or '?')
+        )
