@@ -1003,7 +1003,7 @@ class NCMCProtonDrive(_BaseDrive):
         # TODO: Add Custom forces.
         #force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
         #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
-        force_classes_to_update = ['HarmonicBondForce']
+        force_classes_to_update = ['HarmonicBondForce', 'HarmonicAngleForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -1682,7 +1682,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Retrieve cached force parameters fro this titration state.
         cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
-        if verbose != 0:
+        if fractional_titration_state == 0.0001:
             print('#######################')
             print('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
             print('#######################')
@@ -1691,12 +1691,6 @@ class NCMCProtonDrive(_BaseDrive):
             # Get name of force class.
             force_classname = force.__class__.__name__
             # Get atom indices and charges.
-
-            if verbose != 0:
-                print('#######################')
-                print('Driver - update force:')
-                print(force_classname)
-                print('#######################')
 
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 # Update forces using appropriately blended parameters
@@ -1715,7 +1709,7 @@ class NCMCProtonDrive(_BaseDrive):
                                 fractional_titration_state * atom_final[parameter_name]
                         
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
-                            if verbose != 0:
+                            if fractional_titration_state == 0.0001:
                                 print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
                                 print('Atom-ID: {:3d} atom-current: {:01.4f} {:01.4f} {:01.4f} atom-final: {:01.4f} {:01.4f} {:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
                            
@@ -1742,7 +1736,7 @@ class NCMCProtonDrive(_BaseDrive):
                     
             
             elif force_classname == 'HarmonicBondForce':
-                if verbose != 0:
+                if fractional_titration_state == 0.0001:
                     print('#######################')
                     print('#######################')
 
@@ -1754,7 +1748,7 @@ class NCMCProtonDrive(_BaseDrive):
                         bond[parameter_name] = new_parameter 
 
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
-                        if verbose != 0:
+                        if fractional_titration_state == 0.0001:
                             print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
                             print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
 
@@ -1779,8 +1773,9 @@ class NCMCProtonDrive(_BaseDrive):
                         angle['angle'] = float(angle_initial['angle'])
                     
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
-                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
-                        print('angle current: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle['angle']), float(angle['k'])))                  
+                        if fractional_titration_state == 0.0001:
+                            print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
+                            print('angle current: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle['angle']), float(angle['k'])))                  
 
 
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
@@ -2275,7 +2270,7 @@ class NCMCProtonDrive(_BaseDrive):
                     self._set_titration_state(titration_group_index, final_titration_states[titration_group_index], updateParameters=False)
                 for force in self.forces_to_update:
                     force.updateParametersInContext(self.context)
-                print(self.titrationStates)
+                print('New titration state: ' + str(self.titrationStates))
 
                 # If using NCMC, flip velocities to satisfy super-detailed balance.
                 if self.perturbations_per_trial > 0:
