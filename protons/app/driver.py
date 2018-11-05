@@ -1756,9 +1756,9 @@ class NCMCProtonDrive(_BaseDrive):
                     force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], bond['length'], bond['k'])
                         
             elif force_classname == 'HarmonicAngleForce':
-
-                print('#######################')
-                print('#######################')
+                if fractional_titration_state == 0.0001:
+                    print('#######################')
+                    print('#######################')
 
                 for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
                     angle = dict()
