@@ -1002,7 +1002,8 @@ class NCMCProtonDrive(_BaseDrive):
         # Store force object pointers.
         # TODO: Add Custom forces.
         #force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
-        force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
+        #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
+        force_classes_to_update = ['HarmonicBondForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -2257,6 +2258,7 @@ class NCMCProtonDrive(_BaseDrive):
             # Only record acceptance statistics for exchanges to different protonation states
             if initial_titration_states != final_titration_states:
                 self.nattempted += 1
+            print('Calculate work for change from ' + str(initial_titration_states) + ' to ' + str(final_titration_states))
             
             # Accept or reject with Metropolis criteria.
             attempt_data.logp_accept = log_P_accept
