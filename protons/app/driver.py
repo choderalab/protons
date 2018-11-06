@@ -1645,7 +1645,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, verbose=0, fractional_titration_state=1.0):
+    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, verbose=0, fractional_titration_state=1.0, titration_lambda_for_charge):
         """
         Update the force parameters to a new titration state by reading them from the cache.
 
@@ -1709,17 +1709,16 @@ class NCMCProtonDrive(_BaseDrive):
                                 fractional_titration_state * atom_final[parameter_name]
                         
                         for parameter_name in ['charge']:
-                            atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                                fractional_titration_state * atom_final[parameter_name]
+                            atom[parameter_name] = (1.0 - titration_lambda_for_charge) * atom_initial[parameter_name] + \
+                                titration_lambda_for_charge * atom_final[parameter_name]
+                            print(atom[parameter_name])
+
 
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
 
                             if fractional_titration_state == 0.0001:
                                 print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
                                 print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-                            else:
-                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
 
@@ -2102,11 +2101,16 @@ class NCMCProtonDrive(_BaseDrive):
 
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
+            titration_lambda_for_charge = float(step + 1)*2 / float(self.perturbations_per_trial)
+
+            if titration_lambda_for_charge > 1.00:
+                titration_lambda_for_charge = 1.0
             # perturbation
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
-                                    fractional_titration_state=titration_lambda)
+                                    fractional_titration_state=titration_lambda
+                                    titration_lambda_for_charge=titration_lambda_for_charge)
 
             if update_salt:
                 for salt_residue, (from_state, to_state) in zip(salt_residue_indices, salt_states):
