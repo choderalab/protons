@@ -1690,36 +1690,35 @@ class NCMCProtonDrive(_BaseDrive):
         for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
             force_classname = force.__class__.__name__
-            # Get atom indices and charges.
+
 
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 # Update forces using appropriately blended parameters
-                #print('#######################')
-                #print('#######################')
-
                 for (atom_initial, atom_final) in zip(cache_initial_forces[force_index]['atoms'], cache_final_forces[force_index]['atoms']):
                     atom = {key: atom_initial[key] for key in ['atom_index']}
-
-                    
                     if force_classname == 'NonbondedForce':
                         # TODO : if we ever change LJ parameters, we need to look into softcore potentials
                         # and separate out the changes in charge, and sigma/eps into different steps.
                         for parameter_name in ['sigma', 'epsilon']:
-                            atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                                fractional_titration_state * atom_final[parameter_name]
-                        
-                        for parameter_name in ['charge']:
-                            # change charges seperatly
-                            # if charges are removed make sure there is never an unshielded charge
-                            if float(atom_final[parameter_name]) < 0.1:
+                            #if charges increase epsilon and sigma have to increase faster to shield charges
+                            if float(atom_final['charge']) > float(atom_initial['charge']):
                                 ch_fractional_titration_state = fractional_titration_state* 10.0
                                 if ch_fractional_titration_state > 1.0:
                                     ch_fractional_titration_state = 1.0 
-                                atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + \
-                                    ch_fractional_titration_state * atom_final[parameter_name]
+                                atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
                             else:
-                                atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                                    fractional_titration_state * atom_final[parameter_name]
+                                atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
+                        
+                        for parameter_name in ['charge']:
+                            # change charges seperatly
+                            # if charges are decresed they should decrese faster to avoid unshielded charges
+                            if float(atom_final[parameter_name]) < float(atom_initial[parameter_name]):
+                                ch_fractional_titration_state = fractional_titration_state* 20.0
+                                if ch_fractional_titration_state > 1.0:
+                                    ch_fractional_titration_state = 1.0 
+                                atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
+                            else:
+                                atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
 
 
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
@@ -1728,7 +1727,8 @@ class NCMCProtonDrive(_BaseDrive):
                                 print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
                                 print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
                             else:
-                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                                pass
+                                #print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
