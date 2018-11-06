@@ -971,6 +971,7 @@ class _TitratableForceFieldCompiler(object):
                         e = atom_string.format(name=node, atom_type=atom_type, charge=self.atom_charge_dict[node][isomer_index],epsilon=epsilon,sigma=sigma)
                     
                     isomer_xml.append(etree.fromstring(e))
+                    print(e)
 
                 ##############################################
                 # bond entries

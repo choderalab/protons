@@ -1704,15 +1704,23 @@ class NCMCProtonDrive(_BaseDrive):
                     if force_classname == 'NonbondedForce':
                         # TODO : if we ever change LJ parameters, we need to look into softcore potentials
                         # and separate out the changes in charge, and sigma/eps into different steps.
-                        for parameter_name in ['charge', 'sigma', 'epsilon']:
+                        for parameter_name in ['sigma', 'epsilon']:
                             atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
                                 fractional_titration_state * atom_final[parameter_name]
                         
+                        for parameter_name in ['charge']:
+                            atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
+                                fractional_titration_state * atom_final[parameter_name]
+
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
+
                             if fractional_titration_state == 0.0001:
                                 print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                                print('Atom-ID: {:3d} atom-current: {:01.4f} {:01.4f} {:01.4f} atom-final: {:01.4f} {:01.4f} {:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-                           
+                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                            else:
+                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+
+
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
 
                         # Update exceptions
@@ -1852,7 +1860,10 @@ class NCMCProtonDrive(_BaseDrive):
         # Store the parameters per individual force
         f_params = list()
 
-        for force_index, force in enumerate(self.forces_to_update):
+        forces_to_update = copy.deepcopy(self.forces_to_update)
+        forces_to_update.append('NonbondedForce')
+
+        for force_index, force in enumerate(forces_to_update):
 
             # Get name of force class.
             force_classname = force.__class__.__name__
@@ -2824,7 +2835,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 atom_name = []
                 #print('ATOMS:')
                 for index, atom in enumerate(state_block.xpath("Atom")):
-                    #print(index, ':', atom.get("name"), atom.get("type"), atom.get("charge"), atom.get("epsilon"), atom.get("sigma"))
                     atom_charges.append(float(atom.get("charge")))
                     atom_epsilon.append(float(atom.get("epsilon")))
                     atom_sigma.append(float(atom.get("sigma")))
@@ -2836,7 +2846,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     key = tuple([bond.get('name1'), bond.get('name2')])
                     bond_length = (bond.get('length'))
                     bond_k = (bond.get('k'))
-                    #print(index, ':', bond.get('name1'), bond.get('name2'), bond_length, bond_k)
                     d = dict()
                     d['bond_length'] = bond_length
                     d['bond_k'] = bond_k
@@ -2847,7 +2856,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     key = tuple([angle.get('name1'), angle.get('name2'), angle.get('name3')])
                     angle_value = (angle.get('angle'))
                     angle_k = (angle.get('k'))
-                    #print(index, ':', angle.get('name1'), angle.get('name2'), angle.get('name3'), angle_value, angle_k)
                     d = dict()
                     d['angle'] = angle_value
                     d['k'] = angle_k
