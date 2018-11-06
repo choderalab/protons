@@ -1003,7 +1003,7 @@ class NCMCProtonDrive(_BaseDrive):
         # TODO: Add Custom forces.
         #force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
         #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
-        force_classes_to_update = ['HarmonicBondForce', 'HarmonicAngleForce']
+        force_classes_to_update = ['NonbondedForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -1863,10 +1863,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Store the parameters per individual force
         f_params = list()
 
-        forces_to_update = copy.deepcopy(self.forces_to_update)
-        forces_to_update.append('NonbondedForce')
-
-        for force_index, force in enumerate(forces_to_update):
+        for force_index, force in enumerate(self.forces_to_update):
 
             # Get name of force class.
             force_classname = force.__class__.__name__
