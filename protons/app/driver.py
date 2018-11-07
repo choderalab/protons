@@ -2117,7 +2117,12 @@ class NCMCProtonDrive(_BaseDrive):
                 force.updateParametersInContext(self.context)
             # propagation
             ncmc_integrator.step(self.propagations_per_step)
+            
+            r = random()
 
+            pdb = mm.app.PDBFile('/home/mwieder/Work/Projects/tautomers-protons//protons/UNL-testdata/input/tautomer_set1_mol1.pdb')
+            pdb.positions = self.context.getState().getPositions() 
+            pdb.writeFile('~/' + str(r) + '_test_' + str(step) + '.pdb')
             # logging of statistics
             if isinstance(ncmc_integrator, GHMCIntegrator):
                 self.ncmc_stats_per_step[step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))
