@@ -2099,6 +2099,11 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator.step(self.propagations_per_step)
         print('Initial titration state: ', str(initial_titration_states))
         print('Final titration state: ', str(final_titration_states))
+        r = random.randint(1,1000000000)
+        pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
+        pos = self.context.getState(getPositions=True).getPositions() 
+        mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/00_start_'+str(r) + '_test.pdb', 'w'))
+
 
         for step in log_progress(range(self.perturbations_per_trial)):
 
@@ -2117,12 +2122,9 @@ class NCMCProtonDrive(_BaseDrive):
                 force.updateParametersInContext(self.context)
             # propagation
             ncmc_integrator.step(self.propagations_per_step)
-            
-            r = random()
-
-            pdb = mm.app.PDBFile('/home/mwieder/Work/Projects/tautomers-protons//protons/UNL-testdata/input/tautomer_set1_mol1.pdb')
-            pdb.positions = self.context.getState().getPositions() 
-            pdb.writeFile('~/' + str(r) + '_test_' + str(step) + '.pdb')
+           
+            pos = self.context.getState(getPositions=True).getPositions() 
+            mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/'+str(r) + '_test_'+str(step) + '.pdb', 'w'))
             # logging of statistics
             if isinstance(ncmc_integrator, GHMCIntegrator):
                 self.ncmc_stats_per_step[step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))

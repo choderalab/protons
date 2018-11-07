@@ -573,20 +573,20 @@ class _TitratableForceFieldCompiler(object):
                     helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
                     parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
                     atom_type1 = 'd'+str(atom_type1)
-                    if (atom_type1, helper_atom_type2) in unique_bond_set:
+                    if (atom_type1, helper_atom_type2) in unique_bond_set or (helper_atom_type2, atom_type1) in unique_bond_set:
                         continue
                     else:
-                        unique_bond_set.add((atom_type1,helper_atom_type2))
+                        unique_bond_set.add((atom_type1, helper_atom_type2))
              
                 elif str(atom_type2) == '0':
                     idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
                     helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
                     atom_type2 = 'd'+str(atom_type2)              
-                    if (helper_atom_type1, atom_type2) in unique_bond_set:
+                    if (helper_atom_type1, atom_type2) in unique_bond_set or (atom_type2, helper_atom_type1) in unique_bond_set:
                         continue
                     else:
-                        unique_bond_set.add((helper_atom_type1,atom_type2))
+                        unique_bond_set.add((helper_atom_type1, atom_type2))
                 else:
                     continue
                     
@@ -1669,4 +1669,9 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
 
     app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
                            open(output_file, 'w'))
+    
+    app.PDBFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
+                           open('home/mwieder/input.pdb', 'w'))
+
+    
     return simulation
