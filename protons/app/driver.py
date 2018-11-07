@@ -1721,14 +1721,14 @@ class NCMCProtonDrive(_BaseDrive):
                                 atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
 
 
-                        if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
-
-                            if fractional_titration_state == 0.0001:
-                                print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-                            else:
-                                pass
-                                #print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                        #if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
+                        #    if fractional_titration_state == 0.0001:
+                        #        pass
+                        #        print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
+                        #        print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                        #    else:
+                        #        pass
+                        #        print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
@@ -1744,27 +1744,22 @@ class NCMCProtonDrive(_BaseDrive):
                             force.setExceptionParameters(
                                 exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
                     
-                    elif force_classname == 'GBSAOBCForce':
-                        print('Is this happening? - GBSAOBCForce')
-
+                    elif force_classname == 'GBSAOBCForce':                        
                         for parameter_name in ['charge', 'radius', 'scaleFactor']:
                             atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
                                 fractional_titration_state * atom_final[parameter_name]
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
                     
             
-            elif force_classname == 'HarmonicBondForce':
-                if fractional_titration_state == 0.0001:
-                    print('#######################')
-                    print('#######################')
-
+            elif force_classname == 'HarmonicBondForce':  
                 for bond_index, (bond_initial, bond_final) in enumerate(zip(cache_initial_forces[force_index]['bonds'], cache_final_forces[force_index]['bonds'])):
                     bond = dict()
+                    
                     for parameter_name in ['length', 'k']:
                         # generate new, interpolated parameters
                         new_parameter = (1.0 - fractional_titration_state) * float(bond_initial[parameter_name]) + fractional_titration_state * float(bond_final[parameter_name])
-                        bond[parameter_name] = new_parameter 
-
+                        bond[parameter_name] = new_parameter                    
+                   
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
                         if fractional_titration_state == 0.0001:
                             print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
@@ -2120,7 +2115,6 @@ class NCMCProtonDrive(_BaseDrive):
                     self.swapper.update_fractional_ion(salt_residue, self._ion_parameters[from_state], self._ion_parameters[to_state], titration_lambda)
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(self.context)
-
             # propagation
             ncmc_integrator.step(self.propagations_per_step)
 
