@@ -571,9 +571,12 @@ class _TitratableForceFieldCompiler(object):
                 if str(atom_type1) == '0':
                     idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
                     helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
+                    print('Found dummy bond between ' + str(atom_type1) + ' and ' + str(helper_atom_type2))
                     parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
+                    print(parm)
                     atom_type1 = 'd'+str(atom_type1)
                     if (atom_type1, helper_atom_type2) in unique_bond_set or (helper_atom_type2, atom_type1) in unique_bond_set:
+                        print('Found duplicate')
                         continue
                     else:
                         unique_bond_set.add((atom_type1, helper_atom_type2))
@@ -583,6 +586,9 @@ class _TitratableForceFieldCompiler(object):
                     helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
                     atom_type2 = 'd'+str(atom_type2)              
+                    print('Found dummy bond between ' + str(atom_type1) + ' and ' + str(helper_atom_type2))
+                    print(parm)
+
                     if (helper_atom_type1, atom_type2) in unique_bond_set or (atom_type2, helper_atom_type1) in unique_bond_set:
                         print('Found duplicate')
                         continue
