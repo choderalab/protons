@@ -584,15 +584,17 @@ class _TitratableForceFieldCompiler(object):
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
                     atom_type2 = 'd'+str(atom_type2)              
                     if (helper_atom_type1, atom_type2) in unique_bond_set or (atom_type2, helper_atom_type1) in unique_bond_set:
+                        print('Found duplicate')
                         continue
                     else:
-                        unique_bond_set.add((helper_atom_type1, atom_type2))
+                        unique_bond_set.add((atom_type2, helper_atom_type1))
                 else:
                     continue
                     
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
 
+                print(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
                 element_string= etree.fromstring(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
                 self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
             
@@ -633,7 +635,7 @@ class _TitratableForceFieldCompiler(object):
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
                                 original_atom_type3 = 'd' + real_atom_type
 
-                            if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set:
+                            if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set or (original_atom_type3, original_atom_type2, original_atom_type1) in unique_angle_set:
                                 #print('Repetition!')
                                 continue
                             else:
@@ -1671,7 +1673,7 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
                            open(output_file, 'w'))
     
     app.PDBFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
-                           open('home/mwieder/input.pdb', 'w'))
+                           open('/home/mwieder/input.pdb', 'w'))
 
     
     return simulation
