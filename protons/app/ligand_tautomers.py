@@ -546,7 +546,7 @@ class _TitratableForceFieldCompiler(object):
                 if str(atom_type) == '0':
                     idx,atom_type = _return_real_atom_type(self.atom_types_dict, node)
                     atom_charge = 0.0
-                    atom_type='d'+str(atom_type)
+                    atom_type='d'+ str(node) +str(atom_type)
                     if atom_type in unique_atom_set:
                         continue
                     else:
@@ -561,39 +561,46 @@ class _TitratableForceFieldCompiler(object):
         unique_bond_set = set()
         dummy_bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
         for state in range(len(self.mol_array)):
+            print('$$$$$$$$$$$$$$$$$$$$')
+            print('State: ' + str(state))
+            print('$$$$$$$$$$$$$$$$$$$$')
+            
             for bond in self.network.edges:
                 atomName1 = bond[0]
                 atomName2 = bond[1]
                 
                 atom_type1 = self.atom_types_dict[atomName1][state]
                 atom_type2 = self.atom_types_dict[atomName2][state]
-
+                
                 if str(atom_type1) == '0':
+                    print('#############')
                     idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
                     helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
+                    print('Found dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
                     print('Found dummy bond between ' + str(atom_type1) + ' and ' + str(helper_atom_type2))
                     parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
                     print(parm)
-                    atom_type1 = 'd'+str(atom_type1)
-                    if (atom_type1, helper_atom_type2) in unique_bond_set or (helper_atom_type2, atom_type1) in unique_bond_set:
+                    atom_type1 = 'd'+ str(atomName1) + str(atom_type1)
+                    if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
                         print('Found duplicate')
-                        continue
                     else:
-                        unique_bond_set.add((atom_type1, helper_atom_type2))
+                        unique_bond_set.add((atom_type1, atom_type2))
              
                 elif str(atom_type2) == '0':
+                    print('#############')
                     idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
                     helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
+                    print('Found dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
+                    print('Real bond between ' + str(helper_atom_type1) + ' and ' + str(atom_type2))
+
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
-                    atom_type2 = 'd'+str(atom_type2)              
-                    print('Found dummy bond between ' + str(atom_type1) + ' and ' + str(helper_atom_type2))
+                    atom_type2 = 'd' + str(atomName2) + str(atom_type2)              
                     print(parm)
 
-                    if (helper_atom_type1, atom_type2) in unique_bond_set or (atom_type2, helper_atom_type1) in unique_bond_set:
+                    if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
                         print('Found duplicate')
-                        continue
                     else:
-                        unique_bond_set.add((atom_type2, helper_atom_type1))
+                        unique_bond_set.add((atom_type2, atom_type1))
                 else:
                     continue
                     
@@ -633,13 +640,13 @@ class _TitratableForceFieldCompiler(object):
 
                             if str(original_atom_type1) == '0':
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node1)
-                                original_atom_type1 = 'd' + real_atom_type
+                                original_atom_type1 = 'd' + str(node1) + real_atom_type
                             elif str(original_atom_type2) == '0':
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node2)
-                                original_atom_type2 = 'd' + real_atom_type
+                                original_atom_type2 = 'd' + str(node2) + real_atom_type
                             else:
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
-                                original_atom_type3 = 'd' + real_atom_type
+                                original_atom_type3 = 'd' + str(node3) + real_atom_type
 
                             if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set or (original_atom_type3, original_atom_type2, original_atom_type1) in unique_angle_set:
                                 #print('Repetition!')
@@ -692,16 +699,16 @@ class _TitratableForceFieldCompiler(object):
 
                             if str(original_atom_type1) == '0':
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node1)
-                                original_atom_type1 = 'd' + real_atom_type
+                                original_atom_type1 = 'd' + str(node1) + real_atom_type
                             elif str(original_atom_type2) == '0':
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node2)
-                                original_atom_type2 = 'd' + real_atom_type
+                                original_atom_type2 = 'd' + str(node2) + real_atom_type
                             elif str(original_atom_type3) == '0':
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
-                                original_atom_type3 = 'd' + real_atom_type
+                                original_atom_type3 = 'd' + str(node3) + real_atom_type
                             else:
                                 t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node4)
-                                original_atom_type4 = 'd' + real_atom_type
+                                original_atom_type4 = 'd' + str(node4) + real_atom_type
 
                             if (original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4) in unique_torsion_set:
                                 #print('Repetition!')
@@ -912,7 +919,7 @@ class _TitratableForceFieldCompiler(object):
             if str(atom_type) == '0':
                 idx,atom_type = _return_real_atom_type(self.atom_types_dict, node)
                 atom_charge = 0.0
-                atom_type='d'+str(atom_type)
+                atom_type='d' + str(node) + str(atom_type)
                 residue.append(etree.fromstring(atom_string.format(name=node, atom_type=atom_type, charge=atom_charge)))
             else:
                 atom_charge = self.atom_charge_dict[node][0]
@@ -926,10 +933,10 @@ class _TitratableForceFieldCompiler(object):
             atom_type2 = self.atom_types_dict[atomName2][0]
             if str(atom_type1) == '0':
                 idx,atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
-                atom_type1='d'+str(atom_type1)              
+                atom_type1='d' + str(atomName1) + str(atom_type1)              
             elif str(atom_type2) == '0':
                 idx,atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
-                atom_type2='d'+str(atom_type2)
+                atom_type2='d'+ str(atomName2) + str(atom_type2)
 
 
             residue.append(etree.fromstring(bond_string.format(atomName1=atomName1, atomName2=atomName2)))
@@ -971,7 +978,7 @@ class _TitratableForceFieldCompiler(object):
                     atom_type = self.atom_types_dict[node][isomer_index]                   
                     if str(atom_type) == '0':
                         idx, atom_type = _return_real_atom_type(self.atom_types_dict, node)
-                        e = atom_string.format(name=node, atom_type='d'+atom_type, charge=0,epsilon=0,sigma=0 )
+                        e = atom_string.format(name=node, atom_type='d' + str(node) + atom_type, charge=0,epsilon=0,sigma=0 )
                     else:
                         parm = self._retrieve_parameters(atom_type1=atom_type)                       
                         sigma= parm['nonbonds'].attrib['sigma']
