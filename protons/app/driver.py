@@ -1776,45 +1776,45 @@ class NCMCProtonDrive(_BaseDrive):
                         new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
                         angle[parameter_name] = new_parameter
                     
-                    ##########################
-                    if float(angle_initial['angle']) == 0.0:
-                        angle['angle'] = float(angle_final['angle'])
-                    elif float(angle_final['angle']) == 0.0:
-                        angle['angle'] = float(angle_initial['angle'])
-                    ##########################
-
-
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
                         if fractional_titration_state == 0.0001:
                             print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
-                            print('angle current: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle['angle']), float(angle['k'])))                  
+                            print('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
 
 
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
             elif force_classname == 'PeriodicTorsionForce':
-                pass
-                print('#######################')
-                print('#######################')
+                if fractional_titration_state == 0.0001:
+                    print('#######################')
+                    print('#######################')
 
-                for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
-                    angle = dict()
+                for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsions'], cache_final_forces[force_index]['torsions'])):
+                    torsion = dict()
 
-                    for parameter_name in ['angle', 'k']:
-                        new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
-                        angle[parameter_name] = new_parameter
+                    for parameter_name in ['phase1', 'k1']:
+                        if fractional_titration_state < 0.5:
+                            new_parameter = (1.0 - (2* fractional_titration_state)) * float(torsion_initial[parameter_name])
+                            torsion[parameter_name] = new_parameter
                     
-                    if float(angle_initial['angle']) == 0.0:
-                        angle['angle'] = float(angle_final['angle'])
-                    elif float(angle_final['angle']) == 0.0:
-                        angle['angle'] = float(angle_initial['angle'])
+                        else:
+                            new_parameter = (0.5 - fractional_titration_state) * 2 * float(torsion_final[parameter_name])
+                            torsion[parameter_name] = new_parameter
                     
-                    if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
-                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
-                        print('angle current: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle['angle']), float(angle['k'])))                  
 
+                    for parameter_name in ['periodicity1']:
+                        if fractional_titration_state < 0.5:
+                            torsion[parameter_name] = torsion_initial[parameter_name]
+                        else:
+                            torsion[parameter_name] = torsion_final[parameter_name]
+                    
+                    
+                    
+                    if torsion_initial['phase1'] != torsion_final['phase1'] or torsion_initial['k1'] != torsion_final['k1']:
+                        print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4']))
+                        print('torsion initial: {:1.4f} {:5.4f} torsion final: {:1.4f} {:5.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_final['phase2']), float(torsion_final['periodicity1'])))                  
 
-                    force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
+                    force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], torsion['perodicity1'], torsion['phase1'], torsion['k1'])
 
 
             else:
@@ -1946,7 +1946,7 @@ class NCMCProtonDrive(_BaseDrive):
                 for torsion_index in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
 
-                    current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'a4', 'periodicity', 'phase', 'k'], map(strip_in_unit_system, force.getTorsionParameters(torsion_index)))}
+                    current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'a4', 'periodicity1', 'phase1', 'k1'], map(strip_in_unit_system, force.getTorsionParameters(torsion_index)))}
                     
                     a1_atom_name = atom_name_by_atom_index[a1]
                     a2_atom_name = atom_name_by_atom_index[a2]
