@@ -1789,7 +1789,7 @@ class NCMCProtonDrive(_BaseDrive):
                     print('#######################')
                     print('#######################')
 
-                for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsions'], cache_final_forces[force_index]['torsions'])):
+                for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsion'], cache_final_forces[force_index]['torsion'])):
                     torsion = dict()
 
                     for parameter_name in ['phase1', 'k1']:
@@ -1969,7 +1969,7 @@ class NCMCProtonDrive(_BaseDrive):
                         print("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
                         print(a1, a2, a3, a4)
                         print(str([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]]))
-                        print('Assuming this is an improper - using the Parameters openMM assigned.')
+                        print('Assuming this is an improper - setting everything to zero.')
 
                         #periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
                         #phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
