@@ -1814,7 +1814,8 @@ class NCMCProtonDrive(_BaseDrive):
                         print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4']))
                         print('torsion initial: {:1.4f} {:5.4f} torsion final: {:1.4f} {:5.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_final['phase2']), float(torsion_final['periodicity1'])))                  
 
-                    force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], torsion['periodicity1'], torsion['phase1'], torsion['k1'])
+                    print(torsion['phase1'])
+                    force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], torsion['periodicity1'], int(torsion['phase1']), torsion['k1'])
 
 
             else:
