@@ -1977,7 +1977,7 @@ class NCMCProtonDrive(_BaseDrive):
                         #k = improper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['k1']
                         #print('Periodicity: {} phase: {} k: {}'.format(periodicity, phase, k))
 
-                        current_parameters['periodicity1'] = 0
+                        current_parameters['periodicity1'] = 1
                         current_parameters['phase1'] = 0.0
                         current_parameters['k1'] = 0.0
                         f_params[force_index]['torsion'].append(current_parameters)
