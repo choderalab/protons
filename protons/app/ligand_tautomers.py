@@ -1084,7 +1084,7 @@ class _TitratableForceFieldCompiler(object):
                     key = hash((node1, node2, node3, node4))
                     # torsion between two dummy atoms
                     if list_of_torsion_atom_types[i].count(0) > 1:
-                        periodicity_list = [0.0] * 6
+                        periodicity_list = [1] * 6
                         phase_list = [0.0] * 6
                         k_list = [0.0] * 6
 
@@ -1104,7 +1104,7 @@ class _TitratableForceFieldCompiler(object):
                         atom_type1, atom_type2, atom_type3, atom_type4 = list_of_torsion_atom_types[i]
                         parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2, atom_type3=atom_type3, atom_type4=atom_type4)
 
-                        periodicity_list = [0.0] * 6
+                        periodicity_list = [1] * 6
                         phase_list = [0.0] * 6
                         k_list = [0.0] * 6
                         offset = 0
@@ -1141,7 +1141,7 @@ class _TitratableForceFieldCompiler(object):
                                 new_atom_type1, new_atom_type2, new_atom_type3, new_atom_type4 = torsion_types
                                 parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3, atom_type4=new_atom_type4)
 
-                        periodicity_list = [0.0] * 10
+                        periodicity_list = [1] * 10
                         phase_list = [0.0] * 10
                         k_list = [0.0] * 10
                         offset = 0
@@ -1167,7 +1167,7 @@ class _TitratableForceFieldCompiler(object):
                         # there might be 4 atoms that always contain a dummy at each state
                         # - these torsions are not real therefore everything is set to zero
                         if found_real_torsion == False:
-                            periodicity_list = [0.0] * 10
+                            periodicity_list = [1] * 10
                             phase_list = [0.0] * 10
                             k_list = [0.0] * 10
 
