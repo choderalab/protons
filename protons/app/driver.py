@@ -1184,9 +1184,9 @@ class NCMCProtonDrive(_BaseDrive):
         # Perform a number of protonation state update trials.
         for attempt in range(nattempts):
             self._attempt_number = attempt
-            self._attempt_state_change(proposal, residue_pool=residue_pool)
+            accepted = self._attempt_state_change(proposal, residue_pool=residue_pool)
 
-        return
+        return accepted
 
     def import_gk_values(self, gk_dict, strict=False):
         """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
@@ -1682,6 +1682,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Retrieve cached force parameters fro this titration state.
         cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
+        
         if fractional_titration_state == 0.0001:
             print('#######################')
             print('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
@@ -1702,7 +1703,7 @@ class NCMCProtonDrive(_BaseDrive):
                         for parameter_name in ['sigma', 'epsilon']:
                             #if charges increase epsilon and sigma have to increase faster to shield charges
                             if float(atom_final['charge']) > float(atom_initial['charge']):
-                                ch_fractional_titration_state = fractional_titration_state* 10.0
+                                ch_fractional_titration_state = fractional_titration_state* 2.0
                                 if ch_fractional_titration_state > 1.0:
                                     ch_fractional_titration_state = 1.0 
                                 atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
@@ -1713,7 +1714,7 @@ class NCMCProtonDrive(_BaseDrive):
                             # change charges seperatly
                             # if charges are decresed they should decrese faster to avoid unshielded charges
                             if float(atom_final[parameter_name]) < float(atom_initial[parameter_name]):
-                                ch_fractional_titration_state = fractional_titration_state* 20.0
+                                ch_fractional_titration_state = fractional_titration_state* 2.0
                                 if ch_fractional_titration_state > 1.0:
                                     ch_fractional_titration_state = 1.0 
                                 atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
@@ -1721,15 +1722,10 @@ class NCMCProtonDrive(_BaseDrive):
                                 atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
 
 
-                        #if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
-                        #    if fractional_titration_state == 0.0001:
-                        #        pass
-                        #        print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                        #        print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-                        #    else:
-                        #        pass
-                        #        print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom['charge']), float(atom['sigma']), float(atom['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
-
+                        if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
+                            if fractional_titration_state == 0.0001:
+                                print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
+                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
 
@@ -1780,11 +1776,14 @@ class NCMCProtonDrive(_BaseDrive):
                         new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
                         angle[parameter_name] = new_parameter
                     
+                    ##########################
                     if float(angle_initial['angle']) == 0.0:
                         angle['angle'] = float(angle_final['angle'])
                     elif float(angle_final['angle']) == 0.0:
                         angle['angle'] = float(angle_initial['angle'])
-                    
+                    ##########################
+
+
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
                         if fractional_titration_state == 0.0001:
                             print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
@@ -2099,10 +2098,9 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator.step(self.propagations_per_step)
         print('Initial titration state: ', str(initial_titration_states))
         print('Final titration state: ', str(final_titration_states))
-        r = random.randint(1,1000000000)
-        pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
-        pos = self.context.getState(getPositions=True).getPositions() 
-        mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/00_start_'+str(r) + '_test.pdb', 'w'))
+        #pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
+        #pos = self.context.getState(getPositions=True).getPositions() 
+        #mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/00_start_'+str(r) + '_test.pdb', 'w'))
 
 
         for step in log_progress(range(self.perturbations_per_trial)):
@@ -2123,8 +2121,6 @@ class NCMCProtonDrive(_BaseDrive):
             # propagation
             ncmc_integrator.step(self.propagations_per_step)
            
-            pos = self.context.getState(getPositions=True).getPositions() 
-            mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/'+str(r) + '_test_'+str(step) + '.pdb', 'w'))
             # logging of statistics
             if isinstance(ncmc_integrator, GHMCIntegrator):
                 self.ncmc_stats_per_step[step] = (ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless, ncmc_integrator.getGlobalVariableByName('naccept'), ncmc_integrator.getGlobalVariableByName('ntrials'))
@@ -2274,6 +2270,8 @@ class NCMCProtonDrive(_BaseDrive):
                 self.nattempted += 1
             print('Calculate work for change from ' + str(initial_titration_states) + ' to ' + str(final_titration_states))
             
+            print('Work: ' + str(work))
+            
             # Accept or reject with Metropolis criteria.
             attempt_data.logp_accept = log_P_accept
             accept_move = self._accept_reject(log_P_accept)
@@ -2363,7 +2361,7 @@ class NCMCProtonDrive(_BaseDrive):
             self._last_attempt_data = attempt_data
             self.compound_integrator.setCurrentIntegrator(0)
 
-        return
+        return accepted
 
     def _accept_reject(self, log_P_accept) -> bool:
         """Perform acceptance/rejection check according to the Metropolis-Hastings acceptance criterium."""
