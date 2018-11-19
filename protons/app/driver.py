@@ -1683,7 +1683,7 @@ class NCMCProtonDrive(_BaseDrive):
         cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
         cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
         
-        atom_name_by_atom_index = self.titrationGroups[titration_group_index][final_titration_state_index]
+        atom_name_by_atom_index = self.titrationGroups[titration_group_index][final_titration_state_index].atom_name_by_atom_index
         
         if fractional_titration_state == 0.0001:
             print('#######################')
@@ -1703,7 +1703,7 @@ class NCMCProtonDrive(_BaseDrive):
                         # print details at first step of parameter scaling 
                         if fractional_titration_state == 0.0001:
                             print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                            print('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom_name_by_atom_index(atom['atom_index']), float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                            print('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom_name_by_atom_index[(atom['atom_index']], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
                         # only change parameters if needed, otherwise keep old parameters 
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
@@ -1752,7 +1752,7 @@ class NCMCProtonDrive(_BaseDrive):
                     bond = dict()
                     # print details at first step of parameter scaling 
                     if fractional_titration_state == 0.0001:
-                        print('Updating bond between: {:} and {:}'.format(atom_name_by_atom_index(bond_initial['a1']), atom_name_by_atom_index(bond_initial['a2'])))
+                        print('Updating bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
                         print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond_initial['length']), float(bond_initial['k']), float(bond_final['length']), float(bond_final['k'])))                  
 
                     # update bonds that changed parameters
@@ -1776,7 +1776,7 @@ class NCMCProtonDrive(_BaseDrive):
                 for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
                     angle = dict()
                     if fractional_titration_state == 0.0001:
-                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index(angle_initial['a1']), atom_name_by_atom_index(angle_initial['a2']), angle_initial['a3']))
+                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index[angle_initial['a1']], atom_name_by_atom_index[angle_initial['a2']], angle_initial['a3']))
                         print('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
 
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
@@ -1795,7 +1795,7 @@ class NCMCProtonDrive(_BaseDrive):
                 for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsion'], cache_final_forces[force_index]['torsion'])):
                     torsion = dict()
                     if fractional_titration_state == 0.0001:                   
-                        print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index(torsion_initial['a1']), atom_name_by_atom_index(torsion_initial['a2']), atom_name_by_atom_index(torsion_initial['a3']), atom_name_by_atom_index(torsion_initial['a4'])))
+                        print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index[torsion_initial['a1']], atom_name_by_atom_index[torsion_initial['a2']], atom_name_by_atom_index[torsion_initial['a3']], atom_name_by_atom_index[torsion_initial['a4']]))
                         print('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
                     if float(torsion_initial['phase1']) != float(torsion_final['phase1']) or float(torsion_initial['k1']) != float(torsion_final['k1']) or \
