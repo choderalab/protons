@@ -1908,7 +1908,7 @@ class NCMCProtonDrive(_BaseDrive):
 
             elif force_classname == 'HarmonicBondForce':
                 f_params.append(dict(bonds=list()))
-                bond_string_from_openmm = 'Bond-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} length: {: 02.4f} k: {: 02.4f}'
+                bond_string_from_openmm = 'Bond-ID: {:>3d} Atom-name1: {:>5} Atom-name2: {:>5} length: {: 02.4f} k: {: 02.4f}'
 
                 # only heavy atom - heavy atom bonds are regarded
                 for bond_index in range(force.getNumBonds()):
@@ -1929,7 +1929,7 @@ class NCMCProtonDrive(_BaseDrive):
 
             elif force_classname == 'HarmonicAngleForce':
                 f_params.append(dict(angles=list()))
-                angle_string_from_openmm = 'Angle-ID: {:>3d} Atom-ID1: {:>3d} Atom-ID2: {:>3d} Atom-ID3: {:>3d} angle: {: 02.4f} k: {: 02.4f}'
+                angle_string_from_openmm = 'Angle-ID: {:>3d} Atom-name1: {:>5} Atom-name2: {:>5} Atom-name3: {:>5} angle: {: 02.4f} k: {: 02.4f}'
 
                 for angle_index in range(force.getNumAngles()):
                     a1, a2, a3, angle_value, k = force.getAngleParameters(angle_index)
@@ -1952,7 +1952,7 @@ class NCMCProtonDrive(_BaseDrive):
             # set torsion parameters
             elif force_classname == 'PeriodicTorsionForce':
                 f_params.append(dict(torsion=list()))
-                proper_string_from_openmm = 'Proper-ID: {:>3d} Atom-ID1: {:>2d} Atom-ID2: {:>2d} Atom-ID3: {:>2d} Atom-ID4: {:>2d} periodicity: {: 02.4f} phase: {: 02.4f} k: {: 02.4f}'
+                proper_string_from_openmm = 'Proper-ID: {:>3d} Atom-name1: {:>5} Atom-name2: {:>5} Atom-name3: {:>5} Atom-name4: {:>5} periodicity: {: 02.4f} phase: {: 02.4f} k: {: 02.4f}'
 
                 for torsion_index in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
