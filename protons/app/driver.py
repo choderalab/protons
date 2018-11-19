@@ -1777,7 +1777,7 @@ class NCMCProtonDrive(_BaseDrive):
                 for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
                     angle = dict()
                     if fractional_titration_state == 0.0001:
-                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index[angle_initial['a1']], atom_name_by_atom_index[angle_initial['a2']], angle_initial['a3']))
+                        print('Updating angle between: {:} {:} {:}'.format(atom_name_by_atom_index[angle_initial['a1']], atom_name_by_atom_index[angle_initial['a2']], angle_initial['a3']))
                         print('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
 
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
@@ -1924,7 +1924,7 @@ class NCMCProtonDrive(_BaseDrive):
                     current_parameters['k'] = k
 
                     f_params[force_index]['bonds'].append(current_parameters)
-                    print(bond_string_from_openmm.format(bond_index, a1, a2, float(length), float(k)))
+                    print(bond_string_from_openmm.format(bond_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], float(length), float(k)))
 
 
             elif force_classname == 'HarmonicAngleForce':
@@ -1946,7 +1946,7 @@ class NCMCProtonDrive(_BaseDrive):
                     current_parameters['k'] = k
                     
                     f_params[force_index]['angles'].append(current_parameters)
-                    print(angle_string_from_openmm.format(angle_index, a1, a2, a3, float(strip_in_unit_system(angle_value)), float(strip_in_unit_system(k))))
+                    print(angle_string_from_openmm.format(angle_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], float(strip_in_unit_system(angle_value)), float(strip_in_unit_system(k))))
 
             
             # set torsion parameters
@@ -1972,7 +1972,7 @@ class NCMCProtonDrive(_BaseDrive):
                         current_parameters['phase1'] = phase
                         current_parameters['k1'] = k
                         f_params[force_index]['torsion'].append(current_parameters)
-                        print(proper_string_from_openmm.format(torsion_index, a1, a2, a3, a4, float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
+                        print(proper_string_from_openmm.format(torsion_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
 
 
                     else:
