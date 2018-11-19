@@ -28,7 +28,7 @@ from abc import ABCMeta, abstractmethod
 from lxml import etree, objectify
 from .integrators import GHMCIntegrator, GBAOABIntegrator
 
-kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilocalorie_per_mole  / unit.kelvin)
+kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole  / unit.kelvin)
 np.set_printoptions(precision=15)
 
 
@@ -1808,13 +1808,10 @@ class NCMCProtonDrive(_BaseDrive):
                         else:
                             torsion[parameter_name] = torsion_final[parameter_name]
                     
-                    
-                    
                     if torsion_initial['phase1'] != torsion_final['phase1'] or torsion_initial['k1'] != torsion_final['k1']:
                         print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4']))
                         print('torsion initial: {:1.4f} {:5.4f} torsion final: {:1.4f} {:5.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_final['phase2']), float(torsion_final['periodicity1'])))                  
 
-                    print(torsion['periodicity1'])
                     force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), (torsion['phase1']), torsion['k1'])
 
 
@@ -2362,7 +2359,7 @@ class NCMCProtonDrive(_BaseDrive):
             self._last_attempt_data = attempt_data
             self.compound_integrator.setCurrentIntegrator(0)
 
-        return accepted
+        return accept_move
 
     def _accept_reject(self, log_P_accept) -> bool:
         """Perform acceptance/rejection check according to the Metropolis-Hastings acceptance criterium."""
