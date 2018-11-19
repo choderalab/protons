@@ -1751,7 +1751,7 @@ class NCMCProtonDrive(_BaseDrive):
                     # print details at first step of parameter scaling 
                     if fractional_titration_state == 0.0001:
                         print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
-                        print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
+                        print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond_initial['length']), float(bond_initial['k']), float(bond_final['length']), float(bond_final['k'])))                  
 
                     # update bonds that changed parameters
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
@@ -1768,7 +1768,7 @@ class NCMCProtonDrive(_BaseDrive):
                             bond[parameter_name] = bond_initial[parameter_name]
 
                     # set new parameters using atom indices
-                    force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], bond['length'], bond['k'])
+                    force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], float(bond['length']), float(bond['k']))
                         
             elif force_classname == 'HarmonicAngleForce':
                 for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
@@ -1781,7 +1781,7 @@ class NCMCProtonDrive(_BaseDrive):
                         #print('Updating ...')
                         for parameter_name in ['angle', 'k']:
                             new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
-                            angle[parameter_name] = new_parameter
+                            angle[parameter_name] = float(new_parameter)
                     else:
                         #print('Reusing ...')
                         for parameter_name in ['angle', 'k']:
@@ -1819,7 +1819,7 @@ class NCMCProtonDrive(_BaseDrive):
                         for parameter_name in ['phase1', 'k1', 'periodicity1']:
                             torsion[parameter_name] = torsion_initial[parameter_name]
                         
-                    force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), (torsion['phase1']), torsion['k1'])
+                    force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), float(torsion['phase1']), float(torsion['k1']))
 
 
             else:
