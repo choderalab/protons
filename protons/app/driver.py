@@ -1692,45 +1692,49 @@ class NCMCProtonDrive(_BaseDrive):
             # Get name of force class.
             force_classname = force.__class__.__name__
 
-
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 # Update forces using appropriately blended parameters
+
                 for (atom_initial, atom_final) in zip(cache_initial_forces[force_index]['atoms'], cache_final_forces[force_index]['atoms']):
                     atom = {key: atom_initial[key] for key in ['atom_index']}
                     if force_classname == 'NonbondedForce':
-                        # TODO : if we ever change LJ parameters, we need to look into softcore potentials
-                        # and separate out the changes in charge, and sigma/eps into different steps.
-                        for parameter_name in ['sigma', 'epsilon']:
-                            #if charges increase epsilon and sigma have to increase faster to shield charges
-                            if float(atom_final['charge']) > float(atom_initial['charge']):
-                                ch_fractional_titration_state = fractional_titration_state* 2.0
-                                if ch_fractional_titration_state > 1.0:
-                                    ch_fractional_titration_state = 1.0 
-                                atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
-                            else:
-                                atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
-                        
-                        for parameter_name in ['charge']:
-                            # change charges seperatly
-                            # if charges are decresed they should decrese faster to avoid unshielded charges
-                            if float(atom_final[parameter_name]) < float(atom_initial[parameter_name]):
-                                ch_fractional_titration_state = fractional_titration_state* 2.0
-                                if ch_fractional_titration_state > 1.0:
-                                    ch_fractional_titration_state = 1.0 
-                                atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
-                            else:
-                                atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
+                        # print details at first step of parameter scaling 
+                        if fractional_titration_state == 0.0001:
+                            print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
+                            print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
-
+                        # only change parameters if needed, otherwise keep old parameters 
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
-                            if fractional_titration_state == 0.0001:
-                                print('Updating nonbonded parameters for: {:3d}'.format(atom['atom_index']))                          
-                                print('Atom-ID: {:3d} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(atom['atom_index'], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                            #print('Updating ...')
+                            for parameter_name in ['sigma', 'epsilon']:
+                                #if charges increase epsilon and sigma have to increase faster to shield charges
+                                if float(atom_final['charge']) > float(atom_initial['charge']):
+                                    ch_fractional_titration_state = fractional_titration_state* 2.0
+                                    if ch_fractional_titration_state > 1.0:
+                                        ch_fractional_titration_state = 1.0 
+                                    atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
+                                else:
+                                    atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
+                            
+                            for parameter_name in ['charge']:
+                                # change charges seperatly
+                                # if charges are decresed they should decrese faster to avoid unshielded charges
+                                if float(atom_final[parameter_name]) < float(atom_initial[parameter_name]):
+                                    ch_fractional_titration_state = fractional_titration_state* 2.0
+                                    if ch_fractional_titration_state > 1.0:
+                                        ch_fractional_titration_state = 1.0 
+                                    atom[parameter_name] = (1.0 - ch_fractional_titration_state) * atom_initial[parameter_name] + ch_fractional_titration_state * atom_final[parameter_name]
+                                else:
+                                    atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + fractional_titration_state * atom_final[parameter_name]
+
+                        else:
+                            # keep initial parameters since nothing changed
+                            #print('Reusing')
+                            for parameter_name in ['sigma', 'epsilon', 'charge']:
+                                atom[parameter_name] = atom_initial[parameter_name]
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
-
-                        # Update exceptions
-                        # TODO: Handle Custom forces.
+                                               
                         for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]['exceptions'], cache_final_forces[force_index]['exceptions']):
                                                     
                             exc = {key: exc_initial[key] for key in ['exception_index', 'particle1', 'particle2']}
@@ -1738,80 +1742,83 @@ class NCMCProtonDrive(_BaseDrive):
                                 exc[parameter_name] = (1.0 - fractional_titration_state) * exc_initial[parameter_name] + \
                                     fractional_titration_state * exc_final[parameter_name]
                             force.setExceptionParameters(
-                                exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])
-                    
-                    elif force_classname == 'GBSAOBCForce':                        
-                        for parameter_name in ['charge', 'radius', 'scaleFactor']:
-                            atom[parameter_name] = (1.0 - fractional_titration_state) * atom_initial[parameter_name] + \
-                                fractional_titration_state * atom_final[parameter_name]
-                        force.setParticleParameters(atom['atom_index'], atom['charge'], atom['radius'], atom['scaleFactor'])
+                                exc['exception_index'], exc['particle1'], exc['particle2'], exc['chargeProd'], exc['sigma'], exc['epsilon'])                   
                     
             
             elif force_classname == 'HarmonicBondForce':  
                 for bond_index, (bond_initial, bond_final) in enumerate(zip(cache_initial_forces[force_index]['bonds'], cache_final_forces[force_index]['bonds'])):
                     bond = dict()
-                    
-                    for parameter_name in ['length', 'k']:
-                        # generate new, interpolated parameters
-                        new_parameter = (1.0 - fractional_titration_state) * float(bond_initial[parameter_name]) + fractional_titration_state * float(bond_final[parameter_name])
-                        bond[parameter_name] = new_parameter                    
-                   
+                    # print details at first step of parameter scaling 
+                    if fractional_titration_state == 0.0001:
+                        print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
+                        print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
+
+                    # update bonds that changed parameters
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
-                        if fractional_titration_state == 0.0001:
-                            print('Updating bond between: {:3d} and {:3d}'.format(bond_initial['a1'], bond_initial['a2']))
-                            print('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k']), float(bond_final['length']), float(bond_final['k'])))                  
+                        #print('Updating ...')
+
+                        for parameter_name in ['length', 'k']:
+                            # generate new, interpolated parameters
+                            new_parameter = (1.0 - fractional_titration_state) * float(bond_initial[parameter_name]) + fractional_titration_state * float(bond_final[parameter_name])
+                            bond[parameter_name] = new_parameter                    
+                    else:
+                        #print('Reusing')
+                        for parameter_name in ['length', 'k']:
+                            # generate new, interpolated parameters
+                            bond[parameter_name] = bond_initial[parameter_name]
 
                     # set new parameters using atom indices
                     force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], bond['length'], bond['k'])
                         
             elif force_classname == 'HarmonicAngleForce':
-                if fractional_titration_state == 0.0001:
-                    print('#######################')
-                    print('#######################')
-
                 for angle_index, (angle_initial, angle_final) in enumerate(zip(cache_initial_forces[force_index]['angles'], cache_final_forces[force_index]['angles'])):
                     angle = dict()
+                    if fractional_titration_state == 0.0001:
+                        print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
+                        print('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
 
-                    for parameter_name in ['angle', 'k']:
-                        new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
-                        angle[parameter_name] = new_parameter
-                    
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
-                        if fractional_titration_state == 0.0001:
-                            print('Updating angle between: {:3d} {:3d} {:3d}'.format(angle_initial['a1'], angle_initial['a2'], angle_initial['a3']))
-                            print('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
-
-
+                        #print('Updating ...')
+                        for parameter_name in ['angle', 'k']:
+                            new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
+                            angle[parameter_name] = new_parameter
+                    else:
+                        #print('Reusing ...')
+                        for parameter_name in ['angle', 'k']:
+                            angle[parameter_name] = float(angle_initial[parameter_name])
+                            
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
             elif force_classname == 'PeriodicTorsionForce':
-                if fractional_titration_state == 0.0001:
-                    print('#######################')
-                    print('#######################')
-
                 for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsion'], cache_final_forces[force_index]['torsion'])):
                     torsion = dict()
-
-                    for parameter_name in ['phase1', 'k1']:
-                        if fractional_titration_state < 0.5:
-                            new_parameter = (1.0 - (2* fractional_titration_state)) * float(torsion_initial[parameter_name])
-                            torsion[parameter_name] = new_parameter
-                    
-                        else:
-                            new_parameter = (0.5 - fractional_titration_state) * 2 * float(torsion_final[parameter_name])
-                            torsion[parameter_name] = new_parameter
-                    
-
-                    for parameter_name in ['periodicity1']:
-                        if fractional_titration_state < 0.5:
-                            torsion[parameter_name] = torsion_initial[parameter_name]
-                        else:
-                            torsion[parameter_name] = torsion_final[parameter_name]
-                    
-                    if torsion_initial['phase1'] != torsion_final['phase1'] or torsion_initial['k1'] != torsion_final['k1']:
+                    if fractional_titration_state == 0.0001:                   
                         print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4']))
-                        print('torsion initial: {:1.4f} {:5.4f} torsion final: {:1.4f} {:5.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_final['phase2']), float(torsion_final['periodicity1'])))                  
+                        print('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
+                    if float(torsion_initial['phase1']) != float(torsion_final['phase1']) or float(torsion_initial['k1']) != float(torsion_final['k1']) or \
+                            int(torsion_initial['periodicity1']) != int(torsion_final['periodicity1']):
+                        #print('Updating ... ')
+
+                        for parameter_name in ['phase1', 'k1']:
+                            if fractional_titration_state < 0.5:
+                                new_parameter = (1.0 - (2* fractional_titration_state)) * float(torsion_initial[parameter_name])
+                                torsion[parameter_name] = new_parameter
+                        
+                            else:
+                                new_parameter = (0.5 - fractional_titration_state) * 2 * float(torsion_final[parameter_name])
+                                torsion[parameter_name] = new_parameter
+                       
+                        for parameter_name in ['periodicity1']:
+                            if fractional_titration_state < 0.5:
+                                torsion[parameter_name] = torsion_initial[parameter_name]
+                            else:
+                                torsion[parameter_name] = torsion_final[parameter_name]
+                    else:
+                        #print('Reusing ...')
+                        for parameter_name in ['phase1', 'k1', 'periodicity1']:
+                            torsion[parameter_name] = torsion_initial[parameter_name]
+                        
                     force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), (torsion['phase1']), torsion['k1'])
 
 
