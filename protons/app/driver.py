@@ -1796,7 +1796,7 @@ class NCMCProtonDrive(_BaseDrive):
                 for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsion'], cache_final_forces[force_index]['torsion'])):
                     torsion = dict()
                     if fractional_titration_state == 0.0001:                   
-                        print('Updating torsion between: {:3d} {:3d} {:3d} {:3d}'.format(atom_name_by_atom_index[torsion_initial['a1']], atom_name_by_atom_index[torsion_initial['a2']], atom_name_by_atom_index[torsion_initial['a3']], atom_name_by_atom_index[torsion_initial['a4']]))
+                        print('Updating torsion between: {:} {:} {:} {:}'.format(atom_name_by_atom_index[torsion_initial['a1']], atom_name_by_atom_index[torsion_initial['a2']], atom_name_by_atom_index[torsion_initial['a3']], atom_name_by_atom_index[torsion_initial['a4']]))
                         print('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
                     if float(torsion_initial['phase1']) != float(torsion_final['phase1']) or float(torsion_initial['k1']) != float(torsion_final['k1']) or \
