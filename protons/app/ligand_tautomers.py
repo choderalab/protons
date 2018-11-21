@@ -575,13 +575,10 @@ class _TitratableForceFieldCompiler(object):
                 atom_type1 = self.atom_types_dict[atomName1][state]
                 atom_type2 = self.atom_types_dict[atomName2][state]
                 
-
-
-
-                if [atomName1, atomName2].count(0) == 0:
+                if [atom_type1, atom_type2].count(0) == 0:
                     # regular bond
                     continue
-                elif [atomName1, atomName2].count(0) == 1:
+                elif [atom_type1, atom_type2].count(0) == 1:
                     # dummy bond
 
                     if str(atom_type1) == '0':
@@ -604,7 +601,7 @@ class _TitratableForceFieldCompiler(object):
                             continue
                         else:
                             unique_bond_set.add((atom_type2, atom_type1))
-                elif [atomName1, atomName2].count(0) == 0:
+                elif [atom_type1, atom_type2].count(0) == 0:
                     # crazy bond
                     loggin.warning('HOW CAN THIS HAPPEN? TWO DUMMIES IN ONE BOND?')
                     continue
