@@ -575,29 +575,40 @@ class _TitratableForceFieldCompiler(object):
                 atom_type1 = self.atom_types_dict[atomName1][state]
                 atom_type2 = self.atom_types_dict[atomName2][state]
                 
-                if str(atom_type1) == '0':
-                    idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
-                    helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
-                    parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
-                    atom_type1 = self._generate_hydrogen_dummy_atom_type(atomName1)
-                    if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
-                        continue
-                    else:
-                        unique_bond_set.add((atom_type1, atom_type2))
-             
-                elif str(atom_type2) == '0':
-                    idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
-                    helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
-                    parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
-                    atom_type2 = self._generate_hydrogen_dummy_atom_type(atomName2)              
 
-                    if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
-                        continue
-                    else:
-                        unique_bond_set.add((atom_type2, atom_type1))
-                else:
-                    logging.warning('WHERE IS THE DUMMY???!??!!')
-                    
+
+
+                if [atomName1, atomName2].count(0) == 0:
+                    # regular bond
+                    continue
+                elif [atomName1, atomName2].count(0) == 1:
+                    # dummy bond
+
+                    if str(atom_type1) == '0':
+                        idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
+                        helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
+                        parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
+                        atom_type1 = self._generate_hydrogen_dummy_atom_type(atomName1)
+                        if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
+                            continue
+                        else:
+                            unique_bond_set.add((atom_type1, atom_type2))
+                
+                    elif str(atom_type2) == '0':
+                        idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
+                        helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
+                        parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
+                        atom_type2 = self._generate_hydrogen_dummy_atom_type(atomName2)              
+
+                        if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
+                            continue
+                        else:
+                            unique_bond_set.add((atom_type2, atom_type1))
+                elif [atomName1, atomName2].count(0) == 0:
+                    # crazy bond
+                    loggin.warning('HOW CAN THIS HAPPEN? TWO DUMMIES IN ONE BOND?')
+                    continue
+
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
                 logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
