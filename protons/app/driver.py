@@ -30,7 +30,7 @@ from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole  / unit.kelvin)
 np.set_printoptions(precision=15)
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class _TitratableResidue:
@@ -1851,8 +1851,8 @@ class NCMCProtonDrive(_BaseDrive):
         """
 
         logging.info('#########################')
-        logging.info('Titration group index', titration_group_index)
-        logging.info('titration state index', titration_state_index)
+        logging.info('Titration group index {}'.format(titration_group_index))
+        logging.info('titration state index {}'.format(titration_state_index))
         logging.info('#########################')
 
         titration_group = self.titrationGroups[titration_group_index]
@@ -2737,7 +2737,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             for residue in all_residues:
                 if residue.name in residues_by_name:
                     selected_residue_indices.append(residue.index)
-                    logging.info('Selected residue indeces: ', selected_residue_indices)
+                    logging.info('Selected residue indeces: {}'.format(selected_residue_indices))
         # If no names or indices are specified, make all compatible residues titratable
         if residues_by_name is None and residues_by_index is None:
             for residue in all_residues:
@@ -2842,7 +2842,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 # is defined in elementary_charge units
                 logging.info('###############')
                 state_index = int(state_block.get("index"))
-                logging.info(   '-- Looking at forces of State: ', state_index)
+                logging.info(   '-- Looking at forces of State: {}'.format(state_index))
                 # Parameters for state
                 # 
                 atom_charges = []
