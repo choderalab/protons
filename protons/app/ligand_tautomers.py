@@ -29,6 +29,7 @@ from copy import copy, deepcopy
 from rdkit.Chem import rdMolAlign
 import matplotlib.pyplot as plt
 from collections import defaultdict
+logging.basicConfig(level=logging.DEBUG)
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -949,7 +950,7 @@ class _TitratableForceFieldCompiler(object):
         """
         Add all the isomer specific data to the xml template.
         """
-        print('Add isomer information ...')
+        logging.info('Add isomer information ...')
 
         protonsdata = etree.fromstring("<Protons/>")
         protonsdata.attrib['number_of_states'] = str(len(self._state_templates))
@@ -967,10 +968,9 @@ class _TitratableForceFieldCompiler(object):
 
                 ##############################################
                 # atom entries
-                print('ISOMER: ', isomer_index)
-                print('Atom entries ...')
+                logging.info('ISOMER: {}'.format(isomer_index))
                 isomer_str = str(isomer)
-                print(isomer_str)
+                logging.info(isomer_str)
                 isomer_xml = etree.fromstring(isomer_str)
 
                 for node in self.network:
@@ -984,7 +984,7 @@ class _TitratableForceFieldCompiler(object):
                         e = atom_string.format(name=node, atom_type=atom_type, charge=self.atom_charge_dict[node][isomer_index],epsilon=epsilon,sigma=sigma)
                     
                     isomer_xml.append(etree.fromstring(e))
-                    print(e)
+                    logging.info(e)
 
                 ##############################################
                 # bond entries
@@ -1011,7 +1011,7 @@ class _TitratableForceFieldCompiler(object):
                     k= parm['bonds'].attrib['k']
 
                     e = bond_string.format(atomName1=atomName1, atomName2=atomName2, bond_length=length, k=k)
-                    print(e)
+                    logging.info(e)
                     isomer_xml.append(etree.fromstring(e))
 
                 ##############################################
@@ -1061,13 +1061,13 @@ class _TitratableForceFieldCompiler(object):
                         angle_string_for_debug['no-dummy'].append(e)
                         isomer_xml.append(etree.fromstring(e))
                     else:
-                        print('WHAT IS GOING ON? MORE THAN 3 DUMMY TYPES FOR ANGLE!??!??')
+                        logging.warning('WHAT IS GOING ON? MORE THAN 3 DUMMY TYPES FOR ANGLE!??!??')
 
                 # printing debug info
                 for k in angle_string_for_debug:
-                    print(' - Angles ', k, ' ...')
+                    logging.info(' - Angles ', k, ' ...')
                     for e in angle_string_for_debug[k]:
-                        print('  :', e)
+                        logging.info('  :', e)
 
                 ##############################################
                 # torsion entries
