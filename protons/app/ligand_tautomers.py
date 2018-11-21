@@ -681,7 +681,7 @@ class _TitratableForceFieldCompiler(object):
                             parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3, atom_type4=new_atom_type4)
 
                             if str(original_atom_type1) == '0':
-                                original_atom_type1 self._generate_hydrogen_dummy_atom_type(node1)
+                                original_atom_type1 = self._generate_hydrogen_dummy_atom_type(node1)
                             elif str(original_atom_type2) == '0':
                                 original_atom_type2 = self._generate_hydrogen_dummy_atom_type(node2)
                             elif str(original_atom_type3) == '0':
