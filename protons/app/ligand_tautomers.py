@@ -1066,9 +1066,9 @@ class _TitratableForceFieldCompiler(object):
 
                 # printing debug info
                 for k in angle_string_for_debug:
-                    logging.info(' - Angles ', k, ' ...')
+                    logging.info(' - Angles {} ...'.format(k))
                     for e in angle_string_for_debug[k]:
-                        logging.info('  :', e)
+                        logging.info('  : {}'.format(e))
 
                 ##############################################
                 # torsion entries
@@ -1185,9 +1185,9 @@ class _TitratableForceFieldCompiler(object):
 
 
                 for k in proper_string_for_debug:
-                    print(' - Proper ', k, ' ...')
+                    logging.info(' - Proper {}...'.format(k))
                     for e in proper_string_for_debug[k]:
-                        print('  :', e)
+                        logging.info('  : {}'.format(e))
 
 
                 #http://alma.karlov.mff.cuni.cz/bio/99_Studenti/00_Dalsi/ParamFit/2013_ParamFit_AmberTools13.pdf
