@@ -1850,11 +1850,10 @@ class NCMCProtonDrive(_BaseDrive):
 
         """
 
-        print('#########################')
-        print('defined in topology ....')
-        print('Titration group index', titration_group_index)
-        print('titration state index', titration_state_index)
-        print('#########################')
+        logging.info('#########################')
+        logging.info('Titration group index', titration_group_index)
+        logging.info('titration state index', titration_state_index)
+        logging.info('#########################')
 
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index][titration_state_index]
@@ -1881,9 +1880,9 @@ class NCMCProtonDrive(_BaseDrive):
             # Get name of force class.
             force_classname = force.__class__.__name__
             # update atom parameters
-            print('########################')
-            print(force_classname)
-            print('########################')
+            logging.info('########################')
+            logging.info(force_classname)
+            logging.info('########################')
 
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 f_params.append(dict(atoms=list()))
@@ -1895,7 +1894,7 @@ class NCMCProtonDrive(_BaseDrive):
                         f_params[force_index]['atoms'].append(current_parameters)
                     else:                        
                         charge, sigma, epsilon = map(strip_in_unit_system, force.getParticleParameters(atom_index))
-                        print(atom_string.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], atom_charge_by_atom_index[atom_index], atom_epsilon_by_atom_index[atom_index]))
+                        logging.info(atom_string.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], atom_charge_by_atom_index[atom_index], atom_epsilon_by_atom_index[atom_index]))
 
                         current_parameters = {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
                         current_parameters['atom_index'] = atom_index
@@ -1925,7 +1924,7 @@ class NCMCProtonDrive(_BaseDrive):
                     current_parameters['k'] = k
 
                     f_params[force_index]['bonds'].append(current_parameters)
-                    print(bond_string_from_openmm.format(bond_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], float(length), float(k)))
+                    logging.info(bond_string_from_openmm.format(bond_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], float(length), float(k)))
 
 
             elif force_classname == 'HarmonicAngleForce':
@@ -1947,7 +1946,7 @@ class NCMCProtonDrive(_BaseDrive):
                     current_parameters['k'] = k
                     
                     f_params[force_index]['angles'].append(current_parameters)
-                    print(angle_string_from_openmm.format(angle_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], float(strip_in_unit_system(angle_value)), float(strip_in_unit_system(k))))
+                    logging.info(angle_string_from_openmm.format(angle_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], float(strip_in_unit_system(angle_value)), float(strip_in_unit_system(k))))
 
             
             # set torsion parameters
@@ -1973,15 +1972,15 @@ class NCMCProtonDrive(_BaseDrive):
                         current_parameters['phase1'] = phase
                         current_parameters['k1'] = k
                         f_params[force_index]['torsion'].append(current_parameters)
-                        print(proper_string_from_openmm.format(torsion_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
+                        logging.info(proper_string_from_openmm.format(torsion_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], float(strip_in_unit_system(periodicity)), float(strip_in_unit_system(phase)), float(strip_in_unit_system(k))))
 
 
                     else:
                         # improper parameters
-                        print("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
-                        print(a1, a2, a3, a4)
-                        print(str([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]]))
-                        print('Assuming this is an improper - setting everything to zero.')
+                        logging.warning("Don't know where to find this torsion : " , tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]))
+                        logging.warning(a1, a2, a3, a4)
+                        logging.warning(str([atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]]))
+                        logging.warning('Assuming this is an improper - setting everything to zero.')
 
                         #periodicity = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['periodicity1']
                         #phase = proper_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name])]['phase1']
@@ -2738,7 +2737,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             for residue in all_residues:
                 if residue.name in residues_by_name:
                     selected_residue_indices.append(residue.index)
-                    print('Selected residue indeces: ', selected_residue_indices)
+                    logging.info('Selected residue indeces: ', selected_residue_indices)
         # If no names or indices are specified, make all compatible residues titratable
         if residues_by_name is None and residues_by_index is None:
             for residue in all_residues:
@@ -2841,9 +2840,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
-                print('###############')
+                logging.info('###############')
                 state_index = int(state_block.get("index"))
-                print(   '-- State: ', state_index)
+                logging.info(   '-- Looking at forces of State: ', state_index)
                 # Parameters for state
                 # 
                 atom_charges = []
