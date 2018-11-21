@@ -578,9 +578,7 @@ class _TitratableForceFieldCompiler(object):
                 if str(atom_type1) == '0':
                     idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
                     helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
-                    logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
                     parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
-                    logging.info(parm)
                     atom_type1 = self._generate_hydrogen_dummy_atom_type(atomName1)
                     if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
                         continue
@@ -590,22 +588,22 @@ class _TitratableForceFieldCompiler(object):
                 elif str(atom_type2) == '0':
                     idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
                     helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
-                    logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
                     atom_type2 = self._generate_hydrogen_dummy_atom_type(atomName2)              
-                    logging.info(parm)
 
                     if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
                         continue
                     else:
                         unique_bond_set.add((atom_type2, atom_type1))
                 else:
-                    continue
+                    logging.warning('WHERE IS THE DUMMY???!??!!')
                     
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
+                logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
 
                 element_string= (dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
+                logging.info(element_string)
                 self._add_to_output(etree.fromstring(element_string), "/ForceField/HarmonicBondForce")
             
 
