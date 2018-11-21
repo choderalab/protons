@@ -30,6 +30,7 @@ from .integrators import GHMCIntegrator, GBAOABIntegrator
 
 kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(unit.kilojoules_per_mole  / unit.kelvin)
 np.set_printoptions(precision=15)
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
 class _TitratableResidue:
@@ -1796,12 +1797,12 @@ class NCMCProtonDrive(_BaseDrive):
                 for torsion_index, (torsion_initial, torsion_final) in enumerate(zip(cache_initial_forces[force_index]['torsion'], cache_final_forces[force_index]['torsion'])):
                     torsion = dict()
                     if fractional_titration_state == 0.0001:                   
-                        print('Updating torsion between: {:} {:} {:} {:}'.format(atom_name_by_atom_index[torsion_initial['a1']], atom_name_by_atom_index[torsion_initial['a2']], atom_name_by_atom_index[torsion_initial['a3']], atom_name_by_atom_index[torsion_initial['a4']]))
-                        print('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
+                        logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name_by_atom_index[torsion_initial['a1']], atom_name_by_atom_index[torsion_initial['a2']], atom_name_by_atom_index[torsion_initial['a3']], atom_name_by_atom_index[torsion_initial['a4']]))
+                        logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), int(torsion_initial['periodicity1']), float(torsion_initial['k1']), int(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
                     if float(torsion_initial['phase1']) != float(torsion_final['phase1']) or float(torsion_initial['k1']) != float(torsion_final['k1']) or \
                             int(torsion_initial['periodicity1']) != int(torsion_final['periodicity1']):
-                        #print('Updating ... ')
+                        logging.info('Parameters need to be updating ... ')
 
                         for parameter_name in ['phase1', 'k1']:
                             if fractional_titration_state < 0.5:
@@ -1818,7 +1819,7 @@ class NCMCProtonDrive(_BaseDrive):
                             else:
                                 torsion[parameter_name] = torsion_final[parameter_name]
                     else:
-                        #print('Reusing ...')
+                        logging.info('Parameters can be reused ...')
                         for parameter_name in ['phase1', 'k1', 'periodicity1']:
                             torsion[parameter_name] = torsion_initial[parameter_name]
                         

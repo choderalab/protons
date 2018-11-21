@@ -741,11 +741,11 @@ class _TitratableForceFieldCompiler(object):
         for empty_block in self.ffxml.xpath('/ForceField/*[count(child::*) = 0]'):
             empty_block.getparent().remove(empty_block)
 
-
-
     
     def _register_tautomers(self, mols:list):
         def _generate_hydrogen_atom_name(mol, atom):
+            # all hydrogen atom names consist of the assigned atom name (e.g. H7) and the atom TYPE of the 
+            # bonded heavy atom (e.g. ca) => H7ca
 
             atom_name = atom.GetProp('name')
 
@@ -786,9 +786,7 @@ class _TitratableForceFieldCompiler(object):
 
 
         # generate union mol graph
-        index = -1
-        for mol in mols:
-            index += 1
+        for index, mol in enumerate(mols):
             # set nodes
             for atom in mol.GetAtoms():
                 atom_name = atom.GetProp('name')
@@ -942,6 +940,12 @@ class _TitratableForceFieldCompiler(object):
             residue.append(etree.fromstring(bond_string.format(atomName1=atomName1, atomName2=atomName2)))
 
     def _add_isomers(self):
+        def _generate_hydrogen_dummy_atom_type(node):
+            # hydrogen dummy atom type includes information when in which environment the dummy becomes real
+            # e.g. dH5caha means that H5 becomes real when the heavy atom type is 'ca' - then H5 becomes atom type 'ha'
+            idx, atom_type = _return_real_atom_type(self.atom_types_dict, node)
+            return 'd' + str(node) + atom_type
+
         """
         Add all the isomer specific data to the xml template.
         """
@@ -957,28 +961,22 @@ class _TitratableForceFieldCompiler(object):
         improper_string = '<Improper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
 
 
-
         for residue in self.ffxml.xpath('/ForceField/Residues/Residue'):
     
             for isomer_index, isomer in enumerate(self._state_templates):
 
-
                 ##############################################
                 # atom entries
-
                 print('ISOMER: ', isomer_index)
                 print('Atom entries ...')
-
                 isomer_str = str(isomer)
                 print(isomer_str)
                 isomer_xml = etree.fromstring(isomer_str)
 
-
                 for node in self.network:
                     atom_type = self.atom_types_dict[node][isomer_index]                   
                     if str(atom_type) == '0':
-                        idx, atom_type = _return_real_atom_type(self.atom_types_dict, node)
-                        e = atom_string.format(name=node, atom_type='d' + str(node) + atom_type, charge=0,epsilon=0,sigma=0 )
+                        e = atom_string.format(name=node, atom_type=_generate_hydrogen_dummy_atom_type(node), charge=0,epsilon=0,sigma=0)
                     else:
                         parm = self._retrieve_parameters(atom_type1=atom_type)                       
                         sigma= parm['nonbonds'].attrib['sigma']
@@ -1028,7 +1026,7 @@ class _TitratableForceFieldCompiler(object):
                     node1, node2, node3 = nodes
                     key = hash((node1, node2, node3))
                     # angle between two dummy atoms
-                    if list_of_angles_atom_types[i].count(0) > 1:
+                    if list_of_angles_atom_types[i].count(0) == 2:
                         original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                         angle= float(0.0)
                         k= float(0.0)
@@ -1038,7 +1036,7 @@ class _TitratableForceFieldCompiler(object):
                         continue
 
                     # angle with a single dummy atom 
-                    if 0 in list_of_angles_atom_types[i]:
+                    elif list_of_angles_atom_types[i].count(0) == 1:
                         original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                         for angles_types in self.all_angles_at_all_states[key].values():
                             if 0 in angles_types:
@@ -1054,7 +1052,7 @@ class _TitratableForceFieldCompiler(object):
                                 isomer_xml.append(etree.fromstring(e))
 
                     # angles between real atoms
-                    else:
+                    elif list_of_angles_atom_types[i].count(0) == 0:
                         original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                         parm = self._retrieve_parameters(atom_type1=original_atom_type1, atom_type2=original_atom_type2, atom_type3=original_atom_type3)
                         angle= parm['angle'].attrib['angle']
@@ -1062,6 +1060,8 @@ class _TitratableForceFieldCompiler(object):
                         e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
                         angle_string_for_debug['no-dummy'].append(e)
                         isomer_xml.append(etree.fromstring(e))
+                    else:
+                        print('WHAT IS GOING ON? MORE THAN 3 DUMMY TYPES FOR ANGLE!??!??')
 
                 # printing debug info
                 for k in angle_string_for_debug:
