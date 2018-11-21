@@ -554,13 +554,13 @@ class _TitratableForceFieldCompiler(object):
                         continue
                     else:
                         unique_atom_set.add(atom_type)
-                    element_string = etree.fromstring(atom_string.format(name=node, atom_type=atom_type, charge=atom_charge, element='H', mass=1.008))
-                    nb_element_string = etree.fromstring(nb_string.format(atom_type=atom_type, sigma=0.0, epsilon=0.0, charge=0.0))
+                    element_string = (atom_string.format(name=node, atom_type=atom_type, charge=atom_charge, element='H', mass=1.008))
+                    nb_element_string = (nb_string.format(atom_type=atom_type, sigma=0.0, epsilon=0.0, charge=0.0))
                     logging.info('Adding dummy atom element: \n{}'.format(element_string))
                     logging.info('Adding dummy atom nonbonded parameters: \n{}'.format(nb_element_string))
                     
-                    self._add_to_output(element_string, "/ForceField/AtomTypes")
-                    self._add_to_output(nb_element_string, "/ForceField/NonbondedForce")
+                    self._add_to_output(etree.fromstring(element_string), "/ForceField/AtomTypes")
+                    self._add_to_output(etree.fromstring(nb_element_string), "/ForceField/NonbondedForce")
 
         # Now add all dummy bonds
         unique_bond_set = set()
@@ -605,8 +605,8 @@ class _TitratableForceFieldCompiler(object):
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
 
-                element_string= etree.fromstring(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
-                self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
+                element_string= (dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
+                self._add_to_output(etree.fromstring(element_string), "/ForceField/HarmonicBondForce")
             
 
         unique_angle_set = set()
@@ -648,9 +648,9 @@ class _TitratableForceFieldCompiler(object):
                             angle= parm['angle'].attrib['angle']
                             k= parm['angle'].attrib['k']
 
-                            element_string= etree.fromstring(angle_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, angle=angle, k=k))
+                            element_string= (angle_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, angle=angle, k=k))
                             logging.info(element_string)
-                            self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
+                            self._add_to_output(etree.fromstring(element_string), "/ForceField/HarmonicAngleForce")
                
         # # Last are all TORSIONS
         unique_torsion_set = set()
@@ -697,10 +697,9 @@ class _TitratableForceFieldCompiler(object):
                                     periodicity1 = par.attrib['periodicity1']
                                     phase1 = par.attrib['phase1']
                                     k1 = par.attrib['k1']
+                                    element_string = (proper_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, atomType4=original_atom_type4, periodicity=periodicity1, phase=phase1, k=k1))
                                     logging.info(element_string)
-                                    element_string= etree.fromstring(proper_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, atomType4=original_atom_type4, periodicity=periodicity1, phase=phase1, k=k1))
-                                    logging.info(element_string)
-                                    self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
+                                    self._add_to_output(etree.fromstring(element_string), "/ForceField/PeriodicTorsionForce")
 
 
         logging.info('Added all torsion parameters ...')
