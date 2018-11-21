@@ -1013,6 +1013,7 @@ class _TitratableForceFieldCompiler(object):
                     k= parm['bonds'].attrib['k']
 
                     e = bond_string.format(atomName1=atomName1, atomName2=atomName2, bond_length=length, k=k)
+                    print(e)
                     isomer_xml.append(etree.fromstring(e))
 
                 ##############################################
@@ -1064,10 +1065,9 @@ class _TitratableForceFieldCompiler(object):
 
                 # printing debug info
                 for k in angle_string_for_debug:
-                    #print(' - Angles ', k, ' ...')
+                    print(' - Angles ', k, ' ...')
                     for e in angle_string_for_debug[k]:
-                        pass
-                        #print('  :', e)
+                        print('  :', e)
 
                 ##############################################
                 # torsion entries
@@ -1184,10 +1184,9 @@ class _TitratableForceFieldCompiler(object):
 
 
                 for k in proper_string_for_debug:
-                    #print(' - Proper ', k, ' ...')
+                    print(' - Proper ', k, ' ...')
                     for e in proper_string_for_debug[k]:
-                        pass
-                        #print('  :', e)
+                        print('  :', e)
 
 
                 #http://alma.karlov.mff.cuni.cz/bio/99_Studenti/00_Dalsi/ParamFit/2013_ParamFit_AmberTools13.pdf
