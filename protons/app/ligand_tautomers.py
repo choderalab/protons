@@ -535,27 +535,30 @@ class _TitratableForceFieldCompiler(object):
 
     def _append_dummy_parameters(self):
 
-        print('Appending dummy parameters')
-        print('################################')
+        logging.info('################################')
+        logging.info('Appending dummy parameters')
+        logging.info('################################')
 
         atom_string = '<Type name="{atom_type}" class="{atom_type}" charge="{charge}" element="{element}" mass="{mass}"/>'
         nb_string = '<Atom type="{atom_type}" sigma="{sigma}" epsilon="{epsilon}" charge="{charge}"/>'
 
         unique_atom_set = set()
         for state in range(len(self.mol_array)):
+            logging.info('Atom parameters for state {}'.format(state))
             for node in self.network:
                 atom_type = self.atom_types_dict[node][state]
                 if str(atom_type) == '0':
-                    idx,atom_type = _return_real_atom_type(self.atom_types_dict, node)
                     atom_charge = 0.0
-                    atom_type='d'+ str(node) +str(atom_type)
+                    atom_type = self._generate_hydrogen_dummy_atom_type(node)
                     if atom_type in unique_atom_set:
                         continue
                     else:
                         unique_atom_set.add(atom_type)
                     element_string = etree.fromstring(atom_string.format(name=node, atom_type=atom_type, charge=atom_charge, element='H', mass=1.008))
                     nb_element_string = etree.fromstring(nb_string.format(atom_type=atom_type, sigma=0.0, epsilon=0.0, charge=0.0))
-
+                    logging.info('Adding dummy atom element: \n{}'.format(element_string))
+                    logging.info('Adding dummy atom nonbonded parameters: \n{}'.format(nb_element_string))
+                    
                     self._add_to_output(element_string, "/ForceField/AtomTypes")
                     self._add_to_output(nb_element_string, "/ForceField/NonbondedForce")
 
@@ -563,9 +566,7 @@ class _TitratableForceFieldCompiler(object):
         unique_bond_set = set()
         dummy_bond_string = '<Bond type1="{atomType1}" type2="{atomType2}" length="{bond_length}" k="{k}"/>'
         for state in range(len(self.mol_array)):
-            print('$$$$$$$$$$$$$$$$$$$$')
-            print('State: ' + str(state))
-            print('$$$$$$$$$$$$$$$$$$$$')
+            logging.info('Bond parameters for state {}'.format(state))
             
             for bond in self.network.edges:
                 atomName1 = bond[0]
@@ -575,32 +576,27 @@ class _TitratableForceFieldCompiler(object):
                 atom_type2 = self.atom_types_dict[atomName2][state]
                 
                 if str(atom_type1) == '0':
-                    print('#############')
                     idx, atom_type1 = _return_real_atom_type(self.atom_types_dict, atomName1)
                     helper_atom_type2 = (self.atom_binds_to_atom_type[atomName1])
-                    print('Found dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
-                    print('Found dummy bond between ' + str(atom_type1) + ' and ' + str(helper_atom_type2))
+                    logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
                     parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=helper_atom_type2)
-                    print(parm)
-                    atom_type1 = 'd'+ str(atomName1) + str(atom_type1)
+                    logging.info(parm)
+                    atom_type1 = self._generate_hydrogen_dummy_atom_type(atomName1)
                     if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
-                        print('Found duplicate')
+                        continue
                     else:
                         unique_bond_set.add((atom_type1, atom_type2))
              
                 elif str(atom_type2) == '0':
-                    print('#############')
                     idx, atom_type2 = _return_real_atom_type(self.atom_types_dict, atomName2)
                     helper_atom_type1 = (self.atom_binds_to_atom_type[atomName2])
-                    print('Found dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
-                    print('Real bond between ' + str(helper_atom_type1) + ' and ' + str(atom_type2))
-
+                    logging.info('Adding dummy bond between ' + str(atomName1) + ' and ' + str(atomName2))
                     parm = self._retrieve_parameters(atom_type1=helper_atom_type1, atom_type2=atom_type2)
-                    atom_type2 = 'd' + str(atomName2) + str(atom_type2)              
-                    print(parm)
+                    atom_type2 = self._generate_hydrogen_dummy_atom_type(atomName2)              
+                    logging.info(parm)
 
                     if (atom_type1, atom_type2) in unique_bond_set or (atom_type2, atom_type1) in unique_bond_set:
-                        print('Found duplicate')
+                        continue
                     else:
                         unique_bond_set.add((atom_type2, atom_type1))
                 else:
@@ -609,29 +605,26 @@ class _TitratableForceFieldCompiler(object):
                 length= parm['bonds'].attrib['length']
                 k= parm['bonds'].attrib['k']
 
-                print(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
                 element_string= etree.fromstring(dummy_bond_string.format(atomType1=atom_type1, atomType2=atom_type2, bond_length=length, k=k))
                 self._add_to_output(element_string, "/ForceField/HarmonicBondForce")
             
 
         unique_angle_set = set()
         angle_string = '<Angle type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" angle="{angle}" k="{k}"/>'
-        print('Generating dummy angle entries ...')
         for state in range(len(self.mol_array)):
-            print('@@@@@@@@@@@@')
+            logging.info('Angle parameters for state {}'.format(state))
 
-            print('State: ', state)
             list_of_angles_atom_types, list_of_angles_atom_names = _get_all_angles(self.network, self.atom_types_dict, state)
 
             for i, nodes in enumerate(list_of_angles_atom_names):
                 node1, node2, node3 = nodes
                 key = hash((node1, node2, node3))
                 # angle between two dummy atoms
-                if list_of_angles_atom_types[i].count(0) > 1:
-                    #print('Dummy to dummy')
+                if list_of_angles_atom_types[i].count(0) == 2:
+                    logging.warning('This case is not implemented yet! And should also not happen with only two tautomeric states ...')
                     continue
                 # only one dummy atom
-                elif 0 in list_of_angles_atom_types[i]:
+                elif list_of_angles_atom_types[i].count(0) == 1:
                     original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                     for angles_types in self.all_angles_at_all_states[key].values():
                         if 0 in angles_types:
@@ -641,36 +634,30 @@ class _TitratableForceFieldCompiler(object):
                             parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
 
                             if str(original_atom_type1) == '0':
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node1)
-                                original_atom_type1 = 'd' + str(node1) + real_atom_type
+                                original_atom_type1 = self._generate_hydrogen_dummy_atom_type(node1)
                             elif str(original_atom_type2) == '0':
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node2)
-                                original_atom_type2 = 'd' + str(node2) + real_atom_type
+                                original_atom_type2 = self._generate_hydrogen_dummy_atom_type(node2)
                             else:
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
-                                original_atom_type3 = 'd' + str(node3) + real_atom_type
+                                original_atom_type3 = self._generate_hydrogen_dummy_atom_type(node3) 
 
                             if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set or (original_atom_type3, original_atom_type2, original_atom_type1) in unique_angle_set:
-                                #print('Repetition!')
                                 continue
                             else:
                                 unique_angle_set.add((original_atom_type1, original_atom_type2, original_atom_type3))
 
                             angle= parm['angle'].attrib['angle']
                             k= parm['angle'].attrib['k']
-                            #print(original_atom_type1, original_atom_type2, original_atom_type3)
+
                             element_string= etree.fromstring(angle_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, angle=angle, k=k))
+                            logging.info(element_string)
                             self._add_to_output(element_string, "/ForceField/HarmonicAngleForce")
                
         # # Last are all TORSIONS
-        print('Generating dummy torsion entries ...')
-
         unique_torsion_set = set()
         proper_string = '<Proper type1="{atomType1}" type2="{atomType2}" type3="{atomType3}" type4="{atomType4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
         for state in range(len(self.mol_array)):
-
-            print('@@@@@@@@@@@@')
-            print('State: ', state)
+            
+            logging.info('Torsion parameters for state: {}'.format(state))
 
             list_of_torsion_atom_names, list_of_torsion_atom_types = _get_all_torsion(self.network, self.atom_types_dict, state)
             for i, nodes in enumerate(list_of_torsion_atom_names):
@@ -678,18 +665,12 @@ class _TitratableForceFieldCompiler(object):
                 node1, node2, node3, node4 = nodes
                 key = hash((node1, node2, node3, node4))
 
-
                 # torsion between two dummy atoms
-                if list_of_torsion_atom_types[i].count(0) > 1:
-                    #print('##############')
-                    #print(node1, node2, node3, node4)
-
-                    #print('Dummy to dummy')
+                if list_of_torsion_atom_types[i].count(0) == 2:
+                    logging.warning('Torsion between two dummys! Not yet implemented!')
                     continue
 
-                elif 0 in list_of_torsion_atom_types[i]:
-                    #print('##############')
-                    #print(node1, node2, node3, node4)
+                elif list_of_torsion_atom_types[i].count(0) == 1:
 
                     original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4 = list_of_torsion_atom_types[i]
                     for torsion_types in self.all_torsionss_at_all_states[key].values():
@@ -700,35 +681,29 @@ class _TitratableForceFieldCompiler(object):
                             parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3, atom_type4=new_atom_type4)
 
                             if str(original_atom_type1) == '0':
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node1)
-                                original_atom_type1 = 'd' + str(node1) + real_atom_type
+                                original_atom_type1 self._generate_hydrogen_dummy_atom_type(node1)
                             elif str(original_atom_type2) == '0':
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node2)
-                                original_atom_type2 = 'd' + str(node2) + real_atom_type
+                                original_atom_type2 = self._generate_hydrogen_dummy_atom_type(node2)
                             elif str(original_atom_type3) == '0':
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node3)
-                                original_atom_type3 = 'd' + str(node3) + real_atom_type
+                                original_atom_type3 = self._generate_hydrogen_dummy_atom_type(node3)
                             else:
-                                t, real_atom_type = _return_real_atom_type(self.atom_types_dict, node4)
-                                original_atom_type4 = 'd' + str(node4) + real_atom_type
+                                original_atom_type4 = self._generate_hydrogen_dummy_atom_type(node4) 
 
                             if (original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4) in unique_torsion_set:
-                                #print('Repetition!')
                                 continue
                             else:
                                 unique_torsion_set.add((original_atom_type1, original_atom_type2, original_atom_type3, original_atom_type4))
-
                                 for par in parm['proper']:
                                     periodicity1 = par.attrib['periodicity1']
                                     phase1 = par.attrib['phase1']
                                     k1 = par.attrib['k1']
-
+                                    logging.info(element_string)
                                     element_string= etree.fromstring(proper_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, atomType4=original_atom_type4, periodicity=periodicity1, phase=phase1, k=k1))
+                                    logging.info(element_string)
                                     self._add_to_output(element_string, "/ForceField/PeriodicTorsionForce")
 
 
-        print('@@@@@@@@@@@@')      
-        print('Finished ...')
+        logging.info('Added all torsion parameters ...')
         
 
 
@@ -941,13 +916,15 @@ class _TitratableForceFieldCompiler(object):
 
             residue.append(etree.fromstring(bond_string.format(atomName1=atomName1, atomName2=atomName2)))
 
-    def _add_isomers(self):
-        def _generate_hydrogen_dummy_atom_type(node):
-            # hydrogen dummy atom type includes information when in which environment the dummy becomes real
-            # e.g. dH5caha means that H5 becomes real when the heavy atom type is 'ca' - then H5 becomes atom type 'ha'
-            idx, atom_type = _return_real_atom_type(self.atom_types_dict, node)
-            return 'd' + str(node) + atom_type
+    def _generate_hydrogen_dummy_atom_type(self, node):
+        # hydrogen dummy atom type includes information when in which environment the dummy becomes real
+        # e.g. dH5caha means that H5 becomes real when the heavy atom type is 'ca' - then H5 becomes atom type 'ha'
+        idx, atom_type = _return_real_atom_type(self.atom_types_dict, node)
+        return 'd' + str(node) + atom_type
 
+
+
+    def _add_isomers(self):
         """
         Add all the isomer specific data to the xml template.
         """
@@ -977,7 +954,7 @@ class _TitratableForceFieldCompiler(object):
                 for node in self.network:
                     atom_type = self.atom_types_dict[node][isomer_index]                   
                     if str(atom_type) == '0':
-                        e = atom_string.format(name=node, atom_type=_generate_hydrogen_dummy_atom_type(node), charge=0,epsilon=0,sigma=0)
+                        e = atom_string.format(name=node, atom_type=self._generate_hydrogen_dummy_atom_type(node), charge=0,epsilon=0,sigma=0)
                     else:
                         parm = self._retrieve_parameters(atom_type1=atom_type)                       
                         sigma= parm['nonbonds'].attrib['sigma']
