@@ -28,6 +28,7 @@ from rdkit.Chem import MCS
 from copy import copy, deepcopy
 from rdkit.Chem import rdMolAlign
 import matplotlib.pyplot as plt
+import logging
 from collections import defaultdict
 logging.basicConfig(level=logging.DEBUG)
 
