@@ -1802,14 +1802,14 @@ class NCMCProtonDrive(_BaseDrive):
                     atom_name3 = atom_name_by_atom_index[torsion_initial['a3']]
                     atom_name4 = atom_name_by_atom_index[torsion_initial['a4']]
 
-                    logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
-                    logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
-
                     if float(torsion_initial['phase1']) != float(torsion_final['phase1']) or float(torsion_initial['k1']) != float(torsion_final['k1']) or \
                             int(torsion_initial['periodicity1']) != int(torsion_final['periodicity1']):
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
                             logging.info('Torsion parameters updating ... ')
+                            logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
+                            logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
+
 
                         for parameter_name in ['phase1', 'k1']:
                             if fractional_titration_state < 0.5:
@@ -1829,6 +1829,8 @@ class NCMCProtonDrive(_BaseDrive):
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
                             logging.info('Torsion parameters reusing ...')
+                            logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
+
                         for parameter_name in ['phase1', 'k1', 'periodicity1']:
                             torsion[parameter_name] = torsion_initial[parameter_name]
                         
