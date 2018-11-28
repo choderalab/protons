@@ -2125,8 +2125,8 @@ class NCMCProtonDrive(_BaseDrive):
 
         # PROPAGATION
         ncmc_integrator.step(self.propagations_per_step)
-        logging.info('Initial titration state: ', str(initial_titration_states))
-        logging.info('Final titration state: ', str(final_titration_states))
+        logging.info('Initial titration state: {}'.format(initial_titration_states))
+        logging.info('Final titration state: {}'.format(final_titration_states))
         #pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
         #pos = self.context.getState(getPositions=True).getPositions() 
         #mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/00_start_'+str(r) + '_test.pdb', 'w'))
