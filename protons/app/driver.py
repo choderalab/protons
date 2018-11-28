@@ -1633,7 +1633,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check parameters for validity.
         self._validate_indices(titration_group_index, titration_state_index)
-        logging.info('Titration group index: {} Titration state index: {} update parameter flag: {}'.fomrat(titration_group_index, titration_state_index, updateParameters)
+        logging.info('Titration group index: {} Titration state index: {} update parameter flag: {}'.format(titration_group_index, titration_state_index, updateParameters))
 
         self._update_forces(titration_group_index, titration_state_index)
         # The context needs to be updated after the force parameters are updated
