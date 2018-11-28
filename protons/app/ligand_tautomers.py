@@ -30,12 +30,12 @@ from rdkit.Chem import rdMolAlign
 import matplotlib.pyplot as plt
 import logging
 from collections import defaultdict
-logging.basicConfig(level=logging.DEBUG)
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
 gaff_default = os.path.join(PACKAGE_ROOT, 'data', 'gaff.xml')
+
 
 
 class _State(object):
@@ -624,12 +624,27 @@ class _TitratableForceFieldCompiler(object):
 
             for i, nodes in enumerate(list_of_angles_atom_names):
                 node1, node2, node3 = nodes
-                key = hash((node1, node2, node3))
-                # angle between two dummy atoms
-                if list_of_angles_atom_types[i].count(0) == 2:
-                    logging.warning('This case is not implemented yet! And should also not happen with only two tautomeric states ...')
+                if list_of_angles_atom_types[i].count(0) == 0:
+                    # only real atom types
                     continue
-                # only one dummy atom
+                               
+                logging.info('Infering angle paramters for {}-{}-{}'.format(node1, node2, node3))
+                found_real_angle = False
+
+                key = hash((node1, node2, node3))
+                # two dummy atoms in angle
+                if list_of_angles_atom_types[i].count(0) == 2:
+                    original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
+                    for angles_types in self.all_angles_at_all_states[key].values():
+                        if 0 in angles_types:
+                            continue
+                        else:
+                            new_atom_type1, new_atom_type2, new_atom_type3 = angles_types
+                            found_real_angle = True
+                            logging.info('#### FOUND REAL PARAMETERS FOR 2 DUMMY ANGLE.')
+                            break
+
+                # one dummy atom in angle
                 elif list_of_angles_atom_types[i].count(0) == 1:
                     original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                     for angles_types in self.all_angles_at_all_states[key].values():
@@ -637,26 +652,35 @@ class _TitratableForceFieldCompiler(object):
                             continue
                         else:
                             new_atom_type1, new_atom_type2, new_atom_type3 = angles_types
-                            parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
+                            found_real_angle = True
+                            break
 
-                            if str(original_atom_type1) == '0':
-                                original_atom_type1 = self._generate_hydrogen_dummy_atom_type(node1)
-                            elif str(original_atom_type2) == '0':
-                                original_atom_type2 = self._generate_hydrogen_dummy_atom_type(node2)
-                            else:
-                                original_atom_type3 = self._generate_hydrogen_dummy_atom_type(node3) 
+                else:
+                    logging.critical('WARNING: Found angle between three dummy atoms.')
 
-                            if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set or (original_atom_type3, original_atom_type2, original_atom_type1) in unique_angle_set:
-                                continue
-                            else:
-                                unique_angle_set.add((original_atom_type1, original_atom_type2, original_atom_type3))
+                if found_real_angle:
+                    parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
 
-                            angle= parm['angle'].attrib['angle']
-                            k= parm['angle'].attrib['k']
+                    if str(original_atom_type1) == '0':
+                        original_atom_type1 = self._generate_hydrogen_dummy_atom_type(node1)
+                    if str(original_atom_type2) == '0':
+                        original_atom_type2 = self._generate_hydrogen_dummy_atom_type(node2)
+                    if str(original_atom_type3) == '0':
+                        original_atom_type3 = self._generate_hydrogen_dummy_atom_type(node3) 
 
-                            element_string= (angle_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, angle=angle, k=k))
-                            logging.info(element_string)
-                            self._add_to_output(etree.fromstring(element_string), "/ForceField/HarmonicAngleForce")
+                    if (original_atom_type1, original_atom_type2, original_atom_type3) in unique_angle_set or (original_atom_type3, original_atom_type2, original_atom_type1) in unique_angle_set:
+                        logging.info('Duplicate of already added angle.')
+                        continue
+                    else:
+                        unique_angle_set.add((original_atom_type1, original_atom_type2, original_atom_type3))
+
+                    angle= parm['angle'].attrib['angle']
+                    k= parm['angle'].attrib['k']
+                    element_string= (angle_string.format(atomType1=original_atom_type1, atomType2=original_atom_type2, atomType3=original_atom_type3, angle=angle, k=k))
+                    logging.info(element_string)
+                    self._add_to_output(etree.fromstring(element_string), "/ForceField/HarmonicAngleForce")
+                else: 
+                    logging.warning('Could not find real parameters for angle between: {} - {} - {}.'.format(node1, node2, node3))
                
         # # Last are all TORSIONS
         unique_torsion_set = set()
@@ -941,7 +965,6 @@ class _TitratableForceFieldCompiler(object):
         atom_string = '<Atom name="{name}" type="{atom_type}" charge="{charge}" epsilon="{epsilon}" sigma="{sigma}" />'
         bond_string = '<Bond name1="{atomName1}" name2="{atomName2}" length="{bond_length}" k="{k}"/>'
         angle_string = '<Angle name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" angle="{angle}" k="{k}"/>'
-        proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" periodicity6="{periodicity6}" phase6="{phase6}" k6="{k6}" />'      
         improper_string = '<Improper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity}" phase1="{phase}" k1="{k}"/>'
 
 
@@ -1003,8 +1026,10 @@ class _TitratableForceFieldCompiler(object):
                 angle_string_for_debug['no-dummy'] = []
                 angle_string_for_debug['one-dummy'] = []
                 angle_string_for_debug['two-dummy'] = []
-                list_of_angles_atom_types, list_of_angles_atom_names = _get_all_angles(self.network, self.atom_types_dict, isomer_index)
+                angle_string_for_debug['always-dummy'] = []
 
+                list_of_angles_atom_types, list_of_angles_atom_names = _get_all_angles(self.network, self.atom_types_dict, isomer_index)
+                
                 for i, nodes in enumerate(list_of_angles_atom_names):
                     node1, node2, node3 = nodes
                     key = hash((node1, node2, node3))
@@ -1020,11 +1045,13 @@ class _TitratableForceFieldCompiler(object):
 
                     # angle with a single dummy atom 
                     elif list_of_angles_atom_types[i].count(0) == 1:
+                        found_real_angle = False
                         original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
                         for angles_types in self.all_angles_at_all_states[key].values():
                             if 0 in angles_types:
                                 continue
                             else:
+                                found_real_angle = True
                                 new_atom_type1, new_atom_type2, new_atom_type3 = angles_types
                                 parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
 
@@ -1033,6 +1060,16 @@ class _TitratableForceFieldCompiler(object):
                                 e= angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
                                 angle_string_for_debug['one-dummy'].append(e)
                                 isomer_xml.append(etree.fromstring(e))
+                        
+                        if found_real_angle is not True:
+                            # always dummy angle
+                            logging.warning('COULD NOT FIND REAL ANGLE BETWEEN {}-{}-{}!'.format(node1, node2, node3))
+                            angle= float(0.0)
+                            k= float(0.0)
+                            e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                            angle_string_for_debug['always-dummy'].append(e)
+                            isomer_xml.append(etree.fromstring(e))
+
 
                     # angles between real atoms
                     elif list_of_angles_atom_types[i].count(0) == 0:
@@ -1065,56 +1102,19 @@ class _TitratableForceFieldCompiler(object):
                 for i, nodes in enumerate(list_of_torsion_atom_names):
                     node1, node2, node3, node4 = nodes
                     key = hash((node1, node2, node3, node4))
-                    # torsion between two dummy atoms
-                    if list_of_torsion_atom_types[i].count(0) > 1:
-                        periodicity_list = [1] * 6
-                        phase_list = [0.0] * 6
-                        k_list = [0.0] * 6
 
+                    proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" />'      
+
+                    if list_of_torsion_atom_types[i].count(0) == 2:
+                        # torsion between two dummy atoms
+                        # -> never a real torsion therefore everythign set to zero
                         e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
-                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
-                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
-                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
-                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
-                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
-                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]) )
-
+                        periodicity1=str(0), phase1=str(0.0), k1=str(0.0))
                         proper_string_for_debug['two-dummy'].append(e)
                         isomer_xml.append(etree.fromstring(e))
 
-                    # torsion between real atoms
-                    elif 0 not in list_of_torsion_atom_types[i]:
-                        atom_type1, atom_type2, atom_type3, atom_type4 = list_of_torsion_atom_types[i]
-                        parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2, atom_type3=atom_type3, atom_type4=atom_type4)
-
-                        periodicity_list = [1] * 6
-                        phase_list = [0.0] * 6
-                        k_list = [0.0] * 6
-                        offset = 0
-                        #print(node1, node2, node3, node4)
-                        #print(parm['proper'])
-                        for par in parm['proper']:
-                            nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
-                            #print(nr_of_par)                       
-                            for i in range(1, nr_of_par+1):
-                                periodicity_list[offset + i-1] = (par.attrib['periodicity' + str(i)])
-                                phase_list[offset+i-1] = (par.attrib['phase' + str(i)])
-                                k_list[offset+i-1] = (par.attrib['k' + str(i)])
-                            offset = nr_of_par
-                        
-                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
-                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
-                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
-                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
-                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
-                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
-                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
-
-                        isomer_xml.append(etree.fromstring(e))
-                        proper_string_for_debug['no-dummy'].append(e)
-
                     # torsion which includes a single dummy atom
-                    else:
+                    elif list_of_torsion_atom_types[i].count(0) == 1:
                         found_real_torsion = False
                         for torsion_types in self.all_torsionss_at_all_states[key].values():
                             if 0 in torsion_types:
@@ -1124,36 +1124,55 @@ class _TitratableForceFieldCompiler(object):
                                 new_atom_type1, new_atom_type2, new_atom_type3, new_atom_type4 = torsion_types
                                 parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3, atom_type4=new_atom_type4)
 
-                        periodicity_list = [1] * 10
-                        phase_list = [0.0] * 10
-                        k_list = [0.0] * 10
-                        offset = 0
-                        for par in parm['proper']:
-                            nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
-                            for i in range(1, nr_of_par+1):
-                                periodicity_list[offset + i-1] = (par.attrib['periodicity' + str(i)])
-                                phase_list[offset+i-1] = (par.attrib['phase' + str(i)])
-                                k_list[offset+i-1] = (par.attrib['k' + str(i)])
-                            offset = nr_of_par
-                                                  
-                        e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
-                        periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
-                        periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
-                        periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
-                        periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
-                        periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
-                        periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
-
-                        isomer_xml.append(etree.fromstring(e))
-                        proper_string_for_debug['one-dummy'].append(e)
-                           
                         # there might be 4 atoms that always contain a dummy at each state
                         # - these torsions are not real therefore everything is set to zero
-                        if found_real_torsion == False:
-                            periodicity_list = [1] * 10
-                            phase_list = [0.0] * 10
-                            k_list = [0.0] * 10
+                        if found_real_torsion:
+                            periodicity_list = []
+                            phase_list = []
+                            k_list = []
+                            for par in parm['proper']:
+                                nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
+                                for i in range(nr_of_par):
+                                    periodicity_list.append(par.attrib['periodicity' + str(i+1)])
+                                    phase_list.append(par.attrib['phase' + str(i+1)])
+                                    k_list.append(par.attrib['k' + str(i+1)])
+                        else:
+                            periodicity_list = [0]
+                            phase_list = [0.0]
+                            k_list = [0.0]
 
+                        if len(periodicity_list) == 1:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]))
+                        elif len(periodicity_list) == 2:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]))
+                        elif len(periodicity_list) == 3:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]))
+                        elif len(periodicity_list) == 4:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]))
+                        elif len(periodicity_list) == 5:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                            periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]))              
+                        elif len(periodicity_list) == 6:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" periodicity6="{periodicity6}" phase6="{phase6}" k6="{k6}" />'      
                             e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
                             periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
                             periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
@@ -1161,10 +1180,79 @@ class _TitratableForceFieldCompiler(object):
                             periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
                             periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
                             periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
+                        else:
+                            logging.critical('THERE IS SOMETHING WRONT! WE HAVE TOO MANY PERIODICITY ENTRIES IN THIS TORSION! {}-{}-{}-{}'.format(atomName1,atomName2,atomName3,atomName4))
+                        
+                        isomer_xml.append(etree.fromstring(e))
+                        isomer_xml.append(etree.fromstring(e))
+                        if found_real_torsion:
+                            proper_string_for_debug['one-dummy'].append(e)
+                        else:
                             proper_string_for_debug['always-dummy'].append(e)
-                            isomer_xml.append(etree.fromstring(e))
 
+                    # torsion between real atoms
+                    elif list_of_torsion_atom_types[i].count(0) == 0:
+                        atom_type1, atom_type2, atom_type3, atom_type4 = list_of_torsion_atom_types[i]
+                        parm = self._retrieve_parameters(atom_type1=atom_type1, atom_type2=atom_type2, atom_type3=atom_type3, atom_type4=atom_type4)
+                      
+                        # iterate over proper parameters
+                        periodicity_list = []
+                        phase_list = []
+                        k_list = []
+                        for par in parm['proper']:
+                            nr_of_par = ['period' in x for x in list(par.attrib)].count(True)    
+                            for i in range(nr_of_par):
+                                periodicity_list.append(par.attrib['periodicity' + str(i+1)])
+                                phase_list.append(par.attrib['phase' + str(i+1)])
+                                k_list.append(par.attrib['k' + str(i+1)])
+                        
+                        if len(periodicity_list) == 1:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]))
+                        elif len(periodicity_list) == 2:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]))
+                        elif len(periodicity_list) == 3:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]))
+                        elif len(periodicity_list) == 4:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]))
+                        elif len(periodicity_list) == 5:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                            periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]))              
+                        elif len(periodicity_list) == 6:
+                            proper_string = '<Proper name1="{atomName1}" name2="{atomName2}" name3="{atomName3}" name4="{atomName4}" periodicity1="{periodicity1}" phase1="{phase1}" k1="{k1}" periodicity2="{periodicity2}" phase2="{phase2}" k2="{k2}" periodicity3="{periodicity3}" phase3="{phase3}" k3="{k3}" periodicity4="{periodicity4}" phase4="{phase4}" k4="{k4}" periodicity5="{periodicity5}" phase5="{phase5}" k5="{k5}" periodicity6="{periodicity6}" phase6="{phase6}" k6="{k6}" />'      
+                            e = proper_string.format(atomName1=node1, atomName2=node2, atomName3=node3, atomName4=node4, 
+                            periodicity1=str(periodicity_list[0]), phase1=str(phase_list[0]), k1=str(k_list[0]), 
+                            periodicity2=str(periodicity_list[1]), phase2=str(phase_list[1]), k2=str(k_list[1]), 
+                            periodicity3=str(periodicity_list[2]), phase3=str(phase_list[2]), k3=str(k_list[2]), 
+                            periodicity4=str(periodicity_list[3]), phase4=str(phase_list[3]), k4=str(k_list[3]),
+                            periodicity5=str(periodicity_list[4]), phase5=str(phase_list[4]), k5=str(k_list[4]), 
+                            periodicity6=str(periodicity_list[5]), phase6=str(phase_list[5]), k6=str(k_list[5]))
+                        else:
+                            logging.critical('THERE IS SOMETHING WRONT! WE HAVE TOO MANY PERIODICITY ENTRIES IN THIS TORSION! {}-{}-{}-{}'.format(atomName1,atomName2,atomName3,atomName4))
 
+                        isomer_xml.append(etree.fromstring(e))
+                        proper_string_for_debug['no-dummy'].append(e)
+
+                    else:
+                        logging.warning('THERE ARE THREE DUMMY ATOMS IN THIS TORSION PRESENT!')
 
                 for k in proper_string_for_debug:
                     logging.info(' - Proper {}...'.format(k))
@@ -1393,12 +1481,6 @@ class _TitratableForceFieldCompiler(object):
             
         
         elif len(kwargs) == 4:
-            #for xmltree in self._xml_parameter_trees[1:]:
-            #   # Match proper dihedral of the atom in PeriodicTorsionForce block
-            #    print('all propers that I see')
-            #    print(etree.tostring(xmltree))
-            #    print('$$$$$$$$$')
-
             # match torsion parameters
             par = []
             generic = []
@@ -1411,6 +1493,7 @@ class _TitratableForceFieldCompiler(object):
                     # Start with matching the two central atoms of the torsion - this could now apply to either wildcard torsion or specific torsions
                     if search_list[1] == torsion_types_list[1] and search_list[2] == torsion_types_list[2]:
                         if (torsion_types_list[0] == search_list[0]) and (torsion_types_list[3] == search_list[3]):
+                            logging.warning('Ignoring the following parameters for {}-{}-{}-{} because the force constant is ZERO.'.format(torsion_types_list[0], torsion_types_list[1], torsion_types_list[2], torsion_types_list[3]))
                             par.append(proper)
                         elif torsion_types_list[0] == '' and torsion_types_list[3] == '':
                             generic.append(proper)
