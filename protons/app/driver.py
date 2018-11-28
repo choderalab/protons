@@ -1633,7 +1633,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Check parameters for validity.
         self._validate_indices(titration_group_index, titration_state_index)
-        print('Titration group index: ', str(titration_group_index), 'Titration state index:', str(titration_state_index), 'update parameter flag: ', str(updateParameters))
+        logging.info('Titration group index: {} Titration state index: {} update parameter flag: {}'.fomrat(titration_group_index, titration_state_index, updateParameters)
 
         self._update_forces(titration_group_index, titration_state_index)
         # The context needs to be updated after the force parameters are updated
@@ -2123,7 +2123,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # PROPAGATION
         ncmc_integrator.step(self.propagations_per_step)
-        loggin.info('Initial titration state: ', str(initial_titration_states))
+        logging.info('Initial titration state: ', str(initial_titration_states))
         logging.info('Final titration state: ', str(final_titration_states))
         #pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
         #pos = self.context.getState(getPositions=True).getPositions() 
