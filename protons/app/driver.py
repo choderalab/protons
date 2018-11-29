@@ -1540,7 +1540,7 @@ class NCMCProtonDrive(_BaseDrive):
         The number of charges specified must match the number (and order) of atoms in the defined titration group.
         """
 
-        print('Adding titration state ...')
+        logging.info('Adding titration state ...')
         # Check input arguments.
         if titration_group_index not in range(self._get_num_titratable_groups()):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
@@ -1692,7 +1692,6 @@ class NCMCProtonDrive(_BaseDrive):
         for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
             force_classname = force.__class__.__name__
-            logging.info('Updating force: {}'.format(force_classname))
             if force_classname == 'NonbondedForce' or force_classname == 'GBSAOBCForce':
                 
                 # Update forces using appropriately blended parameters
@@ -1774,21 +1773,17 @@ class NCMCProtonDrive(_BaseDrive):
                     atom_name3 = atom_name_by_atom_index[angle_initial['a3']]
 
                     # give a one time log message
-                    if fractional_titration_state == 0.0001:
-                        logging.info('Updating angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
-                        logging.info('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
 
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
-                            logging.info('Angle parameters updating ...')
+                            logging.info('Updating angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
+                            logging.info('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
                         for parameter_name in ['angle', 'k']:
                             new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
                             angle[parameter_name] = float(new_parameter)
                     else:
                         # give a one time log message
-                        if fractional_titration_state == 0.0001:
-                            logging.info('Angle parameter reusing ...')
                         for parameter_name in ['angle', 'k']:
                             angle[parameter_name] = float(angle_initial[parameter_name])
                             
@@ -1826,11 +1821,6 @@ class NCMCProtonDrive(_BaseDrive):
                             else:
                                 torsion[parameter_name] = torsion_final[parameter_name]
                     else:
-                        # give a one time log message
-                        if fractional_titration_state == 0.0001:
-                            logging.info('Torsion parameters reusing ...')
-                            logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
-
                         for parameter_name in ['phase1', 'k1', 'periodicity1']:
                             torsion[parameter_name] = torsion_initial[parameter_name]
                         
@@ -2333,7 +2323,7 @@ class NCMCProtonDrive(_BaseDrive):
 
             else:
                 # Reject.
-                print('reject ncmc titration state change ...')
+                logging.info('reject ncmc titration state change ...')
                 if initial_titration_states != final_titration_states:
                     self.nrejected += 1
                 # Restore titration states.
@@ -2843,11 +2833,8 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                     add_parameter_with_index += 1
             
             proper_par[key] = d
-            #logging.warning(d)
 
-        #print('IMPROPER')
         for index, improper in enumerate(state_block.xpath("Improper")):
-            #print(index, ':', improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4'))
             key = tuple(([improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4')]))
             d = dict()
 
