@@ -1048,7 +1048,7 @@ class _TitratableForceFieldCompiler(object):
                                 k= parm['angle'].attrib['k']
                                 e= angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
                                 break
-                                
+
                         if not found_real_angle:
                             logging.critical('CRITICAL - WE SHOULD HAVE FOUND A REAL ANGLE HERE!')
 
@@ -1078,6 +1078,7 @@ class _TitratableForceFieldCompiler(object):
                         if found_real_angle is not True:
                             # always dummy angle
                             logging.warning('COULD NOT FIND REAL ANGLE BETWEEN {}-{}-{}!'.format(node1, node2, node3))
+                            logging.warning('These angles are between three atoms that are never all real.')
                             angle= float(0.0)
                             k= float(0.0)
                             e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)

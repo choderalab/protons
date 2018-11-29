@@ -1684,7 +1684,7 @@ class NCMCProtonDrive(_BaseDrive):
         
         atom_name_by_atom_index = self.titrationGroups[titration_group_index][final_titration_state_index].atom_name_by_atom_index
         
-        if fractional_titration_state == 0.0001:
+        if fractional_titration_state == 0.0001 or fractional_titration_state == 9.9999:
             logging.info('#######################')
             logging.info('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
             logging.info('#######################')
@@ -1731,6 +1731,11 @@ class NCMCProtonDrive(_BaseDrive):
                             for parameter_name in ['sigma', 'epsilon', 'charge']:
                                 atom[parameter_name] = atom_initial[parameter_name]
 
+                        # print end state
+                        if fractional_titration_state == 9.9999:
+                            logging.info('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
+                                atom_name_by_atom_index[atom['atom_index']], float(atom['charge']), float(atom['sigma']), float(atom['epsilon'])))
+
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
                                                
                         for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]['exceptions'], cache_final_forces[force_index]['exceptions']):
@@ -1762,6 +1767,12 @@ class NCMCProtonDrive(_BaseDrive):
                             # generate new, interpolated parameters
                             bond[parameter_name] = bond_initial[parameter_name]
 
+                    # print end state
+                    if fractional_titration_state == 9.9999:
+                        logging.info('Updating bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
+                        logging.info('bond current: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k'])))                  
+
+
                     # set new parameters using atom indices
                     force.setBondParameters(bond_index, bond_initial['a1'], bond_initial['a2'], float(bond['length']), float(bond['k']))
                         
@@ -1786,7 +1797,12 @@ class NCMCProtonDrive(_BaseDrive):
                         # give a one time log message
                         for parameter_name in ['angle', 'k']:
                             angle[parameter_name] = float(angle_initial[parameter_name])
-                            
+
+                    # print end state
+                    if fractional_titration_state == 9.9999:
+                        logging.info('Updating angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
+                        logging.info('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle_initial['k'])))                  
+       
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
             elif force_classname == 'PeriodicTorsionForce':
@@ -1824,7 +1840,12 @@ class NCMCProtonDrive(_BaseDrive):
                     else:
                         for parameter_name in ['phase1', 'k1', 'periodicity1']:
                             torsion[parameter_name] = torsion_initial[parameter_name]
-                        
+
+                    # print end state
+                    if fractional_titration_state == 9.9999:
+                        logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
+                        logging.info('torsion current: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion['phase1']), float(torsion['periodicity1']), float(torsion['k1'])))                
+  
                     force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), float(torsion['phase1']), float(torsion['k1']))
 
 
