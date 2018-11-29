@@ -1644,7 +1644,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, verbose=0, fractional_titration_state=1.0):
+    def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, verbose=0, fractional_titration_state=1.0, final=False):
         """
         Update the force parameters to a new titration state by reading them from the cache.
 
@@ -1732,7 +1732,7 @@ class NCMCProtonDrive(_BaseDrive):
                                 atom[parameter_name] = atom_initial[parameter_name]
 
                         # print end state
-                        if fractional_titration_state == 9.9999:
+                        if final:
                             logging.info('Final: Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
                                 atom_name_by_atom_index[atom['atom_index']], float(atom['charge']), float(atom['sigma']), float(atom['epsilon'])))
 
@@ -1768,7 +1768,7 @@ class NCMCProtonDrive(_BaseDrive):
                             bond[parameter_name] = bond_initial[parameter_name]
 
                     # print end state
-                    if fractional_titration_state == 9.9999:
+                    if final:
                         logging.info('Final bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
                         logging.info('bond current: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k'])))                  
 
@@ -1799,7 +1799,7 @@ class NCMCProtonDrive(_BaseDrive):
                             angle[parameter_name] = float(angle_initial[parameter_name])
 
                     # print end state
-                    if fractional_titration_state == 9.9999:
+                    if final:
                         logging.info('Final angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
                         logging.info('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle_initial['k'])))                  
        
@@ -1842,7 +1842,7 @@ class NCMCProtonDrive(_BaseDrive):
                             torsion[parameter_name] = torsion_initial[parameter_name]
 
                     # print end state
-                    if fractional_titration_state == 9.9999:
+                    if final:
                         logging.info('Final torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
                         logging.info('torsion current: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion['phase1']), float(torsion['periodicity1']), float(torsion['k1'])))                
   
@@ -2145,14 +2145,16 @@ class NCMCProtonDrive(_BaseDrive):
 
 
         for step in log_progress(range(self.perturbations_per_trial)):
-
+            final = False
+            if step == self.perturbations_per_trial - 1:
+                final = True
             # Get the fractional stage of the the protocol
             titration_lambda = float(step + 1) / float(self.perturbations_per_trial)
             # perturbation
             for titration_group_index in titration_group_indices:
                 self._update_forces(titration_group_index, final_titration_states[titration_group_index],
                                     initial_titration_state_index=initial_titration_states[titration_group_index],
-                                    fractional_titration_state=titration_lambda)
+                                    fractional_titration_state=titration_lambda, final=final)
 
             if update_salt:
                 for salt_residue, (from_state, to_state) in zip(salt_residue_indices, salt_states):
