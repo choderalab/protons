@@ -1036,8 +1036,22 @@ class _TitratableForceFieldCompiler(object):
                     # angle between two dummy atoms
                     if list_of_angles_atom_types[i].count(0) == 2:
                         original_atom_type1, original_atom_type2, original_atom_type3 = list_of_angles_atom_types[i]
-                        angle= float(0.0)
-                        k= float(0.0)
+                        found_real_angle = False
+                        for angles_types in self.all_angles_at_all_states[key].values(): 
+                            if 0 in angles_types:
+                                continue
+                            else:
+                                found_real_angle = True
+                                new_atom_type1, new_atom_type2, new_atom_type3 = angles_types
+                                parm = self._retrieve_parameters(atom_type1=new_atom_type1, atom_type2=new_atom_type2, atom_type3=new_atom_type3)
+                                angle= parm['angle'].attrib['angle']
+                                k= parm['angle'].attrib['k']
+                                e= angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
+                                break
+                                
+                        if not found_real_angle:
+                            logging.critical('CRITICAL - WE SHOULD HAVE FOUND A REAL ANGLE HERE!')
+
                         e = angle_string.format(atomName1=node1, atomName2=node2, atomName3=node3, angle=angle, k=k)
                         angle_string_for_debug['two-dummy'].append(e)
                         isomer_xml.append(etree.fromstring(e))

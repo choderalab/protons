@@ -1801,18 +1801,19 @@ class NCMCProtonDrive(_BaseDrive):
                             int(torsion_initial['periodicity1']) != int(torsion_final['periodicity1']):
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
-                            logging.info('Torsion parameters updating ... ')
                             logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
                             logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
 
                         for parameter_name in ['phase1', 'k1']:
                             if fractional_titration_state < 0.5:
-                                new_parameter = (1.0 - (2* fractional_titration_state)) * float(torsion_initial[parameter_name])
+                                scaling = (1.0 - (2* fractional_titration_state))
+                                new_parameter =  scaling * float(torsion_initial[parameter_name])
                                 torsion[parameter_name] = new_parameter
                         
                             else:
-                                new_parameter = (0.5 - fractional_titration_state) * 2 * float(torsion_final[parameter_name])
+                                scaling = (0.5 - fractional_titration_state )
+                                new_parameter = scaling * float(torsion_final[parameter_name])
                                 torsion[parameter_name] = new_parameter
                        
                         for parameter_name in ['periodicity1']:
