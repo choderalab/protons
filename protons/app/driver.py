@@ -1685,6 +1685,7 @@ class NCMCProtonDrive(_BaseDrive):
         atom_name_by_atom_index = self.titrationGroups[titration_group_index][final_titration_state_index].atom_name_by_atom_index
         
         if fractional_titration_state == 0.0001 or fractional_titration_state == 9.9999:
+            pass
             #logging.debug('#######################')
             #logging.debug('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
             #logging.debug('#######################')
@@ -1701,7 +1702,8 @@ class NCMCProtonDrive(_BaseDrive):
                         # print details at first step of parameter scaling 
                         if fractional_titration_state == 0.0001:
                             #logging.debug('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
-                                atom_name_by_atom_index[atom['atom_index']], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                            #    atom_name_by_atom_index[atom['atom_index']], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
+                            pass
 
                         # only change parameters if needed, otherwise keep old parameters 
                         if atom_initial['charge'] != atom_final['charge'] or atom_initial['sigma'] != atom_final['sigma'] or atom_initial['epsilon'] != atom_final['epsilon']:
@@ -1733,9 +1735,10 @@ class NCMCProtonDrive(_BaseDrive):
 
                         # print end state
                         if final:
-                            logging.debug('Final: Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
-                                atom_name_by_atom_index[atom['atom_index']], float(atom['charge']), float(atom['sigma']), float(atom['epsilon'])))
-
+                            #logging.debug('Final: Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
+                            #    atom_name_by_atom_index[atom['atom_index']], float(atom['charge']), float(atom['sigma']), float(atom['epsilon'])))
+                            pass
+                            
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
                                                
                         for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]['exceptions'], cache_final_forces[force_index]['exceptions']):
@@ -1849,7 +1852,7 @@ class NCMCProtonDrive(_BaseDrive):
                         #logging.debug('Final torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
                         #logging.debug('torsion current: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion['phase1']), float(torsion['periodicity1']), float(torsion['k1'])))                
                         pass
-                        
+
                     force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), float(torsion['phase1']), float(torsion['k1']))
 
 
