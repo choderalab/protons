@@ -70,6 +70,11 @@ class ConstantPHSimulation(Simulation):
 
     def step(self, steps):
         """Advance the simulation by integrating a specified number of time steps."""
+        self.reporters.append(
+        StateDataReporter(sys.stderr, 100, step=True, potentialEnergy=True,
+                          kineticEnergy=True, temperature=True,
+                          volume=True, density=True)
+
         self._simulate(endStep=self.currentStep + steps)
 
     def update(self, updates, move=None, pool=None):
