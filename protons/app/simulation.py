@@ -95,6 +95,7 @@ class ConstantPHSimulation(Simulation):
         if endUpdate is None:
             endUpdate = sys.maxsize
         nextReport = [None] * len(self.update_reporters)
+        accept_or_not = None
         while self.currentUpdate < endUpdate and (endTime is None or datetime.now() < endTime):
             nextUpdates = endUpdate - self.currentUpdate
             anyReport = False
@@ -106,11 +107,11 @@ class ConstantPHSimulation(Simulation):
             updatesToGo = nextUpdates
             while updatesToGo > 1:
                 # Only take 1 steps at a time, since each ncmc move is assumed to take a long time
-                accept_or_not = self.drive.update(move, residue_pool=pool, nattempts=1)
+                self.drive.update(move, residue_pool=pool, nattempts=1)
                 updatesToGo -= 1
                 if endTime is not None and datetime.now() >= endTime:
                     return
-            self.drive.update(move, residue_pool=pool, nattempts=updatesToGo)
+            accept_or_not = self.drive.update(move, residue_pool=pool, nattempts=updatesToGo)
 
             self.currentUpdate += nextUpdates
             if anyReport:
