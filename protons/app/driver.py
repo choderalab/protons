@@ -1685,9 +1685,9 @@ class NCMCProtonDrive(_BaseDrive):
         atom_name_by_atom_index = self.titrationGroups[titration_group_index][final_titration_state_index].atom_name_by_atom_index
         
         if fractional_titration_state == 0.0001 or fractional_titration_state == 9.9999:
-            logging.info('#######################')
-            logging.info('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
-            logging.info('#######################')
+            logging.debug('#######################')
+            logging.debug('Update forces from {:>4} to {:>4}'.format(initial_titration_state_index, final_titration_state_index))
+            logging.debug('#######################')
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
             # Get name of force class.
@@ -1700,7 +1700,7 @@ class NCMCProtonDrive(_BaseDrive):
                     if force_classname == 'NonbondedForce':
                         # print details at first step of parameter scaling 
                         if fractional_titration_state == 0.0001:
-                            logging.info('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
+                            logging.debug('Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f} atom-final: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
                                 atom_name_by_atom_index[atom['atom_index']], float(atom_initial['charge']), float(atom_initial['sigma']), float(atom_initial['epsilon']), float(atom_final['charge']), float(atom_final['sigma']), float(atom_final['epsilon'])))
 
                         # only change parameters if needed, otherwise keep old parameters 
@@ -1733,7 +1733,7 @@ class NCMCProtonDrive(_BaseDrive):
 
                         # print end state
                         if final:
-                            logging.info('Final: Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
+                            logging.debug('Final: Atom-ID: {} atom-current: ch:{:01.4f} si:{:01.4f} ep:{:01.4f}'.format(\
                                 atom_name_by_atom_index[atom['atom_index']], float(atom['charge']), float(atom['sigma']), float(atom['epsilon'])))
 
                         force.setParticleParameters(atom['atom_index'], atom['charge'], atom['sigma'], atom['epsilon'])
@@ -1753,8 +1753,8 @@ class NCMCProtonDrive(_BaseDrive):
                     bond = dict()
                     # print details at first step of parameter scaling 
                     if fractional_titration_state == 0.0001:
-                        logging.info('Updating bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
-                        logging.info('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond_initial['length']), float(bond_initial['k']), float(bond_final['length']), float(bond_final['k'])))                  
+                        logging.debug('Updating bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
+                        logging.debug('bond current: {:1.4f} {:5.4f} bond final: {:1.4f} {:5.4f}'.format(float(bond_initial['length']), float(bond_initial['k']), float(bond_final['length']), float(bond_final['k'])))                  
 
                     # update bonds that changed parameters
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
@@ -1769,8 +1769,8 @@ class NCMCProtonDrive(_BaseDrive):
 
                     # print end state
                     if final:
-                        logging.info('Final bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
-                        logging.info('bond current: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k'])))                  
+                        logging.debug('Final bond between: {:} and {:}'.format(atom_name_by_atom_index[bond_initial['a1']], atom_name_by_atom_index[bond_initial['a2']]))
+                        logging.debug('bond current: {:1.4f} {:5.4f}'.format(float(bond['length']), float(bond['k'])))                  
 
 
                     # set new parameters using atom indices
@@ -1788,8 +1788,8 @@ class NCMCProtonDrive(_BaseDrive):
                     if angle_initial['angle'] != angle_final['angle'] or angle_initial['k'] != angle_final['k']:
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
-                            logging.info('Updating angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
-                            logging.info('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
+                            logging.debug('Updating angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
+                            logging.debug('angle initial: {:1.4f} {:5.4f} angle final: {:1.4f} {:5.4f}'.format(float(angle_initial['angle']), float(angle_initial['k']), float(angle_final['angle']), float(angle_final['k'])))                  
                         for parameter_name in ['angle', 'k']:
                             new_parameter = (1.0 - fractional_titration_state) * float(angle_initial[parameter_name]) + fractional_titration_state * float(angle_final[parameter_name])
                             angle[parameter_name] = float(new_parameter)
@@ -1800,8 +1800,8 @@ class NCMCProtonDrive(_BaseDrive):
 
                     # print end state
                     if final:
-                        logging.info('Final angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
-                        logging.info('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle['k'])))                  
+                        logging.debug('Final angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
+                        logging.debug('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle['k'])))                  
        
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
@@ -1817,8 +1817,8 @@ class NCMCProtonDrive(_BaseDrive):
                             int(torsion_initial['periodicity1']) != int(torsion_final['periodicity1']):
                         # give a one time log message
                         if fractional_titration_state == 0.0001:
-                            logging.info('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
-                            logging.info('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
+                            logging.debug('Updating torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
+                            logging.debug('torsion initial: {:1.4f} {:5.4f} {:1.4f} torsion final: {:1.4f} {:} {:1.4f}'.format(float(torsion_initial['phase1']), float(torsion_initial['periodicity1']), float(torsion_initial['k1']), float(torsion_final['phase1']), float(torsion_final['periodicity1']), float(torsion_final['k1'])))                 
 
 
                         for parameter_name in ['phase1', 'k1']:
@@ -1843,8 +1843,8 @@ class NCMCProtonDrive(_BaseDrive):
 
                     # print end state
                     if final:
-                        logging.info('Final torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
-                        logging.info('torsion current: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion['phase1']), float(torsion['periodicity1']), float(torsion['k1'])))                
+                        logging.debug('Final torsion between: {:} {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3, atom_name4))
+                        logging.debug('torsion current: {:1.4f} {:5.4f} {:1.4f}'.format(float(torsion['phase1']), float(torsion['periodicity1']), float(torsion['k1'])))                
   
                     force.setTorsionParameters(torsion_index, torsion_initial['a1'], torsion_initial['a2'], torsion_initial['a3'], torsion_initial['a4'], int(torsion['periodicity1']), float(torsion['phase1']), float(torsion['k1']))
 
@@ -2139,9 +2139,6 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator.step(self.propagations_per_step)
         logging.info('Initial titration state: {}'.format(initial_titration_states))
         logging.info('Final titration state: {}'.format(final_titration_states))
-        #pdb = mm.app.PDBFile('/home/mwieder/input.pdb')
-        #pos = self.context.getState(getPositions=True).getPositions() 
-        #mm.app.PDBFile.writeFile(pdb.topology, pos, open('/home/mwieder/tmp_wd/00_start_'+str(r) + '_test.pdb', 'w'))
 
 
         for step in log_progress(range(self.perturbations_per_trial)):
@@ -2208,7 +2205,7 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data = _TitrationAttemptData()
 
         initial_positions = initial_velocities = initial_box_vectors = None
-
+        logging.info(self.context.getState(getPositions=True, getVelocities=True).getPeriodicBoxVectors())
         # If using NCMC, store initial positions.
         if self.perturbations_per_trial > 0:
             initial_openmm_state = self.context.getState(getPositions=True, getVelocities=True)
@@ -2450,7 +2447,7 @@ class NCMCProtonDrive(_BaseDrive):
         if self.pressure is not None:
             # Add pressure contribution for periodic simulations.
             volume = self.context.getState().getPeriodicBoxVolume()
-            log.debug('beta = %s, pressure = %s, volume = %s, multiple = %s', str(self.beta), str(self.pressure), str(volume), str(-self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA))
+            log.info('beta = %s, pressure = %s, volume = %s, multiple = %s', str(self.beta), str(self.pressure), str(volume), str(-self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA))
             log_P -= self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA
 
         # Add reference free energy contributions.
