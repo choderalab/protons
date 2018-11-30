@@ -9,7 +9,7 @@ from protons.app import proposals
 from protons.app.logger import log
 import sys
 from datetime import datetime
-from protons.app import StateDataReporter
+from simtk.openmm.app import StateDataReporter
 
 
 class ConstantPHSimulation(Simulation):
