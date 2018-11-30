@@ -85,7 +85,8 @@ class ConstantPHSimulation(Simulation):
         pool : str
             The identifier for the pool of residues to update.
         """
-        self._update(endUpdate=self.currentUpdate + updates, pool=pool, move=move)
+        accept_or_not = self._update(endUpdate=self.currentUpdate + updates, pool=pool, move=move)
+        return accept_or_not
 
     def _update(self, pool=None, move=None, endUpdate=None, endTime=None):
 
@@ -105,7 +106,7 @@ class ConstantPHSimulation(Simulation):
             updatesToGo = nextUpdates
             while updatesToGo > 1:
                 # Only take 1 steps at a time, since each ncmc move is assumed to take a long time
-                self.drive.update(move, residue_pool=pool, nattempts=1)
+                accept_or_not = self.drive.update(move, residue_pool=pool, nattempts=1)
                 updatesToGo -= 1
                 if endTime is not None and datetime.now() >= endTime:
                     return
@@ -116,6 +117,8 @@ class ConstantPHSimulation(Simulation):
                 for reporter, nextR in zip(self.update_reporters, nextReport):
                     if nextR[0] == nextUpdates:
                         reporter.report(self)
+        
+        return accept_or_not
 
 
 class ConstantPHCalibration(ConstantPHSimulation):

@@ -1760,7 +1760,7 @@ def prepare_calibration_system(vacuum_file:str, output_file:str, ffxml: str=None
     system.addForce(openmm.MonteCarloBarostat(1.0 * atmosphere, 300.0 * kelvin))
     simulation = app.Simulation(modeller.topology, system, GBAOABIntegrator())
     simulation.context.setPositions(modeller.positions)
-    #simulation.minimizeEnergy()
+    simulation.minimizeEnergy()
 
     app.PDBxFile.writeFile(modeller.topology, simulation.context.getState(getPositions=True).getPositions(),
                            open(output_file, 'w'))

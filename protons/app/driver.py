@@ -1801,7 +1801,7 @@ class NCMCProtonDrive(_BaseDrive):
                     # print end state
                     if final:
                         logging.info('Final angle between: {:} {:} {:}'.format(atom_name1, atom_name2, atom_name3))
-                        logging.info('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle_initial['k'])))                  
+                        logging.info('angle current: {:1.4f} {:5.4f}'.format(float(angle['angle']), float(angle['k'])))                  
        
                     force.setAngleParameters(angle_index, angle_initial['a1'], angle_initial['a2'], angle_initial['a3'], angle['angle'], angle['k'])
 
