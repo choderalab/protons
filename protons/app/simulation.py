@@ -73,7 +73,7 @@ class ConstantPHSimulation(Simulation):
         self.reporters.append(
         StateDataReporter(sys.stderr, 100, step=True, potentialEnergy=True,
                           kineticEnergy=True, temperature=True,
-                          volume=True, density=True)
+                          volume=True, density=True))
 
         self._simulate(endStep=self.currentStep + steps)
 
