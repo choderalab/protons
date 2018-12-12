@@ -1000,9 +1000,9 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Store force object pointers.
         # TODO: Add Custom forces.
-        force_classes_to_update = ['NonbondedForce', 'GBSAOBCForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
+        #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
         #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
-        #force_classes_to_update = ['NonbondedForce']
+        force_classes_to_update = ['NonbondedForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
