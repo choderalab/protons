@@ -8,6 +8,7 @@ import numpy as np
 import math
 from simtk import unit, openmm
 from scipy.misc import comb
+from scipy.special import logsumexp
 from typing import Dict, Tuple, Callable, List, Optional
 from lxml import etree
 
@@ -574,6 +575,9 @@ class COOHDummyMover:
     # Keep track of which force index corresponds to angles and dihedral between instances
     angleforceindex = None
     dihedralforceindex = None
+    # Number of different phi angles to propose for moves
+    num_phi_proposals = 50
+
 
     def __init__(self):
         """Instantiate a COOHDummyMover for a single C-COOH moiety in your system.
@@ -605,6 +609,10 @@ class COOHDummyMover:
         self.angles = []
         # The parameters for dihedrals
         self.dihedrals = []
+
+        # Cached arrays for reuse to prevent copying
+        self._position_proposals = None
+        self._log_weights = None
 
     @classmethod
     def from_system(cls, system: openmm.System, indices: Dict[str, int]):
@@ -695,15 +703,14 @@ class COOHDummyMover:
         particle3: int,
     ) -> float:
         """Angle energy function as defined in OpenMM documentation."""
+        theta = COOHDummyMover.bond_angle(positions[particle1], positions[particle2], positions[particle3])
+        log.debug("Angle for %i %i %i: %f", particle1, particle2, particle3, theta)
         return (
             0.5
             * k
             * (
-                COOHDummyMover.angle_between_vectors(
-                    positions[particle1] - positions[particle2],
-                    positions[particle3] - positions[particle2],
-                )
-                - theta0
+                    theta
+                    - theta0
             )
             ** 2
         )
@@ -720,41 +727,26 @@ class COOHDummyMover:
         particle4: int,
     ) -> float:
         """Dihedral energy function as defined in OpenMM documentation. Deals with proper and improper equivalently."""
+
+        theta = COOHDummyMover.dihedral_angle(positions[particle1], positions[particle2], positions[particle3], positions[particle4])
+        log.debug("Angle for %i %i %i %i: %f", particle1, particle2, particle3, particle4, theta)
         return k * (
             1
             + math.cos(
-                n
-                * COOHDummyMover.angle_between_vectors(
-                    positions[particle1] - positions[particle2],
-                    positions[particle4] - positions[particle3],
-                )
-                - theta0
+            n
+            * theta
+            - theta0
             )
         )
 
-    @staticmethod
-    def reflect(n: np.ndarray, x0: np.ndarray, x1: np.ndarray) -> np.ndarray:
-        """Reflect in a mirror with normal vector n.
-
-        Parameters
-        ----------
-        n - normal vector of a mirror
-        x0 - point on mirror.
-        x1 - original point
-
-        Returns
-        -------
-        reflection of x1
-        """
-        v = x0 - x1
-        n /= np.linalg.norm(n)
-        return v + x0 - 2 * (np.dot(v, n) * n)
-
-    def log_probability(self, positions: np.ndarray) -> float:
+    def log_probability(self, positions: np.ndarray, calc_angle=False) -> float:
         """Return the log probability of the angles and dihedrals for a given set of positions."""
-        e_angles = [
-            COOHDummyMover.e_angle(positions, *params) for params in self.angles
-        ]
+        if calc_angle:
+            e_angles = [
+                COOHDummyMover.e_angle(positions, *params) for params in self.angles
+            ]
+        else:
+            e_angles = [0.0]
         e_dihedrals = [
             COOHDummyMover.e_dihedral(positions, *params) for params in self.dihedrals
         ]
@@ -773,99 +765,157 @@ class COOHDummyMover:
         """
         n_v1 = np.linalg.norm(v1)
         n_v2 = np.linalg.norm(v2)
-        return np.arccos(np.dot(v1, v2) / (n_v1 * n_v2))
+        dot = np.dot(v1, v2)
+        y = dot / (n_v1 * n_v2)
 
-    def mirror_oxygens(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Mirror around the CC bound to swap oxygen positions and move hydrogen along without changing bonds.
+        # Limit to the domain of the arccos to deal with float precision issues.
+        if y > 1.0:
+           y = 1.0
+        elif y < -1.0:
+            y = -1.0
+
+        return np.arccos(y)
+
+    @staticmethod
+    def plane_norm(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray):
+        return np.cross(p2 - p1, p3 - p1)
+
+    @staticmethod
+    def bond_angle(p1, p2, p3):
+        return COOHDummyMover.angle_between_vectors(p1 - p2, p3 - p2)
+
+    @staticmethod
+    def dihedral_angle(p1, p2, p3, p4):
+        plane1 = COOHDummyMover.plane_norm(p1, p2, p3)
+        plane2 = COOHDummyMover.plane_norm(p4, p3, p2)
+        return COOHDummyMover.angle_between_vectors(plane1, plane2)
+
+    @staticmethod
+    def rodrigues_rotation_vectorized(theta: np.ndarray, k: np.ndarray, v: np.ndarray) -> np.ndarray:
+        """Return rotated vector v around axis k, using angle theta.
+
+        Note
+        ----
+        Ensure k is a unit vector
+        """
+
+        a = v[:, np.newaxis] * np.cos(theta)
+        b = np.cross(k, v)[:, np.newaxis] * np.sin(theta)
+        c = (k * np.dot(k, v))[:, np.newaxis] * (1 - np.cos(theta))
+        return a + b + c
+
+    @staticmethod
+    def rodrigues_rotation(theta: float, k: np.ndarray, v: np.ndarray) -> np.ndarray:
+        """Return rotated vector v around axis k, using angle theta.
+
+        Note
+        ----
+        Ensure k is a unit vector
+        """
+
+        return v * np.cos(theta) + (np.cross(k, v) * np.sin(theta)) + (k * np.dot(k, v) * (1 - np.cos(theta)))
+
+    @staticmethod
+    def internal_to_cartesian(r: float, theta: float, phi: np.ndarray, pos2: np.ndarray, pos3: np.ndarray,
+                              pos4: np.ndarray) -> np.ndarray:
+        """Find the xyz coordinates of atom 1 in the dihedral 1-2-3-4 based on internal coordinates, and cartesian
+        coordinates of the other atoms
 
         Parameters
         ----------
-        positions - array of positions of all the atoms in the openmm system
+        r - distance between atoms 1-2
+        theta - angle between 1-2-3
+        phi - array of dihedral angles between 1-2 and 3-4
+        pos2 - position (x,y,z) of atom 2
+        pos3 - position (x,y,z) of atom 3
+        pos4 - position (x,y,z) of atom 4
 
         Returns
         -------
-        new_positions, log_accept_mirror
+        pos1 -  the position of atom 1 in the dihedral 1-2-3-4
+            [xyz, proposal]
+
+        Notes
+        -----
+        Based on https://github.com/choderalab/perses/blob/c9d5f0b14355da9cd58221f28b384ea5f215f5aa/perses/rjmc/coordinate_numba.py
 
         """
-        new_positions = copy.deepcopy(positions)
-        hydroxyl_o = positions[self.OH]
-        carbonyl_o = positions[self.OC]
-        hydroxyl_h = positions[self.HO]
-        carbonyl_c = positions[self.CO]
-        r_group_atom = positions[self.R]
+        if not np.isscalar(r):
+            raise ValueError("r should be a scalar")
+        if not np.isscalar(theta):
+            raise ValueError("theta should be a scalar")
 
-        # Mirror normal vector along c-c bond
-        norm = carbonyl_c - r_group_atom
-        # x0 (carbonyl c) lies on norm
-        # x1 is the atom that needs to be reflected
-        ho_reflection = self.reflect(norm, carbonyl_c, hydroxyl_h)
-        oh_reflection = self.reflect(norm, carbonyl_c, hydroxyl_o)
-        # Correct for assymmetry between oxygen atoms
-        new_positions[self.HO] = ho_reflection - oh_reflection + carbonyl_o
-        new_positions[self.OC] = hydroxyl_o
-        new_positions[self.OH] = carbonyl_o
+        bond23_vec = (pos3 - pos2) / np.linalg.norm(pos3 - pos2)
+        bond34_vec = (pos3 - pos4) / np.linalg.norm(pos3 - pos4)
 
-        new_state_probability = self.log_probability(new_positions)
-        old_state_probability = self.log_probability(positions)
-        logp_accept_mirror = new_state_probability - old_state_probability
+        angle234_vec = np.cross(bond23_vec, bond34_vec)
+        angle234_vec /= np.linalg.norm(angle234_vec)
 
-        log.debug("%s", new_positions - positions)
-        log.debug("E new: %.10f", new_state_probability)
-        log.debug("E old: %.10f", old_state_probability)
-        return new_positions, logp_accept_mirror
+        bond = r * bond23_vec
+        bond_plus_angle = COOHDummyMover.rodrigues_rotation(theta, angle234_vec, bond)
+        bond_plus_angle_plus_torsion = COOHDummyMover.rodrigues_rotation_vectorized(phi, bond23_vec, bond_plus_angle)
+        pos1 = pos2[:, np.newaxis] + bond_plus_angle_plus_torsion
+        return pos1.T
 
-    def mirror_syn_anti(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Mirror around the O-C bond to peform a syn/anti coordinate flip.
+    def propose_configurations(self, current_positions:np.ndarray, proposed_positions:np.ndarray, log_weights: np.ndarray)-> Tuple[np.ndarray, np.ndarray]:
+        """
 
         Parameters
         ----------
-        positions - array of positions of all the atoms in the openmm system
+        current_positions - numpy array of current positions
+            Shape dimensions [atom, xyz]
+        proposed_positions - numpy array for new positions
+            Shape dimensions [proposal, atom, xyz], where proposal dimension is an odd number
+            Will get modified in place
+        log_weights - numpy array for log_weights
+            Will be modified in place dimensions should match proposed_positions
 
         Returns
         -------
-        new_positions, log_accept_mirror
+        (proposed_positions, log_weights)
+            positions have dimensions [proposal, atom, xyz]
+            log_weights have dimensions [proposal]
+
+            the first entry in proposal dimension is the old configuration
         """
-        new_positions = copy.deepcopy(positions)
-        hydroxyl_o = positions[self.OH]
-        hydroxyl_h = positions[self.HO]
-        carbonyl_c = positions[self.CO]
+        if proposed_positions.shape[0] % 2 != 1:
+            raise ValueError("Proposed positions needs to have an odd-sized first dimension")
 
-        # Mirror normal vector along O-C bond
-        norm = hydroxyl_o - carbonyl_c
-        # x0 (hydroxyl O) lies on norm
-        # x1 is the atom that needs to be reflected
-        new_positions[self.HO] = self.reflect(norm, hydroxyl_o, hydroxyl_h)
+        elif log_weights.size != proposed_positions.shape[0]:
+            raise ValueError("Weights need to have the same dimension as the first dimension of proposed_positions.")
 
-        new_state_probability = self.log_probability(new_positions)
-        old_state_probability = self.log_probability(positions)
-        logp_accept_mirror = new_state_probability - old_state_probability
+        hydroxy_hydrogen = current_positions[self.HO]
+        hydroxy_oxygen = current_positions[self.OH]
+        carbonyl_oxygen = current_positions[self.OC]
+        carbon = current_positions[self.CO]
+        substituent = current_positions[self.R]
 
-        log.debug("%s", new_positions - positions)
-        log.debug("E new: %.10f", new_state_probability)
-        log.debug("E old: %.10f", old_state_probability)
+        # Bond length, constrained in proposal
+        r = np.linalg.norm(hydroxy_oxygen - hydroxy_hydrogen)
+        # Bond angle, constrained in proposal
+        theta = COOHDummyMover.bond_angle(hydroxy_hydrogen, hydroxy_oxygen, carbon)
 
-        return new_positions, logp_accept_mirror
+        num_phi = COOHDummyMover.num_phi_proposals
+        number_of_proposals = COOHDummyMover.num_phi_proposals * 2
 
-    def no_transformation(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Propose not changing anything.
+        # Duplicate all positions
+        proposed_positions[:,:,:] = current_positions
 
-        Parameters
-        ----------
-        positions - array of positions of all the atoms in the openmm system
+        phi_angles = np.linspace(-np.pi, np.pi, num_phi, endpoint=False)
 
-        Returns
-        -------
-        new_positions, log_accept_mirror
-        """
-        log.debug("COOH no transformation.")
-        return positions, 0.0
+        # New phi on same oxygen
+        proposed_positions[1:1+num_phi, self.HO,:] = COOHDummyMover.internal_to_cartesian(r, theta, phi_angles, hydroxy_oxygen, carbon, carbonyl_oxygen)
 
-    def mirror_both(self,positions: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Perform a double switch."""
-        log.debug("COOH mirroring both.")
-        new_pos, first_logp = self.mirror_syn_anti(positions)
-        final_pos, final_logp = self.mirror_oxygens(new_pos)
-        return final_pos, first_logp + final_logp
+        # New phi on new oxygen
+        proposed_positions[1+num_phi:, self.HO, :] = COOHDummyMover.internal_to_cartesian(r, theta, phi_angles, carbonyl_oxygen, carbon, hydroxy_oxygen)
+        proposed_positions[1+num_phi:, self.OH, :] = carbonyl_oxygen[:, np.newaxis].T
+        proposed_positions[1+num_phi:, self.OC, :] = hydroxy_oxygen[:, np.newaxis].T
+
+        for i in range(number_of_proposals):
+            log_weights[i] = self.log_probability(proposed_positions[i+1, :, :])
+
+        return proposed_positions, log_weights
+
 
     def to_xml(self):
         """Return an xml representation of the dummy mover."""
@@ -920,9 +970,23 @@ class COOHDummyMover:
 
         return obj
 
-    def random_move(self, positions: np.ndarray) -> Tuple[np.ndarray, float]:
-        choices = [self.no_transformation, self.mirror_oxygens, self.mirror_syn_anti, self.mirror_both]
-        move = np.random.choice(choices)
-        # Since every option is just as likely, forward and reverse cancel out in logp,
-        # only take the logp produced by the move itself
-        return move(positions)
+    def random_move(self, current_positions):
+        """Use importance sampling to propose a new position."""
+        num_proposals = 1 + (2 * COOHDummyMover.num_phi_proposals)
+        if self._position_proposals is None:
+            self._position_proposals = np.empty([num_proposals, *(current_positions.shape)])
+            self._log_weights = np.empty([num_proposals])
+
+        self.propose_configurations(current_positions, self._position_proposals, self._log_weights)
+        # Draw a new configuration.
+        # Accept probability is 1 because weights are equal to -u(x)
+        log_normalizing_constant = logsumexp(self._log_weights)
+        chosen = np.random.choice(np.arange(num_proposals), p=np.exp(self._log_weights)/np.exp(log_normalizing_constant))
+
+        return self._position_proposals[chosen, :,:], 0.0
+
+
+
+
+
+

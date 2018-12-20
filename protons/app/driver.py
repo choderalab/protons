@@ -466,7 +466,7 @@ class _TitrationState:
         self._target_weight = None
         # MC moves should be functions that take the positions, and return updated positions,
         # and a log (reverse/forward) proposal probability ratio
-        self._mc_moves = dict()  # Dict[str, List[Callable[[np.array], Tuple[np.array, float]]]]
+        self._mc_moves = dict()  # Dict[str, List[COOHDummyMover]]
 
     @classmethod
     def from_lists(
@@ -517,7 +517,7 @@ class _TitrationState:
         state = copy.deepcopy(state_element)
         obj.proton_count = int(state.get("proton_count"))
         target_weight = state.get("target_weight")
-        obj._target_weight = np.float64(target_weight)
+        obj._target_weight = None if target_weight == "None" else np.float64(target_weight)
         obj.g_k = np.float64(state.get("g_k"))
 
         charges = state.xpath("charge")
@@ -760,10 +760,29 @@ class SAMSApproach(Enum):
     MULTISITE = 1
 
 
-class _SAMSState:
-    """A table to contain SAMS weights (g_k/zeta) and targets (pi) for constant-pH residues."""
 
-    def __init__(self, state_counts: List[int], approach: SAMSApproach, group_index: Optional[int] = None):
+class Stage(Enum):
+    """Two stages of a sams run."""
+    BURNIN = 0 # Fast gain but not optimal convergence
+    SLOWGAIN = 1 # Slower gain but optimal asymptotic convergence
+
+
+class UpdateRule(Enum):
+    """SAMS update rule."""
+    BINARY = 0
+    GLOBAL = 1
+
+
+class _SAMSState:
+    """A table to contain SAMS free energies (zeta or g_k) and targets (pi) for constant-pH residues."""
+
+    def __init__(self, state_counts: List[int],
+                 approach: SAMSApproach,
+                 group_index: Optional[int] = None,
+                 update_rule:UpdateRule= UpdateRule.BINARY,
+                 beta_sams:float = 0.5,
+                 flatness_criterion:float = 0.15,
+                 min_burn:int = 100):
         """Set up tracking for SAMS calibration weights.
 
         Parameters
@@ -771,13 +790,30 @@ class _SAMSState:
         state_counts - list of the number of states that each titratable residue has.
         approach - one of the available ways of running SAMS (see ``SAMSApproach``)
         group_index - integer, SAMSApproach.ONESITE only, specify the site.
+        update_rule - The update rule to use
+        beta_sams - SAMS two-stage coefficient to determine gain in first stage
+        flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
+        min_burn - minimum iterations before slow-gain may be starteds
+
         """
 
         # Contains SAMS free energy estimates
         self._free_energy_table: np.ndarray = None
         # Target weights
         self._target_table: np.ndarray = None
+
+        # Indices in flattened array
         self._index_table: np.ndarray = None
+
+        # state of the free energy calculation
+        self._update_rule: UpdateRule = update_rule
+        self._beta_sams: float = beta_sams
+        self._flatness_criterion = flatness_criterion
+        self._min_burn: int = min_burn
+        self._current_adaptation: int = 0
+        self._stage: Stage = Stage.BURNIN
+        self._end_of_burnin: int = 0
+
 
         if not isinstance(approach, SAMSApproach):
             raise TypeError("Please provide a SAMSApproach.")
@@ -926,6 +962,129 @@ class _SAMSState:
             size = self._free_energy_table.size
 
         return size
+
+    def to_xml(self) -> str:
+        """Serialize this object to xml."""
+        root = etree.Element("SAMSState")
+        # Store the integer value of the SAMS approach
+        root.set("approach", str(self.approach.value))
+
+
+        # Group index is the last residue if not provided
+        if self.approach is SAMSApproach.ONESITE:
+            root.set("group_index", str(self.group_index))
+
+            # Every value in the table is the sams free energy/target weight of one independent titration state
+            # Note that the weights in one site should only change for one residue at a time.
+            # However, calibrated values may be stored, as they are internally used for calculation of relative probabilities.
+
+            for residue in range(self._free_energy_table.size):
+                res = etree.Element("Residue")
+                res.set("idx", str(residue))
+                for s in range(self._free_energy_table[residue].size):
+                    state = etree.Element("State")
+                    state.set("FreeEnergy", str(self._free_energy_table[residue][s]))
+                    state.set("Target", str(self._target_table[residue][s]))
+                    state.set("idx", str(self._index_table[residue][s]))
+
+                    res.append(state)
+                root.append(res)
+
+        elif self.approach is SAMSApproach.MULTISITE:
+            for d, dimension in enumerate(self._free_energy_table.shape):
+                dim_elem = etree.Element("Dimension")
+                dim_elem.set("idx", str(d))
+                dim_elem.set("size", str(dimension))
+                root.append(dim_elem)
+
+            for idx in self._index_table.flat:
+                state = etree.Element("State")
+                state.set("FreeEnergy", str(self._free_energy_table.flat[idx]))
+                state.set("Target", str(self._target_table.flat[idx]))
+                state.set("idx", str(idx))
+                root.append(state)
+
+        # state of the free energy calculation
+        root.set("update_rule", str(self._update_rule.value))
+        root.set("beta_sams", str(self._beta_sams))
+        root.set("flatness_criterion", str(self._flatness_criterion))
+        root.set("min_burn", str(self._min_burn))
+        root.set("adaptation",str(self._current_adaptation))
+        root.set("stage", str(self._stage.value))
+        root.set("end_of_burnin", str(self._end_of_burnin))
+        return root
+
+    @classmethod
+    def from_xml(cls, root: etree.Element):
+        """Instantiate this object from xml."""
+        if not root.tag == "SAMSState":
+            raise ValueError("Wrong XML element provided. Expected 'SAMSState', got '{}'".format(root.tag))
+
+        approach = SAMSApproach(int(root.get("approach")))
+        if "group_index" in root.attrib:
+            group_index = int(root.get("group_index"))
+        else:
+            group_index = None
+
+        instance = None
+
+        if approach is SAMSApproach.ONESITE:
+            residues = root.xpath("./Residue")
+            state_counts: List[int] = [0] * len(residues)
+            for residue in residues:
+                residx = int(residue.get("idx"))
+                state_counts[residx] = len(residue.xpath(".//State"))
+
+            instance = cls(state_counts, approach, group_index)
+
+            # Ensure positive group_index
+            if group_index < 0:
+                group_index += len(residues)
+            res = root.xpath('./Residue[@idx="{}"]'.format(group_index))[0]
+            free_energies = np.zeros_like(instance.free_energies)
+            targets = np.ones_like(instance.targets)
+            for state in res.xpath("State"):
+                idx = int(state.get("idx"))
+                free_energies[idx] = np.float64(state.get("FreeEnergy"))
+                targets[idx] = np.float64(state.get("Target"))
+
+            instance.free_energies = free_energies
+            instance.targets = targets
+
+
+        elif approach is SAMSApproach.MULTISITE:
+            dims =  root.xpath("./Dimension")
+            state_counts: List[int] = [0] * len(dims)
+            for dim in dims:
+                dimidx = int(dim.get("idx"))
+                state_counts[dimidx] = int(dim.get("size"))
+
+            instance = cls(state_counts, approach, group_index)
+
+            free_energies = np.zeros_like(instance.free_energies)
+            targets = np.ones_like(instance.targets)
+            for state in root.xpath("State"):
+                idx = int(state.get("idx"))
+                free_energies[idx] = np.float64(state.get("FreeEnergy"))
+                targets[idx] = np.float64(state.get("Target"))
+
+            instance.free_energies = free_energies
+            instance.targets = targets
+
+        else:
+            raise NotImplementedError("Deserialization of {} SAMSState not implemented.".format(str(approach)))
+
+        # state of the free energy calculation
+
+        instance._update_rule = UpdateRule(int(root.get("update_rule")))
+        instance._beta_sams = float(root.get("beta_sams"))
+        instance._flatness_criterion = float(root.get("flatness_criterion"))
+        instance._min_burn = int(root.get("min_burn"))
+        instance._current_adaptation = int(root.get("adaptation"))
+        instance._stage = Stage(int(root.get("stage")))
+        instance._end_of_burnin = int(root.get("end_of_burnin"))
+        return instance
+
 
 
 class _TitrationAttemptData(object):
@@ -1314,7 +1473,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def serialize_titration_groups(self):
+    def state_to_xml(self):
         """Store residues handled by the drive as xml.
 
         Returns
@@ -1325,15 +1484,24 @@ class NCMCProtonDrive(_BaseDrive):
         for res in self.titrationGroups:
             xmltree.append(res.serialize())
 
+        if self.calibration_state is not None:
+            xmltree.append(self.calibration_state.to_xml())
+
         return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
 
-    def add_residues_from_serialized_xml(self, xmltree):
+
+    def state_from_xml_tree(self, xmltree):
         """Add residues from previously serialized residues."""
+        # TODO replace this with a class method?
         if type(xmltree) == str:
             xmltree = etree.fromstring(xmltree)
         drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
         for res in drive_xml.xpath("TitratableResidue"):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
+
+        sams_state = xmltree.xpath("/NCMCProtonDrive/SAMSState")
+        if len(sams_state):
+            self.calibration_state = _SAMSState.from_xml(sams_state[0])
 
     @property
     def titrationStates(self):
@@ -1419,7 +1587,11 @@ class NCMCProtonDrive(_BaseDrive):
             self.swap_proposal = OneDirectionChargeProposal()
         return
 
-    def attach_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None):
+    def attach_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None,
+                           update_rule:UpdateRule= UpdateRule.BINARY,
+                           beta_sams:float = 0.5,
+                           flatness_criterion:float = 0.15,
+                           min_burn:int = 100):
         """Prepare the drive to read g_k values from a calibration instead of its defaults.
 
         Parameters
@@ -1429,6 +1601,12 @@ class NCMCProtonDrive(_BaseDrive):
             SAMSApproach.MULTISITE will run SAMS to exhaustively sample the entire state space
         group_index - For ONESITE, the titrationGroup index of the residue to run SAMS on.
             If not provided, it will be assumed to be minus one
+        update_rule - The update rule to use
+        beta_sams - SAMS two-stage coefficient to determine gain in first stage
+        flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
+        min_burn - minimum iterations before slow-gain may be starteds
+
+
 
         Raises
         ------
@@ -1437,7 +1615,7 @@ class NCMCProtonDrive(_BaseDrive):
              isn't added to the drive.
         """
         state_counts = [len(res)  for res in self.titrationGroups]
-        self.calibration_state = _SAMSState(state_counts, approach, group_index)
+        self.calibration_state = _SAMSState(state_counts, approach, group_index, update_rule=update_rule, beta_sams=beta_sams, flatness_criterion=flatness_criterion, min_burn=min_burn)
 
         if approach is SAMSApproach.ONESITE:
             residue = self.titrationGroups[group_index] if group_index is not None else self.titrationGroups[-1]
@@ -1521,7 +1699,7 @@ class NCMCProtonDrive(_BaseDrive):
         if proposal == "COOH":
             # TODO support residue pool for COOH?
             if residue_pool is not None:
-                raise NotImplementedError("Residue pooling has not yet been implemented for COOH moves.")
+                raise NotImplementedError("Residue pooling has not been implemented for COOH moves.")
             moves = []
             for residue in self.titrationGroups:
                 state = residue.state
@@ -1530,8 +1708,8 @@ class NCMCProtonDrive(_BaseDrive):
                 except KeyError:
                     pass # residue current state has no moves.
 
-            state = self.context.getState(getPositions=True)
-            pos = state.getPositions(asNumpy=True)
+            state = self.context.getState(getPositions=True, getVelocities=True)
+            pos = state.getPositions(asNumpy=True)._value
 
             # perform a move.
             if len(moves) == 0:
@@ -1543,16 +1721,26 @@ class NCMCProtonDrive(_BaseDrive):
                     # nothing is moved,
                     # one of either
                     # or both
-                    move = random.sample(moves, 1)[0].random_move
+                    mover = random.sample(moves, 1)[0]
+                    movable_atoms = mover.movable
+                    variances = [1.0/(self.beta * self.system.getParticleMass(atom)) for atom in movable_atoms]
+
+                    move = mover.random_move
+
                     log.debug(move.__name__)
                     new_pos, logp = move(pos)
                     if math.exp(logp) > random.uniform(0.0, 1.0):
                         log.debug("Accepted COOH update: logp %f", logp)
                         self.context.setPositions(new_pos)
+                        # Resample velocities of movable atoms to maintain detailed balance
+                        vel = state.getVelocities(asNumpy=True)
+                        for i, atom in enumerate(movable_atoms):
+                            new_vel = np.random.normal(size=3) * unit.sqrt(variances[i])
+                            vel[i,:] = new_vel[:]
+                        self.context.setVelocities(vel)
+
                     else:
                         log.debug("Rejected COOH update: logp %f", logp)
-                        # Resample velocities if rejected to maintain detailed balance
-                        self.context.setVelocitiesToTemperature(self.temperature)
 
         else:
 
@@ -3500,3 +3688,4 @@ def strip_in_unit_system(quant, unit_system=unit.md_unit_system, compatible_with
         return quant.value_in_unit_system(unit_system)
     else:
         return quant
+

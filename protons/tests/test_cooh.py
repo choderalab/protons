@@ -33,7 +33,7 @@ from random import choice, uniform, sample
 from protons.app import log
 from math import exp
 
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 class TestCarboxylicAcid:
@@ -333,25 +333,12 @@ class TestCarboxylicAcid:
 
         for iteration in range(50):
             viologen.simulation.step(10)
-            new_pos, logp = cooh1.mirror_oxygens(viologen.positions)
-            if not logp == pytest.approx(0.0, abs=0.1):
-                raise ValueError("Proposal should be very favorable.")
-
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh1.mirror_syn_anti(viologen.positions)
+            positions = viologen.simulation.context.getState(getPositions=True).getPositions(asNumpy=True)._value
+            new_pos, logp = cooh1.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
 
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh2.mirror_oxygens(viologen.positions)
-            if not logp == pytest.approx(0.0, abs=0.1):
-                raise ValueError("Proposal should be very favorable.")
-
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh2.mirror_syn_anti(viologen.positions)
+            new_pos, logp = cooh2.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
 
@@ -394,27 +381,15 @@ class TestCarboxylicAcid:
 
         for iteration in range(50):
             viologen.simulation.step(10)
-            new_pos, logp = cooh3.mirror_oxygens(viologen.positions)
-            if not logp == pytest.approx(0.0, abs=0.1):
-                raise ValueError("Proposal should be very favorable.")
-
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh3.mirror_syn_anti(viologen.positions)
+            positions = viologen.simulation.context.getState(getPositions=True).getPositions(asNumpy=True)._value
+            new_pos, logp = cooh1.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
 
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh4.mirror_oxygens(viologen.positions)
-            if not logp == pytest.approx(0.0, abs=0.1):
-                raise ValueError("Proposal should be very favorable.")
-
-        for iteration in range(50):
-            viologen.simulation.step(10)
-            new_pos, logp = cooh4.mirror_syn_anti(viologen.positions)
+            new_pos, logp = cooh2.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
+
 
         return
 
@@ -422,9 +397,10 @@ class TestCarboxylicAcid:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
         md_steps_between_mc = 100
-        total_loops = 100
-        # viologen = self.setup_viologen_vacuum()
-        viologen = self.setup_viologen_water()
+        total_loops = 500
+        viologen = self.setup_viologen_vacuum()
+        #viologen = self.setup_viologen_water()
+
 
         if log.getEffectiveLevel() == logging.DEBUG:
             viologen.simulation.reporters.append(
@@ -436,22 +412,16 @@ class TestCarboxylicAcid:
 
         cooh1 = COOHDummyMover.from_system(viologen.system, viologen.cooh1)
         cooh2 = COOHDummyMover.from_system(viologen.system, viologen.cooh2)
-
-        do_nothing = lambda positions: (positions, 0.0)
-
         moveset = {
-            do_nothing,
-            cooh1.mirror_syn_anti,
-            cooh1.mirror_oxygens,
-            cooh2.mirror_syn_anti,
-            cooh2.mirror_oxygens,
+            cooh1.random_move,
+            cooh2.random_move,
         }
+
         n_accept = 0
         for iteration in range(total_loops):
             viologen.simulation.step(md_steps_between_mc)
-
             state = viologen.context.getState(getPositions=True, getVelocities=True)
-            pos = state.getPositions(asNumpy=True)
+            pos = state.getPositions(asNumpy=True)._value
 
             # perform a move.
             move = sample(moveset, 1)[0]
@@ -460,19 +430,13 @@ class TestCarboxylicAcid:
             if exp(logp) > uniform(0.0, 1.0):
                 log.debug("Accepted: logp %f", logp)
                 viologen.context.setPositions(new_pos)
+                viologen.context.setVelocitiesToTemperature(viologen.temperature)
+
                 n_accept += 1
             else:
                 log.debug("Rejected: logp %f", logp)
-                # Resample velocities if rejected to maintain detailed balance
-                viologen.context.setVelocitiesToTemperature(viologen.temperature)
+                raise RuntimeError("These moves should never be rejected.")
 
-        if not logp == pytest.approx(0.0, abs=0.1):
-            raise ValueError("Proposal should be very favorable, log p was {}.".format(logp))
-
-        acceptance_rate = n_accept / (iteration + 1)
-        log.info("Acceptance rate was %f", acceptance_rate)
-        if acceptance_rate < 0.9:
-            raise ValueError("Acceptance rate was lower than expected.")
         return
 
     def test_dummy_moving_protondrive(self) -> None:
@@ -535,10 +499,10 @@ class TestCarboxylicAcid:
             drive.update("COOH", nattempts=1)
 
 
-        x = drive.serialize_titration_groups()
+        x = drive.state_to_xml()
         newdrive = NCMCProtonDrive(viologen.temperature, viologen.topology, viologen.system,
                                    pressure=viologen.pressure, perturbations_per_trial=viologen.perturbations_per_trial)
-        newdrive.add_residues_from_serialized_xml(etree.fromstring(x))
+        newdrive.state_from_xml_tree(etree.fromstring(x))
 
         for old_res, new_res in zip(drive.titrationGroups, newdrive.titrationGroups):
             assert old_res == new_res, "Residues don't match. {} :: {}".format(old_res.name, new_res.name)
@@ -574,8 +538,8 @@ class TestCarboxylicAcid:
     def test_glutamic_acid_cooh(self):
         """Use the dummy mover with the amino acid glutamic acid"""
 
-        md_steps_between_mc = 1000
-        total_loops = 50
+        md_steps_between_mc = 10
+        total_loops = 5
 
         glh = self.setup_amino_acid_water("glh")
         drive = ForceFieldProtonDrive(

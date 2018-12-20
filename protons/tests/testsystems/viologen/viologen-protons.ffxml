@@ -2,9 +2,9 @@
 <ForceField>
   <Residues>
     <Residue name="VIO">
-      <Atom name="O1" type="o" charge="-0.7376"/>
+      <Atom name="O1" type="oh" charge="-0.7376"/>
       <Atom name="C2" type="c" charge="0.9118"/>
-      <Atom name="O3" type="o" charge="-0.7373"/>
+      <Atom name="O3" type="oh" charge="-0.7373"/>
       <Atom name="C4" type="c3" charge="-0.176"/>
       <Atom name="C5" type="c3" charge="-0.0608"/>
       <Atom name="C6" type="c3" charge="-0.0738"/>
@@ -28,8 +28,8 @@
       <Atom name="C24" type="c3" charge="-0.0608"/>
       <Atom name="C25" type="c3" charge="-0.176"/>
       <Atom name="C26" type="c" charge="0.9118"/>
-      <Atom name="O27" type="o" charge="-0.7373"/>
-      <Atom name="O28" type="o" charge="-0.7373"/>
+      <Atom name="O27" type="oh" charge="-0.7373"/>
+      <Atom name="O28" type="oh" charge="-0.7373"/>
       <Atom name="H2" type="hc" charge="0.0428"/>
       <Atom name="H1" type="hc" charge="0.0428"/>
       <Atom name="H3" type="hc" charge="0.0483"/>
@@ -122,9 +122,9 @@
       <Protons number_of_states="4">
         <State index="0" log_population="-0.011814650015108523" g_k="0.0" proton_count="0">
           <Condition pH="7.0" log_population="-0.011814650015108523" temperature_kelvin="298.15"/>
-          <Atom name="O1" type="o" charge="-0.7376"/>
+          <Atom name="O1" type="oh" charge="-0.7376"/>
           <Atom name="C2" type="c" charge="0.9118"/>
-          <Atom name="O3" type="o" charge="-0.7373"/>
+          <Atom name="O3" type="oh" charge="-0.7373"/>
           <Atom name="C4" type="c3" charge="-0.176"/>
           <Atom name="C5" type="c3" charge="-0.0608"/>
           <Atom name="C6" type="c3" charge="-0.0738"/>
@@ -148,8 +148,8 @@
           <Atom name="C24" type="c3" charge="-0.0608"/>
           <Atom name="C25" type="c3" charge="-0.176"/>
           <Atom name="C26" type="c" charge="0.9118"/>
-          <Atom name="O27" type="o" charge="-0.7373"/>
-          <Atom name="O28" type="o" charge="-0.7373"/>
+          <Atom name="O27" type="oh" charge="-0.7373"/>
+          <Atom name="O28" type="oh" charge="-0.7373"/>
           <Atom name="H2" type="hc" charge="0.0428"/>
           <Atom name="H1" type="hc" charge="0.0428"/>
           <Atom name="H3" type="hc" charge="0.0483"/>
@@ -183,9 +183,9 @@
         </State>
         <State index="1" log_population="-4.441295721393796" g_k="0.0" proton_count="1">
           <Condition pH="7.0" log_population="-4.441295721393796" temperature_kelvin="298.15"/>
-          <Atom name="O1" type="o" charge="-0.2911"/>
+          <Atom name="O1" type="oh" charge="-0.2911"/>
           <Atom name="C2" type="c" charge="0.3291"/>
-          <Atom name="O3" type="o" charge="-0.189"/>
+          <Atom name="O3" type="oh" charge="-0.189"/>
           <Atom name="C4" type="c3" charge="0.0286"/>
           <Atom name="C5" type="c3" charge="0.0786"/>
           <Atom name="C6" type="c3" charge="0.0786"/>
@@ -209,8 +209,8 @@
           <Atom name="C24" type="c3" charge="0.0786"/>
           <Atom name="C25" type="c3" charge="0.0286"/>
           <Atom name="C26" type="c" charge="0.5806"/>
-          <Atom name="O27" type="o" charge="-0.2653"/>
-          <Atom name="O28" type="o" charge="-0.2653"/>
+          <Atom name="O27" type="oh" charge="-0.2653"/>
+          <Atom name="O28" type="oh" charge="-0.2653"/>
           <Atom name="H2" type="hc" charge="-0.0393"/>
           <Atom name="H1" type="hc" charge="-0.0393"/>
           <Atom name="H3" type="hc" charge="-0.0393"/>
@@ -244,9 +244,9 @@
         </State>
         <State index="2" log_population="-4.441295721393796" g_k="0.0" proton_count="1">
           <Condition pH="7.0" log_population="-4.441295721393796" temperature_kelvin="298.15"/>
-          <Atom name="O1" type="o" charge="-0.2653"/>
+          <Atom name="O1" type="oh" charge="-0.2653"/>
           <Atom name="C2" type="c" charge="0.5806"/>
-          <Atom name="O3" type="o" charge="-0.2653"/>
+          <Atom name="O3" type="oh" charge="-0.2653"/>
           <Atom name="C4" type="c3" charge="0.0286"/>
           <Atom name="C5" type="c3" charge="0.0786"/>
           <Atom name="C6" type="c3" charge="0.0786"/>
@@ -270,8 +270,8 @@
           <Atom name="C24" type="c3" charge="0.0786"/>
           <Atom name="C25" type="c3" charge="0.0286"/>
           <Atom name="C26" type="c" charge="0.3291"/>
-          <Atom name="O27" type="o" charge="-0.189"/>
-          <Atom name="O28" type="o" charge="-0.2911"/>
+          <Atom name="O27" type="oh" charge="-0.189"/>
+          <Atom name="O28" type="oh" charge="-0.2911"/>
           <Atom name="H2" type="hc" charge="-0.0393"/>
           <Atom name="H1" type="hc" charge="-0.0393"/>
           <Atom name="H3" type="hc" charge="-0.0393"/>
@@ -305,9 +305,9 @@
         </State>
         <State index="3" log_population="-10.35013975537857" g_k="0.0" proton_count="2">
           <Condition pH="7.0" log_population="-10.35013975537857" temperature_kelvin="298.15"/>
-          <Atom name="O1" type="o" charge="-0.2911"/>
+          <Atom name="O1" type="oh" charge="-0.2911"/>
           <Atom name="C2" type="c" charge="0.3291"/>
-          <Atom name="O3" type="o" charge="-0.189"/>
+          <Atom name="O3" type="oh" charge="-0.189"/>
           <Atom name="C4" type="c3" charge="0.0286"/>
           <Atom name="C5" type="c3" charge="0.0786"/>
           <Atom name="C6" type="c3" charge="0.0786"/>
@@ -331,8 +331,8 @@
           <Atom name="C24" type="c3" charge="0.0786"/>
           <Atom name="C25" type="c3" charge="0.0286"/>
           <Atom name="C26" type="c" charge="0.3291"/>
-          <Atom name="O27" type="o" charge="-0.189"/>
-          <Atom name="O28" type="o" charge="-0.2911"/>
+          <Atom name="O27" type="oh" charge="-0.189"/>
+          <Atom name="O28" type="oh" charge="-0.2911"/>
           <Atom name="H2" type="hc" charge="-0.0393"/>
           <Atom name="H1" type="hc" charge="-0.0393"/>
           <Atom name="H3" type="hc" charge="-0.0393"/>
