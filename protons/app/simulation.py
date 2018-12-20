@@ -3,12 +3,13 @@
 
 from simtk.openmm.app import Simulation
 from simtk import openmm
-from .driver import ForceFieldProtonDrive
-from .calibration import SelfAdjustedMixtureSampler
+from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive
+from .calibration import SelfAdjustedMixtureSampler, MultiSiteSAMSSampler
 from protons.app import proposals
 from protons.app.logger import log
 import sys
 from datetime import datetime
+from typing import Optional, List
 
 
 class ConstantPHSimulation(Simulation):
@@ -53,6 +54,7 @@ class ConstantPHSimulation(Simulation):
         self.drive = drive
         self.drive.attach_context(self.context)
 
+
         if move is None:
             move = proposals.UniformProposal()
         self.move = move
@@ -65,6 +67,15 @@ class ConstantPHSimulation(Simulation):
 
         if pools is not None:
             drive.define_pools(pools)
+
+        if self.drive.calibration_state is not None:
+            self.sams = MultiSiteSAMSSampler(drive)
+        else:
+            self.sams = None
+
+        self.calibration_reporters = list()  # keeps track of calibration results
+        self.last_dev = None  # deviation at last iteration if sams
+        self.last_gk = None  # weights at last iteration if sams
 
         return
 
@@ -117,75 +128,12 @@ class ConstantPHSimulation(Simulation):
                     if nextR[0] == nextUpdates:
                         reporter.report(self)
 
-
-class ConstantPHCalibration(ConstantPHSimulation):
-    """ConstantPHCalibration is an API for calibrating a constant-pH free energy calculation that uses
-    self-adjusted mixture sampling (SAMS) to calculate the relative free energy of different protonation states
-    in a simulation system."""
-
-    def __init__(self, topology, system, compound_integrator, drive, group_index=0, move=None, pools=None, samsProperties=None, platform=None, platformProperties=None, state=None):
-        """Create a ConstantPHCalibration.
-
-        Parameters
-        ----------
-        topology : Topology
-            A Topology describing the the system to simulate
-        system : System or XML file name
-            The OpenMM System object to simulate (or the name of an XML file
-            with a serialized System)
-        compound_integrator : openmm.CompoundIntegrator or XML file name
-            The OpenMM Integrator to use for simulating the System (or the name of an XML file with a serialized System)
-            Needs to have 2 integrators. The first integrator is used for MD, the second integrator is used for NCMC.
-            The NCMC integrator needs to be a CustomIntegrator with the following two properties defined:
-                first_step: 0 or 1. 0 indicates the first step in an NCMC protocol and can be used for special actions
-                required such as computing the energy prior to perturbation.
-                protocol_work: double, the protocol work performed by external moves in between steps.
-        drive : protons ProtonDrive
-            A ProtonDrive object that can manipulate the protonation states of the system.
-        group_index: int, default 0
-            The index of the titratable group in Drive.titrationGroups.
-        move: StateProposal, default None
-            An MC proposal move for updating titration states.
-        pools: dict, default is None
-            A dictionary of titration group indices to group together.
-        samsProperties: dict, default is None
-            A dictionary with properties for the sams calibration. Used to set parameters for calibration or to resume.
-        platform : Platform=None
-            If not None, the OpenMM Platform to use
-        platformProperties : map=None
-            If not None, a set of platform-specific properties to pass to the
-            Context's constructor
-        state : XML file name, default None
-            The name of an XML file containing a serialized State. If not None,
-            the information stored in state will be transferred to the generated
-            Simulation object.
-        """
-
-        super(ConstantPHCalibration, self).__init__(topology, system, compound_integrator, drive,  move=move, pools=pools, platform=platform, platformProperties=platformProperties, state=state)
-        self.sams = SelfAdjustedMixtureSampler(self.drive, group_index=group_index)
-
-        self.group_index = group_index
-        self.scheme = "binary"
-        self.beta_sams = 0.5 # beta is stored as beta_sams to prevent confusion with 1/kT beta
-        self.stage = "burn-in"
-        self.flatness_criterion = 0.20
-        self.end_of_burnin = 0 # t0, end of the burn in period.
-        self.current_adaptation = 0
-        self.calibration_reporters = list() # keeps track of calibration results
-        self.min_burn = 0
-        self.last_dev = None # deviation at last iteration
-        self.last_gk = None # weights at last iteration
-
-        if samsProperties is not None:
-            # retrieve property if provided and convert to the appropriate type
-            for prop, proptype in [('scheme', str), ('beta_sams', float), ('flatness_criterion', float), ('min_burn', int),  ('current_adaptation', int), ('stage',str), ('end_of_burnin', int)]:
-                if prop in samsProperties:
-                        setattr(self, prop, proptype(samsProperties[prop]))
-
     def adapt(self):
         """
         Adapt the weights for the residue that is being calibrated.
         """
+        if self.drive.calibration_state is None:
+            raise ValueError("Proton drive has no calibration state attached.")
 
         nextReport = [None] * len(self.calibration_reporters)
         anyReport = False
@@ -193,16 +141,15 @@ class ConstantPHCalibration(ConstantPHSimulation):
             nextReport[i] = reporter.describeNextReport(self)
             if 0 < nextReport[i][0] <= 1:
                 anyReport = True
+        self.last_dev = self.sams.adapt_zetas(self.drive.calibration_state._update_rule, stage=self.drive.calibration_state._stage, b=self.drive.calibration_state._beta_sams, end_of_burnin=self.drive.calibration_state._end_of_burnin)
+        self.last_gk = self.drive.calibration_state.free_energies
 
-        self.last_dev = self.sams.adapt_zetas(self.scheme, stage=self.stage, b=self.beta_sams, end_of_burnin=self.end_of_burnin)
-        self.last_gk = self.sams.get_gk(group_index=self.group_index)
-        self.current_adaptation += 1
         # If the histogram is flat below the criterion
         # Flatness is defined as the sum of absolute deviations
-        if self.last_dev < self.flatness_criterion and self.stage == "burn-in" and self.current_adaptation > self.min_burn:
-            log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.flatness_criterion))
-            self.stage = "slow-gain"
-            self.end_of_burnin = int(self.sams.n_adaptations)
+        if self.last_dev < self.drive.calibration_state._flatness_criterion and self.drive.calibration_state._stage == Stage.BURNIN and self.drive.calibration_state._current_adaptation > self.min_burn:
+            log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.drive.calibration_state._flatness_criterion))
+            self.drive.calibration_state._stage = Stage.SLOWGAIN
+            self.drive.calibration_state._end_of_burnin = int(self.drive.calibration_state._current_adaptation)
 
         if anyReport:
             for reporter, nextR in zip(self.calibration_reporters, nextReport):
@@ -210,13 +157,3 @@ class ConstantPHCalibration(ConstantPHSimulation):
                     reporter.report(self)
 
         return self.last_dev, self.last_gk
-
-    def export_samsProperties(self):
-        """Returns a dictionary of properties of the state of the SAMS algorithm.
-        This can be used to resume a calibration by providing it in the constructor.
-        """
-        samsProperties = dict()
-        for prop in ['scheme', 'beta_sams', 'flatness_criterion', 'min_burn', 'current_adaptation', 'stage', 'end_of_burnin']:
-            samsProperties[prop] = getattr(self,prop)
-
-        return samsProperties

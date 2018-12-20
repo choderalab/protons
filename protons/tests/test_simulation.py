@@ -9,7 +9,9 @@ from simtk.openmm import openmm as mm
 from . import get_test_data
 import netCDF4
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
+from protons.app.driver import SAMSApproach, NCMCProtonDrive
 from uuid import uuid4
+from lxml import etree
 import os
 
 
@@ -98,8 +100,8 @@ class TestConstantPHSimulation(object):
         print('Done!')
 
 
-class TestConstantPHCalibration:
-    """Tests the functionality of the ConstantPHCalibration class."""
+class TestConstantPHFreeEnergyCalculation:
+    """Tests the functionality of the ConstantpHSimulation class when using SAMS class."""
 
     _default_platform =  mm.Platform.getPlatformByName('Reference')
 
@@ -124,7 +126,10 @@ class TestConstantPHCalibration:
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
                                        perturbations_per_trial=0)
-        simulation = app.ConstantPHCalibration(pdb.topology, system, compound_integrator, driver,group_index=1, platform=self._default_platform)
+
+        # prep the driver for calibration
+        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+        simulation = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)
         simulation.step(1)
@@ -158,8 +163,9 @@ class TestConstantPHCalibration:
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'],
                                        pressure=pressure,
                                        perturbations_per_trial=0)
-        simulation = app.ConstantPHCalibration(pdb.topology, system, compound_integrator, driver, group_index=1,
-                                               platform=self._default_platform)
+        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+
+        simulation = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)
         simulation.step(1)
@@ -169,8 +175,11 @@ class TestConstantPHCalibration:
         for x in range(5):
             simulation.adapt()
         # retrieve the samsProperties
-        samsProperties = simulation.export_samsProperties()
+        # TODO use deserialize proton drive for this
+        xml = simulation.drive.state_to_xml()
 
+        driver2 = NCMCProtonDrive(temperature, pdb.topology, system, pressure=pressure, perturbations_per_trial=0)
+        driver2.state_from_xml_tree(etree.fromstring(xml))
         integrator2 = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds,
                                       timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=False)
         ncmcintegrator2 = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds,
@@ -181,10 +190,10 @@ class TestConstantPHCalibration:
         compound_integrator2.addIntegrator(ncmcintegrator2)
 
         # Make a new calibration and do another step, ignore the state for this example
-        simulation2 = app.ConstantPHCalibration(pdb.topology, system, compound_integrator2, driver, group_index=1,
-                                               platform=self._default_platform, samsProperties=samsProperties)
+        simulation2 = app.ConstantPHSimulation(pdb.topology, system, compound_integrator2, driver2,
+                                               platform=self._default_platform)
 
-        assert simulation2.stage == simulation.stage
+        assert simulation2.drive.calibration_state._stage is simulation.drive.calibration_state._stage
         # get going then
         simulation2.context.setPositions(pdb.positions)
         simulation2.context.setVelocitiesToTemperature(temperature)
@@ -194,7 +203,7 @@ class TestConstantPHCalibration:
         # Adapt the weights using binary update.
         simulation2.adapt()
 
-        assert simulation2.current_adaptation == 6, "The resumed calibration does not have the right adaptation_index"
+        assert simulation2.drive.calibration_state._current_adaptation == 6, "The resumed calibration does not have the right adaptation_index"
 
 
     def test_create_constantphcalibration_with_reporters(self):
@@ -218,7 +227,11 @@ class TestConstantPHCalibration:
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
         driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
                                        perturbations_per_trial=2, propagations_per_step=1)
-        simulation = app.ConstantPHCalibration(pdb.topology, system, compound_integrator, driver,group_index=1, platform=self._default_platform)
+
+        # prep the driver for calibration
+        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+        simulation = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver,
+                                              platform=self._default_platform)
         simulation.context.setPositions(pdb.positions)
         simulation.context.setVelocitiesToTemperature(temperature)
         # Outputfile for reporters

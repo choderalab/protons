@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 import numpy as np
-from .driver import NCMCProtonDrive, _SAMSState, SAMSApproach
-from warnings import warn
+
+from .driver import NCMCProtonDrive, _SAMSState, SAMSApproach, Stage, UpdateRule
 import simtk.unit as units
 from .logger import log
 from scipy.special import logsumexp
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
-from enum import Enum
-from typing import Optional, Union, List
 
 
 class SelfAdjustedMixtureSampler:
@@ -256,19 +254,6 @@ class SelfAdjustedMixtureSampler:
         return np.diag(gain)
 
 
-
-class Stage(Enum):
-    """Two stages of a sams run."""
-    BURNIN = 0
-    SLOWGAIN = 1
-
-
-class UpdateRule(Enum):
-    """SAMS update rule."""
-    BINARY = 0
-    GLOBAL = 1
-
-
 class MultiSiteSAMSSampler:
     """An implementation of Self Adjusted mixture sampling that can sample multiple sites at once."""
 
@@ -288,10 +273,9 @@ class MultiSiteSAMSSampler:
         assert issubclass(type(driver), NCMCProtonDrive)
 
         if driver.calibration_state is None:
-            raise ValueError("Drive has not been prepared for calibration. Please call driver.attach_calibration.")
+            raise ValueError("Drive has not been prepared for calibration. Please call driver.enable_calibration.")
 
         self.driver = driver
-        self.n_adaptations = 0
         self.approach: SAMSApproach = driver.calibration_state.approach
         self.group_index = driver.calibration_state.group_index
         self._calibration_state: _SAMSState = driver.calibration_state
@@ -300,7 +284,7 @@ class MultiSiteSAMSSampler:
         log.debug('There are %d titration states', self.nstates)
         return
 
-    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage=Stage.SLOWGAIN, end_of_burnin: int=0):
+    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage = Stage.SLOWGAIN, end_of_burnin: int=0):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -320,14 +304,14 @@ class MultiSiteSAMSSampler:
         target_deviation - np.array of the deviation of the sampled histogram weights from the target pi_j's
 
         """
-        self.n_adaptations += 1
 
         # zeta^{t-1}
         zeta = self._calibration_state.free_energies
+        self._calibration_state._current_adaptation += 1
 
-        if update_rule == UpdateRule.BINARY:
+        if update_rule is UpdateRule.BINARY:
             update = self._binary_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
-        elif update_rule == UpdateRule.GLOBAL:
+        elif update_rule is UpdateRule.GLOBAL:
             if self.approach is SAMSApproach.MULTISITE:
                 raise NotImplementedError("Global updates only implemented for one site at this time.")
             update = self._global_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
@@ -345,7 +329,7 @@ class MultiSiteSAMSSampler:
         Nk = self.state_counts / self.state_counts.sum()
         target = self._calibration_state.targets
         target_deviation = sum(abs(target - Nk))
-        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self.n_adaptations, str(zeta_t), str(Nk), target_deviation * 100))
+        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self._calibration_state._current_adaptation, str(zeta_t), str(Nk), target_deviation * 100))
         return target_deviation
 
     def _binary_update(self, group_index: int=0, b:float=1.0, stage=Stage.SLOWGAIN, end_of_burnin:int=0):
@@ -376,11 +360,11 @@ class MultiSiteSAMSSampler:
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
-        self.state_counts[current_state] += np.sqrt(self.n_adaptations)
+        self.state_counts[current_state] += np.sqrt(self._calibration_state._current_adaptation)
 
         return update
 
-    def _global_update(self, b=1.0, stage:Stage=Stage.SLOWGAIN, end_of_burnin=0, group_index=0):
+    def _global_update(self, b=1.0, stage: Stage = Stage.SLOWGAIN, end_of_burnin=0, group_index=0):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -412,7 +396,7 @@ class MultiSiteSAMSSampler:
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
-        self.state_counts += np.sqrt(self.n_adaptations) * w_j
+        self.state_counts += np.sqrt(self._calibration_state._current_adaptation) * w_j
 
         return update
 
@@ -437,13 +421,14 @@ class MultiSiteSAMSSampler:
             raise ValueError("β needs to be between 1/2 and 1")
 
         pi_j = self._calibration_state.targets
+        n_adapt = self._calibration_state._current_adaptation
 
         gain = np.zeros_like(pi_j)
         for j in range(gain.size):
             if stage is Stage.BURNIN:
-                gain[j] = min(pi_j[j], 1.0/pow(self.n_adaptations, b))
+                gain[j] = min(pi_j[j], 1.0/pow(n_adapt, b))
             elif stage is Stage.SLOWGAIN:
-                gain[j] = min(pi_j[j], 1.0/(self.n_adaptations - end_of_burnin + pow(end_of_burnin, b)))
+                gain[j] = min(pi_j[j], 1.0/(n_adapt - end_of_burnin + pow(end_of_burnin, b)))
             else:
                 raise ValueError("Invalid SAMS adaptation stage specified %s. Choose Stage.BURNIN or Stage.SLOWGAIN.")
 

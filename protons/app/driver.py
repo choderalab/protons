@@ -1409,7 +1409,7 @@ class NCMCProtonDrive(_BaseDrive):
         self.context = None
 
         # If performing a calibration, free energy / g_k values can be read out of this table instead.
-        # Use the attach_calibration to instantiate this.
+        # Use the enable_calibration to instantiate this.
         self.calibration_state: _SAMSState = None
 
         # A salt swap swapper can later be attached to enable counterion coupling to protonation state changes
@@ -1587,7 +1587,7 @@ class NCMCProtonDrive(_BaseDrive):
             self.swap_proposal = OneDirectionChargeProposal()
         return
 
-    def attach_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None,
+    def enable_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None,
                            update_rule:UpdateRule= UpdateRule.BINARY,
                            beta_sams:float = 0.5,
                            flatness_criterion:float = 0.15,

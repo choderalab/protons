@@ -3,7 +3,10 @@
 
 import netCDF4
 import time
+import numpy as np
 from copy import deepcopy
+from protons.app.simulation import ConstantPHSimulation
+from protons.app.driver import Stage, UpdateRule, SAMSApproach
 
 class SAMSReporter:
     """SamsReporter outputs SAMS data from a ConstantPHCalibration to a netCDF4 file."""
@@ -39,7 +42,7 @@ class SAMSReporter:
         """The netCDF file currently being written to."""
         return self._out
 
-    def describeNextReport(self, calibration):
+    def describeNextReport(self, calibration: ConstantPHSimulation):
         """Get information about the next report this object will generate.
 
         Parameters
@@ -53,10 +56,10 @@ class SAMSReporter:
             A tuple. The first element is the number of steps
             until the next report.
         """
-        updates = self._reportInterval - calibration.current_adaptation % self._reportInterval
+        updates = self._reportInterval - calibration.drive.calibration_state._current_adaptation % self._reportInterval
         return tuple([updates])
 
-    def report(self, calibration):
+    def report(self, calibration:ConstantPHSimulation):
         """Generate a report.
 
         Parameters
@@ -78,38 +81,42 @@ class SAMSReporter:
         # Write the values.
         self._out.sync()
 
-    def _write_adaptation(self, calibration):
+    def _write_adaptation(self, simulation: ConstantPHSimulation):
         """Record data for the current update in the netCDF file.
 
         Parameters
         ----------
-        calibration : ConstantPHCalibration
+        simulation : ConstantPHSimulation
             The calibration to generate a report for
         """
-        drv = calibration.drive
-        sams = calibration.sams
+        drv = simulation.drive
+        sams = simulation.sams
         iadapt = self._adaptation
         # The iteration of the protonation state update attempt. [update]
-        self._grp['adaptation'][iadapt] = calibration.current_adaptation
-        self._grp['g_k'][iadapt,:] = deepcopy(calibration.last_gk[:])
-        self._grp['flatness'][iadapt] = calibration.last_dev
+        self._grp['adaptation'][iadapt] = simulation.drive.calibration_state._current_adaptation
+        self._grp['g_k'][iadapt,:] = deepcopy(simulation.drive.calibration_state.free_energies[:])
+        self._grp['flatness'][iadapt] = simulation.last_dev
+        self._grp['stage'][iadapt] = simulation.drive.calibration_state._stage.value
+        if simulation.drive.calibration_state._stage == Stage.SLOWGAIN:
+            self._grp['end_of_burnin'][0] = simulation.drive.calibration_state._end_of_burnin
+            self._grp['end_of_burnin'][0] = simulation.drive.calibration_state._end_of_burnin
 
-        self._grp['stage'][0] = calibration.stage
-        if calibration.stage == "slow-gain":
-            self._grp['end_of_burnin'][0] = calibration.end_of_burnin
-
-    def _initialize_constants(self, simulation):
+    def _initialize_constants(self, simulation: ConstantPHSimulation):
         """Initialize a set of constants required for the reports
 
         Parameters
         - simulation (ConstantPHSimulation) The simulation to generate a report for
         """
         system = simulation.context.getSystem()
-        driver = simulation.drive
-        self._group_index = simulation.sams.group_index
+        drive = simulation.drive
+        if drive.calibration_state.approach is SAMSApproach.ONESITE:
+            group_index = drive.calibration_state.group_index
+        else:
+            group_index = np.nan
+        self._group_index = group_index
         self._ngroups = len(simulation.drive.titrationGroups)
-        self._nstates = len(driver.titrationGroups[self._group_index])
-        self._perturbation_steps = driver.perturbations_per_trial
+        self._nstates = drive.calibration_state.free_energies.size
+        self._perturbation_steps = drive.perturbations_per_trial
 
     def _create_netcdf_structure(self):
         """Construct the netCDF directory structure and variables
@@ -130,18 +137,21 @@ class SAMSReporter:
         g_k = grp.createVariable('g_k', float, ('adaptation', 'state',))
         g_k.description = "Weight of each individual state, relative to g_0. [adaptation, state]"
         flatness = grp.createVariable('flatness', float, ('adaptation',))
-        flatness = "Measure of how flat the histogram is. (Sum over all deviations from target)."
+        flatness.description = "Measure of how flat the histogram is. (Sum over all deviations from target)."
+
+        approach = grp.createVariable("approach", int)
+        approach.description = "The approach used with sams, one-site (0) or multi-site (1)"
 
         # Metadata
         # burn-in or slow-gain
         group = grp.createVariable('group_index', int)
-        group.description = "The index of the titration group that is being calibrated. (not the topology index)."
+        group.description = "The index of the titration group that is being calibrated in the drive. (not the topology index)."
 
-        stage = grp.createVariable('stage', str)
-        stage.description = "Current stage in the SAMS protocol (burn-in or slow-gain)."
+        stage = grp.createVariable('stage', int, ('adaptation'))
+        stage.description = "Current stage in the SAMS protocol (burn-in (0) or slow-gain(1))."
         # binary vs global
-        scheme = grp.createVariable('scheme', str)
-        scheme.description = "The SAMS scheme that is being used (binary/global)."
+        scheme = grp.createVariable('update_rule', int)
+        scheme.description = "The SAMS update rule that is being used (binary(0)/global(1))."
         # Two stage beta value
         beta = grp.createVariable('beta', float)
         beta.description = "SAMS parameter beta, determining the scale of the adaptation (0.5< b <1.0"
@@ -170,11 +180,14 @@ class SAMSReporter:
         sams = calibration.sams
         grp = self._grp
 
-        grp['group_index'][0] = self._group_index
-        grp['stage'][0] = calibration.stage
-        grp['scheme'][0] = calibration.scheme
-        grp['beta'][0] = calibration.beta_sams
-        grp['end_of_burnin'][0] = calibration.end_of_burnin
-        grp['min_burn'][0] = calibration.min_burn
-        grp['flatness_criterion'][0] = calibration.flatness_criterion
+        grp['approach'][0] = calibration.drive.calibration_state.approach.value
+        # only set group index when onesite is used
+        if calibration.drive.calibration_state.approach is SAMSApproach.ONESITE:
+            grp['group_index'][0] = calibration.drive.calibration_state.group_index
+
+        grp['update_rule'][0] = calibration.drive.calibration_state._update_rule.value
+        grp['beta'][0] = calibration.drive.calibration_state._beta_sams
+        grp['end_of_burnin'][0] = calibration.drive.calibration_state._end_of_burnin
+        grp['min_burn'][0] = calibration.drive.calibration_state._min_burn
+        grp['flatness_criterion'][0] = calibration.drive.calibration_state._flatness_criterion
         return

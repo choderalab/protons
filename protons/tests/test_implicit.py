@@ -22,7 +22,7 @@ except ValueError:
 found_schrodinger = is_schrodinger_suite_installed()
 
 
-@pytest.mark.skip(reason="Implicit solvent support is disabled.")
+@pytest.mark.skip(reason="These tests are deprecated.")
 class TestAmberTyrosineImplicit(object):
     """Simulating a tyrosine in implicit solvent"""
     default_platform = 'CPU'
@@ -132,7 +132,7 @@ class TestAmberTyrosineImplicit(object):
         driver.update(UniformProposal(), nattempts=10)  # protonation
 
 
-@pytest.mark.skip(reason="Implicit solvent support is disabled.")
+@pytest.mark.skip(reason="These tests are deprecated.")
 class TestAmberPeptideImplicit(object):
     """Implicit solvent tests for a peptide with the sequence EDYCHK"""
     default_platform = 'Reference'

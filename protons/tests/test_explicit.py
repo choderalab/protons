@@ -224,8 +224,8 @@ class TestForceFieldImidazoleExplicit(object):
 
         _system_folder = get_test_data('imidazole_explicit', 'testsystems')
         # Only grab the particles from each system. It is okay if versions et cetera mismatch.
-        original_system = self.pattern_from_multiline(open('{}/imidazole-explicit.sys.xml'.format(_system_folder)).read(), '<Particle')
-        after_driver = self.pattern_from_multiline(openmm.XmlSerializer.serialize(testsystem.system),'<Particle')
+        original_system = self.pattern_from_multiline(open('{}/imidazole-explicit.sys.xml'.format(_system_folder)).read(), '<Particle ')
+        after_driver = self.pattern_from_multiline(openmm.XmlSerializer.serialize(testsystem.system),'<Particle ')
 
         # Make sure there are no differences between the particles in each system
         assert original_system == after_driver
@@ -441,7 +441,7 @@ class TestAmberPeptide(object):
         context.setVelocitiesToTemperature(testsystem.temperature)
         driver.attach_context(context)
         driver.adjust_to_ph(7.4)
-        x = driver.serialize_titration_groups()
+        x = driver.state_to_xml()
 
     @pytest.mark.slowtest
     @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
@@ -461,9 +461,9 @@ class TestAmberPeptide(object):
         olddrive.attach_context(context)
         olddrive.adjust_to_ph(7.4)
 
-        x = olddrive.serialize_titration_groups()
+        x = olddrive.state_to_xml()
         newdrive = NCMCProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, pressure=testsystem.pressure, perturbations_per_trial=2)
-        newdrive.add_residues_from_serialized_xml(etree.fromstring(x))
+        newdrive.state_from_xml_tree(etree.fromstring(x))
 
         for old_res, new_res in zip(olddrive.titrationGroups, newdrive.titrationGroups):
             assert old_res == new_res, "Residues don't match. {} :: {}".format(old_res.name, new_res.name)

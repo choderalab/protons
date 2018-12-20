@@ -1,6 +1,7 @@
 """Tests for self adjusted mixture sampling."""
 
 from protons import app
+from lxml import etree
 from simtk import unit
 from simtk.openmm import openmm as mm
 from . import get_test_data
@@ -11,8 +12,8 @@ import numpy as np
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
 from protons.app import UniformProposal
-from protons.app.calibration import UpdateRule, MultiSiteSAMSSampler, SelfAdjustedMixtureSampler, Stage
-from protons.app.driver import SAMSApproach
+from protons.app.calibration import MultiSiteSAMSSampler, SelfAdjustedMixtureSampler
+from protons.app.driver import SAMSApproach, Stage, UpdateRule
 from protons.app import log
 import logging
 
@@ -36,13 +37,16 @@ class TestSAMS:
 
 
     @staticmethod
-    def setup_peptide_implicit(name:str,minimize=True):
+    def setup_peptide_implicit(name:str,minimize=True, createsim=True):
         """
         Set up implicit solvent peptide
 
-        Note
-        ----
-        folder "name_implicit" needs to exist, and "name".pdb needs to exist in the folder.
+        name - name of the peptide file. The folder "name_implicit" needs to exist,
+         and "name".pdb needs to exist in the folder.
+        minimize = Minimize the system before running (recommended)
+            Works only if simulation is created
+        createsim - instantiate simulation class
+            If False, minimization is not performed.
 
         """
         peptide = SystemSetup()
@@ -89,17 +93,18 @@ class TestSAMS:
             residues_by_index=None,
         )
 
-        peptide.simulation = app.ConstantPHSimulation(
-            peptide.topology,
-            peptide.system,
-            peptide.integrator,
-            peptide.drive,
-            platform=TestSAMS.platform,
-        )
-        peptide.simulation.context.setPositions(peptide.positions)
-        peptide.context = peptide.simulation.context
-        if minimize:
-            peptide.simulation.minimizeEnergy()
+        if createsim:
+            peptide.simulation = app.ConstantPHSimulation(
+                peptide.topology,
+                peptide.system,
+                peptide.integrator,
+                peptide.drive,
+                platform=TestSAMS.platform,
+            )
+            peptide.simulation.context.setPositions(peptide.positions)
+            peptide.context = peptide.simulation.context
+            if minimize:
+                peptide.simulation.minimizeEnergy()
 
         return peptide
 
@@ -109,7 +114,7 @@ class TestSAMS:
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.adjust_to_ph(7.4) # ensure nonequal target weights
         for group_index in range(len(pep.drive.titrationGroups)):
-            pep.drive.attach_calibration(SAMSApproach.ONESITE, group_index=group_index)
+            pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
             table = pep.drive.calibration_state
 
             # The one site table should have exactly one entry for
@@ -120,7 +125,7 @@ class TestSAMS:
 
         # Test that using None treats the last residue.
         group_index = None
-        pep.drive.attach_calibration(SAMSApproach.ONESITE, group_index=group_index)
+        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
         table = pep.drive.calibration_state
 
         assert len(table) == 7, "The number of g_k values does not equal the number of available (independent) states."
@@ -129,6 +134,11 @@ class TestSAMS:
         assert np.all(table.targets == pep.drive.titrationGroups[-1].target_weights)
         assert np.all(table.free_energies == pep.drive.titrationGroups[-1].g_k_values)
 
+        xml = etree.tostring(table.to_xml()).decode()
+        assert xml.count("<Residue") == 3, "The number of states in the XML output is wrong."
+        assert xml.count("<State") == 7, "The number of states in the XML output is wrong."
+
+        new_table = app.driver._SAMSState.from_xml(etree.fromstring(xml))
         return
 
     def test_make_multisite_table(self):
@@ -137,12 +147,18 @@ class TestSAMS:
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.adjust_to_ph(7.4) # ensure nonequal target weights for tests
 
-        pep.drive.attach_calibration(SAMSApproach.MULTISITE)
+        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
         table = pep.drive.calibration_state
         # The multi site table should have exactly one entry for
         assert len(table) == 12, "The number of g_k values does not equal the product of the number of available (independent) states."
         assert table.free_energy(pep.drive.titrationStates) ==  pytest.approx(pep.drive.sum_of_gk()), "The weight should be the same as the initial weight at this stage."
         assert np.all(table.targets == 1./12.), "Targets should be 1/num of states."
+
+        xml = etree.tostring(table.to_xml()).decode()
+        assert xml.count("<Dimension") == 3, "The number of dimensions in the XML output is wrong."
+        assert xml.count("<State") == 12, "The number of states in the XML output is wrong."
+
+        new_table = app.driver._SAMSState.from_xml(etree.fromstring(xml))
         return
 
 
@@ -151,7 +167,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.attach_calibration(SAMSApproach.ONESITE, group_index=1)
+        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
         sampler = MultiSiteSAMSSampler(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
@@ -159,6 +175,7 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
+
             sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.BURNIN)
         log.setLevel(old_log_level)
 
@@ -167,7 +184,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.attach_calibration(SAMSApproach.ONESITE, group_index=1)
+        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
         sampler = MultiSiteSAMSSampler(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
@@ -183,7 +200,23 @@ class TestSAMS:
         """Test the multisite SAMS sampling approach."""
         old_log_level = log.getEffectiveLevel()
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.attach_calibration(SAMSApproach.MULTISITE)
+        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
+        sampler = MultiSiteSAMSSampler(pep.drive)
+        total_iterations = 1500
+        for x in range(total_iterations):
+            if x == total_iterations -1:
+                log.setLevel(logging.DEBUG)
+            pep.simulation.step(1)
+            pep.simulation.update(1)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.BURNIN)
+        log.setLevel(old_log_level)
+        return
+
+    def test_calibration_class_multisite(self):
+        """Test the multisite SAMS sampling approach."""
+        old_log_level = log.getEffectiveLevel()
+        pep = self.setup_peptide_implicit("yeah", createsim=True)
+        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
         sampler = MultiSiteSAMSSampler(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
