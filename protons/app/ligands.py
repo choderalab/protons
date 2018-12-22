@@ -1350,13 +1350,13 @@ def extract_residue(inputfile:str, outputfile:str, resname:str ):
     input_traj.save(outputfile)
 
 
-def prepare_calibration_system(vacuum_file: str,
-                               output_file: str,
-                               ffxml: str = None,
-                               hxml: str = None,
-                               delete_old_H: bool = True,
-                               minimize: bool = True,
-                               box_size: app.modeller.Vec3 = None):
+def prepare_calibration_systems(vacuum_file: str,
+                                output_basename: str,
+                                ffxml: str = None,
+                                hxml: str = None,
+                                delete_old_H: bool = True,
+                                minimize: bool = True,
+                                box_size: app.modeller.Vec3 = None):
     """Add hydrogens to a residue based on forcefield and hydrogen definitons, and then solvate.
 
     Note that no salt is added. We use saltswap for this.
@@ -1405,6 +1405,9 @@ def prepare_calibration_system(vacuum_file: str,
     else:
         padding = None
 
+    app.PDBxFile.writeFile(modeller.topology, modeller.positions, open(
+        f'{output_basename}-vacuum.cif', 'w'))
+
     modeller.addSolvent(
         forcefield, model='tip3p', padding=padding, neutralize=False, boxSize=box_size)
 
@@ -1429,4 +1432,4 @@ def prepare_calibration_system(vacuum_file: str,
         positions = modeller.positions
 
     app.PDBxFile.writeFile(modeller.topology, positions, open(
-        output_file, 'w'))
+        f'{output_basename}-water.cif', 'w'))
