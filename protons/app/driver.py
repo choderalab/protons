@@ -650,7 +650,11 @@ class _TitrationState:
                 )  # the force index in the internal state, not the force index in openmm
             )
             atoms = force["atoms"]
-            exceptions = force["exceptions"]
+
+            if "exceptions" in force:
+                exceptions = force["exceptions"]
+            else:
+                exceptions = []
             for atom in atoms:
                 # Convert to string for xml storage
                 atom_strings = dict(atom)
@@ -1473,7 +1477,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def state_to_xml(self):
+    def state_to_xml(self) -> str:
         """Store residues handled by the drive as xml.
 
         Returns
