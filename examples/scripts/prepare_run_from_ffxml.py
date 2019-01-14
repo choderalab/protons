@@ -229,7 +229,7 @@ def main(jsonfile):
     simulation.context.setPositions(positions)
 
     # After the simulation system has been defined, we can add salt to the system using saltswap.
-    if salt_concentration is not None and "PME" not in sysprops:
+    if salt_concentration is not None and "PME" in sysprops:
         salinator = Salinator(context=simulation.context,
                               system=system,
                               topology=topology,

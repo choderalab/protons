@@ -44,11 +44,16 @@ def serialize_drive(drive) -> str:
     return drivexml
 
 
+def num_to_int_str(num: float)-> str:
+    """Takes a float and converts to int, and then returns a string version."""
+    return str(int(round(num)))
+
+
 def serialize_state_vector(swapper):
     """Store the saltswap state vector as xml."""
-    root = etree.fromstring("<saltswap><statevector/></saltswap>")
-    vecstring = ' '.join(map(str, swapper.stateVector))
-    root.xpath('statevector')[0].text = vecstring
+    root = etree.fromstring("<Saltswap><StateVector/></Saltswap>")
+    vecstring = ' '.join(map(num_to_int_str, swapper.stateVector))
+    root.xpath('StateVector')[0].text = vecstring
     return etree.tostring(root)
 
 
@@ -77,7 +82,7 @@ def create_calibration_checkpoint_file(filename, drive, context, system, integra
 
 def deserialize_state_vector(saltswap_tree: etree.Element, swapper) -> None:
     """Set the saltswap state vector from one stored in xml (inplace)."""
-    vectsring = saltswap_tree.xpath('statevector')[0].text
+    vectsring = saltswap_tree.xpath('StateVector')[0].text
     swapper.stateVector = np.fromstring(vectsring, dtype=int, sep=' ')
 
 
