@@ -69,10 +69,9 @@ def main(jsonfile):
     forcefield = app.ForceField(*(user_ff_paths + default_ff))
 
 
-
     # Load structure
     # The input should be an mmcif/pdbx file
-    input_pdbx_file = os.path.join(idir, inp["structure"].format(**format_vars))
+    input_pdbx_file = os.path.abspath(os.path.join(idir, inp["structure"].format(**format_vars)))
     pdb_object = app.PDBxFile(input_pdbx_file)
 
     # Atoms , connectivity, residues
@@ -239,19 +238,19 @@ def main(jsonfile):
                               temperature=temperature)
         salinator.neutralize()
         salinator.initialize_concentration()
-        swapper = salinator.swapper
     else:
-        swapper = None
-        # Dont attach swapper yet, we might not want to use counterions
+        salinator = None
 
     # Minimize the initial configuration to remove bad contacts
     simulation.minimizeEnergy(tolerance=pre_run_minimization_tolerance, maxIterations=minimization_max_iterations)
     # Slightly equilibrate the system, detect early issues.
     simulation.step(num_thermalization_steps)
 
-    # MAIN SIMULATION LOOP STARTS HERE
+    topology_file_content = open(input_pdbx_file, 'r').read()
+
     # export the context
-    create_calibration_checkpoint_file(output_checkpoint_file, driver, simulation.context, simulation.system, simulation.integrator, swapper=swapper)
+    create_calibration_checkpoint_file(output_checkpoint_file, driver, simulation.context, simulation.system, simulation. integrator, topology_file_content, salinator=salinator)
+
     os.chdir(lastdir)
 
 

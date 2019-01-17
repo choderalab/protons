@@ -8,6 +8,7 @@ from copy import deepcopy
 from protons.app.simulation import ConstantPHSimulation
 from protons.app.driver import Stage, UpdateRule, SAMSApproach
 
+
 class SAMSReporter:
     """SamsReporter outputs SAMS data from a ConstantPHCalibration to a netCDF4 file."""
 

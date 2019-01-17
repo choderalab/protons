@@ -543,11 +543,13 @@ class _TitrationState:
 
             for atom in force.xpath("atom"):
                 atom_dict = dict()
-                for key in ["atom_index", "charge", "epsilon", "sigma"]:
+                for key in ["atom_index", "charge", "epsilon", "sigma", "radius", "scaleFactor"]:
                     if key == "atom_index":
                         atom_dict[key] = int(atom.get(key))
                     else:
-                        atom_dict[key] = np.float64(atom.get(key))
+                        param_value = atom.get(key)
+                        if param_value is not None:
+                            atom_dict[key] = np.float64(param_value)
                 force_dict["atoms"].append(atom_dict)
 
             for exception in force.xpath("exception"):
@@ -679,7 +681,7 @@ class _TitrationState:
                     force_xml, "exception", **exception_strings
                 )
 
-            state.force = force_xml
+            state.append(force_xml)
 
         # Titration state specific MCMoves are serialized using their to_xml method
         mcmoves = objectify.SubElement(state, "MCMoves")
@@ -1485,6 +1487,10 @@ class NCMCProtonDrive(_BaseDrive):
         str - xml representation of the residues inside of the drive.
         """
         xmltree = etree.Element("NCMCProtonDrive")
+        xmltree.set("temperature_kelvin", str(self.temperature / unit.kelvin))
+        if self.pressure is not None:
+            xmltree.set("pressure_bar", str(self.pressure / unit.bar))
+
         for res in self.titrationGroups:
             xmltree.append(res.serialize())
 
@@ -1493,17 +1499,16 @@ class NCMCProtonDrive(_BaseDrive):
 
         return etree.tostring(xmltree, encoding="utf-8", pretty_print=True)
 
-
     def state_from_xml_tree(self, xmltree):
         """Add residues from previously serialized residues."""
         # TODO replace this with a class method?
         if type(xmltree) == str:
             xmltree = etree.fromstring(xmltree)
-        drive_xml = xmltree.xpath("/NCMCProtonDrive")[0]
+        drive_xml = xmltree.xpath("//NCMCProtonDrive")[0]
         for res in drive_xml.xpath("TitratableResidue"):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
 
-        sams_state = xmltree.xpath("/NCMCProtonDrive/SAMSState")
+        sams_state = drive_xml.xpath("SAMSState")
         if len(sams_state):
             self.calibration_state = _SAMSState.from_xml(sams_state[0])
 

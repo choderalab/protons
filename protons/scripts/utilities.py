@@ -1,8 +1,10 @@
 from openmmtools.integrators import ExternalPerturbationLangevinIntegrator
 from simtk import openmm as mm, unit
 from lxml import etree, objectify
+from protons import app
 from protons.app import log
 import numpy as np
+from io import StringIO
 xmls = mm.XmlSerializer
 import datetime
 
@@ -31,6 +33,11 @@ def serialize_system(system) -> str:
     return xmls.serialize(system)
 
 
+def deserialize_openmm_element(element: etree.Element):
+    """Deserialize an lxml Element containing a serialized openmm object"""
+    return mm.XmlSerializer.deserialize(etree.tostring(element, encoding='unicode'))
+
+
 def serialize_integrator(integrator) -> str:
     """Serialize openmm integrator"""
     return xmls.serialize(integrator)
@@ -49,32 +56,59 @@ def num_to_int_str(num: float)-> str:
     return str(int(round(num)))
 
 
-def serialize_state_vector(swapper):
-    """Store the saltswap state vector as xml."""
+def store_saltswap_state(salinator):
+    """Store the saltswap state as xml so an identical salinator can be instantiated."""
+    swapper = salinator.swapper
     root = etree.fromstring("<Saltswap><StateVector/></Saltswap>")
+    root.set("salt_concentration_molar", str(salinator.salt_concentration / unit.molar))
     vecstring = ' '.join(map(num_to_int_str, swapper.stateVector))
     root.xpath('StateVector')[0].text = vecstring
     return etree.tostring(root)
 
 
-def create_calibration_checkpoint_file(filename, drive, context, system, integrator, swapper=None) -> None:
+def store_topology(topology_file_string:str, fileformat='pdbx'):
+    """Store a file (containing topology, such as pdbx) in a topology XML block."""
+    root = etree.fromstring(f'<TopologyFile format="{fileformat}"/>')
+    root.text = topology_file_string
+    return root
+
+
+def xml_to_topology(topology_elem:etree.Element) -> app.Topology:
+    """From a TopologyFile xml element, create a topology"""
+    text = topology_elem.text
+    fileio = StringIO(text)
+
+    topo_format = topology_elem.attrib['format'].lower()
+    if topo_format == 'pdbx':
+        loaded = app.PDBxFile(fileio)
+    elif topo_format == 'pdb':
+        loaded = app.PDBFile(fileio)
+    else:
+        raise ValueError(f"Unsupported topology format: '{topo_format}'.")
+
+    return loaded.getTopology()
+
+
+def create_calibration_checkpoint_file(filename: str, drive: app.ForceFieldProtonDrive, context:mm.Context, system: mm.System, integrator: mm.CustomIntegrator, topology_string: str, salinator=None) -> None:
     """Write out a checkpoint file for calibration-v1 example scripts."""
 
     date = str(datetime.datetime.now())
-    runtype = "calibration-v1" # hash version of script in future?
+    runtype = "calibration-v1"  # hash version of script in future?
 
     drivexml = serialize_drive(drive)
     integratorxml = serialize_integrator(integrator)
     systemxml = serialize_system(system)
     state_xml = serialize_state(context)
+    topology_xml = store_topology(topology_string)
 
     tree = etree.fromstring(f"""<Checkpoint runtype="{runtype}" date="{date}"></Checkpoint>""")
     tree.append(etree.fromstring(drivexml))
     tree.append(etree.fromstring(integratorxml))
     tree.append(etree.fromstring(systemxml))
     tree.append(etree.fromstring(state_xml))
-    if swapper is not None:
-        tree.append(etree.fromstring(serialize_state_vector(swapper)))
+    tree.append(topology_xml)
+    if salinator is not None:
+        tree.append(etree.fromstring(store_saltswap_state(salinator)))
 
     with open(filename, 'wb') as ofile:
         ofile.write(etree.tostring(tree))
