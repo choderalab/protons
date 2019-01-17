@@ -67,6 +67,7 @@ setup(
     packages=[
         'protons',
         'protons.app',
+        'protons.scripts',
         'protons.tests'],
     package_data={
         'protons': find_package_data(
