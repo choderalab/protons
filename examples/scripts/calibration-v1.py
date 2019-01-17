@@ -108,12 +108,10 @@ def main(jsonfile):
     if driver.calibration_state.approach == SAMSApproach.ONESITE:
         driver.define_pools({"calibration": driver.calibration_state.group_index})
 
-    # # properties = {'CudaPrecision': 'mixed', 'DeterministicForces': 'true',
-    # #               'CudaDeviceIndex': os.environ['CUDA_VISIBLE_DEVICES']}
-    # properties = dict()
 
-    platform = mm.Platform.getPlatformByName('OpenCL')
-    properties = {'OpenCLPrecision': 'double'}
+    platform = mm.Platform.getPlatformByName('CUDA')
+    properties = {'CudaPrecision': 'mixed', 'DeterministicForces': 'true',
+                  'CudaDeviceIndex': os.environ['CUDA_VISIBLE_DEVICES']}
 
     simulation = app.ConstantPHSimulation(topology, system, integrator, driver, platform=platform, platformProperties=properties)
 
