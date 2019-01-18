@@ -146,7 +146,7 @@ class ConstantPHSimulation(Simulation):
 
         # If the histogram is flat below the criterion
         # Flatness is defined as the sum of absolute deviations
-        if self.last_dev < self.drive.calibration_state._flatness_criterion and self.drive.calibration_state._stage == Stage.BURNIN and self.drive.calibration_state._current_adaptation > self.min_burn:
+        if self.last_dev < self.drive.calibration_state._flatness_criterion and self.drive.calibration_state._stage == Stage.BURNIN and self.drive.calibration_state._current_adaptation > self.drive.calibration_state._min_burn:
             log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.drive.calibration_state._flatness_criterion))
             self.drive.calibration_state._stage = Stage.SLOWGAIN
             self.drive.calibration_state._end_of_burnin = int(self.drive.calibration_state._current_adaptation)
