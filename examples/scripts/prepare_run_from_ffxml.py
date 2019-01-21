@@ -249,7 +249,7 @@ def main(jsonfile):
     topology_file_content = open(input_pdbx_file, 'r').read()
 
     # export the context
-    create_calibration_checkpoint_file(output_checkpoint_file, driver, simulation.context, simulation.system, simulation. integrator, topology_file_content, salinator=salinator)
+    create_calibration_checkpoint_file(output_checkpoint_file, driver, simulation.context, simulation.system, simulation.integrator, topology_file_content, salinator=salinator)
 
     os.chdir(lastdir)
 

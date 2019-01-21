@@ -1597,7 +1597,7 @@ class NCMCProtonDrive(_BaseDrive):
         return
 
     def enable_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None,
-                           update_rule:UpdateRule= UpdateRule.BINARY,
+                           update_rule: UpdateRule = UpdateRule.BINARY,
                            beta_sams:float = 0.5,
                            flatness_criterion:float = 0.15,
                            min_burn:int = 100):

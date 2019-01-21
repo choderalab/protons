@@ -15,7 +15,7 @@ from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
 from typing import List, Dict, Tuple, Callable, Any, AnyStr
-from protons.scripts.utilities import TimeOutError, timeout_handler, create_calibration_checkpoint_file, ExternalGBAOABIntegrator, xml_to_topology, deserialize_openmm_element
+from protons.scripts.utilities import TimeOutError, timeout_handler, create_calibration_checkpoint_file, ExternalGBAOABIntegrator, xml_to_topology, deserialize_openmm_element, deserialize_state_vector
 
 log.setLevel(logging.DEBUG)
 
@@ -131,7 +131,6 @@ def main(jsonfile):
     saltswap_element = checkpoint_tree.xpath("Saltswap")
     if saltswap_element:
         saltswap_element = saltswap_element[0]
-
         salt_concentration = float(saltswap_element.get("salt_concentration_molar")) * unit.molar
         salinator = Salinator(context=simulation.context,
                               system=system,
@@ -141,7 +140,7 @@ def main(jsonfile):
                               pressure=pressure,
                               temperature=temperature)
         swapper = salinator.swapper
-
+        deserialize_state_vector(saltswap_element, swapper)
         # If counterion is false, openmm automatically uses a neutralizing background charge
         if run["counter-ion"]:
             driver.attach_swapper(swapper)
