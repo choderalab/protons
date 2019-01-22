@@ -29,10 +29,13 @@
       "frequency": 1
     },
     "coordinates": {
-      "frequency": 1
+      "frequency": 100
     },
     "sams": {
       "frequency": 1
+    },
+    "ncmc": {
+      "frequency" : 1
     }
   }
 }

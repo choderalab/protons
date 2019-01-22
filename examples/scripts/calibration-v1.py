@@ -168,7 +168,7 @@ def main(jsonfile):
         simulation.calibration_reporters.append(app.SAMSReporter(ncfile, freq))
 
     if "ncmc" in reporters:
-        freq = int["ncmc"]["frequency"]
+        freq = int(reporters["ncmc"]["frequency"])
         simulation.update_reporters.append(app.NCMCReporter(ncfile, freq))
 
     total_iterations = int(run["total_update_attempts"])
