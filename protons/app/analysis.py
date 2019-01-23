@@ -7,6 +7,9 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 import netCDF4
+from typing import List, Tuple, Union
+from protons.app.utils import OutdatedFileError
+from protons.app.driver import SAMSApproach
 
 sns.set_style('ticks')
 
@@ -39,19 +42,80 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
     except KeyError:
         raise ValueError("This data set does not appear to have NCMC data.")
 
+
+    try:
+        approach = SAMSApproach(dataset['Protons/SAMS/approach'][0])
+    except IndexError:
+        raise OutdatedFileError("This file was generated with an older version of Protons. "
+                                "Please try a protons version <=0.0.1a4 to analyze it.")
+
     group = sams['group_index'][0]
-    initial_states = ncmc['initial_state'][:, group]
-    proposed_states = ncmc['proposed_state'][:, group]
+    # This if statement checks if the group index is an integer, or undefined/masked (multisite calibration)
+    if approach is SAMSApproach.ONESITE:
+        initial_states = ncmc['initial_state'][:, group]
+        proposed_states = ncmc['proposed_state'][:, group]
+    elif approach is SAMSApproach.MULTISITE:
+        initial_states = ncmc['initial_state'][:, :]
+        proposed_states = ncmc['proposed_state'][:, :]
+    else:
+        raise NotImplementedError(f"This method does not support the {str(approach)} approach.")
+
     proposal_work = ncmc['total_work'][:]
     # Sams weighs iteration, state
     gk = dataset['Protons/SAMS/g_k']
+
     # The number of states should be equal to the shape of the last dimension of the weights array.
     n_states = gk.shape[-1]
 
     return initial_states, proposed_states, proposal_work, n_states, gk
 
 
-def bar_all_states(dataset: netCDF4.Dataset, bootstrap: bool = False, num_bootstrap_samples: int = 1000):
+def stitch_calibrations(
+    datasets: List[netCDF4.Dataset]
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray]:
+    """Collect data from multiple netCDF datasets and return them as single arrays."""
+    initial_states_collection: List[np.ndarray] = list()
+    proposed_states_collection: List[np.ndarray] = list()
+    proposal_work_collection: List[np.ndarray] = list()
+    n_states_reference: int = 0
+    gk_collection: List[np.ndarray] = list()
+
+    # Start gathering datasets in lists, and concatenate them in the end.
+
+    for d, dataset in enumerate(datasets):
+        initial_states, proposed_states, proposal_work, n_states, gk = calibration_dataset_to_arrays(
+            dataset
+        )
+
+        if d == 0:
+            n_states_reference = n_states
+
+        if n_states_reference != n_states:
+            raise ValueError(
+                f"Number of states in set {d+1} ({n_states}) does not match the first set ({n_states_reference})."
+            )
+
+        initial_states_collection.append(initial_states)
+        proposed_states_collection.append(proposed_states)
+        proposal_work_collection.append(proposal_work)
+        gk_collection.append(gk)
+
+    # Use ma concatenate to preserve masked (incomplete) data
+    init_states = np.ma.concatenate(initial_states_collection)
+    prop_states = np.ma.concatenate(proposed_states_collection)
+    prop_work = np.ma.concatenate(proposal_work_collection)
+    gks = np.ma.concatenate(gk_collection,axis=0)
+
+    return (
+        init_states,
+        prop_states,
+        prop_work,
+        n_states_reference,
+        gks,
+    )
+
+
+def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], bootstrap: bool = False, num_bootstrap_samples: int = 1000):
     """
     Run BAR between the first state and all other states.
 
@@ -73,7 +137,16 @@ def bar_all_states(dataset: netCDF4.Dataset, bootstrap: bool = False, num_bootst
 
     """
 
-    initial_states, proposed_states, proposal_work, n_states, gk = calibration_dataset_to_arrays(dataset)
+    if type(dataset) == netCDF4.Dataset:
+        initial_states, proposed_states, proposal_work, n_states, gk = calibration_dataset_to_arrays(dataset)
+        group = dataset['Protons/SAMS/group_index'][0]
+        approach = SAMSApproach(dataset['Protons/SAMS/approach'][0])
+    elif type(dataset) == list:
+        initial_states, proposed_states, proposal_work, n_states, gk = stitch_calibrations(dataset)
+        group = dataset[0]['Protons/SAMS/group_index'][0]
+        approach = SAMSApproach(dataset[0]['Protons/SAMS/approach'][0])
+    else:
+        raise TypeError(f"Not sure how to handle type ({str(type(dataset))}) of dataset. Please provide a netCDF4 data set or a list of data sets.")
 
     bars_per_transition = dict()
     for from_state in range(1):
@@ -83,8 +156,16 @@ def bar_all_states(dataset: netCDF4.Dataset, bootstrap: bool = False, num_bootst
 
             transition = '{}->{}'.format(from_state, to_state)
             log.debug(transition)
+
             # SAMS bias estimate has the opposite sign of the free energy difference
-            sams_estimate = -gk[-1, to_state] + gk[-1, from_state]
+
+            if approach is SAMSApproach.ONESITE:
+                sams_estimate = -gk[group, to_state] + gk[group, from_state]
+            elif approach is SAMSApproach.MULTISITE:
+                sams_estimate = -gk[to_state] + gk[from_state]
+            else:
+                raise NotImplementedError("This method has not been implemented yet for this approach.")
+
             forward, reverse = _gather_transitions(from_state, to_state, initial_states, proposed_states, proposal_work, gk)
 
             if bootstrap:
@@ -195,6 +276,7 @@ def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarr
     forward = list()
     reverse = list()
 
+
     for i in range(0, gk.shape[0]):
         # subtract delta g_k forward
         if initial_states[i] == from_state and proposed_states[i] == to_state:
@@ -212,7 +294,7 @@ def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarr
     return forward, reverse
 
 
-def plot_calibration_weight_traces(dataset: netCDF4.Dataset, ax: plt.Axes = None, bar: bool = True,
+def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], ax: plt.Axes = None, bar: bool = True,
                                    error: str = 'stdev', num_bootstrap_samples: int = 1000, zerobased: bool = False):
     """Plot the results of a calibration netCDF dataset.
 
@@ -258,8 +340,11 @@ def plot_calibration_weight_traces(dataset: netCDF4.Dataset, ax: plt.Axes = None
     ax.set_xlabel("Update", fontsize=18)
 
     ax.set_ylabel(r"$g_k/RT$ (unitless) relative to state 1", fontsize=18)
-    nstates, gk = calibration_dataset_to_arrays(dataset)[-2:]
-    cp = sns.color_palette("husl", nstates)
+    if type(dataset) == netCDF4.Dataset:
+        n_states, gk = calibration_dataset_to_arrays(dataset)[-2:]
+    elif type(dataset) == list:
+        n_states, gk = stitch_calibrations(dataset)[-2:]
+    cp = sns.color_palette("husl", n_states)
 
     if bar:
         bar_data = bar_all_states(dataset, bootstrap=bootstrap, num_bootstrap_samples=num_bootstrap_samples)
@@ -267,7 +352,7 @@ def plot_calibration_weight_traces(dataset: netCDF4.Dataset, ax: plt.Axes = None
         bar_data = None
 
     xaxis_points = list(range(gk.shape[0]))
-    for state in range(1, nstates):
+    for state in range(1, n_states):
         state_color = cp[state]
         ax.plot(gk[:, state], label="State {}".format(state + label_offset), color=state_color)
 
