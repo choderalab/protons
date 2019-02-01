@@ -42,7 +42,6 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
     except KeyError:
         raise ValueError("This data set does not appear to have NCMC data.")
 
-
     try:
         approach = SAMSApproach(dataset['Protons/SAMS/approach'][0])
     except IndexError:
@@ -71,7 +70,7 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
 
 
 def stitch_calibrations(
-    datasets: List[netCDF4.Dataset]
+        datasets: List[netCDF4.Dataset]
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray]:
     """Collect data from multiple netCDF datasets and return them as single arrays."""
     initial_states_collection: List[np.ndarray] = list()
@@ -92,7 +91,7 @@ def stitch_calibrations(
 
         if n_states_reference != n_states:
             raise ValueError(
-                f"Number of states in set {d+1} ({n_states}) does not match the first set ({n_states_reference})."
+                f"Number of states in set {d + 1} ({n_states}) does not match the first set ({n_states_reference})."
             )
 
         initial_states_collection.append(initial_states)
@@ -104,7 +103,7 @@ def stitch_calibrations(
     init_states = np.ma.concatenate(initial_states_collection)
     prop_states = np.ma.concatenate(proposed_states_collection)
     prop_work = np.ma.concatenate(proposal_work_collection)
-    gks = np.ma.concatenate(gk_collection,axis=0)
+    gks = np.ma.concatenate(gk_collection, axis=0)
 
     return (
         init_states,
@@ -115,7 +114,8 @@ def stitch_calibrations(
     )
 
 
-def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], bootstrap: bool = False, num_bootstrap_samples: int = 1000):
+def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], bootstrap: bool = False,
+                   num_bootstrap_samples: int = 1000):
     """
     Run BAR between the first state and all other states.
 
@@ -166,7 +166,8 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
             else:
                 raise NotImplementedError("This method has not been implemented yet for this approach.")
 
-            forward, reverse = _gather_transitions(from_state, to_state, initial_states, proposed_states, proposal_work, gk)
+            forward, reverse = _gather_transitions(from_state, to_state, initial_states, proposed_states, proposal_work,
+                                                   gk)
 
             if bootstrap:
                 bar_estimate, bar_sd = _nonparametric_bootstrap_bar(forward, reverse, num_bootstrap_samples,
@@ -199,19 +200,19 @@ def extract_work_distributions(dataset: netCDF4.Dataset, state1_idx: int, state2
     The distribution of the reverse proposals is returned as -W, to give it the same sign 
     as the forward distribution.    
     """
-    
+
     ncmc = dataset["Protons/NCMC"]
     forward_work = []
     neg_reverse_work = []
-    
-    initial_states = ncmc["initial_state"][:,res_idx]
-    proposed_states = ncmc["proposed_state"][:,res_idx]
+
+    initial_states = ncmc["initial_state"][:, res_idx]
+    proposed_states = ncmc["proposed_state"][:, res_idx]
     tot_work = ncmc["total_work"][:]
-    for update in ncmc["update"]:        
-        update -= 1 # 1 indexed variable        
+    for update in ncmc["update"]:
+        update -= 1  # 1 indexed variable
         init = initial_states[update]
         prop = proposed_states[update]
-        
+
         # Forward distribution
         if init == state1_idx:
             if prop == state2_idx:
@@ -222,9 +223,9 @@ def extract_work_distributions(dataset: netCDF4.Dataset, state1_idx: int, state2
                 # Use negative value of the work
                 # so that the two distributions have the same sign.
                 neg_reverse_work.append(-tot_work[update])
-                
+
     return np.asarray(forward_work), np.asarray(neg_reverse_work)
-                
+
 
 def _nonparametric_bootstrap_bar(forward: np.ndarray, reverse: np.ndarray, nbootstraps: int, sams_estimate: float):
     """Perform sampling with replacement on forward and reverse trajectories and perform BAR.
@@ -276,7 +277,6 @@ def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarr
     forward = list()
     reverse = list()
 
-
     for i in range(0, gk.shape[0]):
         # subtract delta g_k forward
         if initial_states[i] == from_state and proposed_states[i] == to_state:
@@ -294,7 +294,8 @@ def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarr
     return forward, reverse
 
 
-def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], ax: plt.Axes = None, bar: bool = True,
+def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], ax: plt.Axes = None,
+                                   bar: bool = True,
                                    error: str = 'stdev', num_bootstrap_samples: int = 1000, zerobased: bool = False):
     """Plot the results of a calibration netCDF dataset.
 
@@ -445,11 +446,11 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
     """
     # charge by residue, state, rounded to nearest integer    
     charge_data = np.rint(dataset['Protons/Metadata/total_charge'][:, :]).astype(int)
-    
+
     # tautomer per residue, state, counted per charge
     # filled in below
     tautomer_data = np.empty_like(charge_data)
-    
+
     for residue in range(tautomer_data.shape[0]):
         # Keep track of how many times a charge was observed in the states of this residue
         charge_counts = dict()
@@ -457,12 +458,12 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
             charge = charge_data[residue, state]
             # for non-existent states
             if type(charge) is np.ma.core.MaskedConstant:
-                tautomer_data[residue,state] = 0
-                continue            
-            
+                tautomer_data[residue, state] = 0
+                continue
+
             if charge not in charge_counts:
                 charge_counts[charge] = 0
-            tautomer_data[residue,state] = charge_counts[charge]
+            tautomer_data[residue, state] = charge_counts[charge]
             charge_counts[charge] += 1
 
     # State per iteration, residue
@@ -472,7 +473,7 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
     tautomers = np.empty_like(titration_states)
     for iteration in range(titration_states.shape[0]):
         for residue in range(titration_states.shape[1]):
-            state = titration_states[iteration, residue]            
+            state = titration_states[iteration, residue]
             charges[iteration, residue] = charge_data[residue, state]
             tautomers[iteration, residue] = tautomer_data[residue, state]
 
@@ -600,14 +601,14 @@ def plot_tautomer_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, residue
 
     to_plot = None
     if residues is None:
-        to_plot, taut_to_plot = charge_taut_trace(dataset)        
+        to_plot, taut_to_plot = charge_taut_trace(dataset)
 
     else:
         if isinstance(residues, int):
             residues = [residues]
         residues = np.asarray(residues).astype(np.int)
         charges, tauts = charge_taut_trace(dataset)
-        to_plot = charges[:, residues]        
+        to_plot = charges[:, residues]
         taut_to_plot = tauts[:, residues]
 
     mesh = ax.pcolor(to_plot.T, cmap=cmap, vmin=vmin, vmax=vmax, snap=True, alpha=1.0)
@@ -645,3 +646,105 @@ def calculate_ncmc_acceptance_rate(dataset: netCDF4.Dataset):
                 naccepted += 1
 
     return float(naccepted) / float(ntotal)
+
+
+def gather_trajectories(
+    datasets: List[netCDF4.Dataset],
+    from_state: int,
+    to_state: int,
+    cumulative: bool = True,
+) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    """Gather lists of work trajectories from a list of netCDF datasets.
+
+    Parameters
+    ----------
+    datasets - A list of different netCDF datasets to retrieve NCMC work trajectories from
+    from_state - The state from which the protocol was initiated
+    to_state - The state to which the protocol is changing the system
+    cumulative - Set to false if incremental work is desired, rather than cumulative work.
+    """
+    forward_trajectories = list()
+    reverse_trajectories = list()
+
+    for d, dataset in enumerate(datasets):
+        for update in dataset["Protons/NCMC/update"][:]:
+            x = update - 1
+            if (
+                from_state == dataset["Protons/NCMC/initial_state"][x, :]
+                and to_state == dataset["Protons/NCMC/proposed_state"][x, :]
+            ):
+
+                if cumulative:
+                    trajectory = dataset["Protons/NCMC/cumulative_work"][x, :]
+                else:
+                    trajectory = np.diff(dataset["Protons/NCMC/cumulative_work"][x, :])
+
+                forward_trajectories.append(trajectory)
+            elif (
+                to_state == dataset["Protons/NCMC/initial_state"][x, :]
+                and from_state == dataset["Protons/NCMC/proposed_state"][x, :]
+            ):
+                if cumulative:
+                    trajectory = dataset["Protons/NCMC/cumulative_work"][x, :]
+                else:
+                    trajectory = np.diff(dataset["Protons/NCMC/cumulative_work"][x, :])
+                reverse_trajectories.append(trajectory)
+    return forward_trajectories, reverse_trajectories
+
+
+def plot_work_per_step(
+    datasets: List[netCDF4.Dataset],
+    from_state: int,
+    to_state: int,
+    color: str,
+    cumulative=True,
+    alpha: float = 0.1,
+    label: str = "",
+    which: int = 0,
+):
+    """Plot the work trajectories from a series of netCDF data sets.
+
+     Parameters
+    ----------
+    datasets - A list of different netCDF datasets to retrieve NCMC work trajectories from
+    from_state - The state from which the protocol was initiated
+    to_state - The state to which the protocol is changing the system
+    color - A color name for matplotlib
+    cumulative - Set to false if incremental work is desired, rather than cumulative work.
+    Alpha - float between 0 and 1 for transparency of lines
+    label - label for the data in the legend.
+    which - -1 for plotting reverse only, 1 for forward only, or 0 for both
+    """
+    if which not in [-1, 0, 1]:
+        raise ValueError(
+            "Please use -1 for plotting reverse only, 1 for forward only, or 0 for both."
+        )
+
+    forward, reverse = gather_trajectories(
+        datasets, from_state, to_state, cumulative=cumulative
+    )
+    size = forward[0].shape[0]
+    # Only label first line
+    if which == 0 or which == 1:
+        for traj in forward:
+            plt.plot(
+                np.linspace(0, 100, num=size),
+                traj,
+                color=color,
+                alpha=alpha,
+                label=label,
+                linestyle="-",
+            )
+            label = ""
+    if which == 0 or which == -1:
+        for traj in reverse:
+            plt.plot(
+                np.linspace(0, 100, num=size),
+                traj,
+                color=color,
+                alpha=alpha,
+                label=label,
+                linestyle=":",
+            )
+            label = ""
+    return

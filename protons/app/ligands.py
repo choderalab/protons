@@ -1386,7 +1386,13 @@ def prepare_calibration_systems(vacuum_file: str,
         forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml',
                                     'tip3p.xml', 'ions_tip3p.xml')
 
-    pdb = app.PDBFile(vacuum_file)
+    _, vacuum_extension = os.path.splitext(vacuum_file)
+    if vacuum_extension == ".pdf":
+        pdb = app.PDBFile(vacuum_file)
+    elif vacuum_extension == ".cif":
+        pdb = app.PDBxFile(vacuum_file)
+    else:
+        raise ValueError(f"Unsupported file extension {vacuum_extension} for vacuum file. Currently supported: pdb, cif.")
     modeller = app.Modeller(pdb.topology, pdb.positions)
 
     # The system will likely have different hydrogen names.
