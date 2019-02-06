@@ -115,7 +115,7 @@ def stitch_calibrations(
 
 
 def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], bootstrap: bool = False,
-                   num_bootstrap_samples: int = 1000):
+                   num_bootstrap_samples: int = 1000, to_first_state_only: bool= True):
     """
     Run BAR between the first state and all other states.
 
@@ -124,6 +124,8 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
     dataset - a Protons formatted netCDF4 file
     bootstrap - enable to perform nonparametric bootstrapping over transitions to get uncertainty estimates.
     num_bootstrap_samples - int, the number of samples for bootstrapping
+    to_first_state_only - only calculate values for pairswith first state by default, set to false for bar estimate
+    between every pair of states
 
     Notes
     -----
@@ -149,7 +151,8 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
         raise TypeError(f"Not sure how to handle type ({str(type(dataset))}) of dataset. Please provide a netCDF4 data set or a list of data sets.")
 
     bars_per_transition = dict()
-    for from_state in range(1):
+    outer = range(1) if to_first_state_only else range(n_states)
+    for from_state in outer:
         for to_state in range(n_states):
             if from_state == to_state:
                 continue
