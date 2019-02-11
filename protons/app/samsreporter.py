@@ -98,9 +98,9 @@ class SAMSReporter:
         self._grp['g_k'][iadapt,:] = deepcopy(simulation.drive.calibration_state.free_energies[:])
         self._grp['flatness'][iadapt] = simulation.last_dev
         self._grp['stage'][iadapt] = simulation.drive.calibration_state._stage.value
-        if simulation.drive.calibration_state._stage == Stage.SLOWGAIN:
-            self._grp['end_of_burnin'][0] = simulation.drive.calibration_state._end_of_burnin
-            self._grp['end_of_burnin'][0] = simulation.drive.calibration_state._end_of_burnin
+        if simulation.drive.calibration_state._stage == Stage.FASTDECAY:
+            self._grp['end_of_slowdecay'][0] = simulation.drive.calibration_state._end_of_slowdecay
+            self._grp['end_of_slowdecay'][0] = simulation.drive.calibration_state._end_of_slowdecay
 
     def _initialize_constants(self, simulation: ConstantPHSimulation):
         """Initialize a set of constants required for the reports
@@ -157,7 +157,7 @@ class SAMSReporter:
         beta = grp.createVariable('beta', float)
         beta.description = "SAMS parameter beta, determining the scale of the adaptation (0.5< b <1.0"
         # t0, end of the burn in period
-        t0 = grp.createVariable('end_of_burnin', int)
+        t0 = grp.createVariable('end_of_slowdecay', int)
         t0.description = "The end of the burn-in period, necessary for calculating gain-factor."
         # The criterion for flatness
         flatness_cr = grp.createVariable('flatness_criterion', float)
@@ -188,7 +188,7 @@ class SAMSReporter:
 
         grp['update_rule'][0] = calibration.drive.calibration_state._update_rule.value
         grp['beta'][0] = calibration.drive.calibration_state._beta_sams
-        grp['end_of_burnin'][0] = calibration.drive.calibration_state._end_of_burnin
+        grp['end_of_slowdecay'][0] = calibration.drive.calibration_state._end_of_slowdecay
         grp['min_burn'][0] = calibration.drive.calibration_state._min_burn
         grp['flatness_criterion'][0] = calibration.drive.calibration_state._flatness_criterion
         return

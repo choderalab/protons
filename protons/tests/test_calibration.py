@@ -176,7 +176,7 @@ class TestSAMS:
             pep.simulation.step(1)
             pep.simulation.update(1)
 
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.BURNIN)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
         log.setLevel(old_log_level)
 
     def test_onesite_sams_sampling_global(self):
@@ -192,7 +192,7 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.BURNIN)
+            sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.SLOWDECAY)
         log.setLevel(old_log_level)
 
 
@@ -208,7 +208,7 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.BURNIN)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
         log.setLevel(old_log_level)
         return
 
@@ -224,6 +224,6 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.BURNIN)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
         log.setLevel(old_log_level)
         return

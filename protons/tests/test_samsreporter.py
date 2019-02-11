@@ -162,7 +162,7 @@ class TestSAMSReporter(object):
         print("Temporary file: ", filename)
         newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
-        driver.calibration_state._stage = Stage.SLOWGAIN
+        driver.calibration_state._stage = Stage.FASTDECAY
 
         # Regular MD step
         for iteration in range(20):

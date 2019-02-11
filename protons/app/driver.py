@@ -766,11 +766,12 @@ class SAMSApproach(Enum):
     MULTISITE = 1
 
 
-
 class Stage(Enum):
-    """Two stages of a sams run."""
-    BURNIN = 0 # Fast gain but not optimal convergence
-    SLOWGAIN = 1 # Slower gain but optimal asymptotic convergence
+    """Stages of a sams run."""
+    NODECAY = -1 # Initial guess constructing, do not adjust gain factor or SAMS iteration number.
+    SLOWDECAY = 0 # Fast gain but not optimal convergence
+    FASTDECAY = 1 # Slower gain but optimal asymptotic convergence
+    EQUILIBRIUM = 2 # No adaptation of g_k
 
 
 class UpdateRule(Enum):
@@ -787,8 +788,8 @@ class _SAMSState:
                  group_index: Optional[int] = None,
                  update_rule:UpdateRule= UpdateRule.BINARY,
                  beta_sams:float = 0.5,
-                 flatness_criterion:float = 0.15,
-                 min_burn:int = 100):
+                 flatness_criterion: float = 0.05,
+                 min_burn:int = 200):
         """Set up tracking for SAMS calibration weights.
 
         Parameters
@@ -799,7 +800,7 @@ class _SAMSState:
         update_rule - The update rule to use
         beta_sams - SAMS two-stage coefficient to determine gain in first stage
         flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
-        min_burn - minimum iterations before slow-gain may be starteds
+        min_burn - minimum iterations before gain decay is initiated
 
         """
 
@@ -816,10 +817,11 @@ class _SAMSState:
         self._beta_sams: float = beta_sams
         self._flatness_criterion = flatness_criterion
         self._min_burn: int = min_burn
-        self._current_adaptation: int = 0
-        self._stage: Stage = Stage.BURNIN
-        self._end_of_burnin: int = 0
 
+        # Starting adaptation uses negative numbers to indicate burn-in
+        self._current_adaptation: int = -1 * min_burn
+        self._stage: Stage = Stage.NODECAY
+        self._end_of_slowdecay: int = 0
 
         if not isinstance(approach, SAMSApproach):
             raise TypeError("Please provide a SAMSApproach.")
@@ -1017,7 +1019,7 @@ class _SAMSState:
         root.set("min_burn", str(self._min_burn))
         root.set("adaptation",str(self._current_adaptation))
         root.set("stage", str(self._stage.value))
-        root.set("end_of_burnin", str(self._end_of_burnin))
+        root.set("end_of_slowdecay", str(self._end_of_slowdecay))
         return root
 
     @classmethod
@@ -1088,7 +1090,7 @@ class _SAMSState:
         instance._min_burn = int(root.get("min_burn"))
         instance._current_adaptation = int(root.get("adaptation"))
         instance._stage = Stage(int(root.get("stage")))
-        instance._end_of_burnin = int(root.get("end_of_burnin"))
+        instance._end_of_slowdecay = int(root.get("end_of_slowdecay"))
         return instance
 
 

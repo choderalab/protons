@@ -32,13 +32,13 @@ class SelfAdjustedMixtureSampler:
         """
         Initialize a Self-adjusted mixture sampling (SAMS) simulation engine for a given
         ProtonDrive object.
-        
+
         Parameters
         ----------
         driver : NCMCProtonDrive derived class
         group_index : int
             Index of the titration group that is being sampled.
-        
+
         """
 
         # Check if driver is of the right type.
@@ -280,11 +280,12 @@ class MultiSiteSAMSSampler:
         self.group_index = driver.calibration_state.group_index
         self._calibration_state: _SAMSState = driver.calibration_state
         self.nstates = len(self._calibration_state.free_energies)
+        # TODO bug: The state counts should be stored inside the calibration state, they are vital to the algorithm
         self.state_counts = np.zeros(self.nstates, np.float64)
         log.debug('There are %d titration states', self.nstates)
         return
 
-    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage = Stage.SLOWGAIN, end_of_burnin: int=0):
+    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage = Stage.FASTDECAY, end_of_slowdecay: int=0):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -297,8 +298,8 @@ class MultiSiteSAMSSampler:
              Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
         stage:
             Sams two-stage phase. Options : "burn-in" or "slow-gain"
-        end_of_burnin: int, optional (default : 0)
-            Iteration at which burn-in phase was ended.
+        end_of_slowdecay: int, optional (default : 0)
+            Iteration at which slow-decay phase was ended.
         Returns
         -------
         target_deviation - np.array of the deviation of the sampled histogram weights from the target pi_j's
@@ -307,14 +308,20 @@ class MultiSiteSAMSSampler:
 
         # zeta^{t-1}
         zeta = self._calibration_state.free_energies
-        self._calibration_state._current_adaptation += 1
+
+        # Only increase adaptation number if adaptation is expected
+        if stage in [Stage.NODECAY, Stage.SLOWDECAY, Stage.FASTDECAY]:
+            self._calibration_state._current_adaptation += 1
+
+        elif stage == Stage.EQUILIBRIUM:
+            return
 
         if update_rule is UpdateRule.BINARY:
-            update = self._binary_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
+            update = self._binary_update(group_index=self.group_index, b=b, stage=stage, end_of_slowdecay=end_of_slowdecay)
         elif update_rule is UpdateRule.GLOBAL:
             if self.approach is SAMSApproach.MULTISITE:
                 raise NotImplementedError("Global updates only implemented for one site at this time.")
-            update = self._global_update(group_index=self.group_index, b=b, stage=stage, end_of_burnin=end_of_burnin)
+            update = self._global_update(group_index=self.group_index, b=b, stage=stage, end_of_slowdecay=end_of_slowdecay)
         else:
             raise ValueError("Unknown adaptation update_rule: {}!".format(update_rule))
 
@@ -324,15 +331,18 @@ class MultiSiteSAMSSampler:
         zeta_t = zeta - zeta[0]
 
         # Set reference free energy based on new zeta
-        self._calibration_state.free_energies=(zeta_t)
+        self._calibration_state.free_energies = zeta_t
 
+        # TODO state counts fix
+        # These need to be taken from full calibration run
         Nk = self.state_counts / self.state_counts.sum()
         target = self._calibration_state.targets
-        target_deviation = sum(abs(target - Nk))
+        # Return the maximum deviation of any one state from the target histogram.
+        target_deviation = max(abs(target - Nk))
         log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self._calibration_state._current_adaptation, str(zeta_t), str(Nk), target_deviation * 100))
         return target_deviation
 
-    def _binary_update(self, group_index: int=0, b:float=1.0, stage=Stage.SLOWGAIN, end_of_burnin:int=0):
+    def _binary_update(self, group_index: int=0, b:float=1.0, stage=Stage.FASTDECAY, end_of_slowdecay:int=0):
         """
         Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
 
@@ -342,9 +352,9 @@ class MultiSiteSAMSSampler:
             Index of the group that needs updating, defaults to 0.
         b : float, optional (default : 1.0)
              Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
-        stage : Sams two-stage phase. Options : Stage.BURNIN or Stage.SLOWGAIN
-        end_of_burnin: int, optional (default : 0)
-            Iteration at which burn-in phase was ended.
+        stage : Sams two-stage phase. Options : Stage.SLOWDECAY or Stage.FASTDECAY
+        end_of_slowdecay: int, optional (default : 0)
+            Iteration at which slow-decay phase was ended.
         Returns
         -------
         np.ndarray - free energy updates
@@ -356,7 +366,7 @@ class MultiSiteSAMSSampler:
         current_state = self._calibration_state.state_index(self.driver.titrationStates)
         delta[current_state] = 1
         update *= delta
-        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_burnin=end_of_burnin), update)
+        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay), update)
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
@@ -364,7 +374,7 @@ class MultiSiteSAMSSampler:
 
         return update
 
-    def _global_update(self, b=1.0, stage: Stage = Stage.SLOWGAIN, end_of_burnin=0, group_index=0):
+    def _global_update(self, b=1.0, stage: Stage = Stage.FASTDECAY, end_of_slowdecay=0, group_index=0):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -374,8 +384,8 @@ class MultiSiteSAMSSampler:
              Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
         stage : Stage, optional (default : "burn-in")
             Sams two-stage phase. Options : "burn-in" or "slow-gain"
-        end_of_burnin: int, optional (default : 0)
-            Iteration at which burn-in phase was ended.
+        end_of_slowdecay: int, optional (default : 0)
+            Iteration at which slow-decay phase was ended.
         group_index : int, optional
             Index of the group that needs updating, defaults to 0.
         Returns
@@ -392,7 +402,7 @@ class MultiSiteSAMSSampler:
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j / pi_j
-        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_burnin=end_of_burnin), update)
+        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay), update)
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
@@ -400,7 +410,7 @@ class MultiSiteSAMSSampler:
 
         return update
 
-    def _gain_factor(self, b=1.0, stage=Stage.SLOWGAIN, end_of_burnin=0):
+    def _gain_factor(self, b=1.0, stage=Stage.FASTDECAY, end_of_slowdecay=0):
         """
         Two stage update scheme (equation 15) from DOI: 10.1080/10618600.2015.1113975
 
@@ -408,9 +418,9 @@ class MultiSiteSAMSSampler:
         ----------
         b : float, optional (default : 1.0)
              Decay factor β in two stage SAMS update scheme. Must be between 0.5 and 1.0.
-        stage : Sams two-stage phase. Options : Stage.BURNIN or Stage.SLOWGAIN
-        end_of_burnin: int, optional (default : 0)
-            Iteration at which burn-in phase was ended.
+        stage : Sams two-stage phase. Options : Stage.SLOWDECAY or Stage.FASTDECAY
+        end_of_slowdecay: int, optional (default : 0)
+            Iteration at which slow_decay phase was ended.
 
         Returns
         -------
@@ -425,11 +435,19 @@ class MultiSiteSAMSSampler:
 
         gain = np.zeros_like(pi_j)
         for j in range(gain.size):
-            if stage is Stage.BURNIN:
+            # Adaptation with a slow decay of the gain factor
+            if stage is Stage.SLOWDECAY:
                 gain[j] = min(pi_j[j], 1.0/pow(n_adapt, b))
-            elif stage is Stage.SLOWGAIN:
-                gain[j] = min(pi_j[j], 1.0/(n_adapt - end_of_burnin + pow(end_of_burnin, b)))
+            # Adaptation with a fast decay of the gain factor (asymptotic optimal convergence)
+            elif stage is Stage.FASTDECAY:
+                gain[j] = min(pi_j[j], 1.0 / (n_adapt - end_of_slowdecay + pow(end_of_slowdecay, b)))
+            # Adaptation with no decay of the gain factor (sub-optimal, not proven to converge, for initial guess)
+            elif stage is Stage.NODECAY:
+                gain[j] = min(pi_j[j], 1.0)
+            # No adaptation, for equilibrium free energy estimates
+            elif stage is Stage.EQUILIBRIUM:
+                gain[j] = 0.0
             else:
-                raise ValueError("Invalid SAMS adaptation stage specified %s. Choose Stage.BURNIN or Stage.SLOWGAIN.")
+                raise ValueError("Invalid SAMS adaptation stage specified %s. Choose Stage.SLOWDECAY or Stage.FASTDECAY.")
 
         return np.diag(gain)
