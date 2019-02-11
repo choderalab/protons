@@ -11,6 +11,7 @@ from protons.app.calibration import SAMSApproach
 from protons.app.logger import log, logging
 
 from lxml import etree
+from tqdm import trange
 from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
@@ -169,7 +170,11 @@ def main(jsonfile):
 
     if "ncmc" in reporters:
         freq = int(reporters["ncmc"]["frequency"])
-        simulation.update_reporters.append(app.NCMCReporter(ncfile, freq))
+        if "work_interval" in reporters["ncmc"]:
+            work_interval = int(reporters["ncmc"]["work_interval"])
+        else:
+            work_interval = 0
+        simulation.update_reporters.append(app.NCMCReporter(ncfile, freq, work_interval))
 
     total_iterations = int(run["total_update_attempts"])
     md_steps_between_updates = int(run["md_steps_between_updates"])
@@ -178,8 +183,7 @@ def main(jsonfile):
 
     try:
 
-        for i in range(total_iterations):
-            log.info("Iteration %i", i)
+        for i in trange(total_iterations, desc="NCMC attempts"):
             if i == 2:
                 log.info("Simulation seems to be working. Suppressing debugging info.")
                 log.setLevel(logging.INFO)

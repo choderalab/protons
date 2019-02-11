@@ -70,8 +70,10 @@ def main(jsonfile):
 
 
     # Load structure
-    # The input should be an mmcif/pdbx file
-    input_pdbx_file = os.path.abspath(os.path.join(idir, inp["structure"].format(**format_vars)))
+    # The input should be an mmcif/pdbx file'
+    ifilename= inp["structure"].format(**format_vars)
+    joined_path = os.path.join(idir, ifilename)
+    input_pdbx_file = os.path.abspath(joined_path)
     pdb_object = app.PDBxFile(input_pdbx_file)
 
     # Atoms , connectivity, residues
