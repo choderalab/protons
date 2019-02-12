@@ -19,10 +19,6 @@ class SAMSCalibrationEngine:
         Parameters
         ----------
         driver : NCMCProtonDrive derived class
-        approach : The SAMS approach (SAMSApproach.ONESITE or SAMSApproach.MULTISITE)
-        group_index : int
-            Index of the titration group that is being sampled.
-
         """
         # Type checks
         assert issubclass(type(driver), NCMCProtonDrive)
