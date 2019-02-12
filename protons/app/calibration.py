@@ -6,7 +6,10 @@ from .driver import NCMCProtonDrive, _SAMSState, SAMSApproach, Stage, UpdateRule
 import simtk.unit as units
 from .logger import log
 from scipy.special import logsumexp
-kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
+
+kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(
+    units.kilocalories_per_mole / units.kelvin
+)
 
 
 class SAMSCalibrationEngine:
@@ -24,7 +27,9 @@ class SAMSCalibrationEngine:
         assert issubclass(type(driver), NCMCProtonDrive)
 
         if driver.calibration_state is None:
-            raise ValueError("Drive has not been prepared for calibration. Please call driver.enable_calibration.")
+            raise ValueError(
+                "Drive has not been prepared for calibration. Please call driver.enable_calibration."
+            )
 
         self.driver = driver
         self.approach: SAMSApproach = driver.calibration_state.approach
@@ -33,7 +38,13 @@ class SAMSCalibrationEngine:
         self.nstates = len(self._calibration_state.free_energies)
         return
 
-    def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage = Stage.FASTDECAY, end_of_slowdecay: int=0):
+    def adapt_zetas(
+        self,
+        update_rule=UpdateRule.BINARY,
+        b: float = 0.85,
+        stage: Stage = Stage.FASTDECAY,
+        end_of_slowdecay: int = 0,
+    ):
         """
         Update the relative free energy of titration states of the specified titratable group
         using self-adjusted mixture sampling (SAMS)
@@ -65,11 +76,23 @@ class SAMSCalibrationEngine:
             return
 
         if update_rule is UpdateRule.BINARY:
-            update = self._binary_update(group_index=self.group_index, b=b, stage=stage, end_of_slowdecay=end_of_slowdecay)
+            update = self._binary_update(
+                group_index=self.group_index,
+                b=b,
+                stage=stage,
+                end_of_slowdecay=end_of_slowdecay,
+            )
         elif update_rule is UpdateRule.GLOBAL:
             if self.approach is SAMSApproach.MULTISITE:
-                raise NotImplementedError("Global updates only implemented for one site at this time.")
-            update = self._global_update(group_index=self.group_index, b=b, stage=stage, end_of_slowdecay=end_of_slowdecay)
+                raise NotImplementedError(
+                    "Global updates only implemented for one site at this time."
+                )
+            update = self._global_update(
+                group_index=self.group_index,
+                b=b,
+                stage=stage,
+                end_of_slowdecay=end_of_slowdecay,
+            )
         else:
             raise ValueError("Unknown adaptation update_rule: {}!".format(update_rule))
 
@@ -83,14 +106,31 @@ class SAMSCalibrationEngine:
 
         # TODO state counts fix
         # These need to be taken from full calibration run
-        Nk = self._calibration_state.observed_counts / self._calibration_state.observed_counts.sum()
+        Nk = (
+            self._calibration_state.observed_counts
+            / self._calibration_state.observed_counts.sum()
+        )
         target = self._calibration_state.targets
         # Return the maximum deviation of any one state from the target histogram.
         target_deviation = max(abs(target - Nk))
-        log.debug('Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation' % (self._calibration_state._current_adaptation, str(zeta_t), str(Nk), target_deviation * 100))
+        log.debug(
+            "Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation"
+            % (
+                self._calibration_state._current_adaptation,
+                str(zeta_t),
+                str(Nk),
+                target_deviation * 100,
+            )
+        )
         return target_deviation
 
-    def _binary_update(self, group_index: int=0, b:float=1.0, stage=Stage.FASTDECAY, end_of_slowdecay:int=0):
+    def _binary_update(
+        self,
+        group_index: int = 0,
+        b: float = 1.0,
+        stage=Stage.FASTDECAY,
+        end_of_slowdecay: int = 0,
+    ):
         """
         Binary update scheme (equation 9) from DOI: 10.1080/10618600.2015.1113975
 
@@ -114,7 +154,10 @@ class SAMSCalibrationEngine:
         current_state = self._calibration_state.state_index(self.driver.titrationStates)
         delta[current_state] = 1
         update *= delta
-        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay), update)
+        update = np.dot(
+            self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay),
+            update,
+        )
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
@@ -124,7 +167,9 @@ class SAMSCalibrationEngine:
 
         return update
 
-    def _global_update(self, b=1.0, stage: Stage = Stage.FASTDECAY, end_of_slowdecay=0, group_index=0):
+    def _global_update(
+        self, b=1.0, stage: Stage = Stage.FASTDECAY, end_of_slowdecay=0, group_index=0
+    ):
         """
         Global update scheme (equation 12) from DOI: 10.1080/10618600.2015.1113975
 
@@ -152,11 +197,16 @@ class SAMSCalibrationEngine:
         log_w_j -= logsumexp(log_w_j)
         w_j = np.exp(log_w_j)
         update *= w_j / pi_j
-        update = np.dot(self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay), update)
+        update = np.dot(
+            self._gain_factor(b=b, stage=stage, end_of_slowdecay=end_of_slowdecay),
+            update,
+        )
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
-        self._calibration_state.observed_counts += np.sqrt(self._calibration_state._current_adaptation) * w_j
+        self._calibration_state.observed_counts += (
+            np.sqrt(self._calibration_state._current_adaptation) * w_j
+        )
         return update
 
     def _gain_factor(self, b=1.0, stage=Stage.FASTDECAY, end_of_slowdecay=0):
@@ -186,10 +236,13 @@ class SAMSCalibrationEngine:
         for j in range(gain.size):
             # Adaptation with a slow decay of the gain factor
             if stage is Stage.SLOWDECAY:
-                gain[j] = min(pi_j[j], 1.0/pow(n_adapt, b))
+                gain[j] = min(pi_j[j], 1.0 / pow(n_adapt, b))
             # Adaptation with a fast decay of the gain factor (asymptotic optimal convergence)
             elif stage is Stage.FASTDECAY:
-                gain[j] = min(pi_j[j], 1.0 / (n_adapt - end_of_slowdecay + pow(end_of_slowdecay, b)))
+                gain[j] = min(
+                    pi_j[j],
+                    1.0 / (n_adapt - end_of_slowdecay + pow(end_of_slowdecay, b)),
+                )
             # Adaptation with no decay of the gain factor (sub-optimal, not proven to converge, for initial guess)
             elif stage is Stage.NODECAY:
                 gain[j] = min(pi_j[j], 1.0)
@@ -197,6 +250,8 @@ class SAMSCalibrationEngine:
             elif stage is Stage.EQUILIBRIUM:
                 gain[j] = 0.0
             else:
-                raise ValueError("Invalid SAMS adaptation stage specified %s. Choose Stage.SLOWDECAY or Stage.FASTDECAY.")
+                raise ValueError(
+                    "Invalid SAMS adaptation stage specified %s. Choose Stage.SLOWDECAY or Stage.FASTDECAY."
+                )
 
         return np.diag(gain)
