@@ -280,9 +280,6 @@ class MultiSiteSAMSSampler:
         self.group_index = driver.calibration_state.group_index
         self._calibration_state: _SAMSState = driver.calibration_state
         self.nstates = len(self._calibration_state.free_energies)
-        # TODO bug: The state counts should be stored inside the calibration state, they are vital to the algorithm
-        self.state_counts = np.zeros(self.nstates, np.float64)
-        log.debug('There are %d titration states', self.nstates)
         return
 
     def adapt_zetas(self, update_rule=UpdateRule.BINARY, b:float=0.85, stage: Stage = Stage.FASTDECAY, end_of_slowdecay: int=0):
@@ -335,7 +332,7 @@ class MultiSiteSAMSSampler:
 
         # TODO state counts fix
         # These need to be taken from full calibration run
-        Nk = self.state_counts / self.state_counts.sum()
+        Nk = self._calibration_state.observed_counts / self._calibration_state.observed_counts.sum()
         target = self._calibration_state.targets
         # Return the maximum deviation of any one state from the target histogram.
         target_deviation = max(abs(target - Nk))
@@ -370,7 +367,9 @@ class MultiSiteSAMSSampler:
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
-        self.state_counts[current_state] += np.sqrt(self._calibration_state._current_adaptation)
+        counts = self._calibration_state.observed_counts
+        counts[current_state] += np.sqrt(self._calibration_state._current_adaptation)
+        self._calibration_state.observed_counts = counts
 
         return update
 
@@ -406,8 +405,7 @@ class MultiSiteSAMSSampler:
 
         # Update count of current state weights.
         #  Use sqrt to make recent states count more
-        self.state_counts += np.sqrt(self._calibration_state._current_adaptation) * w_j
-
+        self._calibration_state.observed_counts += np.sqrt(self._calibration_state._current_adaptation) * w_j
         return update
 
     def _gain_factor(self, b=1.0, stage=Stage.FASTDECAY, end_of_slowdecay=0):

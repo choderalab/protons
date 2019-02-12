@@ -768,10 +768,10 @@ class SAMSApproach(Enum):
 
 class Stage(Enum):
     """Stages of a sams run."""
-    NODECAY = -1 # Initial guess constructing, do not adjust gain factor or SAMS iteration number.
-    SLOWDECAY = 0 # Fast gain but not optimal convergence
-    FASTDECAY = 1 # Slower gain but optimal asymptotic convergence
-    EQUILIBRIUM = 2 # No adaptation of g_k
+    NODECAY = -1  # Initial guess constructing, do not adjust gain factor or SAMS iteration number.
+    SLOWDECAY = 0  # Fast gain but not optimal convergence
+    FASTDECAY = 1  # Slower gain but optimal asymptotic convergence
+    EQUILIBRIUM = 2  # No adaptation of g_k
 
 
 class UpdateRule(Enum):
@@ -808,6 +808,8 @@ class _SAMSState:
         self._free_energy_table: np.ndarray = None
         # Target weights
         self._target_table: np.ndarray = None
+        # Observed histogram counts
+        self._observed_table: np.ndarray = None
 
         # Indices in flattened array
         self._index_table: np.ndarray = None
@@ -843,15 +845,18 @@ class _SAMSState:
             self._free_energy_table = list()
             self._target_table = list()
             self._index_table = list()
+            self._observed_table = list()
             for state in state_counts:
-                gkarray = np.zeros(state, dtype=np.float64)
-                self._free_energy_table.append(gkarray)
+                self._free_energy_table.append(np.zeros(state, dtype=np.float64))
                 targets = np.ones(state, dtype=np.float64) / state
                 self._target_table.append(targets)
+                self._observed_table.append(np.zeros(state, dtype=np.float64))
                 self._index_table.append(np.arange(state))
+
             self._free_energy_table = np.asarray(self._free_energy_table)
             self._target_table = np.asarray(self._target_table)
             self._index_table = np.asarray(self._index_table)
+            self._observed_table = np.asarray(self._observed_table)
 
         elif approach is SAMSApproach.MULTISITE:
             # Every value in the table is one joint titration state
@@ -861,6 +866,7 @@ class _SAMSState:
             # These should be equal for multisite sams
             total_count = int(np.prod(state_counts))
             self._target_table = np.ones(state_counts, dtype=np.float64) / (total_count)
+            self._observed_table = np.zeros(state_counts, dtype=np.float64)
             # For looking up index in the flattened array.
             self._index_table = np.arange(total_count).reshape(state_counts)
 
@@ -891,7 +897,7 @@ class _SAMSState:
             return self._free_energy_table[tuple(titration_states)]
 
     def target(self, titration_states: List[int]) -> np.float64:
-        """Return the target weight for all the SAMS states."""
+        """Return the target weight for the supplied state."""
         # In case of the one site sams approach, the sams weight is the total weight of every titration state
 
         weight = None
@@ -910,6 +916,26 @@ class _SAMSState:
 
         return weight
 
+    def observed(self, titration_states: List[int]) -> np.float64:
+        """Return the histogram count for the supplied state."""
+        # In case of the one site sams approach, the sams weight is the total weight of every titration state
+
+        counts = None
+        if self.approach is SAMSApproach.ONESITE:
+            current_state = titration_states[self.group_index]
+            if len(titration_states) != len(self._observed_table):
+                raise ValueError("The number of titration states in the table does not match what was provided.")
+            return self._observed_table[self.group_index][current_state]
+
+        # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
+        elif self.approach is SAMSApproach.MULTISITE:
+            if len(titration_states) != len(self._observed_table.shape):
+                raise ValueError(
+                    "The number of titration states provided does not match the dimensionality of the table.")
+            counts = self._observed_table[tuple(titration_states)]
+
+        return counts
+
     @property
     def targets(self) -> np.ndarray:
         """Return entire row of targets."""
@@ -917,6 +943,14 @@ class _SAMSState:
             return self._target_table[self.group_index]
         elif self.approach is SAMSApproach.MULTISITE:
             return self._target_table.flatten()
+
+    @property
+    def observed_counts(self) -> np.ndarray:
+        """Return entire row of histogram counts."""
+        if self.approach is SAMSApproach.ONESITE:
+            return self._observed_table[self.group_index]
+        elif self.approach is SAMSApproach.MULTISITE:
+            return self._observed_table.flatten()
 
     @property
     def free_energies(self) -> np.ndarray:
@@ -948,6 +982,17 @@ class _SAMSState:
         elif self.approach is SAMSApproach.MULTISITE:
             self._target_table = targets.reshape(self._target_table.shape)
 
+    @observed_counts.setter
+    def observed_counts(self, counts):
+        """Update all observed counts from a 1D array."""
+        if not counts.ndim == 1:
+            raise ValueError("Target input needs to be one dimensional.")
+
+        if self.approach is SAMSApproach.ONESITE:
+            self._observed_table[self.group_index] = counts
+        elif self.approach is SAMSApproach.MULTISITE:
+            self._observed_table = counts.reshape(self._observed_table.shape)
+
     def state_index(self, titration_states) -> int:
         """Find the index of the current titration state in the flattened arrays."""
         if self.approach is SAMSApproach.ONESITE:
@@ -977,7 +1022,6 @@ class _SAMSState:
         # Store the integer value of the SAMS approach
         root.set("approach", str(self.approach.value))
 
-
         # Group index is the last residue if not provided
         if self.approach is SAMSApproach.ONESITE:
             root.set("group_index", str(self.group_index))
@@ -993,6 +1037,7 @@ class _SAMSState:
                     state = etree.Element("State")
                     state.set("FreeEnergy", str(self._free_energy_table[residue][s]))
                     state.set("Target", str(self._target_table[residue][s]))
+                    state.set("Observed", str(self._observed_table[residue][s]))
                     state.set("idx", str(self._index_table[residue][s]))
 
                     res.append(state)
@@ -1009,6 +1054,7 @@ class _SAMSState:
                 state = etree.Element("State")
                 state.set("FreeEnergy", str(self._free_energy_table.flat[idx]))
                 state.set("Target", str(self._target_table.flat[idx]))
+                state.set("Observed", str(self._observed_table.flat[idx]))
                 state.set("idx", str(idx))
                 root.append(state)
 
@@ -1051,17 +1097,20 @@ class _SAMSState:
             res = root.xpath('./Residue[@idx="{}"]'.format(group_index))[0]
             free_energies = np.zeros_like(instance.free_energies)
             targets = np.ones_like(instance.targets)
+            counts = np.zeros_like(instance.observed_counts)
+
             for state in res.xpath("State"):
                 idx = int(state.get("idx"))
                 free_energies[idx] = np.float64(state.get("FreeEnergy"))
                 targets[idx] = np.float64(state.get("Target"))
+                counts[idx] = np.float64(state.get("Observed"))
 
             instance.free_energies = free_energies
             instance.targets = targets
-
+            instance.observed_counts = counts
 
         elif approach is SAMSApproach.MULTISITE:
-            dims =  root.xpath("./Dimension")
+            dims = root.xpath("./Dimension")
             state_counts: List[int] = [0] * len(dims)
             for dim in dims:
                 dimidx = int(dim.get("idx"))
@@ -1071,13 +1120,16 @@ class _SAMSState:
 
             free_energies = np.zeros_like(instance.free_energies)
             targets = np.ones_like(instance.targets)
+            counts = np.zeros_like(instance.observed_counts)
             for state in root.xpath("State"):
                 idx = int(state.get("idx"))
                 free_energies[idx] = np.float64(state.get("FreeEnergy"))
                 targets[idx] = np.float64(state.get("Target"))
+                counts[idx] = np.float64(state.get("Observed"))
 
             instance.free_energies = free_energies
             instance.targets = targets
+            instance.observed_counts = counts
 
         else:
             raise NotImplementedError("Deserialization of {} SAMSState not implemented.".format(str(approach)))
@@ -1092,7 +1144,6 @@ class _SAMSState:
         instance._stage = Stage(int(root.get("stage")))
         instance._end_of_slowdecay = int(root.get("end_of_slowdecay"))
         return instance
-
 
 
 class _TitrationAttemptData(object):
