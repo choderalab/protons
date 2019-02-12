@@ -14,8 +14,9 @@ from protons import GBAOABIntegrator, GHMCIntegrator
 from protons import ForceFieldProtonDrive
 from protons.app.proposals import UniformProposal
 from protons import app as protonsapp
+from protons.app.driver import SAMSApproach
 
-from protons import SelfAdjustedMixtureSampler
+from protons import SAMSCalibrationEngine
 from . import get_test_data
 from .utilities import create_compound_gbaoab_integrator, SystemSetup
 
@@ -311,7 +312,8 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
     pools = {'glu' : [0], 'his': [1],  'glu-his' : [0,1] }
 
     driver.define_pools(pools)
-    sams_sampler = SelfAdjustedMixtureSampler(driver, 1) # SAMS on HIS
+    driver.enable_calibration(SAMSApproach.ONESITE, group_index=1)
+    sams_sampler = SAMSCalibrationEngine(driver) # SAMS on HIS
     simulation = app.Simulation(
         topology,
         system,
@@ -323,7 +325,7 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
     # run one step and one update
     simulation.step(1)
     driver.update(UniformProposal(), nattempts=1, residue_pool='his')
-    sams_sampler.adapt_zetas(scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0)
+    sams_sampler.adapt_zetas()
     # Clean up so that the classes remain unmodified
     # unit test specific errors might occur otherwise when loading files due
     # to class side effects
