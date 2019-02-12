@@ -15,7 +15,7 @@ from simtk import unit, openmm
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
-from protons.app import SelfAdjustedMixtureSampler
+from protons.app import SAMSCalibrationEngine
 from protons.app import UniformProposal
 from protons.app.proposals import OneDirectionChargeProposal
 from . import get_test_data
@@ -106,7 +106,8 @@ class TestAmberTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -115,7 +116,7 @@ class TestAmberTyrosineExplicit(object):
 
         compound_integrator.step(10)  # MD
         sams_sampler.driver.update(UniformProposal())  # protonation
-        sams_sampler.adapt_zetas('binary')
+        sams_sampler.adapt_zetas(app.driver.UpdateRule.BINARY)
 
     def test_tyrosine_sams_instantaneous_global(self):
         """
@@ -124,7 +125,8 @@ class TestAmberTyrosineExplicit(object):
         testsystem = self.setup_tyrosine_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -133,7 +135,7 @@ class TestAmberTyrosineExplicit(object):
 
         compound_integrator.step(10)  # MD
         sams_sampler.driver.update(UniformProposal())  # protonation
-        sams_sampler.adapt_zetas('global')
+        sams_sampler.adapt_zetas(app.driver.UpdateRule.GLOBAL)
 
     def test_tyrosine_ncmc(self):
         """
@@ -284,7 +286,8 @@ class TestForceFieldImidazoleExplicit(object):
         driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology,
                                        testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure=testsystem.pressure,
                                        perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -293,7 +296,7 @@ class TestForceFieldImidazoleExplicit(object):
 
         compound_integrator.step(10)  # MD
         sams_sampler.driver.update(UniformProposal())  # protonation
-        sams_sampler.adapt_zetas('binary')
+        sams_sampler.adapt_zetas(app.driver.UpdateRule.BINARY)
 
     def test_imidazole_sams_instantaneous_global(self):
         """
@@ -305,7 +308,8 @@ class TestForceFieldImidazoleExplicit(object):
         driver = ForceFieldProtonDrive(testsystem.temperature, testsystem.topology,
                                        testsystem.system, testsystem.forcefield, testsystem.ffxml_filename, pressure= testsystem.pressure,
                                        perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampler(driver, 0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -314,7 +318,7 @@ class TestForceFieldImidazoleExplicit(object):
 
         compound_integrator.step(10)  # MD
         sams_sampler.driver.update(UniformProposal())  # protonation
-        sams_sampler.adapt_zetas('global')
+        sams_sampler.adapt_zetas(app.driver.UpdateRule.GLOBAL)
 
 
 class TestAmberPeptide(object):
@@ -386,7 +390,8 @@ class TestAmberPeptide(object):
         testsystem = self.setup_edchky_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
         driver = AmberProtonDrive(testsystem.temperature, testsystem.topology, testsystem.system, testsystem.cpin_filename, pressure=testsystem.pressure, perturbations_per_trial=0)
-        sams_sampler = SelfAdjustedMixtureSampler(driver, 4)
+        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=4)
+        sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
         context.setPositions(testsystem.positions)  # set to minimized positions
@@ -405,7 +410,7 @@ class TestAmberPeptide(object):
 
         compound_integrator.step(10)  # MD
         sams_sampler.driver.update(UniformProposal(), residue_pool="LYS")  # protonation
-        sams_sampler.adapt_zetas('binary')
+        sams_sampler.adapt_zetas(app.driver.UpdateRule.BINARY)
 
     @pytest.mark.slowtest
     @pytest.mark.skipif(os.environ.get("TRAVIS", None) == 'true', reason="Skip slow test on travis.")
