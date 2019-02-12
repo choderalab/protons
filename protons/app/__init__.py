@@ -5,7 +5,7 @@ from __future__ import print_function
 
 from simtk.openmm.app import *
 from .topology import Topology
-from .calibration import MultiSiteSAMSSampler
+from .calibration import SAMSCalibrationEngine
 from .simulation import ConstantPHSimulation
 from .driver import ForceFieldProtonDrive, AmberProtonDrive, NCMCProtonDrive
 from .proposals import UniformProposal, DoubleProposal, CategoricalProposal

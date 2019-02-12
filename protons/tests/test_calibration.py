@@ -12,7 +12,7 @@ import numpy as np
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
 from protons.app import UniformProposal
-from protons.app.calibration import MultiSiteSAMSSampler
+from protons.app.calibration import SAMSCalibrationEngine
 from protons.app.driver import SAMSApproach, Stage, UpdateRule
 from protons.app import log
 import logging
@@ -168,7 +168,7 @@ class TestSAMS:
 
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
-        sampler = MultiSiteSAMSSampler(pep.drive)
+        sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
             if x == total_iterations - 1:
@@ -185,7 +185,7 @@ class TestSAMS:
 
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
-        sampler = MultiSiteSAMSSampler(pep.drive)
+        sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
             if x == total_iterations - 1:
@@ -201,7 +201,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.enable_calibration(SAMSApproach.MULTISITE)
-        sampler = MultiSiteSAMSSampler(pep.drive)
+        sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
             if x == total_iterations -1:
@@ -217,7 +217,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
         pep = self.setup_peptide_implicit("yeah", createsim=True)
         pep.drive.enable_calibration(SAMSApproach.MULTISITE)
-        sampler = MultiSiteSAMSSampler(pep.drive)
+        sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
             if x == total_iterations -1:

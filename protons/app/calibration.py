@@ -9,7 +9,7 @@ from scipy.special import logsumexp
 kB = (1.0 * units.BOLTZMANN_CONSTANT_kB * units.AVOGADRO_CONSTANT_NA).in_units_of(units.kilocalories_per_mole / units.kelvin)
 
 
-class MultiSiteSAMSSampler:
+class SAMSCalibrationEngine:
     """An implementation of Self Adjusted mixture sampling that can sample multiple sites at once."""
 
     def __init__(self, driver: NCMCProtonDrive):

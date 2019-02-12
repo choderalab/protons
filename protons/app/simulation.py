@@ -4,7 +4,7 @@
 from simtk.openmm.app import Simulation
 from simtk import openmm
 from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive
-from .calibration import MultiSiteSAMSSampler
+from .calibration import SAMSCalibrationEngine
 from protons.app import proposals
 from protons.app.logger import log
 import sys
@@ -69,7 +69,7 @@ class ConstantPHSimulation(Simulation):
             drive.define_pools(pools)
 
         if self.drive.calibration_state is not None:
-            self.sams = MultiSiteSAMSSampler(drive)
+            self.sams = SAMSCalibrationEngine(drive)
         else:
             self.sams = None
 
