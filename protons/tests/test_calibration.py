@@ -12,7 +12,7 @@ import numpy as np
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
 from protons.app import UniformProposal
-from protons.app.calibration import MultiSiteSAMSSampler, SelfAdjustedMixtureSampler
+from protons.app.calibration import MultiSiteSAMSSampler
 from protons.app.driver import SAMSApproach, Stage, UpdateRule
 from protons.app import log
 import logging

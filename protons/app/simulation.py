@@ -4,7 +4,7 @@
 from simtk.openmm.app import Simulation
 from simtk import openmm
 from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive
-from .calibration import SelfAdjustedMixtureSampler, MultiSiteSAMSSampler
+from .calibration import MultiSiteSAMSSampler
 from protons.app import proposals
 from protons.app.logger import log
 import sys
