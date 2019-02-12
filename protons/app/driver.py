@@ -89,7 +89,9 @@ class _TitratableResidue:
 
         if self._pka_data is not None and other._pka_data is not None:
             try:
-                assert_frame_equal(self._pka_data, other._pka_data, check_less_precise=4)
+                assert_frame_equal(
+                    self._pka_data, other._pka_data, check_less_precise=4
+                )
             except AssertionError:
                 return False
 
@@ -440,7 +442,7 @@ class _TitratableResidue:
         """Returns boolean array of atoms, and if they're switched on.
         Defined as charge equal to 0 (to precision of 1.e-9
         """
-        return [0 if abs(charge) < 1.e-9 else 1 for charge in self.state.charges]
+        return [0 if abs(charge) < 1.0e-9 else 1 for charge in self.state.charges]
 
     @property
     def total_charge(self) -> int:
@@ -517,7 +519,9 @@ class _TitrationState:
         state = copy.deepcopy(state_element)
         obj.proton_count = int(state.get("proton_count"))
         target_weight = state.get("target_weight")
-        obj._target_weight = None if target_weight == "None" else np.float64(target_weight)
+        obj._target_weight = (
+            None if target_weight == "None" else np.float64(target_weight)
+        )
         obj.g_k = np.float64(state.get("g_k"))
 
         charges = state.xpath("charge")
@@ -543,7 +547,14 @@ class _TitrationState:
 
             for atom in force.xpath("atom"):
                 atom_dict = dict()
-                for key in ["atom_index", "charge", "epsilon", "sigma", "radius", "scaleFactor"]:
+                for key in [
+                    "atom_index",
+                    "charge",
+                    "epsilon",
+                    "sigma",
+                    "radius",
+                    "scaleFactor",
+                ]:
                     if key == "atom_index":
                         atom_dict[key] = int(atom.get(key))
                     else:
@@ -582,9 +593,15 @@ class _TitrationState:
                             except KeyError:
                                 obj._mc_moves["COOH"] = [mover]
                         else:
-                            raise KeyError("Unknown COOH movetype found in XML: {}".format(grandchild.tag))
+                            raise KeyError(
+                                "Unknown COOH movetype found in XML: {}".format(
+                                    grandchild.tag
+                                )
+                            )
                 else:
-                    raise KeyError("Unsupported MC movetype found in XML: {}".format(child.tag))
+                    raise KeyError(
+                        "Unsupported MC movetype found in XML: {}".format(child.tag)
+                    )
             pass
 
         return obj
@@ -699,7 +716,7 @@ class _TitrationState:
         if not isinstance(other, _TitrationState):
             return False
 
-        float_atol = 1.e-10
+        float_atol = 1.0e-10
         if not np.isclose(
             self._target_weight, other._target_weight, rtol=0.0, atol=float_atol
         ):
@@ -750,6 +767,7 @@ class _TitrationState:
         # Everything that was checked seems equal.
         return True
 
+
 class SAMSApproach(Enum):
     """Various ways of running SAMS for a titration drive.
 
@@ -762,13 +780,17 @@ class SAMSApproach(Enum):
         Example: 2 hydroxy residues have 4 states (OH1 OH2, O-1 OH2, OH1 O-1, O-1 O-2)
 
     """
+
     ONESITE = 0
     MULTISITE = 1
 
 
 class Stage(Enum):
     """Stages of a sams run."""
-    NODECAY = -1  # Initial guess constructing, do not adjust gain factor or SAMS iteration number.
+
+    NODECAY = (
+        -1
+    )  # Initial guess constructing, do not adjust gain factor or SAMS iteration number.
     SLOWDECAY = 0  # Fast gain but not optimal convergence
     FASTDECAY = 1  # Slower gain but optimal asymptotic convergence
     EQUILIBRIUM = 2  # No adaptation of g_k
@@ -776,6 +798,7 @@ class Stage(Enum):
 
 class UpdateRule(Enum):
     """SAMS update rule."""
+
     BINARY = 0
     GLOBAL = 1
 
@@ -783,13 +806,16 @@ class UpdateRule(Enum):
 class _SAMSState:
     """A table to contain SAMS free energies (zeta or g_k) and targets (pi) for constant-pH residues."""
 
-    def __init__(self, state_counts: List[int],
-                 approach: SAMSApproach,
-                 group_index: Optional[int] = None,
-                 update_rule:UpdateRule= UpdateRule.BINARY,
-                 beta_sams:float = 0.5,
-                 flatness_criterion: float = 0.05,
-                 min_burn:int = 200):
+    def __init__(
+        self,
+        state_counts: List[int],
+        approach: SAMSApproach,
+        group_index: Optional[int] = None,
+        update_rule: UpdateRule = UpdateRule.BINARY,
+        beta_sams: float = 0.5,
+        flatness_criterion: float = 0.05,
+        min_burn: int = 200,
+    ):
         """Set up tracking for SAMS calibration weights.
 
         Parameters
@@ -833,7 +859,9 @@ class _SAMSState:
             self.group_index = -1 if group_index is None else group_index
         elif approach is SAMSApproach.MULTISITE:
             if group_index is not None:
-                raise NotImplementedError("group_index should not be provided for multi site SAMS.")
+                raise NotImplementedError(
+                    "group_index should not be provided for multi site SAMS."
+                )
             self.group_index = group_index
 
         self.approach = approach
@@ -885,7 +913,9 @@ class _SAMSState:
         # In case of the one site sams approach, its only the current state of the residue that is being calibrated.
         if self.approach is SAMSApproach.ONESITE:
             if len(titration_states) != len(self._free_energy_table):
-                raise ValueError("The number of titration states in the table does not match what was provided.")
+                raise ValueError(
+                    "The number of titration states in the table does not match what was provided."
+                )
             state = titration_states[self.group_index]
             return self._free_energy_table[self.group_index][state]
 
@@ -893,7 +923,8 @@ class _SAMSState:
         elif self.approach is SAMSApproach.MULTISITE:
             if len(titration_states) != len(self._free_energy_table.shape):
                 raise ValueError(
-                    "The number of titration states provided does not match the dimensionality of the table.")
+                    "The number of titration states provided does not match the dimensionality of the table."
+                )
             return self._free_energy_table[tuple(titration_states)]
 
     def target(self, titration_states: List[int]) -> np.float64:
@@ -904,14 +935,17 @@ class _SAMSState:
         if self.approach is SAMSApproach.ONESITE:
             current_state = titration_states[self.group_index]
             if len(titration_states) != len(self._free_energy_table):
-                raise ValueError("The number of titration states in the table does not match what was provided.")
+                raise ValueError(
+                    "The number of titration states in the table does not match what was provided."
+                )
             return self._target_table[self.group_index][current_state]
 
         # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
         elif self.approach is SAMSApproach.MULTISITE:
             if len(titration_states) != len(self._free_energy_table.shape):
                 raise ValueError(
-                    "The number of titration states provided does not match the dimensionality of the table.")
+                    "The number of titration states provided does not match the dimensionality of the table."
+                )
             weight = self._target_table[tuple(titration_states)]
 
         return weight
@@ -924,14 +958,17 @@ class _SAMSState:
         if self.approach is SAMSApproach.ONESITE:
             current_state = titration_states[self.group_index]
             if len(titration_states) != len(self._observed_table):
-                raise ValueError("The number of titration states in the table does not match what was provided.")
+                raise ValueError(
+                    "The number of titration states in the table does not match what was provided."
+                )
             return self._observed_table[self.group_index][current_state]
 
         # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
         elif self.approach is SAMSApproach.MULTISITE:
             if len(titration_states) != len(self._observed_table.shape):
                 raise ValueError(
-                    "The number of titration states provided does not match the dimensionality of the table.")
+                    "The number of titration states provided does not match the dimensionality of the table."
+                )
             counts = self._observed_table[tuple(titration_states)]
 
         return counts
@@ -969,7 +1006,9 @@ class _SAMSState:
         if self.approach is SAMSApproach.ONESITE:
             self._free_energy_table[self.group_index] = free_energies
         elif self.approach is SAMSApproach.MULTISITE:
-            self._free_energy_table = free_energies.reshape(self._free_energy_table.shape)
+            self._free_energy_table = free_energies.reshape(
+                self._free_energy_table.shape
+            )
 
     @targets.setter
     def targets(self, targets):
@@ -997,7 +1036,9 @@ class _SAMSState:
         """Find the index of the current titration state in the flattened arrays."""
         if self.approach is SAMSApproach.ONESITE:
             if len(titration_states) != len(self._index_table):
-                raise ValueError("The number of titration states in the table does not match what was provided.")
+                raise ValueError(
+                    "The number of titration states in the table does not match what was provided."
+                )
             state = titration_states[self.group_index]
             return self._index_table[self.group_index][state]
 
@@ -1063,7 +1104,7 @@ class _SAMSState:
         root.set("beta_sams", str(self._beta_sams))
         root.set("flatness_criterion", str(self._flatness_criterion))
         root.set("min_burn", str(self._min_burn))
-        root.set("adaptation",str(self._current_adaptation))
+        root.set("adaptation", str(self._current_adaptation))
         root.set("stage", str(self._stage.value))
         root.set("end_of_slowdecay", str(self._end_of_slowdecay))
         return root
@@ -1072,7 +1113,11 @@ class _SAMSState:
     def from_xml(cls, root: etree.Element):
         """Instantiate this object from xml."""
         if not root.tag == "SAMSState":
-            raise ValueError("Wrong XML element provided. Expected 'SAMSState', got '{}'".format(root.tag))
+            raise ValueError(
+                "Wrong XML element provided. Expected 'SAMSState', got '{}'".format(
+                    root.tag
+                )
+            )
 
         approach = SAMSApproach(int(root.get("approach")))
         if "group_index" in root.attrib:
@@ -1132,7 +1177,9 @@ class _SAMSState:
             instance.observed_counts = counts
 
         else:
-            raise NotImplementedError("Deserialization of {} SAMSState not implemented.".format(str(approach)))
+            raise NotImplementedError(
+                "Deserialization of {} SAMSState not implemented.".format(str(approach))
+            )
 
         # state of the free energy calculation
 
@@ -1649,11 +1696,15 @@ class NCMCProtonDrive(_BaseDrive):
             self.swap_proposal = OneDirectionChargeProposal()
         return
 
-    def enable_calibration(self, approach: SAMSApproach, group_index: Optional[int] = None,
-                           update_rule: UpdateRule = UpdateRule.BINARY,
-                           beta_sams:float = 0.5,
-                           flatness_criterion:float = 0.15,
-                           min_burn:int = 100):
+    def enable_calibration(
+        self,
+        approach: SAMSApproach,
+        group_index: Optional[int] = None,
+        update_rule: UpdateRule = UpdateRule.BINARY,
+        beta_sams: float = 0.5,
+        flatness_criterion: float = 0.15,
+        min_burn: int = 100,
+    ):
         """Prepare the drive to read g_k values from a calibration instead of its defaults.
 
         Parameters
@@ -1676,23 +1727,38 @@ class NCMCProtonDrive(_BaseDrive):
             The code assumes all residues need to be sampled. If you want to exclude a residue from sampling, ensure it
              isn't added to the drive.
         """
-        state_counts = [len(res)  for res in self.titrationGroups]
-        self.calibration_state = _SAMSState(state_counts, approach, group_index, update_rule=update_rule, beta_sams=beta_sams, flatness_criterion=flatness_criterion, min_burn=min_burn)
+        state_counts = [len(res) for res in self.titrationGroups]
+        self.calibration_state = _SAMSState(
+            state_counts,
+            approach,
+            group_index,
+            update_rule=update_rule,
+            beta_sams=beta_sams,
+            flatness_criterion=flatness_criterion,
+            min_burn=min_burn,
+        )
 
         if approach is SAMSApproach.ONESITE:
-            residue = self.titrationGroups[group_index] if group_index is not None else self.titrationGroups[-1]
+            residue = (
+                self.titrationGroups[group_index]
+                if group_index is not None
+                else self.titrationGroups[-1]
+            )
             self.calibration_state.free_energies = np.asarray(residue.g_k_values)
             self.calibration_state.targets = np.asarray(residue.target_weights)
         elif approach is SAMSApproach.MULTISITE:
             free_energies = self.calibration_state.free_energies
             for index in self.calibration_state._index_table.flatten():
                 free_energy = 0
-                for residue, state in enumerate(np.where(self.calibration_state._index_table == index)):
+                for residue, state in enumerate(
+                    np.where(self.calibration_state._index_table == index)
+                ):
                     state_idx = int(state)
-                    free_energy += self.titrationGroups[residue].titration_states[state_idx].g_k
+                    free_energy += (
+                        self.titrationGroups[residue].titration_states[state_idx].g_k
+                    )
                 free_energies[index] = free_energy
             self.calibration_state.free_energies = free_energies
-
 
     def define_pools(self, dict_of_pools):
         """
@@ -1761,14 +1827,16 @@ class NCMCProtonDrive(_BaseDrive):
         if proposal == "COOH":
             # TODO support residue pool for COOH?
             if residue_pool is not None:
-                raise NotImplementedError("Residue pooling has not been implemented for COOH moves.")
+                raise NotImplementedError(
+                    "Residue pooling has not been implemented for COOH moves."
+                )
             moves = []
             for residue in self.titrationGroups:
                 state = residue.state
                 try:
                     moves.extend(state._mc_moves["COOH"])
                 except KeyError:
-                    pass # residue current state has no moves.
+                    pass  # residue current state has no moves.
 
             state = self.context.getState(getPositions=True, getVelocities=True)
             pos = state.getPositions(asNumpy=True)._value
@@ -1785,7 +1853,10 @@ class NCMCProtonDrive(_BaseDrive):
                     # or both
                     mover = random.sample(moves, 1)[0]
                     movable_atoms = mover.movable
-                    variances = [1.0/(self.beta * self.system.getParticleMass(atom)) for atom in movable_atoms]
+                    variances = [
+                        1.0 / (self.beta * self.system.getParticleMass(atom))
+                        for atom in movable_atoms
+                    ]
 
                     move = mover.random_move
 
@@ -1798,7 +1869,7 @@ class NCMCProtonDrive(_BaseDrive):
                         vel = state.getVelocities(asNumpy=True)
                         for i, atom in enumerate(movable_atoms):
                             new_vel = np.random.normal(size=3) * unit.sqrt(variances[i])
-                            vel[i,:] = new_vel[:]
+                            vel[i, :] = new_vel[:]
                         self.context.setVelocities(vel)
 
                     else:
@@ -1932,9 +2003,9 @@ class NCMCProtonDrive(_BaseDrive):
             # Using 1.e-15 as necessary precision for establishing greater than 0
             # Needs to be slightly larger than sys.float_info.epsilon to prevent numerical errors.
             if (
-                (abs(charge1 / (unit.elementary_charge)) > 1.e-15)
-                and (abs(charge2 / unit.elementary_charge) > 1.e-15)
-                and (abs(chargeProd / (unit.elementary_charge ** 2)) > 1.e-15)
+                (abs(charge1 / (unit.elementary_charge)) > 1.0e-15)
+                and (abs(charge2 / unit.elementary_charge) > 1.0e-15)
+                and (abs(chargeProd / (unit.elementary_charge ** 2)) > 1.0e-15)
             ):
                 coulomb14scale = chargeProd / (charge1 * charge2)
                 return coulomb14scale
@@ -2041,7 +2112,7 @@ class NCMCProtonDrive(_BaseDrive):
                     # 1-2 and 1-3 should be 0 for both chargeProd and episilon, whereas a 1-4 interaction is scaled.
                     # Potentially, chargeProd is 0, but epsilon should never be 0.
                     # Using > 1.e-15 as a reasonable float precision for being greater than 0
-                    if abs(unitless_epsilon) > 1.e-15:
+                    if abs(unitless_epsilon) > 1.0e-15:
                         self.atomExceptions[atom1].append(atom2)
                         self.atomExceptions[atom2].append(atom1)
         return
@@ -2795,15 +2866,19 @@ class NCMCProtonDrive(_BaseDrive):
             elif self.calibration_state.approach is SAMSApproach.ONESITE:
                 # override internal g_k and then calculate totals
                 free_energies = self.calibration_state.free_energies.tolist()
-                self.titrationGroups[self.calibration_state.group_index].g_k_values = free_energies
+                self.titrationGroups[
+                    self.calibration_state.group_index
+                ].g_k_values = free_energies
 
         return self.sum_of_gk()
 
     def sum_of_gk(self):
         """Calculate the total weight of the current titration state."""
         g_total = 0
-        for (titration_group_index, (titration_group, titration_state_index),) in enumerate(
-                zip(self.titrationGroups, self.titrationStates)):
+        for (
+            titration_group_index,
+            (titration_group, titration_state_index),
+        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
             g_total += titration_state.g_k
         return g_total
@@ -3160,7 +3235,9 @@ class NCMCProtonDrive(_BaseDrive):
             Index of the state for which the reduced potential needs to be calculated.
 
         """
-        potential_energy = self._get_potential_energy(state_index, group_index=group_index)
+        potential_energy = self._get_potential_energy(
+            state_index, group_index=group_index
+        )
         red_pot = self.beta * potential_energy
 
         if self.pressure is not None:
@@ -3667,7 +3744,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
                         cooh_system_indices[key] = system_index
 
-                    cooh_movers.append(COOHDummyMover.from_system(system, cooh_system_indices))
+                    cooh_movers.append(
+                        COOHDummyMover.from_system(system, cooh_system_indices)
+                    )
 
                 # Create titration state.
                 self._add_titration_state(
@@ -3750,4 +3829,3 @@ def strip_in_unit_system(quant, unit_system=unit.md_unit_system, compatible_with
         return quant.value_in_unit_system(unit_system)
     else:
         return quant
-
