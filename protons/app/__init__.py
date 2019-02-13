@@ -21,8 +21,10 @@ import numpy as np
 
 from simtk.openmm import State
 
+
 def err_on_nan(func):
     """This decorator causes a RuntimeError when a function returns NaN."""
+
     def nan_wrapper(self):
         val = func(self)
         if isinstance(val, Quantity):
@@ -35,7 +37,9 @@ def err_on_nan(func):
                 raise RuntimeError("NaN value returned by {}.".format(func.__name__))
             else:
                 return val
+
     return nan_wrapper
+
 
 State.getPotentialEnergy = err_on_nan(State.getPotentialEnergy)
 State.getKineticEnergy = err_on_nan(State.getKineticEnergy)

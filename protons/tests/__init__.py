@@ -1,4 +1,5 @@
 import os
+
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -15,4 +16,3 @@ def get_test_data(filename, folder):
         The name of the folder it is contained in
     """
     return os.path.join(PACKAGE_ROOT, folder, filename)
-

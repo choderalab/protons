@@ -25,6 +25,7 @@ from protons.tests.utilities import (
 
 log.setLevel(logging.INFO)
 
+
 class TestSAMS:
     """Test the functionality of the ``app.calibration.WeighsTable`` class."""
 
@@ -35,9 +36,8 @@ class TestSAMS:
 
     platform = mm.Platform.getPlatformByName(default_platform_name)
 
-
     @staticmethod
-    def setup_peptide_implicit(name:str,minimize=True, createsim=True):
+    def setup_peptide_implicit(name: str, minimize=True, createsim=True):
         """
         Set up implicit solvent peptide
 
@@ -55,7 +55,7 @@ class TestSAMS:
         peptide.timestep = 2.0 * unit.femtoseconds
         peptide.collision_rate = 1.0 / unit.picoseconds
         peptide.pH = 7.0
-        peptide.perturbations_per_trial = 0 # instantaneous monte carlo
+        peptide.perturbations_per_trial = 0  # instantaneous monte carlo
         peptide.propagations_per_step = 1
 
         testsystems = get_test_data("{}_implicit".format(name), "testsystems")
@@ -70,10 +70,10 @@ class TestSAMS:
         # Openmm relabels them HIS, which leads to them not being detected as
         # titratable. Renaming them fixes this.
         for residue in peptide.topology.residues():
-            if residue.name == 'HIS':
-                residue.name = 'HIP'
+            if residue.name == "HIS":
+                residue.name = "HIP"
 
-        peptide.constraint_tolerance = 1.e-7
+        peptide.constraint_tolerance = 1.0e-7
 
         peptide.integrator = create_compound_gbaoab_integrator(peptide)
 
@@ -112,31 +112,48 @@ class TestSAMS:
         """Test the creation of a weights table for one site sams."""
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.adjust_to_ph(7.4) # ensure nonequal target weights
+        pep.drive.adjust_to_ph(7.4)  # ensure nonequal target weights
         for group_index in range(len(pep.drive.titrationGroups)):
             pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
             table = pep.drive.calibration_state
 
             # The one site table should have exactly one entry for
-            assert len(table) == 7, "The number of g_k values does not equal the number of available (independent) states."
-            assert table.free_energy(pep.drive.titrationStates) == pep.drive.titrationGroups[group_index].state.g_k, "The weight should be the weight of the current state."
-            assert np.all(table.targets == pep.drive.titrationGroups[group_index].target_weights)
-            assert np.all(table.free_energies == pep.drive.titrationGroups[group_index].g_k_values)
+            assert (
+                len(table) == 7
+            ), "The number of g_k values does not equal the number of available (independent) states."
+            assert (
+                table.free_energy(pep.drive.titrationStates)
+                == pep.drive.titrationGroups[group_index].state.g_k
+            ), "The weight should be the weight of the current state."
+            assert np.all(
+                table.targets == pep.drive.titrationGroups[group_index].target_weights
+            )
+            assert np.all(
+                table.free_energies == pep.drive.titrationGroups[group_index].g_k_values
+            )
 
         # Test that using None treats the last residue.
         group_index = None
         pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
         table = pep.drive.calibration_state
 
-        assert len(table) == 7, "The number of g_k values does not equal the number of available (independent) states."
-        assert table.free_energy(pep.drive.titrationStates) == pep.drive.titrationGroups[
-            -1].state.g_k, "The weight should be the weight of the current state."
+        assert (
+            len(table) == 7
+        ), "The number of g_k values does not equal the number of available (independent) states."
+        assert (
+            table.free_energy(pep.drive.titrationStates)
+            == pep.drive.titrationGroups[-1].state.g_k
+        ), "The weight should be the weight of the current state."
         assert np.all(table.targets == pep.drive.titrationGroups[-1].target_weights)
         assert np.all(table.free_energies == pep.drive.titrationGroups[-1].g_k_values)
 
         xml = etree.tostring(table.to_xml()).decode()
-        assert xml.count("<Residue") == 3, "The number of states in the XML output is wrong."
-        assert xml.count("<State") == 7, "The number of states in the XML output is wrong."
+        assert (
+            xml.count("<Residue") == 3
+        ), "The number of states in the XML output is wrong."
+        assert (
+            xml.count("<State") == 7
+        ), "The number of states in the XML output is wrong."
 
         new_table = app.driver._SAMSState.from_xml(etree.fromstring(xml))
         return
@@ -145,22 +162,29 @@ class TestSAMS:
         """Test the creation of a weights table for multisite sams."""
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.adjust_to_ph(7.4) # ensure nonequal target weights for tests
+        pep.drive.adjust_to_ph(7.4)  # ensure nonequal target weights for tests
 
         pep.drive.enable_calibration(SAMSApproach.MULTISITE)
         table = pep.drive.calibration_state
         # The multi site table should have exactly one entry for
-        assert len(table) == 12, "The number of g_k values does not equal the product of the number of available (independent) states."
-        assert table.free_energy(pep.drive.titrationStates) ==  pytest.approx(pep.drive.sum_of_gk()), "The weight should be the same as the initial weight at this stage."
-        assert np.all(table.targets == 1./12.), "Targets should be 1/num of states."
+        assert (
+            len(table) == 12
+        ), "The number of g_k values does not equal the product of the number of available (independent) states."
+        assert table.free_energy(pep.drive.titrationStates) == pytest.approx(
+            pep.drive.sum_of_gk()
+        ), "The weight should be the same as the initial weight at this stage."
+        assert np.all(table.targets == 1.0 / 12.0), "Targets should be 1/num of states."
 
         xml = etree.tostring(table.to_xml()).decode()
-        assert xml.count("<Dimension") == 3, "The number of dimensions in the XML output is wrong."
-        assert xml.count("<State") == 12, "The number of states in the XML output is wrong."
+        assert (
+            xml.count("<Dimension") == 3
+        ), "The number of dimensions in the XML output is wrong."
+        assert (
+            xml.count("<State") == 12
+        ), "The number of states in the XML output is wrong."
 
         new_table = app.driver._SAMSState.from_xml(etree.fromstring(xml))
         return
-
 
     def test_onesite_sams_sampling_binary(self):
         """Test the one site sams sampling approach with binary updates"""
@@ -195,7 +219,6 @@ class TestSAMS:
             sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.SLOWDECAY)
         log.setLevel(old_log_level)
 
-
     def test_multisite_sams_sampling(self):
         """Test the multisite SAMS sampling approach."""
         old_log_level = log.getEffectiveLevel()
@@ -204,7 +227,7 @@ class TestSAMS:
         sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
-            if x == total_iterations -1:
+            if x == total_iterations - 1:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
@@ -220,7 +243,7 @@ class TestSAMS:
         sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
-            if x == total_iterations -1:
+            if x == total_iterations - 1:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)

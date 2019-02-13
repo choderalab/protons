@@ -4,7 +4,15 @@
 from .topology import Topology
 from simtk.openmm.app import modeller
 from simtk.openmm.vec3 import Vec3
-from simtk.openmm import System, Context,  CustomNonbondedForce, HarmonicBondForce, HarmonicAngleForce, VerletIntegrator, LocalEnergyMinimizer
+from simtk.openmm import (
+    System,
+    Context,
+    CustomNonbondedForce,
+    HarmonicBondForce,
+    HarmonicAngleForce,
+    VerletIntegrator,
+    LocalEnergyMinimizer,
+)
 from simtk.unit import nanometer, degree, acos, dot, norm
 import os
 from . import element as elem
@@ -24,12 +32,12 @@ class Modeller(modeller.Modeller):
     -------
     The original class was written by Peter Eastman.
     """
+
     @classmethod
     def unloadHydrogenDefinitions(cls):
         """Unloading hydrogen definitions."""
         cls._residueHydrogens = {}
         cls._hasLoadedStandardHydrogens = False
-
 
     def addHydrogens(self, forcefield=None, pH=None, variants=None, platform=None):
         """Add missing hydrogens to the model.
@@ -111,7 +119,9 @@ class Modeller(modeller.Modeller):
         residues = list(self.topology.residues())
         if variants is not None:
             if len(variants) != len(residues):
-                raise ValueError("The length of the variants list must equal the number of residues")
+                raise ValueError(
+                    "The length of the variants list must equal the number of residues"
+                )
         else:
             variants = [None] * len(residues)
         actualVariants = [None] * len(residues)
@@ -119,7 +129,11 @@ class Modeller(modeller.Modeller):
         # Load the residue specifications.
 
         if not Modeller._hasLoadedStandardHydrogens:
-            Modeller.loadHydrogenDefinitions(os.path.join(os.path.dirname(__file__), 'data', 'hydrogens-amber10-constph.xml'))
+            Modeller.loadHydrogenDefinitions(
+                os.path.join(
+                    os.path.dirname(__file__), "data", "hydrogens-amber10-constph.xml"
+                )
+            )
 
         # Make a list of atoms bonded to each atom.
 
@@ -148,45 +162,71 @@ class Modeller(modeller.Modeller):
         newAtoms = {}
         newPositions = [] * nanometer
         newIndices = []
-        acceptors = [atom for atom in self.topology.atoms() if atom.element in (elem.oxygen, elem.nitrogen)]
+        acceptors = [
+            atom
+            for atom in self.topology.atoms()
+            if atom.element in (elem.oxygen, elem.nitrogen)
+        ]
         for chain in self.topology.chains():
             newChain = newTopology.addChain(chain.id)
             for residue in chain.residues():
                 newResidue = newTopology.addResidue(residue.name, newChain, residue.id)
-                isNTerminal = (residue == chain._residues[0])
-                isCTerminal = (residue == chain._residues[-1])
+                isNTerminal = residue == chain._residues[0]
+                isCTerminal = residue == chain._residues[-1]
                 if residue.name in Modeller._residueHydrogens:
                     # Add hydrogens.  First select which variant to use.
 
                     spec = Modeller._residueHydrogens[residue.name]
                     variant = variants[residue.index]
                     if variant is None:
-                        if residue.name == 'CYS':
+                        if residue.name == "CYS":
                             # If this is part of a disulfide, use CYX.
 
-                            sulfur = [atom for atom in residue.atoms() if atom.element == elem.sulfur]
-                            if len(sulfur) == 1 and any((atom.residue != residue for atom in bonded[sulfur[0]])):
-                                variant = 'CYX'
-                        if residue.name == 'HIS':
-                            variant = 'HIP'
-                        if residue.name == 'GLU':
-                            variant = 'GL4'
-                        if residue.name == 'ASP':
-                            variant = 'AS4'
+                            sulfur = [
+                                atom
+                                for atom in residue.atoms()
+                                if atom.element == elem.sulfur
+                            ]
+                            if len(sulfur) == 1 and any(
+                                (atom.residue != residue for atom in bonded[sulfur[0]])
+                            ):
+                                variant = "CYX"
+                        if residue.name == "HIS":
+                            variant = "HIP"
+                        if residue.name == "GLU":
+                            variant = "GL4"
+                        if residue.name == "ASP":
+                            variant = "AS4"
                     if variant is not None and variant not in spec.variants:
-                        raise ValueError('Illegal variant for %s residue: %s' % (residue.name, variant))
+                        raise ValueError(
+                            "Illegal variant for %s residue: %s"
+                            % (residue.name, variant)
+                        )
                     actualVariants[residue.index] = variant
-                    removeExtraHydrogens = (variants[residue.index] is not None)
+                    removeExtraHydrogens = variants[residue.index] is not None
 
                     # Make a list of hydrogens that should be present in the residue.
 
-                    parents = [atom for atom in residue.atoms() if atom.element != elem.hydrogen]
+                    parents = [
+                        atom
+                        for atom in residue.atoms()
+                        if atom.element != elem.hydrogen
+                    ]
                     parentNames = [atom.name for atom in parents]
-                    hydrogens = [h for h in spec.hydrogens if
-                                 (variant is None) or (h.variants is None) or (
-                                 h.variants is not None and variant in h.variants)]
-                    hydrogens = [h for h in hydrogens if h.terminal is None or (isNTerminal and h.terminal == 'N') or (
-                    isCTerminal and h.terminal == 'C')]
+                    hydrogens = [
+                        h
+                        for h in spec.hydrogens
+                        if (variant is None)
+                        or (h.variants is None)
+                        or (h.variants is not None and variant in h.variants)
+                    ]
+                    hydrogens = [
+                        h
+                        for h in hydrogens
+                        if h.terminal is None
+                        or (isNTerminal and h.terminal == "N")
+                        or (isCTerminal and h.terminal == "C")
+                    ]
                     hydrogens = [h for h in hydrogens if h.parent in parentNames]
 
                     # Loop over atoms in the residue, adding them to the new topology along with required hydrogens.
@@ -194,19 +234,28 @@ class Modeller(modeller.Modeller):
                     for parent in residue.atoms():
                         # Check whether this is a hydrogen that should be removed.
 
-                        if removeExtraHydrogens and parent.element == elem.hydrogen and not any(
-                                        parent.name == h.name for h in hydrogens):
+                        if (
+                            removeExtraHydrogens
+                            and parent.element == elem.hydrogen
+                            and not any(parent.name == h.name for h in hydrogens)
+                        ):
                             continue
 
                         # Add the atom.
 
-                        newAtom = newTopology.addAtom(parent.name, parent.element, newResidue)
+                        newAtom = newTopology.addAtom(
+                            parent.name, parent.element, newResidue
+                        )
                         newAtoms[parent] = newAtom
                         newPositions.append(deepcopy(self.positions[parent.index]))
                         if parent in parents:
                             # Match expected hydrogens with existing ones and find which ones need to be added.
 
-                            existing = [atom for atom in bonded[parent] if atom.element == elem.hydrogen]
+                            existing = [
+                                atom
+                                for atom in bonded[parent]
+                                if atom.element == elem.hydrogen
+                            ]
                             expected = [h for h in hydrogens if h.parent == parent.name]
                             if len(existing) < len(expected):
                                 # Try to match up existing hydrogens to expected ones.
@@ -230,24 +279,48 @@ class Modeller(modeller.Modeller):
                                 # Add the missing hydrogens.
 
                                 for h in expected:
-                                    newH = newTopology.addAtom(h.name, elem.hydrogen, newResidue)
+                                    newH = newTopology.addAtom(
+                                        h.name, elem.hydrogen, newResidue
+                                    )
                                     newIndices.append(newH.index)
                                     delta = Vec3(0, 0, 0) * nanometer
                                     if len(bonded[parent]) > 0:
                                         for other in bonded[parent]:
-                                            delta += self.positions[parent.index] - self.positions[other.index]
+                                            delta += (
+                                                self.positions[parent.index]
+                                                - self.positions[other.index]
+                                            )
                                     else:
-                                        delta = Vec3(random.random(), random.random(), random.random()) * nanometer
+                                        delta = (
+                                            Vec3(
+                                                random.random(),
+                                                random.random(),
+                                                random.random(),
+                                            )
+                                            * nanometer
+                                        )
                                     delta *= 0.1 * nanometer / norm(delta)
-                                    delta += 0.05 * Vec3(random.random(), random.random(), random.random()) * nanometer
+                                    delta += (
+                                        0.05
+                                        * Vec3(
+                                            random.random(),
+                                            random.random(),
+                                            random.random(),
+                                        )
+                                        * nanometer
+                                    )
                                     delta *= 0.1 * nanometer / norm(delta)
-                                    newPositions.append(self.positions[parent.index] + delta)
+                                    newPositions.append(
+                                        self.positions[parent.index] + delta
+                                    )
                                     newTopology.addBond(newAtom, newH)
                 else:
                     # Just copy over the residue.
 
                     for atom in residue.atoms():
-                        newAtom = newTopology.addAtom(atom.name, atom.element, newResidue)
+                        newAtom = newTopology.addAtom(
+                            atom.name, atom.element, newResidue
+                        )
                         newAtoms[atom] = newAtom
                         newPositions.append(deepcopy(self.positions[atom.index]))
         for bond in self.topology.bonds():
@@ -270,7 +343,7 @@ class Modeller(modeller.Modeller):
             # and causes hydrogens to spread out evenly.
 
             system = System()
-            nonbonded = CustomNonbondedForce('100/((r/0.1)^4+1)')
+            nonbonded = CustomNonbondedForce("100/((r/0.1)^4+1)")
             bonds = HarmonicBondForce()
             angles = HarmonicAngleForce()
             system.addForce(nonbonded)
@@ -290,24 +363,39 @@ class Modeller(modeller.Modeller):
                 bondedTo[atom1.index].append(atom2)
                 bondedTo[atom2.index].append(atom1)
             for residue in newTopology.residues():
-                if residue.name == 'HOH':
+                if residue.name == "HOH":
                     # Add an angle term to make the water geometry correct.
 
                     atoms = list(residue.atoms())
-                    oindex = [i for i in range(len(atoms)) if atoms[i].element == elem.oxygen]
+                    oindex = [
+                        i for i in range(len(atoms)) if atoms[i].element == elem.oxygen
+                    ]
                     if len(atoms) == 3 and len(oindex) == 1:
                         hindex = list(set([0, 1, 2]) - set(oindex))
-                        angles.addAngle(atoms[hindex[0]].index, atoms[oindex[0]].index, atoms[hindex[1]].index, 1.824,
-                                        836.8)
+                        angles.addAngle(
+                            atoms[hindex[0]].index,
+                            atoms[oindex[0]].index,
+                            atoms[hindex[1]].index,
+                            1.824,
+                            836.8,
+                        )
                 else:
                     # Add angle terms for any hydroxyls.
 
                     for atom in residue.atoms():
                         index = atom.index
-                        if atom.element == elem.oxygen and len(bondedTo[index]) == 2 and elem.hydrogen in (a.element for a
-                                                                                                           in
-                                                                                                           bondedTo[index]):
-                            angles.addAngle(bondedTo[index][0].index, index, bondedTo[index][1].index, 1.894, 460.24)
+                        if (
+                            atom.element == elem.oxygen
+                            and len(bondedTo[index]) == 2
+                            and elem.hydrogen in (a.element for a in bondedTo[index])
+                        ):
+                            angles.addAngle(
+                                bondedTo[index][0].index,
+                                index,
+                                bondedTo[index][1].index,
+                                1.894,
+                                460.24,
+                            )
 
         if platform is None:
             context = Context(system, VerletIntegrator(0.0))
@@ -320,4 +408,7 @@ class Modeller(modeller.Modeller):
         del context
         return actualVariants
 
-Modeller.loadHydrogenDefinitions(os.path.join(PACKAGE_ROOT, 'data', 'hydrogens-amber10-constph.xml'))
+
+Modeller.loadHydrogenDefinitions(
+    os.path.join(PACKAGE_ROOT, "data", "hydrogens-amber10-constph.xml")
+)

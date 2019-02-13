@@ -1,7 +1,16 @@
 """Tests for pH curve calculation"""
 from __future__ import print_function
 
-from protons.app.pka import HIP as Histidine, TYR as Tyrosine, AS4 as Aspartic4, CYS as Cysteine, GL4 as Glutamic4, LYS as Lysine, GLH as Glutamic, ASH as Aspartic
+from protons.app.pka import (
+    HIP as Histidine,
+    TYR as Tyrosine,
+    AS4 as Aspartic4,
+    CYS as Cysteine,
+    GL4 as Glutamic4,
+    LYS as Lysine,
+    GLH as Glutamic,
+    ASH as Aspartic,
+)
 from numpy import linspace
 from pytest import approx
 
@@ -146,10 +155,10 @@ class TestGlutamicAcid4(object):
         weights = Glutamic4(Glutamic4.pka).populations()
 
         # 4 protonated forms of the same state
-        assert approx(weights[0], weights[1]*4)
-        assert approx(weights[0], weights[2]*4)
-        assert approx(weights[0], weights[3]*4)
-        assert approx(weights[0], weights[4]*4)
+        assert approx(weights[0], weights[1] * 4)
+        assert approx(weights[0], weights[2] * 4)
+        assert approx(weights[0], weights[3] * 4)
+        assert approx(weights[0], weights[4] * 4)
 
     def test_ph_greater_than_pka(self):
         """
@@ -159,10 +168,10 @@ class TestGlutamicAcid4(object):
         weights = Glutamic4(Glutamic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
-        assert approx(weights[0], 10.0 * weights[1]*4)
-        assert approx(weights[0], 10.0 * weights[2]*4)
-        assert approx(weights[0], 10.0 * weights[3]*4)
-        assert approx(weights[0], 10.0 * weights[4]*4)
+        assert approx(weights[0], 10.0 * weights[1] * 4)
+        assert approx(weights[0], 10.0 * weights[2] * 4)
+        assert approx(weights[0], 10.0 * weights[3] * 4)
+        assert approx(weights[0], 10.0 * weights[4] * 4)
 
     def test_ph_less_than_pka(self):
         """
@@ -208,7 +217,6 @@ class TestGlutamicAcid(object):
         # protonated forms of the same state should be 10X less
         assert approx(weights[0], 10.0 * weights[1])
 
-
     def test_ph_less_than_pka(self):
         """
         Weights for glutamic acid at pH == pKa - 1
@@ -219,7 +227,6 @@ class TestGlutamicAcid(object):
         # protonated forms of the same state should be 10X more
         assert approx(10.0 * weights[0], weights[1])
 
-
     def test_totals(self):
         """
         Fractional concentrations of glutamic acid should always sum to 1.0
@@ -228,8 +235,10 @@ class TestGlutamicAcid(object):
         for ph in linspace(-1, 15, 50):
             assert approx(1.0, sum(Glutamic(ph).populations()))
 
+
 class TestAsparticAcid4(object):
     """Test titration curve of aspartic acid  (syn/anti restype)"""
+
     def test_pka(self):
         """
         Weights for aspartic acid at pH == pKa
@@ -237,10 +246,10 @@ class TestAsparticAcid4(object):
         weights = Aspartic4(Aspartic4.pka).populations()
 
         # 4 protonated forms of the same state
-        assert approx(weights[0], weights[1]*4)
-        assert approx(weights[0], weights[2]*4)
-        assert approx(weights[0], weights[3]*4)
-        assert approx(weights[0], weights[4]*4)
+        assert approx(weights[0], weights[1] * 4)
+        assert approx(weights[0], weights[2] * 4)
+        assert approx(weights[0], weights[3] * 4)
+        assert approx(weights[0], weights[4] * 4)
 
     def test_ph_greater_than_pka(self):
         """
@@ -250,10 +259,10 @@ class TestAsparticAcid4(object):
         weights = Aspartic4(Aspartic4.pka + 1).populations()
 
         # 4 protonated forms of the same state
-        assert approx(weights[0], 10.0 * weights[1]*4)
-        assert approx(weights[0], 10.0 * weights[2]*4)
-        assert approx(weights[0], 10.0 * weights[3]*4)
-        assert approx(weights[0], 10.0 * weights[4]*4)
+        assert approx(weights[0], 10.0 * weights[1] * 4)
+        assert approx(weights[0], 10.0 * weights[2] * 4)
+        assert approx(weights[0], 10.0 * weights[3] * 4)
+        assert approx(weights[0], 10.0 * weights[4] * 4)
 
     def test_ph_less_than_pka(self):
         """
@@ -279,6 +288,7 @@ class TestAsparticAcid4(object):
 
 class TestAsparticAcid(object):
     """Test titration curve of aspartic acid  (syn/anti restype)"""
+
     def test_pka(self):
         """
         Weights for aspartic acid at pH == pKa
@@ -287,7 +297,6 @@ class TestAsparticAcid(object):
 
         # weights should be equal
         assert approx(weights[0], weights[1])
-
 
     def test_ph_greater_than_pka(self):
         """
@@ -299,7 +308,6 @@ class TestAsparticAcid(object):
         # protonated forms of the same state should be 10X less
         assert approx(weights[0], 10.0 * weights[1])
 
-
     def test_ph_less_than_pka(self):
         """
         Weights for aspartic acid at pH == pKa - 1
@@ -308,8 +316,7 @@ class TestAsparticAcid(object):
         weights = Aspartic(Aspartic.pka - 1).populations()
 
         # protonated forms of the same state should be 10X more
-        assert approx(10.0 * weights[0],  weights[1])
-
+        assert approx(10.0 * weights[0], weights[1])
 
     def test_totals(self):
         """
