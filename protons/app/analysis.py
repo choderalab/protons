@@ -11,7 +11,7 @@ from typing import List, Tuple, Union
 from protons.app.utils import OutdatedFileError
 from protons.app.driver import SAMSApproach
 
-sns.set_style('ticks')
+sns.set_style("ticks")
 
 
 def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
@@ -33,35 +33,39 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
     """
 
     try:
-        sams = dataset['Protons/SAMS']
+        sams = dataset["Protons/SAMS"]
     except KeyError:
         raise ValueError("This data set does not appear to have calibration data.")
 
     try:
-        ncmc = dataset['Protons/NCMC']
+        ncmc = dataset["Protons/NCMC"]
     except KeyError:
         raise ValueError("This data set does not appear to have NCMC data.")
 
     try:
-        approach = SAMSApproach(dataset['Protons/SAMS/approach'][0])
+        approach = SAMSApproach(dataset["Protons/SAMS/approach"][0])
     except IndexError:
-        raise OutdatedFileError("This file was generated with an older version of Protons. "
-                                "Please try a protons version <=0.0.1a4 to analyze it.")
+        raise OutdatedFileError(
+            "This file was generated with an older version of Protons. "
+            "Please try a protons version <=0.0.1a4 to analyze it."
+        )
 
-    group = sams['group_index'][0]
+    group = sams["group_index"][0]
     # This if statement checks if the group index is an integer, or undefined/masked (multisite calibration)
     if approach is SAMSApproach.ONESITE:
-        initial_states = ncmc['initial_state'][:, group]
-        proposed_states = ncmc['proposed_state'][:, group]
+        initial_states = ncmc["initial_state"][:, group]
+        proposed_states = ncmc["proposed_state"][:, group]
     elif approach is SAMSApproach.MULTISITE:
-        initial_states = ncmc['initial_state'][:, :]
-        proposed_states = ncmc['proposed_state'][:, :]
+        initial_states = ncmc["initial_state"][:, :]
+        proposed_states = ncmc["proposed_state"][:, :]
     else:
-        raise NotImplementedError(f"This method does not support the {str(approach)} approach.")
+        raise NotImplementedError(
+            f"This method does not support the {str(approach)} approach."
+        )
 
-    proposal_work = ncmc['total_work'][:]
+    proposal_work = ncmc["total_work"][:]
     # Sams weighs iteration, state
-    gk = dataset['Protons/SAMS/g_k']
+    gk = dataset["Protons/SAMS/g_k"]
 
     # The number of states should be equal to the shape of the last dimension of the weights array.
     n_states = gk.shape[-1]
@@ -70,7 +74,7 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
 
 
 def stitch_calibrations(
-        datasets: List[netCDF4.Dataset]
+    datasets: List[netCDF4.Dataset]
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray]:
     """Collect data from multiple netCDF datasets and return them as single arrays."""
     initial_states_collection: List[np.ndarray] = list()
@@ -105,17 +109,15 @@ def stitch_calibrations(
     prop_work = np.ma.concatenate(proposal_work_collection)
     gks = np.ma.concatenate(gk_collection, axis=0)
 
-    return (
-        init_states,
-        prop_states,
-        prop_work,
-        n_states_reference,
-        gks,
-    )
+    return (init_states, prop_states, prop_work, n_states_reference, gks)
 
 
-def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], bootstrap: bool = False,
-                   num_bootstrap_samples: int = 1000, to_first_state_only: bool= True):
+def bar_all_states(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]],
+    bootstrap: bool = False,
+    num_bootstrap_samples: int = 1000,
+    to_first_state_only: bool = True,
+):
     """
     Run BAR between the first state and all other states.
 
@@ -140,15 +142,21 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
     """
 
     if type(dataset) == netCDF4.Dataset:
-        initial_states, proposed_states, proposal_work, n_states, gk = calibration_dataset_to_arrays(dataset)
-        group = dataset['Protons/SAMS/group_index'][0]
-        approach = SAMSApproach(dataset['Protons/SAMS/approach'][0])
+        initial_states, proposed_states, proposal_work, n_states, gk = calibration_dataset_to_arrays(
+            dataset
+        )
+        group = dataset["Protons/SAMS/group_index"][0]
+        approach = SAMSApproach(dataset["Protons/SAMS/approach"][0])
     elif type(dataset) == list:
-        initial_states, proposed_states, proposal_work, n_states, gk = stitch_calibrations(dataset)
-        group = dataset[0]['Protons/SAMS/group_index'][0]
-        approach = SAMSApproach(dataset[0]['Protons/SAMS/approach'][0])
+        initial_states, proposed_states, proposal_work, n_states, gk = stitch_calibrations(
+            dataset
+        )
+        group = dataset[0]["Protons/SAMS/group_index"][0]
+        approach = SAMSApproach(dataset[0]["Protons/SAMS/approach"][0])
     else:
-        raise TypeError(f"Not sure how to handle type ({str(type(dataset))}) of dataset. Please provide a netCDF4 data set or a list of data sets.")
+        raise TypeError(
+            f"Not sure how to handle type ({str(type(dataset))}) of dataset. Please provide a netCDF4 data set or a list of data sets."
+        )
 
     bars_per_transition = dict()
     outer = range(1) if to_first_state_only else range(n_states)
@@ -157,7 +165,7 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
             if from_state == to_state:
                 continue
 
-            transition = '{}->{}'.format(from_state, to_state)
+            transition = "{}->{}".format(from_state, to_state)
             log.debug(transition)
 
             # SAMS bias estimate has the opposite sign of the free energy difference
@@ -167,14 +175,18 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
             elif approach is SAMSApproach.MULTISITE:
                 sams_estimate = -gk[to_state] + gk[from_state]
             else:
-                raise NotImplementedError("This method has not been implemented yet for this approach.")
+                raise NotImplementedError(
+                    "This method has not been implemented yet for this approach."
+                )
 
-            forward, reverse = _gather_transitions(from_state, to_state, initial_states, proposed_states, proposal_work,
-                                                   gk)
+            forward, reverse = _gather_transitions(
+                from_state, to_state, initial_states, proposed_states, proposal_work, gk
+            )
 
             if bootstrap:
-                bar_estimate, bar_sd = _nonparametric_bootstrap_bar(forward, reverse, num_bootstrap_samples,
-                                                                    sams_estimate)
+                bar_estimate, bar_sd = _nonparametric_bootstrap_bar(
+                    forward, reverse, num_bootstrap_samples, sams_estimate
+                )
             else:
 
                 bar_estimate, bar_sd = bar.BAR(forward, reverse, DeltaF=sams_estimate)
@@ -184,7 +196,9 @@ def bar_all_states(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], boots
     return bars_per_transition
 
 
-def extract_work_distributions(dataset: netCDF4.Dataset, state1_idx: int, state2_idx: int, res_idx: int) -> tuple:
+def extract_work_distributions(
+    dataset: netCDF4.Dataset, state1_idx: int, state2_idx: int, res_idx: int
+) -> tuple:
     """Extract the forward and reverse work distributions for ncmc protocols between two states, for a given residue.
            
     Parameters
@@ -230,7 +244,9 @@ def extract_work_distributions(dataset: netCDF4.Dataset, state1_idx: int, state2
     return np.asarray(forward_work), np.asarray(neg_reverse_work)
 
 
-def _nonparametric_bootstrap_bar(forward: np.ndarray, reverse: np.ndarray, nbootstraps: int, sams_estimate: float):
+def _nonparametric_bootstrap_bar(
+    forward: np.ndarray, reverse: np.ndarray, nbootstraps: int, sams_estimate: float
+):
     """Perform sampling with replacement on forward and reverse trajectories and perform BAR.
 
     Parameters
@@ -254,14 +270,22 @@ def _nonparametric_bootstrap_bar(forward: np.ndarray, reverse: np.ndarray, nboot
         bootstrap_forward = forward[np.random.choice(num_forward, num_forward)]
         # pick new set with the same length from reverse trajectories using sampling with replacement
         bootstrap_reverse = reverse[np.random.choice(num_reverse, num_reverse)]
-        strap_bars.append(bar.BAR(bootstrap_forward, bootstrap_reverse, DeltaF=sams_estimate)[0])
+        strap_bars.append(
+            bar.BAR(bootstrap_forward, bootstrap_reverse, DeltaF=sams_estimate)[0]
+        )
 
     # standard deviation of the bootstrap samples corresponds to the standard error.
     return np.mean(strap_bars), np.std(strap_bars)
 
 
-def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarray, proposed_states: np.ndarray,
-                        proposal_work: np.ndarray, gk: np.ndarray):
+def _gather_transitions(
+    from_state: int,
+    to_state: int,
+    initial_states: np.ndarray,
+    proposed_states: np.ndarray,
+    proposal_work: np.ndarray,
+    gk: np.ndarray,
+):
     """Gather the total work for all forward and reverse proposals for a given pair of states.
 
     Parameters
@@ -297,9 +321,14 @@ def _gather_transitions(from_state: int, to_state: int, initial_states: np.ndarr
     return forward, reverse
 
 
-def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]], ax: plt.Axes = None,
-                                   bar: bool = True,
-                                   error: str = 'stdev', num_bootstrap_samples: int = 1000, zerobased: bool = False):
+def plot_calibration_weight_traces(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]],
+    ax: plt.Axes = None,
+    bar: bool = True,
+    error: str = "stdev",
+    num_bootstrap_samples: int = 1000,
+    zerobased: bool = False,
+):
     """Plot the results of a calibration netCDF dataset.
 
     Parameters
@@ -321,13 +350,13 @@ def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.
         ax = plt.gca()
 
     # Two methods of calculating the error
-    if error == 'stdev':
+    if error == "stdev":
         # Use 2 * standard deviation, as returned by bar
         bootstrap = False
         err_multiply = 2
         err_label = r"BAR estimate $\pm$ $2\sigma$, State {}"
 
-    elif error == 'bootstrap':
+    elif error == "bootstrap":
         # Use the standard error from bootstrap sampling of reverse and forward trajectories
         bootstrap = True
         err_multiply = 1
@@ -351,29 +380,42 @@ def plot_calibration_weight_traces(dataset: Union[netCDF4.Dataset, List[netCDF4.
     cp = sns.color_palette("husl", n_states)
 
     if bar:
-        bar_data = bar_all_states(dataset, bootstrap=bootstrap, num_bootstrap_samples=num_bootstrap_samples)
+        bar_data = bar_all_states(
+            dataset, bootstrap=bootstrap, num_bootstrap_samples=num_bootstrap_samples
+        )
     else:
         bar_data = None
 
     xaxis_points = list(range(gk.shape[0]))
     for state in range(1, n_states):
         state_color = cp[state]
-        ax.plot(gk[:, state], label="State {}".format(state + label_offset), color=state_color)
+        ax.plot(
+            gk[:, state],
+            label="State {}".format(state + label_offset),
+            color=state_color,
+        )
 
         if bar:
-            estimate, err = bar_data['0->{}'.format(state)]
+            estimate, err = bar_data["0->{}".format(state)]
             err *= err_multiply
-            ax.fill_between(xaxis_points,
-                            -estimate - err,
-                            -estimate + err,
-                            alpha=0.3, color=state_color,
-                            label=err_label.format(state + label_offset))
+            ax.fill_between(
+                xaxis_points,
+                -estimate - err,
+                -estimate + err,
+                alpha=0.3,
+                color=state_color,
+                label=err_label.format(state + label_offset),
+            )
     sns.despine(ax=ax)
     return ax
 
 
-def plot_residue_state_traces(dataset: netCDF4.Dataset, residue_index: int, ax: plt.Axes = None,
-                              zerobased_states: bool = False):
+def plot_residue_state_traces(
+    dataset: netCDF4.Dataset,
+    residue_index: int,
+    ax: plt.Axes = None,
+    zerobased_states: bool = False,
+):
     """
     Plot the state of the given residue for individual updates.
 
@@ -397,9 +439,9 @@ def plot_residue_state_traces(dataset: netCDF4.Dataset, residue_index: int, ax: 
     else:
         label_offset = 1
     dataset.set_auto_mask(True)
-    titration_states = dataset['Protons/Titration/state'][:, residue_index]
-    meta = dataset['Protons/Metadata']
-    g_ks = meta['g_k'][residue_index, :]
+    titration_states = dataset["Protons/Titration/state"][:, residue_index]
+    meta = dataset["Protons/Metadata"]
+    g_ks = meta["g_k"][residue_index, :]
     # all True values in the inverse mask are actual states
     try:
         nstates = np.count_nonzero(~g_ks.mask)
@@ -418,12 +460,14 @@ def plot_residue_state_traces(dataset: netCDF4.Dataset, residue_index: int, ax: 
 
     encountered = np.unique(titration_states)
     for axis in [ax.xaxis, ax.yaxis]:
-        axis.set_major_locator(mpl.ticker.MaxNLocator(integer=True, min_n_ticks=encountered.size))
+        axis.set_major_locator(
+            mpl.ticker.MaxNLocator(integer=True, min_n_ticks=encountered.size)
+        )
 
     xaxis = list(range(titration_states.shape[0]))
 
     # Line connecting states
-    ax.plot(xaxis, label_offset + titration_states, c='k', alpha=0.02)
+    ax.plot(xaxis, label_offset + titration_states, c="k", alpha=0.02)
 
     # Plot individual points in the right color
     for s, state in enumerate(state_sets):
@@ -447,8 +491,8 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
     charges - array of charges indexed as [iteration,residue]
     tautomers - array of tautomers per charge, indexed as iteration, residue
     """
-    # charge by residue, state, rounded to nearest integer    
-    charge_data = np.rint(dataset['Protons/Metadata/total_charge'][:, :]).astype(int)
+    # charge by residue, state, rounded to nearest integer
+    charge_data = np.rint(dataset["Protons/Metadata/total_charge"][:, :]).astype(int)
 
     # tautomer per residue, state, counted per charge
     # filled in below
@@ -470,7 +514,7 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
             charge_counts[charge] += 1
 
     # State per iteration, residue
-    titration_states = dataset['Protons/Titration/state'][:, :]
+    titration_states = dataset["Protons/Titration/state"][:, :]
 
     charges = np.empty_like(titration_states)
     tautomers = np.empty_like(titration_states)
@@ -483,8 +527,13 @@ def charge_taut_trace(dataset: netCDF4.Dataset):
     return charges, tautomers
 
 
-def plot_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, color: str = 'charge', residues: list = None,
-                 zerobased: bool = False):
+def plot_heatmap(
+    dataset: netCDF4.Dataset,
+    ax: plt.Axes = None,
+    color: str = "charge",
+    residues: list = None,
+    zerobased: bool = False,
+):
     """Plot the states, or the charges as colored blocks
 
     Parameters
@@ -508,59 +557,74 @@ def plot_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, color: str = 'ch
     else:
         label_offset = 1
 
-    if color == 'charge':
+    if color == "charge":
         vmin = -2
         vmax = 2
         center = 0
-        cmap = sns.diverging_palette(25, 244, l=60, s=95, sep=80, center='light', as_cmap=True)
+        cmap = sns.diverging_palette(
+            25, 244, l=60, s=95, sep=80, center="light", as_cmap=True
+        )
         ticks = np.arange(vmin, vmax + 1)
-        boundaries = np.arange(vmin - .5, vmax + 1.5)
+        boundaries = np.arange(vmin - 0.5, vmax + 1.5)
         cbar_kws = {"ticks": ticks, "boundaries": boundaries, "label": color.title()}
 
-    elif color == 'state':
+    elif color == "state":
         vmin = 0 + label_offset
-        vmax = label_offset + np.amax(dataset['Protons/Titration/state'][:, :])
+        vmax = label_offset + np.amax(dataset["Protons/Titration/state"][:, :])
         ticks = np.arange(vmin, vmax + 1)
-        boundaries = np.arange(vmin - .5, vmax + 1.5)
+        boundaries = np.arange(vmin - 0.5, vmax + 1.5)
         cbar_kws = {"ticks": ticks, "boundaries": boundaries, "label": color.title()}
         center = None
-        cmap = 'Accent'
+        cmap = "Accent"
 
     else:
         raise ValueError("color argument should be 'charge', or 'state'.")
 
     to_plot = None
     if residues is None:
-        if color == 'charge':
+        if color == "charge":
             to_plot = charge_taut_trace(dataset)[0][:, :]
-        elif color == 'state':
-            titration_states = dataset['Protons/Titration/state'][:, :]
+        elif color == "state":
+            titration_states = dataset["Protons/Titration/state"][:, :]
             to_plot = titration_states + label_offset
 
     else:
         if isinstance(residues, int):
             residues = [residues]
         residues = np.asarray(residues).astype(np.int)
-        if color == 'charge':
+        if color == "charge":
             to_plot = charge_taut_trace(dataset)[0][:, residues]
-        elif color == 'state':
-            to_plot = dataset['Protons/Titration/state'][:, residues] + label_offset
+        elif color == "state":
+            to_plot = dataset["Protons/Titration/state"][:, residues] + label_offset
 
-    ax = sns.heatmap(to_plot.T, ax=ax, vmin=vmin, vmax=vmax, center=center,
-                     xticklabels=int(np.floor(to_plot.shape[0] / 7)) - 1,
-                     yticklabels=int(np.floor(to_plot.shape[1] / 4)) - 1, cmap=cmap, cbar_kws=cbar_kws,
-                     edgecolor='None', snap=True)
+    ax = sns.heatmap(
+        to_plot.T,
+        ax=ax,
+        vmin=vmin,
+        vmax=vmax,
+        center=center,
+        xticklabels=int(np.floor(to_plot.shape[0] / 7)) - 1,
+        yticklabels=int(np.floor(to_plot.shape[1] / 4)) - 1,
+        cmap=cmap,
+        cbar_kws=cbar_kws,
+        edgecolor="None",
+        snap=True,
+    )
 
     for residue in range(to_plot.T.shape[1]):
-        ax.axhline(residue, lw=0.4, c='w')
+        ax.axhline(residue, lw=0.4, c="w")
 
-    ax.set_ylabel('Residue')
-    ax.set_xlabel('Update')
+    ax.set_ylabel("Residue")
+    ax.set_xlabel("Update")
     return ax
 
 
-def plot_tautomer_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, residues: list = None,
-                          zerobased: bool = False):
+def plot_tautomer_heatmap(
+    dataset: netCDF4.Dataset,
+    ax: plt.Axes = None,
+    residues: list = None,
+    zerobased: bool = False,
+):
     """Plot the charge of residues on a blue-red (negative-positive) scale, and add different shades for different tautomers.
 
     Parameters
@@ -588,15 +652,17 @@ def plot_tautomer_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, residue
     vmin = -2
     vmax = 2
     center = 0
-    cmap = sns.diverging_palette(25, 244, l=60, s=95, sep=80, center='light', as_cmap=True)
+    cmap = sns.diverging_palette(
+        25, 244, l=60, s=95, sep=80, center="light", as_cmap=True
+    )
     ticks = np.arange(vmin, vmax + 1)
-    boundaries = np.arange(vmin - .5, vmax + 1.5)
+    boundaries = np.arange(vmin - 0.5, vmax + 1.5)
     cbar_kws = {"ticks": ticks, "boundaries": boundaries, "label": "Charge"}
 
     taut_vmin = 0 + label_offset
-    taut_vmax = label_offset + np.amax(dataset['Protons/Titration/state'][:, :])
+    taut_vmax = label_offset + np.amax(dataset["Protons/Titration/state"][:, :])
     taut_ticks = np.arange(taut_vmin, taut_vmax + 1)
-    taut_boundaries = np.arange(taut_vmin - .5, taut_vmax + 1.5)
+    taut_boundaries = np.arange(taut_vmin - 0.5, taut_vmax + 1.5)
     taut_cbar_kws = {"boundaries": taut_boundaries}
 
     taut_center = None
@@ -616,13 +682,20 @@ def plot_tautomer_heatmap(dataset: netCDF4.Dataset, ax: plt.Axes = None, residue
 
     mesh = ax.pcolor(to_plot.T, cmap=cmap, vmin=vmin, vmax=vmax, snap=True, alpha=1.0)
     plt.colorbar(mesh, ax=ax, **cbar_kws)
-    taut_mesh = ax.pcolor(taut_to_plot.T, cmap=taut_cmap, vmin=taut_vmin, vmax=taut_vmax, alpha=0.1, snap=True)
+    taut_mesh = ax.pcolor(
+        taut_to_plot.T,
+        cmap=taut_cmap,
+        vmin=taut_vmin,
+        vmax=taut_vmax,
+        alpha=0.1,
+        snap=True,
+    )
 
     for residue in range(to_plot.T.shape[0]):
-        ax.axhline(residue, lw=0.4, c='w')
+        ax.axhline(residue, lw=0.4, c="w")
 
-    ax.set_ylabel('Residue')
-    ax.set_xlabel('Update')
+    ax.set_ylabel("Residue")
+    ax.set_xlabel("Update")
 
     return ax
 
@@ -638,9 +711,9 @@ def calculate_ncmc_acceptance_rate(dataset: netCDF4.Dataset):
     float - acceptance rate
 
     """
-    titration_states = dataset['Protons/Titration/state'][:, :]
-    initial_states = dataset['Protons/NCMC/initial_state'][:, :]
-    proposed_states = dataset['Protons/NCMC/proposed_state'][:, :]
+    titration_states = dataset["Protons/Titration/state"][:, :]
+    initial_states = dataset["Protons/NCMC/initial_state"][:, :]
+    proposed_states = dataset["Protons/NCMC/proposed_state"][:, :]
     naccepted = 0
     ntotal = titration_states.shape[0]
     for i in range(ntotal):
