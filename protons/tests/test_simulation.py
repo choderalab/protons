@@ -362,7 +362,8 @@ class TestConstantPHFreeEnergyCalculation:
         simulation2.adapt()
 
         assert (
-            simulation2.drive.calibration_state._current_adaptation == 6
+            simulation2.drive.calibration_state._current_adaptation
+            == simulation.drive.calibration_state.min_burn + 6
         ), "The resumed calibration does not have the right adaptation_index"
 
     def test_create_constantphcalibration_with_reporters(self):
