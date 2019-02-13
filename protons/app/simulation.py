@@ -168,7 +168,7 @@ class ConstantPHSimulation(Simulation):
                 self.drive.calibration_state._update_rule,
                 stage=self.drive.calibration_state._stage,
                 b=self.drive.calibration_state._beta_sams,
-                end_of_slowdecay=self.drive.calibration_state._end_of_burnin,
+                end_of_slowdecay=self.drive.calibration_state._end_of_slowdecay,
             )
 
             self.last_gk = self.drive.calibration_state.free_energies
