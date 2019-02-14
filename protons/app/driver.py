@@ -582,10 +582,10 @@ class _TitrationState:
 
         # instantiate supported MCMoves from xml
         # throws KeyError if there is an unimplemented move present
-        for mcmove in state.xpath("MCMoves"):
-            for child in mcmove:
+        for mcmove in state.xpath("MCMoves")[0]:
+            for child in mcmove.iterchildren():
                 if child.tag == "COOH":
-                    for grandchild in child:
+                    for grandchild in child.iterchildren():
                         if grandchild.tag == "COOHDummyMover":
                             mover = COOHDummyMover.from_xml(grandchild)
                             try:
