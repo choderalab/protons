@@ -259,9 +259,9 @@ class TestSAMS:
         pep.drive.enable_calibration(
             SAMSApproach.ONESITE,
             group_index=0,
-            min_burn=0,
-            min_fast=200,
-            min_slow=200,
+            min_burn=200,
+            min_fast=100,
+            min_slow=100,
             flatness_criterion=0.1,
         )
         pep.simulation = app.ConstantPHSimulation(
@@ -275,7 +275,7 @@ class TestSAMS:
         pep.context = pep.simulation.context
         pep.simulation.minimizeEnergy()
 
-        total_iterations = 50000
+        total_iterations = 1000
         for x in range(total_iterations):
             if x == total_iterations - 1:
                 log.setLevel(logging.DEBUG)
