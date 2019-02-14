@@ -3,7 +3,8 @@ from lxml import etree, objectify
 import networkx as nx
 import math
 
-def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
+
+def patch_cooh(source: str, residue_name: str, oh_type="oh", ho_type="ho") -> str:
     """Add COOH statements to protons ffxml templates and fix hydroxy atom types.
 
     Parameters
@@ -20,7 +21,7 @@ def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
 
     """
 
-    with open(source, 'r') as ffxml:
+    with open(source, "r") as ffxml:
         ffxml = etree.fromstring(ffxml.read())
 
     # Keep track of all relevant atoms
@@ -32,24 +33,29 @@ def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
 
     coohs = list()
 
-
     # undirected graph represents the complete openmm residue (ignoring protonation states)
     G = nx.Graph()
-    for atom in ffxml.xpath("/ForceField/Residues/Residue[@name='{}']/Atom".format(residue_name)):
-        G.add_node(atom.get("name"), type=atom.get('type'), charge=float(atom.get("charge")))
+    for atom in ffxml.xpath(
+        "/ForceField/Residues/Residue[@name='{}']/Atom".format(residue_name)
+    ):
+        G.add_node(
+            atom.get("name"), type=atom.get("type"), charge=float(atom.get("charge"))
+        )
 
         # For convenience, assume only hydroxy hydrogen types are part of lowercase COOH
-        if atom.attrib['type'] == ho_type:
-            hydrogens.append(atom.get('name'))
+        if atom.attrib["type"] == ho_type:
+            hydrogens.append(atom.get("name"))
         # No restriction besides the first letter in the type should be an lowercase  o
-        elif atom.attrib['type'][0].lower() == 'o':
-            oxygens.append(atom.get('name'))
+        elif atom.attrib["type"][0].lower() == "o":
+            oxygens.append(atom.get("name"))
         # No restriction on carbon type besides first letter should be a lowercase c
-        elif atom.attrib['type'][0].lower() == 'c':
-            carbons.append(atom.get('name'))
+        elif atom.attrib["type"][0].lower() == "c":
+            carbons.append(atom.get("name"))
 
     # Add edges to graph using the bond records
-    for bond in ffxml.xpath("/ForceField/Residues/Residue[@name='{}']/Bond".format(residue_name)):
+    for bond in ffxml.xpath(
+        "/ForceField/Residues/Residue[@name='{}']/Bond".format(residue_name)
+    ):
         G.add_edge(bond.get("atomName1"), bond.get("atomName2"))
 
     # A COOH moiety is always a H-O=C=O path, with a branch on the C
@@ -72,11 +78,11 @@ def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
                     # Defined the moiety based on template atom names
                     else:
                         cooh = {
-                            'HO' : path[0],
-                            'OH' : path[1],
-                            'CO' : path[2],
-                            'OC' : path[3],
-                            'R' : neighbors[0]
+                            "HO": path[0],
+                            "OH": path[1],
+                            "CO": path[2],
+                            "OC": path[3],
+                            "R": neighbors[0],
                         }
                         # Add to molecule wide list of templates
                         coohs.append(cooh)
@@ -84,14 +90,20 @@ def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
     # Now that all COOH moieties were found in the main template, ensure oxygens have equal types
     # Then, detect dummy status
     for cooh in coohs:
-        for atom in ffxml.xpath("/ForceField/Residues/Residue[@name='{}']/Atom".format(residue_name)):
+        for atom in ffxml.xpath(
+            "/ForceField/Residues/Residue[@name='{}']/Atom".format(residue_name)
+        ):
             # Ensure oxygens have same type in deprotonated state.
             # Using oh because otherwise this results in lack of a C-O-H angle term
             if atom.get("name") in (cooh["OH"], cooh["OC"]):
                 atom.set("type", oh_type)
 
-        for state in ffxml.xpath("/ForceField/Residues/Residue[@name='{}']/Protons/State".format(residue_name)):
-            for atom in state.xpath('Atom'):
+        for state in ffxml.xpath(
+            "/ForceField/Residues/Residue[@name='{}']/Protons/State".format(
+                residue_name
+            )
+        ):
+            for atom in state.xpath("Atom"):
                 # Ensure oxygens have same type in deprotonated state.
                 # Using oh because otherwise this results in lack of a C-O-H angle term
                 if atom.get("name") in (cooh["OH"], cooh["OC"]):
@@ -113,9 +125,11 @@ def patch_cooh(source:str, residue_name:str, oh_type="oh", ho_type="ho") -> str:
     # Initial result has messy newlines
     result = etree.tostring(ffxml, pretty_print=True, encoding="UTF-8").decode()
     # reread and reprint to remove messy syntax
-    re_tree = etree.fromstring(result,etree.XMLParser(remove_blank_text=True, remove_comments=False))
-    result = etree.tostring(re_tree, pretty_print=True, encoding="UTF-8").decode("utf-8")
+    re_tree = etree.fromstring(
+        result, etree.XMLParser(remove_blank_text=True, remove_comments=False)
+    )
+    result = etree.tostring(re_tree, pretty_print=True, encoding="UTF-8").decode(
+        "utf-8"
+    )
 
     return result
-
-

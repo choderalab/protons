@@ -18,7 +18,6 @@ from simtk import unit, openmm
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
-from protons.app import SelfAdjustedMixtureSampler
 from protons.app import UniformProposal
 from protons.app.template_patches import patch_cooh
 from protons.app.proposals import OneDirectionChargeProposal, COOHDummyMover
@@ -63,7 +62,7 @@ class TestCarboxylicAcid:
         viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
         viologen.topology = viologen.pdbfile.topology
         viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
-        viologen.constraint_tolerance = 1.e-7
+        viologen.constraint_tolerance = 1.0e-7
 
         viologen.integrator = openmm.LangevinIntegrator(
             viologen.temperature, viologen.collision_rate, viologen.timestep
@@ -115,12 +114,14 @@ class TestCarboxylicAcid:
         testsystems = get_test_data("viologen", "testsystems")
         viologen.ffxml_files = os.path.join(testsystems, "viologen-protons.ffxml")
         viologen.gaff = os.path.join(testsystems, "gaff.xml")
-        viologen.forcefield = ForceField(viologen.gaff, "gaff-obc2.xml", viologen.ffxml_files)
+        viologen.forcefield = ForceField(
+            viologen.gaff, "gaff-obc2.xml", viologen.ffxml_files
+        )
 
         viologen.pdbfile = app.PDBFile(os.path.join(testsystems, "viologen-vacuum.pdb"))
         viologen.topology = viologen.pdbfile.topology
         viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
-        viologen.constraint_tolerance = 1.e-7
+        viologen.constraint_tolerance = 1.0e-7
 
         viologen.integrator = openmm.LangevinIntegrator(
             viologen.temperature, viologen.collision_rate, viologen.timestep
@@ -181,7 +182,7 @@ class TestCarboxylicAcid:
         )
         viologen.topology = viologen.pdbfile.topology
         viologen.positions = viologen.pdbfile.getPositions(asNumpy=True)
-        viologen.constraint_tolerance = 1.e-7
+        viologen.constraint_tolerance = 1.0e-7
 
         viologen.integrator = create_compound_gbaoab_integrator(viologen)
 
@@ -243,11 +244,12 @@ class TestCarboxylicAcid:
         aa.ffxml_files = "amber10-constph.xml"
         aa.forcefield = ForceField(aa.ffxml_files, "tip3p.xml")
 
-        aa.pdbfile = app.PDBFile(os.path.join(testsystems, "{}.pdb".format(three_letter_code))
+        aa.pdbfile = app.PDBFile(
+            os.path.join(testsystems, "{}.pdb".format(three_letter_code))
         )
         aa.topology = aa.pdbfile.topology
         aa.positions = aa.pdbfile.getPositions(asNumpy=True)
-        aa.constraint_tolerance = 1.e-7
+        aa.constraint_tolerance = 1.0e-7
 
         aa.integrator = create_compound_gbaoab_integrator(aa)
 
@@ -260,15 +262,10 @@ class TestCarboxylicAcid:
             rigidWater=True,
             ewaldErrorTolerance=0.0005,
         )
-        aa.system.addForce(
-            openmm.MonteCarloBarostat(aa.pressure, aa.temperature, 25)
-        )
+        aa.system.addForce(openmm.MonteCarloBarostat(aa.pressure, aa.temperature, 25))
 
         aa.simulation = app.Simulation(
-            aa.topology,
-            aa.system,
-            aa.integrator,
-            TestCarboxylicAcid.platform,
+            aa.topology, aa.system, aa.integrator, TestCarboxylicAcid.platform
         )
         aa.simulation.context.setPositions(aa.positions)
         aa.context = aa.simulation.context
@@ -294,11 +291,12 @@ class TestCarboxylicAcid:
         aa.ffxml_files = "amber10-constph.xml"
         aa.forcefield = ForceField(aa.ffxml_files, "amber10-constph-obc2.xml")
 
-        aa.pdbfile = app.PDBFile(os.path.join(testsystems, "{}_vacuum.pdb".format(three_letter_code))
-                                 )
+        aa.pdbfile = app.PDBFile(
+            os.path.join(testsystems, "{}_vacuum.pdb".format(three_letter_code))
+        )
         aa.topology = aa.pdbfile.topology
         aa.positions = aa.pdbfile.getPositions(asNumpy=True)
-        aa.constraint_tolerance = 1.e-7
+        aa.constraint_tolerance = 1.0e-7
 
         aa.integrator = create_compound_gbaoab_integrator(aa)
 
@@ -311,10 +309,7 @@ class TestCarboxylicAcid:
         )
 
         aa.simulation = app.Simulation(
-            aa.topology,
-            aa.system,
-            aa.integrator,
-            TestCarboxylicAcid.platform,
+            aa.topology, aa.system, aa.integrator, TestCarboxylicAcid.platform
         )
         aa.simulation.context.setPositions(aa.positions)
         aa.context = aa.simulation.context
@@ -333,7 +328,11 @@ class TestCarboxylicAcid:
 
         for iteration in range(50):
             viologen.simulation.step(10)
-            positions = viologen.simulation.context.getState(getPositions=True).getPositions(asNumpy=True)._value
+            positions = (
+                viologen.simulation.context.getState(getPositions=True)
+                .getPositions(asNumpy=True)
+                ._value
+            )
             new_pos, logp = cooh1.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
@@ -362,10 +361,14 @@ class TestCarboxylicAcid:
         cooh4 = COOHDummyMover.from_xml(cooh2_tree)
 
         for atom in ["HO", "OH", "CO", "OC", "R"]:
-            assert getattr(cooh1, atom) ==  getattr(cooh3, atom), 'Atom {} does not match.'.format(atom)
+            assert getattr(cooh1, atom) == getattr(
+                cooh3, atom
+            ), "Atom {} does not match.".format(atom)
 
         for atom in ["HO", "OH", "CO", "OC", "R"]:
-            assert getattr(cooh2, atom) ==  getattr(cooh4, atom), 'Atom {} does not match.'.format(atom)
+            assert getattr(cooh2, atom) == getattr(
+                cooh4, atom
+            ), "Atom {} does not match.".format(atom)
 
         for angle1, angle3 in zip(cooh1.angles, cooh3.angles):
             assert angle1 == angle3, "Angles do not match."
@@ -381,7 +384,11 @@ class TestCarboxylicAcid:
 
         for iteration in range(50):
             viologen.simulation.step(10)
-            positions = viologen.simulation.context.getState(getPositions=True).getPositions(asNumpy=True)._value
+            positions = (
+                viologen.simulation.context.getState(getPositions=True)
+                .getPositions(asNumpy=True)
+                ._value
+            )
             new_pos, logp = cooh1.random_move(positions)
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
@@ -390,17 +397,15 @@ class TestCarboxylicAcid:
             if not logp == pytest.approx(0.0, abs=1e-12):
                 raise ValueError("Proposal should be 100% accepted.")
 
-
         return
 
     def test_dummy_moving_mc(self) -> None:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
         md_steps_between_mc = 100
-        total_loops = 500
+        total_loops = 100
         viologen = self.setup_viologen_vacuum()
-        #viologen = self.setup_viologen_water()
-
+        # viologen = self.setup_viologen_water()
 
         if log.getEffectiveLevel() == logging.DEBUG:
             viologen.simulation.reporters.append(
@@ -412,10 +417,7 @@ class TestCarboxylicAcid:
 
         cooh1 = COOHDummyMover.from_system(viologen.system, viologen.cooh1)
         cooh2 = COOHDummyMover.from_system(viologen.system, viologen.cooh2)
-        moveset = {
-            cooh1.random_move,
-            cooh2.random_move,
-        }
+        moveset = {cooh1.random_move, cooh2.random_move}
 
         n_accept = 0
         for iteration in range(total_loops):
@@ -459,16 +461,22 @@ class TestCarboxylicAcid:
             residues_by_index=None,
         )
 
-        assert len(drive.titrationGroups[0].titration_states[0]._mc_moves["COOH"]) == 2, "The first state should have two movers"
-        assert len(drive.titrationGroups[0].titration_states[1]._mc_moves["COOH"]) == 1, "The second state should have one mover"
-        assert len(drive.titrationGroups[0].titration_states[2]._mc_moves["COOH"]) == 1, "The third state should have one mover"
+        assert (
+            len(drive.titrationGroups[0].titration_states[0]._mc_moves["COOH"]) == 2
+        ), "The first state should have two movers"
+        assert (
+            len(drive.titrationGroups[0].titration_states[1]._mc_moves["COOH"]) == 1
+        ), "The second state should have one mover"
+        assert (
+            len(drive.titrationGroups[0].titration_states[2]._mc_moves["COOH"]) == 1
+        ), "The third state should have one mover"
         # There should be no COOH in this state
         with pytest.raises(KeyError):
             assert len(drive.titrationGroups[0].titration_states[3]._mc_moves["COOH"])
         drive.attach_context(viologen.context)
         drive.adjust_to_ph(7.0)
-        for iteration in range(50):
-            viologen.integrator.step(100)
+        for iteration in range(15):
+            viologen.integrator.step(10)
             drive.update("COOH", nattempts=1)
 
         return
@@ -491,35 +499,45 @@ class TestCarboxylicAcid:
             residues_by_index=None,
         )
 
-
         drive.attach_context(viologen.context)
         drive.adjust_to_ph(7.0)
         for iteration in range(1):
-            viologen.integrator.step(100)
+            viologen.integrator.step(10)
             drive.update("COOH", nattempts=1)
 
-
         x = drive.state_to_xml()
-        newdrive = NCMCProtonDrive(viologen.temperature, viologen.topology, viologen.system,
-                                   pressure=viologen.pressure, perturbations_per_trial=viologen.perturbations_per_trial)
+        newdrive = NCMCProtonDrive(
+            viologen.temperature,
+            viologen.topology,
+            viologen.system,
+            pressure=viologen.pressure,
+            perturbations_per_trial=viologen.perturbations_per_trial,
+        )
         newdrive.state_from_xml_tree(etree.fromstring(x))
 
         for old_res, new_res in zip(drive.titrationGroups, newdrive.titrationGroups):
-            assert old_res == new_res, "Residues don't match. {} :: {}".format(old_res.name, new_res.name)
+            assert old_res == new_res, "Residues don't match. {} :: {}".format(
+                old_res.name, new_res.name
+            )
 
-        assert len(newdrive.titrationGroups[0].titration_states[0]._mc_moves[
-                       "COOH"]) == 2, "The first state should have two movers"
-        assert len(newdrive.titrationGroups[0].titration_states[1]._mc_moves[
-                       "COOH"]) == 1, "The second state should have one mover"
-        assert len(newdrive.titrationGroups[0].titration_states[2]._mc_moves[
-                       "COOH"]) == 1, "The third state should have one mover"
+        assert (
+            len(newdrive.titrationGroups[0].titration_states[0]._mc_moves["COOH"]) == 2
+        ), "The first state should have two movers"
+        assert (
+            len(newdrive.titrationGroups[0].titration_states[1]._mc_moves["COOH"]) == 1
+        ), "The second state should have one mover"
+        assert (
+            len(newdrive.titrationGroups[0].titration_states[2]._mc_moves["COOH"]) == 1
+        ), "The third state should have one mover"
         # There should be no COOH in this state
         with pytest.raises(KeyError):
-            assert len(newdrive.titrationGroups[0].titration_states[3]._mc_moves["COOH"])
+            assert len(
+                newdrive.titrationGroups[0].titration_states[3]._mc_moves["COOH"]
+            )
 
         newdrive.attach_context(viologen.context)
-        for iteration in range(50):
-            viologen.integrator.step(100)
+        for iteration in range(3):
+            viologen.integrator.step(10)
             newdrive.update("COOH", nattempts=1)
         newdrive.update(UniformProposal(), nattempts=1)
 
@@ -531,9 +549,13 @@ class TestCarboxylicAcid:
         source = viologen.ffxml_files
         output = patch_cooh(source, "VIO")
         tree = etree.fromstring(output)
-        assert len([cooh for cooh in tree.xpath('//COOH')]) == 4, "There should be a total of 4 COOH statements for viologen."
-        atoms = [atom.get('type') for atom in tree.xpath('//Atom') ]
-        assert atoms.count('oh') == 20, "There should be 20 atoms with oh types total (4 per state, and 4 in the main template)."
+        assert (
+            len([cooh for cooh in tree.xpath("//COOH")]) == 4
+        ), "There should be a total of 4 COOH statements for viologen."
+        atoms = [atom.get("type") for atom in tree.xpath("//Atom")]
+        assert (
+            atoms.count("oh") == 20
+        ), "There should be 20 atoms with oh types total (4 per state, and 4 in the main template)."
 
     def test_glutamic_acid_cooh(self):
         """Use the dummy mover with the amino acid glutamic acid"""
@@ -560,7 +582,7 @@ class TestCarboxylicAcid:
                 app.DCDReporter(
                     "cooh-glh-{}.dcd".format(str(uuid.uuid4())),
                     md_steps_between_mc // 100,
-                    enforcePeriodicBox=True
+                    enforcePeriodicBox=True,
                 )
             )
 
@@ -572,4 +594,3 @@ class TestCarboxylicAcid:
             drive.update("COOH", nattempts=1)
 
         return
-

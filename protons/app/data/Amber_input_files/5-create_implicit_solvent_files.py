@@ -3,8 +3,9 @@ from lxml import etree, objectify
 import os
 
 
-obc_block= '<GBSAOBCForce>\n  <UseAttributeFromResidue name="charge"/>\n</GBSAOBCForce>'
-
+obc_block = (
+    '<GBSAOBCForce>\n  <UseAttributeFromResidue name="charge"/>\n</GBSAOBCForce>'
+)
 
 
 class OBCType:
@@ -18,7 +19,9 @@ class OBCType:
         self._scale = scale
 
     def to_xml(self):
-        return '<Atom type="{_typename}" radius="{_radius:f}" scale="{_scale:f}"/>\n'.format(**self.__dict__)
+        return '<Atom type="{_typename}" radius="{_radius:f}" scale="{_scale:f}"/>\n'.format(
+            **self.__dict__
+        )
 
     def __repr__(self):
         return self.to_xml()
@@ -26,12 +29,13 @@ class OBCType:
     def __str__(self):
         return self.to_xml()
 
+
 datadirs = app.forcefield._getDataDirectories()
 
 # Find simtk/openmm/app/data
 source = None
 for directory in datadirs:
-    head,tail = os.path.split(directory)
+    head, tail = os.path.split(directory)
     head, tail2 = os.path.split(head)
     head, tail3 = os.path.split(head)
 
@@ -46,23 +50,25 @@ if source is None:
 
 # from https://raw.githubusercontent.com/choderalab/gbff/27860c88fc5cfefea96f49558f7dd4bbfcd7edb0/parameters/gbsa-amber-mbondi2.parameters
 
-types = {"H": (1.20 / 10.0, 0.85),
-         "HN": (1.30 / 10.0, 0.85),
-         "C": (1.70 / 10.0, 0.72),
-         "N": (1.55 / 10.0, 0.79),
-         "O": (1.50 / 10.0, 0.85),
-         "F": (1.50 / 10.0, 0.88),
-         "Si": (2.10 / 10.0, 0.80),
-         "P": (1.85 / 10.0, 0.86),
-         "S": (1.80 / 10.0, 0.96),
-         "Cl": (1.70 / 10.0, 0.80),
-         "Br": (1.50 / 10.0, 0.80),
-         "I": (1.50 / 10.0, 0.80)}
+types = {
+    "H": (1.20 / 10.0, 0.85),
+    "HN": (1.30 / 10.0, 0.85),
+    "C": (1.70 / 10.0, 0.72),
+    "N": (1.55 / 10.0, 0.79),
+    "O": (1.50 / 10.0, 0.85),
+    "F": (1.50 / 10.0, 0.88),
+    "Si": (2.10 / 10.0, 0.80),
+    "P": (1.85 / 10.0, 0.86),
+    "S": (1.80 / 10.0, 0.96),
+    "Cl": (1.70 / 10.0, 0.80),
+    "Br": (1.50 / 10.0, 0.80),
+    "I": (1.50 / 10.0, 0.80),
+}
 
-for forcefieldfile in ["amber10-constph.xml", "gaff.xml", 'gaff2.xml']:
+for forcefieldfile in ["amber10-constph.xml", "gaff.xml", "gaff2.xml"]:
     root, ext = os.path.splitext(forcefieldfile)
 
-    with open(forcefieldfile, 'r') as xmlio:
+    with open(forcefieldfile, "r") as xmlio:
         tree = etree.fromstring(xmlio.read())
 
     obctypes = list()
@@ -87,7 +93,7 @@ for forcefieldfile in ["amber10-constph.xml", "gaff.xml", 'gaff2.xml']:
 
     ff = etree.Element("ForceField")
     ff.append(forceblock)
-    outtree= etree.ElementTree(ff)
+    outtree = etree.ElementTree(ff)
 
     outxmlname = "{}-obc2-tmp.xml".format(root)
     with open(outxmlname, "wb") as outio:
@@ -95,7 +101,3 @@ for forcefieldfile in ["amber10-constph.xml", "gaff.xml", 'gaff2.xml']:
 
     # Ensure openmm can read the file without trouble, or clashes with the main forcefield
     app.ForceField(forcefieldfile, outxmlname)
-
-
-
-

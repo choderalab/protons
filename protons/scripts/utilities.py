@@ -5,12 +5,14 @@ from protons import app
 from protons.app import log
 import numpy as np
 from io import StringIO
+
 xmls = mm.XmlSerializer
 import datetime
 
 
 class TimeOutError(RuntimeError):
     """This error is raised when an operation is taking longer than expected."""
+
     pass
 
 
@@ -24,7 +26,14 @@ def serialize_state(context) -> str:
     """
     Serialize the simulation state to xml.
     """
-    statexml = xmls.serialize(context.getState(getPositions=True, getVelocities=True, getParameters=True, enforcePeriodicBox=True))
+    statexml = xmls.serialize(
+        context.getState(
+            getPositions=True,
+            getVelocities=True,
+            getParameters=True,
+            enforcePeriodicBox=True,
+        )
+    )
     return statexml
 
 
@@ -35,7 +44,7 @@ def serialize_system(system) -> str:
 
 def deserialize_openmm_element(element: etree.Element):
     """Deserialize an lxml Element containing a serialized openmm object"""
-    return mm.XmlSerializer.deserialize(etree.tostring(element, encoding='unicode'))
+    return mm.XmlSerializer.deserialize(etree.tostring(element, encoding="unicode"))
 
 
 def serialize_integrator(integrator) -> str:
@@ -51,7 +60,7 @@ def serialize_drive(drive) -> str:
     return drivexml
 
 
-def num_to_int_str(num: float)-> str:
+def num_to_int_str(num: float) -> str:
     """Takes a float and converts to int, and then returns a string version."""
     return str(int(round(num)))
 
@@ -61,27 +70,27 @@ def store_saltswap_state(salinator):
     swapper = salinator.swapper
     root = etree.fromstring("<Saltswap><StateVector/></Saltswap>")
     root.set("salt_concentration_molar", str(salinator.salt_concentration / unit.molar))
-    vecstring = ' '.join(map(num_to_int_str, swapper.stateVector))
-    root.xpath('StateVector')[0].text = vecstring
+    vecstring = " ".join(map(num_to_int_str, swapper.stateVector))
+    root.xpath("StateVector")[0].text = vecstring
     return etree.tostring(root)
 
 
-def store_topology(topology_file_string:str, fileformat='pdbx'):
+def store_topology(topology_file_string: str, fileformat="pdbx"):
     """Store a file (containing topology, such as pdbx) in a topology XML block."""
     root = etree.fromstring(f'<TopologyFile format="{fileformat}"/>')
     root.text = topology_file_string
     return root
 
 
-def xml_to_topology(topology_elem:etree.Element) -> app.Topology:
+def xml_to_topology(topology_elem: etree.Element) -> app.Topology:
     """From a TopologyFile xml element, create a topology"""
     text = topology_elem.text
     fileio = StringIO(text)
 
-    topo_format = topology_elem.attrib['format'].lower()
-    if topo_format == 'pdbx':
+    topo_format = topology_elem.attrib["format"].lower()
+    if topo_format == "pdbx":
         loaded = app.PDBxFile(fileio)
-    elif topo_format == 'pdb':
+    elif topo_format == "pdb":
         loaded = app.PDBFile(fileio)
     else:
         raise ValueError(f"Unsupported topology format: '{topo_format}'.")
@@ -89,7 +98,15 @@ def xml_to_topology(topology_elem:etree.Element) -> app.Topology:
     return loaded.getTopology()
 
 
-def create_calibration_checkpoint_file(filename: str, drive: app.ForceFieldProtonDrive, context:mm.Context, system: mm.System, integrator: mm.CustomIntegrator, topology_string: str, salinator=None) -> None:
+def create_calibration_checkpoint_file(
+    filename: str,
+    drive: app.ForceFieldProtonDrive,
+    context: mm.Context,
+    system: mm.System,
+    integrator: mm.CustomIntegrator,
+    topology_string: str,
+    salinator=None,
+) -> None:
     """Write out a checkpoint file for calibration-v1 example scripts."""
 
     date = str(datetime.datetime.now())
@@ -101,7 +118,9 @@ def create_calibration_checkpoint_file(filename: str, drive: app.ForceFieldProto
     state_xml = serialize_state(context)
     topology_xml = store_topology(topology_string)
 
-    tree = etree.fromstring(f"""<Checkpoint runtype="{runtype}" date="{date}"></Checkpoint>""")
+    tree = etree.fromstring(
+        f"""<Checkpoint runtype="{runtype}" date="{date}"></Checkpoint>"""
+    )
     tree.append(etree.fromstring(drivexml))
     tree.append(etree.fromstring(integratorxml))
     tree.append(etree.fromstring(systemxml))
@@ -110,14 +129,14 @@ def create_calibration_checkpoint_file(filename: str, drive: app.ForceFieldProto
     if salinator is not None:
         tree.append(etree.fromstring(store_saltswap_state(salinator)))
 
-    with open(filename, 'wb') as ofile:
+    with open(filename, "wb") as ofile:
         ofile.write(etree.tostring(tree))
 
 
 def deserialize_state_vector(saltswap_tree: etree.Element, swapper) -> None:
     """Set the saltswap state vector from one stored in xml (inplace)."""
-    vectsring = saltswap_tree.xpath('StateVector')[0].text
-    swapper.stateVector = np.fromstring(vectsring, dtype=int, sep=' ')
+    vectsring = saltswap_tree.xpath("StateVector")[0].text
+    swapper.stateVector = np.fromstring(vectsring, dtype=int, sep=" ")
 
 
 class ExternalGBAOABIntegrator(ExternalPerturbationLangevinIntegrator):
@@ -138,18 +157,22 @@ class ExternalGBAOABIntegrator(ExternalPerturbationLangevinIntegrator):
 
     """
 
-    def __init__(self, number_R_steps=1, temperature=298.0 * unit.kelvin,
-                collision_rate=1.0 / unit.picoseconds,
-                timestep=1.0 * unit.femtoseconds,
-                constraint_tolerance=1e-7
-                ):
+    def __init__(
+        self,
+        number_R_steps=1,
+        temperature=298.0 * unit.kelvin,
+        collision_rate=1.0 / unit.picoseconds,
+        timestep=1.0 * unit.femtoseconds,
+        constraint_tolerance=1e-7,
+    ):
         Rstep = " R" * number_R_steps
 
-        super(ExternalGBAOABIntegrator, self).__init__(splitting="V{0} O{0} V".format(Rstep),
-                                                    temperature=temperature,
-                                                    collision_rate=collision_rate,
-                                                    timestep=timestep,
-                                                    constraint_tolerance=constraint_tolerance,
-                                                    measure_shadow_work=False,
-                                                    measure_heat=False,
-                                                    )
+        super(ExternalGBAOABIntegrator, self).__init__(
+            splitting="V{0} O{0} V".format(Rstep),
+            temperature=temperature,
+            collision_rate=collision_rate,
+            timestep=timestep,
+            constraint_tolerance=constraint_tolerance,
+            measure_shadow_work=False,
+            measure_heat=False,
+        )

@@ -15,7 +15,7 @@ from protons.tests.utilities import hasCUDA
 travis = os.environ.get("TRAVIS", None)
 
 
-@pytest.mark.skipif(travis == 'true', reason="Travis segfaulting risk.")
+@pytest.mark.skipif(travis == "true", reason="Travis segfaulting risk.")
 class TestSAMSReporter(object):
     """Tests use cases for ConstantPHCalibration"""
 
@@ -30,16 +30,39 @@ class TestSAMSReporter(object):
     def test_reports(self):
         """Instantiate a simulation at 300K/1 atm for a small peptide with reporter."""
 
-        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
-        forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
+        pdb = app.PDBxFile(
+            get_test_data(
+                "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+            )
+        )
+        forcefield = app.ForceField(
+            "amber10-constph.xml", "ions_tip3p.xml", "tip3p.xml"
+        )
 
-        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
-                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds, rigidWater=True,
-                                         ewaldErrorTolerance=0.0005)
+        system = forcefield.createSystem(
+            pdb.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
 
         temperature = 300 * unit.kelvin
-        integrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=False)
-        ncmcintegrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=True)
+        integrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=False,
+        )
+        ncmcintegrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=True,
+        )
 
         compound_integrator = mm.CompoundIntegrator()
         compound_integrator.addIntegrator(integrator)
@@ -47,17 +70,32 @@ class TestSAMSReporter(object):
         pressure = 1.0 * unit.atmosphere
 
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
-        driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
-                                       perturbations_per_trial=3)
+        driver = ForceFieldProtonDrive(
+            temperature,
+            pdb.topology,
+            system,
+            forcefield,
+            ["amber10-constph.xml"],
+            pressure=pressure,
+            perturbations_per_trial=3,
+        )
 
         # prep the driver for calibration
-        driver.enable_calibration(SAMSApproach.ONESITE, group_index=1, update_rule=UpdateRule.BINARY)
+        driver.enable_calibration(
+            SAMSApproach.ONESITE, group_index=1, update_rule=UpdateRule.BINARY
+        )
 
-        calibration = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
+        calibration = app.ConstantPHSimulation(
+            pdb.topology,
+            system,
+            compound_integrator,
+            driver,
+            platform=self._default_platform,
+        )
         calibration.context.setPositions(pdb.positions)
         calibration.context.setVelocitiesToTemperature(temperature)
         filename = uuid.uuid4().hex + ".nc"
-        print("Temporary file: ",filename)
+        print("Temporary file: ", filename)
         newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
 
@@ -70,24 +108,51 @@ class TestSAMSReporter(object):
             calibration.adapt()
 
         # Basic checks for dimension
-        assert newreporter.ncfile['Protons/SAMS'].dimensions['adaptation'].size == 2, "There should be 2 updates recorded."
-        assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 3, "There should be 3 states reported."
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["adaptation"].size == 2
+        ), "There should be 2 updates recorded."
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["state"].size == 3
+        ), "There should be 3 states reported."
 
         newreporter.ncfile.close()
 
     def test_reports_multisite(self):
         """Instantiate a simulation at 300K/1 atm for a small peptide with reporter."""
 
-        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
-        forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
+        pdb = app.PDBxFile(
+            get_test_data(
+                "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+            )
+        )
+        forcefield = app.ForceField(
+            "amber10-constph.xml", "ions_tip3p.xml", "tip3p.xml"
+        )
 
-        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
-                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds, rigidWater=True,
-                                         ewaldErrorTolerance=0.0005)
+        system = forcefield.createSystem(
+            pdb.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
 
         temperature = 300 * unit.kelvin
-        integrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=False)
-        ncmcintegrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds, timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=True)
+        integrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=False,
+        )
+        ncmcintegrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=True,
+        )
 
         compound_integrator = mm.CompoundIntegrator()
         compound_integrator.addIntegrator(integrator)
@@ -95,19 +160,32 @@ class TestSAMSReporter(object):
         pressure = 1.0 * unit.atmosphere
 
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
-        driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'], pressure=pressure,
-                                       perturbations_per_trial=3)
+        driver = ForceFieldProtonDrive(
+            temperature,
+            pdb.topology,
+            system,
+            forcefield,
+            ["amber10-constph.xml"],
+            pressure=pressure,
+            perturbations_per_trial=3,
+        )
 
         # prep the driver for calibration
         driver.enable_calibration(SAMSApproach.MULTISITE, update_rule=UpdateRule.BINARY)
 
-        calibration = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
+        calibration = app.ConstantPHSimulation(
+            pdb.topology,
+            system,
+            compound_integrator,
+            driver,
+            platform=self._default_platform,
+        )
         calibration.context.setPositions(pdb.positions)
         calibration.minimizeEnergy()
         calibration.context.setVelocitiesToTemperature(temperature)
 
         filename = uuid.uuid4().hex + ".nc"
-        print("Temporary file: ",filename)
+        print("Temporary file: ", filename)
         newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
 
@@ -120,8 +198,12 @@ class TestSAMSReporter(object):
             calibration.adapt()
 
         # Basic checks for dimension
-        assert newreporter.ncfile['Protons/SAMS'].dimensions['adaptation'].size == 2, "There should be 2 updates recorded."
-        assert newreporter.ncfile['Protons/SAMS'].dimensions['state'].size == 15, "There should be 15 states reported."
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["adaptation"].size == 2
+        ), "There should be 2 updates recorded."
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["state"].size == 15
+        ), "There should be 15 states reported."
 
         newreporter.ncfile.close()
 
@@ -129,19 +211,39 @@ class TestSAMSReporter(object):
         """
         Tests a case of a SAMS reporter that finished burn_in
         """
-        pdb = app.PDBxFile(get_test_data('glu_ala_his-solvated-minimized-renamed.cif', 'testsystems/tripeptides'))
-        forcefield = app.ForceField('amber10-constph.xml', 'ions_tip3p.xml', 'tip3p.xml')
+        pdb = app.PDBxFile(
+            get_test_data(
+                "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+            )
+        )
+        forcefield = app.ForceField(
+            "amber10-constph.xml", "ions_tip3p.xml", "tip3p.xml"
+        )
 
-        system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.PME,
-                                         nonbondedCutoff=1.0 * unit.nanometers, constraints=app.HBonds, rigidWater=True,
-                                         ewaldErrorTolerance=0.0005)
+        system = forcefield.createSystem(
+            pdb.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
 
         temperature = 300 * unit.kelvin
-        integrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds,
-                                      timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7, external_work=False)
-        ncmcintegrator = GBAOABIntegrator(temperature=temperature, collision_rate=1.0 / unit.picoseconds,
-                                          timestep=2.0 * unit.femtoseconds, constraint_tolerance=1.e-7,
-                                          external_work=True)
+        integrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=False,
+        )
+        ncmcintegrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=True,
+        )
 
         compound_integrator = mm.CompoundIntegrator()
         compound_integrator.addIntegrator(integrator)
@@ -149,12 +251,24 @@ class TestSAMSReporter(object):
         pressure = 1.0 * unit.atmosphere
 
         system.addForce(mm.MonteCarloBarostat(pressure, temperature))
-        driver = ForceFieldProtonDrive(temperature, pdb.topology, system, forcefield, ['amber10-constph.xml'],
-                                       pressure=pressure,
-                                       perturbations_per_trial=3)
+        driver = ForceFieldProtonDrive(
+            temperature,
+            pdb.topology,
+            system,
+            forcefield,
+            ["amber10-constph.xml"],
+            pressure=pressure,
+            perturbations_per_trial=3,
+        )
         driver.enable_calibration(SAMSApproach.MULTISITE, update_rule=UpdateRule.BINARY)
 
-        calibration = app.ConstantPHSimulation(pdb.topology, system, compound_integrator, driver, platform=self._default_platform)
+        calibration = app.ConstantPHSimulation(
+            pdb.topology,
+            system,
+            compound_integrator,
+            driver,
+            platform=self._default_platform,
+        )
         calibration.context.setPositions(pdb.positions)
         calibration.minimizeEnergy()
         calibration.context.setVelocitiesToTemperature(temperature)
@@ -162,7 +276,7 @@ class TestSAMSReporter(object):
         print("Temporary file: ", filename)
         newreporter = sr.SAMSReporter(filename, 2)
         calibration.calibration_reporters.append(newreporter)
-        driver.calibration_state._stage = Stage.SLOWGAIN
+        driver.calibration_state._stage = Stage.FASTDECAY
 
         # Regular MD step
         for iteration in range(20):
@@ -172,15 +286,16 @@ class TestSAMSReporter(object):
             # adapt sams weights
             calibration.adapt()
 
-
         # Basic checks for dimension
-        assert newreporter.ncfile['Protons/SAMS'].dimensions[
-                   'adaptation'].size == 10, "There should be 2 updates recorded."
-        assert newreporter.ncfile['Protons/SAMS'].dimensions[
-                   'state'].size == 15, "There should be 15 states reported."
-        assert newreporter.ncfile['Protons/SAMS/stage'][9] == 1, "Stage should be 1 at this point"
-
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["adaptation"].size == 10
+        ), "There should be 2 updates recorded."
+        assert (
+            newreporter.ncfile["Protons/SAMS"].dimensions["state"].size == 15
+        ), "There should be 15 states reported."
+        assert (
+            newreporter.ncfile["Protons/SAMS/stage"][9] == 1
+        ), "Stage should be 1 at this point"
 
         # close files to avoid segfaults, possibly
         newreporter.ncfile.close()
-

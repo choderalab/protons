@@ -3,6 +3,7 @@
 
 from simtk.openmm.app import Topology
 import os
+
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -15,8 +16,9 @@ def unloadStandardBonds(cls):
     cls._hasLoadedStandardBonds = False
     cls._standardBonds = dict()
 
+
 Topology.unloadStandardBonds = classmethod(unloadStandardBonds)
 Topology.unloadStandardBonds()
-Topology.loadBondDefinitions(os.path.join(PACKAGE_ROOT, 'data', 'bonds-amber10-constph.xml'))
-
-
+Topology.loadBondDefinitions(
+    os.path.join(PACKAGE_ROOT, "data", "bonds-amber10-constph.xml")
+)

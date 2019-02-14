@@ -5,7 +5,7 @@ from __future__ import print_function
 
 from simtk.openmm.app import *
 from .topology import Topology
-from .calibration import SelfAdjustedMixtureSampler
+from .calibration import SAMSCalibrationEngine
 from .simulation import ConstantPHSimulation
 from .driver import ForceFieldProtonDrive, AmberProtonDrive, NCMCProtonDrive
 from .proposals import UniformProposal, DoubleProposal, CategoricalProposal
@@ -21,8 +21,10 @@ import numpy as np
 
 from simtk.openmm import State
 
+
 def err_on_nan(func):
     """This decorator causes a RuntimeError when a function returns NaN."""
+
     def nan_wrapper(self):
         val = func(self)
         if isinstance(val, Quantity):
@@ -35,7 +37,9 @@ def err_on_nan(func):
                 raise RuntimeError("NaN value returned by {}.".format(func.__name__))
             else:
                 return val
+
     return nan_wrapper
+
 
 State.getPotentialEnergy = err_on_nan(State.getPotentialEnergy)
 State.getKineticEnergy = err_on_nan(State.getKineticEnergy)

@@ -14,8 +14,9 @@ from protons import GBAOABIntegrator, GHMCIntegrator
 from protons import ForceFieldProtonDrive
 from protons.app.proposals import UniformProposal
 from protons import app as protonsapp
+from protons.app.driver import SAMSApproach
 
-from protons import SelfAdjustedMixtureSampler
+from protons import SAMSCalibrationEngine
 from . import get_test_data
 from .utilities import create_compound_gbaoab_integrator, SystemSetup
 
@@ -29,21 +30,24 @@ def unloadStandardBonds(cls):
     cls._hasLoadedStandardBonds = False
     cls._standardBonds = dict()
 
+
 app.Topology.unloadStandardBonds = classmethod(unloadStandardBonds)
 
 app_location = os.path.dirname(protonsapp.__file__)
-bonds_path = os.path.join(app_location, 'data', 'bonds-amber10-constph.xml')
-ffxml_path = os.path.join(app_location, 'data', 'amber10-constph.xml')
-ions_spce_path = os.path.join(app_location, 'data', 'ions_spce.xml')
-ions_tip3p_path = os.path.join(app_location, 'data', 'ions_tip3p.xml')
-ions_tip4pew_path = os.path.join(app_location, 'data', 'ions_tip4pew.xml')
-hydrogen_path = os.path.join(app_location, 'data', 'hydrogens-amber10-constph.xml')
-gaff_path = os.path.join(app_location, 'data', 'gaff.xml')
-gaff2_path = os.path.join(app_location, 'data', 'gaff2.xml')
+bonds_path = os.path.join(app_location, "data", "bonds-amber10-constph.xml")
+ffxml_path = os.path.join(app_location, "data", "amber10-constph.xml")
+ions_spce_path = os.path.join(app_location, "data", "ions_spce.xml")
+ions_tip3p_path = os.path.join(app_location, "data", "ions_tip3p.xml")
+ions_tip4pew_path = os.path.join(app_location, "data", "ions_tip4pew.xml")
+hydrogen_path = os.path.join(app_location, "data", "hydrogens-amber10-constph.xml")
+gaff_path = os.path.join(app_location, "data", "gaff.xml")
+gaff2_path = os.path.join(app_location, "data", "gaff2.xml")
+
 
 def test_reading_protons():
     """Read parameters and templates protons.xml using OpenMM."""
     parsed = app.ForceField(ffxml_path)
+
 
 def test_reading_bonds():
     """Read bond definitions in bonds-protons.xml using OpenMM."""
@@ -61,26 +65,27 @@ def test_create_peptide_system_using_protons_xml():
 
     # Load pdb file with protons compatible residue names
     pdbx = app.PDBxFile(
-       get_test_data(
-            'glu_ala_his-solvated-minimized-renamed.cif',
-            'testsystems/tripeptides'))
-    forcefield = app.ForceField(ffxml_path, ions_spce_path, 'spce.xml')
+        get_test_data(
+            "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+        )
+    )
+    forcefield = app.ForceField(ffxml_path, ions_spce_path, "spce.xml")
 
     # System Configuration
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    constraintTolerance = 1.e-7
+    constraintTolerance = 1.0e-7
 
     # Integration Options
     dt = 0.5 * unit.femtoseconds
-    temperature = 300. * unit.kelvin
-    friction = 1. / unit.picosecond
+    temperature = 300.0 * unit.kelvin
+    friction = 1.0 / unit.picosecond
     pressure = 1.0 * unit.atmospheres
     barostatInterval = 25
 
     # Simulation Options
-    platform = mm.Platform.getPlatformByName('Reference')
+    platform = mm.Platform.getPlatformByName("Reference")
 
     # Prepare the Simulation
     topology = pdbx.topology
@@ -91,11 +96,7 @@ def test_create_peptide_system_using_protons_xml():
         constraints=constraints,
         rigidWater=rigidWater,
     )
-    system.addForce(
-        mm.MonteCarloBarostat(
-            pressure,
-            temperature,
-            barostatInterval))
+    system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
 
     integrator = GHMCIntegrator(temperature, friction, dt)
     integrator.setConstraintTolerance(constraintTolerance)
@@ -112,29 +113,30 @@ def test_create_peptide_simulation_using_protons_xml():
 
     sys_details = SystemSetup()
     sys_details.timestep = 0.5 * unit.femtoseconds
-    sys_details.temperature = 300. * unit.kelvin
-    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.temperature = 300.0 * unit.kelvin
+    sys_details.collision_rate = 1.0 / unit.picosecond
     sys_details.pressure = 1.0 * unit.atmospheres
     sys_details.barostatInterval = 25
-    sys_details.constraint_tolerance = 1.e-7
+    sys_details.constraint_tolerance = 1.0e-7
 
     app.Topology.loadBondDefinitions(bonds_path)
 
     # Load pdb file with protons compatible residue names
     pdbx = app.PDBxFile(
         get_test_data(
-            'glu_ala_his-solvated-minimized-renamed.cif',
-            'testsystems/tripeptides'))
-    forcefield = app.ForceField(ffxml_path, ions_spce_path, 'spce.xml')
+            "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+        )
+    )
+    forcefield = app.ForceField(ffxml_path, ions_spce_path, "spce.xml")
 
     # System Configuration
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    sys_details.constraintTolerance = 1.e-7
+    sys_details.constraintTolerance = 1.0e-7
 
     # Simulation Options
-    platform = mm.Platform.getPlatformByName('Reference')
+    platform = mm.Platform.getPlatformByName("Reference")
 
     # Prepare the Simulation
     topology = pdbx.topology
@@ -147,18 +149,22 @@ def test_create_peptide_simulation_using_protons_xml():
     )
     system.addForce(
         mm.MonteCarloBarostat(
-            sys_details.pressure,
-            sys_details.temperature,
-            sys_details.barostatInterval))
+            sys_details.pressure, sys_details.temperature, sys_details.barostatInterval
+        )
+    )
 
     integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
-    driver = ForceFieldProtonDrive(sys_details.temperature, topology, system, forcefield, ffxml_path, pressure=sys_details.pressure, perturbations_per_trial=1)
-
-    simulation = app.Simulation(
+    driver = ForceFieldProtonDrive(
+        sys_details.temperature,
         topology,
         system,
-        integrator,
-        platform)
+        forcefield,
+        ffxml_path,
+        pressure=sys_details.pressure,
+        perturbations_per_trial=1,
+    )
+
+    simulation = app.Simulation(topology, system, integrator, platform)
     simulation.context.setPositions(positions)
     simulation.context.setVelocitiesToTemperature(sys_details.temperature)
 
@@ -178,29 +184,30 @@ def test_create_peptide_simulation_with_residue_pools_using_protons_xml():
 
     sys_details = SystemSetup()
     sys_details.timestep = 0.5 * unit.femtoseconds
-    sys_details.temperature = 300. * unit.kelvin
-    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.temperature = 300.0 * unit.kelvin
+    sys_details.collision_rate = 1.0 / unit.picosecond
     sys_details.pressure = 1.0 * unit.atmospheres
     sys_details.barostatInterval = 25
-    sys_details.constraint_tolerance = 1.e-7
+    sys_details.constraint_tolerance = 1.0e-7
 
     app.Topology.loadBondDefinitions(bonds_path)
 
     # Load pdb file with protons compatible residue names
     pdbx = app.PDBxFile(
         get_test_data(
-            'glu_ala_his-solvated-minimized-renamed.cif',
-            'testsystems/tripeptides'))
-    forcefield = app.ForceField(ffxml_path, ions_spce_path, 'spce.xml')
+            "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+        )
+    )
+    forcefield = app.ForceField(ffxml_path, ions_spce_path, "spce.xml")
 
     # System Configuration
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    sys_details.constraintTolerance = 1.e-7
+    sys_details.constraintTolerance = 1.0e-7
 
     # Simulation Options
-    platform = mm.Platform.getPlatformByName('Reference')
+    platform = mm.Platform.getPlatformByName("Reference")
 
     # Prepare the Simulation
     topology = pdbx.topology
@@ -213,29 +220,33 @@ def test_create_peptide_simulation_with_residue_pools_using_protons_xml():
     )
     system.addForce(
         mm.MonteCarloBarostat(
-            sys_details.pressure,
-            sys_details.temperature,
-            sys_details.barostatInterval))
+            sys_details.pressure, sys_details.temperature, sys_details.barostatInterval
+        )
+    )
 
     integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
-    driver = ForceFieldProtonDrive(sys_details.temperature, topology, system, forcefield, ffxml_path, pressure=sys_details.pressure, perturbations_per_trial=1)
+    driver = ForceFieldProtonDrive(
+        sys_details.temperature,
+        topology,
+        system,
+        forcefield,
+        ffxml_path,
+        pressure=sys_details.pressure,
+        perturbations_per_trial=1,
+    )
 
-    pools = {'glu' : [0], 'his': [1],  'glu-his' : [0,1] }
+    pools = {"glu": [0], "his": [1], "glu-his": [0, 1]}
 
     driver.define_pools(pools)
 
-    simulation = app.Simulation(
-        topology,
-        system,
-        integrator,
-        platform)
+    simulation = app.Simulation(topology, system, integrator, platform)
     simulation.context.setPositions(positions)
     simulation.context.setVelocitiesToTemperature(sys_details.temperature)
     driver.attach_context(simulation.context)
 
     # run one step and one update
     simulation.step(1)
-    driver.update(UniformProposal(), nattempts=1, residue_pool='his')
+    driver.update(UniformProposal(), nattempts=1, residue_pool="his")
     # Clean up so that the classes remain unmodified
     # unit test specific errors might occur otherwise when loading files due
     # to class side effects
@@ -255,7 +266,7 @@ def pattern_from_multiline(multiline, pattern):
     multiline str containing pattern
     """
 
-    return '\n'.join([line for line in multiline.splitlines() if pattern in line])
+    return "\n".join([line for line in multiline.splitlines() if pattern in line])
 
 
 def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
@@ -265,29 +276,30 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
 
     sys_details = SystemSetup()
     sys_details.timestep = 0.5 * unit.femtoseconds
-    sys_details.temperature = 300. * unit.kelvin
-    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.temperature = 300.0 * unit.kelvin
+    sys_details.collision_rate = 1.0 / unit.picosecond
     sys_details.pressure = 1.0 * unit.atmospheres
     sys_details.barostatInterval = 25
-    sys_details.constraint_tolerance = 1.e-7
+    sys_details.constraint_tolerance = 1.0e-7
 
     app.Topology.loadBondDefinitions(bonds_path)
 
     # Load pdb file with protons compatible residue names
     pdbx = app.PDBxFile(
         get_test_data(
-            'glu_ala_his-solvated-minimized-renamed.cif',
-            'testsystems/tripeptides'))
-    forcefield = app.ForceField(ffxml_path, ions_spce_path, 'spce.xml')
+            "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+        )
+    )
+    forcefield = app.ForceField(ffxml_path, ions_spce_path, "spce.xml")
 
     # System Configuration
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    sys_details.constraintTolerance = 1.e-7
+    sys_details.constraintTolerance = 1.0e-7
 
     # Simulation Options
-    platform = mm.Platform.getPlatformByName('Reference')
+    platform = mm.Platform.getPlatformByName("Reference")
 
     # Prepare the Simulation
     topology = pdbx.topology
@@ -300,30 +312,35 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
     )
     system.addForce(
         mm.MonteCarloBarostat(
-            sys_details.pressure,
-            sys_details.temperature,
-            sys_details.barostatInterval))
+            sys_details.pressure, sys_details.temperature, sys_details.barostatInterval
+        )
+    )
 
     integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
 
-    driver = ForceFieldProtonDrive(sys_details.temperature, topology, system, forcefield, ffxml_path, pressure=sys_details.pressure, perturbations_per_trial=1)
-
-    pools = {'glu' : [0], 'his': [1],  'glu-his' : [0,1] }
-
-    driver.define_pools(pools)
-    sams_sampler = SelfAdjustedMixtureSampler(driver, 1) # SAMS on HIS
-    simulation = app.Simulation(
+    driver = ForceFieldProtonDrive(
+        sys_details.temperature,
         topology,
         system,
-        integrator,
-        platform)
+        forcefield,
+        ffxml_path,
+        pressure=sys_details.pressure,
+        perturbations_per_trial=1,
+    )
+
+    pools = {"glu": [0], "his": [1], "glu-his": [0, 1]}
+
+    driver.define_pools(pools)
+    driver.enable_calibration(SAMSApproach.ONESITE, group_index=1)
+    sams_sampler = SAMSCalibrationEngine(driver)  # SAMS on HIS
+    simulation = app.Simulation(topology, system, integrator, platform)
     simulation.context.setPositions(positions)
     simulation.context.setVelocitiesToTemperature(sys_details.temperature)
     driver.attach_context(simulation.context)
     # run one step and one update
     simulation.step(1)
-    driver.update(UniformProposal(), nattempts=1, residue_pool='his')
-    sams_sampler.adapt_zetas(scheme='binary', b=0.85, stage="slow-gain", end_of_burnin=0)
+    driver.update(UniformProposal(), nattempts=1, residue_pool="his")
+    sams_sampler.adapt_zetas()
     # Clean up so that the classes remain unmodified
     # unit test specific errors might occur otherwise when loading files due
     # to class side effects
@@ -337,29 +354,30 @@ def test_peptide_system_integrity():
 
     sys_details = SystemSetup()
     sys_details.timestep = 0.5 * unit.femtoseconds
-    sys_details.temperature = 300. * unit.kelvin
-    sys_details.collision_rate = 1. / unit.picosecond
+    sys_details.temperature = 300.0 * unit.kelvin
+    sys_details.collision_rate = 1.0 / unit.picosecond
     sys_details.pressure = 1.0 * unit.atmospheres
     sys_details.barostatInterval = 25
-    sys_details.constraint_tolerance = 1.e-7
+    sys_details.constraint_tolerance = 1.0e-7
 
     app.Topology.loadBondDefinitions(bonds_path)
 
     # Load pdb file with protons compatible residue names
     pdbx = app.PDBxFile(
         get_test_data(
-            'glu_ala_his-solvated-minimized-renamed.cif',
-            'testsystems/tripeptides'))
-    forcefield = app.ForceField(ffxml_path, ions_spce_path, 'spce.xml')
+            "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+        )
+    )
+    forcefield = app.ForceField(ffxml_path, ions_spce_path, "spce.xml")
 
     # System Configuration
     nonbondedMethod = app.PME
     constraints = app.AllBonds
     rigidWater = True
-    sys_details.constraintTolerance = 1.e-7
+    sys_details.constraintTolerance = 1.0e-7
 
     # Simulation Options
-    platform = mm.Platform.getPlatformByName('Reference')
+    platform = mm.Platform.getPlatformByName("Reference")
 
     # Prepare the Simulation
     topology = pdbx.topology
@@ -372,17 +390,29 @@ def test_peptide_system_integrity():
     )
     system.addForce(
         mm.MonteCarloBarostat(
-            sys_details.pressure,
-            sys_details.temperature,
-            sys_details.barostatInterval))
+            sys_details.pressure, sys_details.temperature, sys_details.barostatInterval
+        )
+    )
 
     integrator = create_compound_gbaoab_integrator(testsystem=sys_details)
 
-    original_system = pattern_from_multiline(mm.XmlSerializer.serialize(system), '<Particle')
+    original_system = pattern_from_multiline(
+        mm.XmlSerializer.serialize(system), "<Particle"
+    )
 
-    driver = ForceFieldProtonDrive(sys_details.temperature, topology, system, forcefield, ffxml_path, pressure=sys_details.pressure, perturbations_per_trial=1)
+    driver = ForceFieldProtonDrive(
+        sys_details.temperature,
+        topology,
+        system,
+        forcefield,
+        ffxml_path,
+        pressure=sys_details.pressure,
+        perturbations_per_trial=1,
+    )
 
-    after_driver = pattern_from_multiline(mm.XmlSerializer.serialize(system), '<Particle')
+    after_driver = pattern_from_multiline(
+        mm.XmlSerializer.serialize(system), "<Particle"
+    )
 
     # Clean up so that the classes remain unmodified
     # unit test specific errors might occur otherwise when loading files due

@@ -578,7 +578,6 @@ class COOHDummyMover:
     # Number of different phi angles to propose for moves
     num_phi_proposals = 50
 
-
     def __init__(self):
         """Instantiate a COOHDummyMover for a single C-COOH moiety in your system.
 
@@ -703,17 +702,11 @@ class COOHDummyMover:
         particle3: int,
     ) -> float:
         """Angle energy function as defined in OpenMM documentation."""
-        theta = COOHDummyMover.bond_angle(positions[particle1], positions[particle2], positions[particle3])
-        log.debug("Angle for %i %i %i: %f", particle1, particle2, particle3, theta)
-        return (
-            0.5
-            * k
-            * (
-                    theta
-                    - theta0
-            )
-            ** 2
+        theta = COOHDummyMover.bond_angle(
+            positions[particle1], positions[particle2], positions[particle3]
         )
+        log.debug("Angle for %i %i %i: %f", particle1, particle2, particle3, theta)
+        return 0.5 * k * (theta - theta0) ** 2
 
     @staticmethod
     def e_dihedral(
@@ -728,16 +721,21 @@ class COOHDummyMover:
     ) -> float:
         """Dihedral energy function as defined in OpenMM documentation. Deals with proper and improper equivalently."""
 
-        theta = COOHDummyMover.dihedral_angle(positions[particle1], positions[particle2], positions[particle3], positions[particle4])
-        log.debug("Angle for %i %i %i %i: %f", particle1, particle2, particle3, particle4, theta)
-        return k * (
-            1
-            + math.cos(
-            n
-            * theta
-            - theta0
-            )
+        theta = COOHDummyMover.dihedral_angle(
+            positions[particle1],
+            positions[particle2],
+            positions[particle3],
+            positions[particle4],
         )
+        log.debug(
+            "Angle for %i %i %i %i: %f",
+            particle1,
+            particle2,
+            particle3,
+            particle4,
+            theta,
+        )
+        return k * (1 + math.cos(n * theta - theta0))
 
     def log_probability(self, positions: np.ndarray, calc_angle=False) -> float:
         """Return the log probability of the angles and dihedrals for a given set of positions."""
@@ -770,7 +768,7 @@ class COOHDummyMover:
 
         # Limit to the domain of the arccos to deal with float precision issues.
         if y > 1.0:
-           y = 1.0
+            y = 1.0
         elif y < -1.0:
             y = -1.0
 
@@ -791,7 +789,9 @@ class COOHDummyMover:
         return COOHDummyMover.angle_between_vectors(plane1, plane2)
 
     @staticmethod
-    def rodrigues_rotation_vectorized(theta: np.ndarray, k: np.ndarray, v: np.ndarray) -> np.ndarray:
+    def rodrigues_rotation_vectorized(
+        theta: np.ndarray, k: np.ndarray, v: np.ndarray
+    ) -> np.ndarray:
         """Return rotated vector v around axis k, using angle theta.
 
         Note
@@ -813,11 +813,21 @@ class COOHDummyMover:
         Ensure k is a unit vector
         """
 
-        return v * np.cos(theta) + (np.cross(k, v) * np.sin(theta)) + (k * np.dot(k, v) * (1 - np.cos(theta)))
+        return (
+            v * np.cos(theta)
+            + (np.cross(k, v) * np.sin(theta))
+            + (k * np.dot(k, v) * (1 - np.cos(theta)))
+        )
 
     @staticmethod
-    def internal_to_cartesian(r: float, theta: float, phi: np.ndarray, pos2: np.ndarray, pos3: np.ndarray,
-                              pos4: np.ndarray) -> np.ndarray:
+    def internal_to_cartesian(
+        r: float,
+        theta: float,
+        phi: np.ndarray,
+        pos2: np.ndarray,
+        pos3: np.ndarray,
+        pos4: np.ndarray,
+    ) -> np.ndarray:
         """Find the xyz coordinates of atom 1 in the dihedral 1-2-3-4 based on internal coordinates, and cartesian
         coordinates of the other atoms
 
@@ -853,11 +863,18 @@ class COOHDummyMover:
 
         bond = r * bond23_vec
         bond_plus_angle = COOHDummyMover.rodrigues_rotation(theta, angle234_vec, bond)
-        bond_plus_angle_plus_torsion = COOHDummyMover.rodrigues_rotation_vectorized(phi, bond23_vec, bond_plus_angle)
+        bond_plus_angle_plus_torsion = COOHDummyMover.rodrigues_rotation_vectorized(
+            phi, bond23_vec, bond_plus_angle
+        )
         pos1 = pos2[:, np.newaxis] + bond_plus_angle_plus_torsion
         return pos1.T
 
-    def propose_configurations(self, current_positions:np.ndarray, proposed_positions:np.ndarray, log_weights: np.ndarray)-> Tuple[np.ndarray, np.ndarray]:
+    def propose_configurations(
+        self,
+        current_positions: np.ndarray,
+        proposed_positions: np.ndarray,
+        log_weights: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
 
         Parameters
@@ -879,10 +896,14 @@ class COOHDummyMover:
             the first entry in proposal dimension is the old configuration
         """
         if proposed_positions.shape[0] % 2 != 1:
-            raise ValueError("Proposed positions needs to have an odd-sized first dimension")
+            raise ValueError(
+                "Proposed positions needs to have an odd-sized first dimension"
+            )
 
         elif log_weights.size != proposed_positions.shape[0]:
-            raise ValueError("Weights need to have the same dimension as the first dimension of proposed_positions.")
+            raise ValueError(
+                "Weights need to have the same dimension as the first dimension of proposed_positions."
+            )
 
         hydroxy_hydrogen = current_positions[self.HO]
         hydroxy_oxygen = current_positions[self.OH]
@@ -899,23 +920,30 @@ class COOHDummyMover:
         number_of_proposals = COOHDummyMover.num_phi_proposals * 2
 
         # Duplicate all positions
-        proposed_positions[:,:,:] = current_positions
+        proposed_positions[:, :, :] = current_positions
 
         phi_angles = np.linspace(-np.pi, np.pi, num_phi, endpoint=False)
 
         # New phi on same oxygen
-        proposed_positions[1:1+num_phi, self.HO,:] = COOHDummyMover.internal_to_cartesian(r, theta, phi_angles, hydroxy_oxygen, carbon, carbonyl_oxygen)
+        proposed_positions[
+            1 : 1 + num_phi, self.HO, :
+        ] = COOHDummyMover.internal_to_cartesian(
+            r, theta, phi_angles, hydroxy_oxygen, carbon, carbonyl_oxygen
+        )
 
         # New phi on new oxygen
-        proposed_positions[1+num_phi:, self.HO, :] = COOHDummyMover.internal_to_cartesian(r, theta, phi_angles, carbonyl_oxygen, carbon, hydroxy_oxygen)
-        proposed_positions[1+num_phi:, self.OH, :] = carbonyl_oxygen[:, np.newaxis].T
-        proposed_positions[1+num_phi:, self.OC, :] = hydroxy_oxygen[:, np.newaxis].T
+        proposed_positions[
+            1 + num_phi :, self.HO, :
+        ] = COOHDummyMover.internal_to_cartesian(
+            r, theta, phi_angles, carbonyl_oxygen, carbon, hydroxy_oxygen
+        )
+        proposed_positions[1 + num_phi :, self.OH, :] = carbonyl_oxygen[:, np.newaxis].T
+        proposed_positions[1 + num_phi :, self.OC, :] = hydroxy_oxygen[:, np.newaxis].T
 
         for i in range(number_of_proposals):
-            log_weights[i] = self.log_probability(proposed_positions[i+1, :, :])
+            log_weights[i] = self.log_probability(proposed_positions[i + 1, :, :])
 
         return proposed_positions, log_weights
-
 
     def to_xml(self):
         """Return an xml representation of the dummy mover."""
@@ -946,7 +974,9 @@ class COOHDummyMover:
         """Instantiate a COOHDummyMover class from an lxml Element."""
         obj = cls()
         if not xmltree.tag == "COOHDummyMover":
-            raise ValueError("Wrong xml element provided, was expecting a COOHDummyMover")
+            raise ValueError(
+                "Wrong xml element provided, was expecting a COOHDummyMover"
+            )
         obj.OH = int(xmltree.get("OH"))
         obj.HO = int(xmltree.get("HO"))
         obj.OC = int(xmltree.get("OC"))
@@ -955,16 +985,29 @@ class COOHDummyMover:
         cls.angleforceindex = int(xmltree.get("AngleForceIndex"))
         cls.dihedralforceindex = int(xmltree.get("DihedralForceIndex"))
 
-        for angle in xmltree.xpath('//Angle'):
+        for angle in xmltree.xpath("//Angle"):
             angle_params = []
-            for param, ptype in [("k", float), ("theta0", float), ("particle1", int),("particle2", int),("particle3", int),] :
+            for param, ptype in [
+                ("k", float),
+                ("theta0", float),
+                ("particle1", int),
+                ("particle2", int),
+                ("particle3", int),
+            ]:
                 angle_params.append(ptype(angle.get(param)))
             obj.angles.append(angle_params)
 
         for dihedral in xmltree.xpath("//Dihedral"):
             dihedral_params = []
-            for param, ptype in [("k", float), ("n", int), ("theta0", float), ("particle1", int), ("particle2", int),
-                                 ("particle3", int), ("particle4", int)]:
+            for param, ptype in [
+                ("k", float),
+                ("n", int),
+                ("theta0", float),
+                ("particle1", int),
+                ("particle2", int),
+                ("particle3", int),
+                ("particle4", int),
+            ]:
                 dihedral_params.append(ptype(dihedral.get(param)))
             obj.dihedrals.append(dihedral_params)
 
@@ -974,19 +1017,20 @@ class COOHDummyMover:
         """Use importance sampling to propose a new position."""
         num_proposals = 1 + (2 * COOHDummyMover.num_phi_proposals)
         if self._position_proposals is None:
-            self._position_proposals = np.empty([num_proposals, *(current_positions.shape)])
+            self._position_proposals = np.empty(
+                [num_proposals, *(current_positions.shape)]
+            )
             self._log_weights = np.empty([num_proposals])
 
-        self.propose_configurations(current_positions, self._position_proposals, self._log_weights)
+        self.propose_configurations(
+            current_positions, self._position_proposals, self._log_weights
+        )
         # Draw a new configuration.
         # Accept probability is 1 because weights are equal to -u(x)
         log_normalizing_constant = logsumexp(self._log_weights)
-        chosen = np.random.choice(np.arange(num_proposals), p=np.exp(self._log_weights)/np.exp(log_normalizing_constant))
+        chosen = np.random.choice(
+            np.arange(num_proposals),
+            p=np.exp(self._log_weights) / np.exp(log_normalizing_constant),
+        )
 
-        return self._position_proposals[chosen, :,:], 0.0
-
-
-
-
-
-
+        return self._position_proposals[chosen, :, :], 0.0

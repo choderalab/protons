@@ -4,7 +4,7 @@
 from simtk.openmm.app import Simulation
 from simtk import openmm
 from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive
-from .calibration import SelfAdjustedMixtureSampler, MultiSiteSAMSSampler
+from .calibration import SAMSCalibrationEngine
 from protons.app import proposals
 from protons.app.logger import log
 import sys
@@ -15,7 +15,18 @@ from typing import Optional, List
 class ConstantPHSimulation(Simulation):
     """ConstantPHSimulation is an API for running constant-pH simulation in OpenMM analogous to app.Simulation."""
 
-    def __init__(self, topology, system, compound_integrator, drive, move=None, pools=None, platform=None, platformProperties=None, state=None):
+    def __init__(
+        self,
+        topology,
+        system,
+        compound_integrator,
+        drive,
+        move=None,
+        pools=None,
+        platform=None,
+        platformProperties=None,
+        state=None,
+    ):
         """Create a ConstantPHSimulation.
 
         Parameters
@@ -49,11 +60,17 @@ class ConstantPHSimulation(Simulation):
             Simulation object.
         """
 
-        super(ConstantPHSimulation, self).__init__(topology, system, compound_integrator, platform=platform, platformProperties=platformProperties, state=state)
+        super(ConstantPHSimulation, self).__init__(
+            topology,
+            system,
+            compound_integrator,
+            platform=platform,
+            platformProperties=platformProperties,
+            state=state,
+        )
 
         self.drive = drive
         self.drive.attach_context(self.context)
-
 
         if move is None:
             move = proposals.UniformProposal()
@@ -69,12 +86,12 @@ class ConstantPHSimulation(Simulation):
             drive.define_pools(pools)
 
         if self.drive.calibration_state is not None:
-            self.sams = MultiSiteSAMSSampler(drive)
+            self.sams = SAMSCalibrationEngine(drive)
         else:
             self.sams = None
 
         self.calibration_reporters = list()  # keeps track of calibration results
-        self.last_dev = None  # deviation at last iteration if sams
+        self.last_dev = 1.0  # deviation at last iteration if sams
         self.last_gk = None  # weights at last iteration if sams
 
         return
@@ -105,7 +122,9 @@ class ConstantPHSimulation(Simulation):
         if endUpdate is None:
             endUpdate = sys.maxsize
         nextReport = [None] * len(self.update_reporters)
-        while self.currentUpdate < endUpdate and (endTime is None or datetime.now() < endTime):
+        while self.currentUpdate < endUpdate and (
+            endTime is None or datetime.now() < endTime
+        ):
             nextUpdates = endUpdate - self.currentUpdate
             anyReport = False
             for i, reporter in enumerate(self.update_reporters):
@@ -134,6 +153,10 @@ class ConstantPHSimulation(Simulation):
         """
         if self.drive.calibration_state is None:
             raise ValueError("Proton drive has no calibration state attached.")
+        elif self.sams is None:
+            raise ValueError(
+                "Please enable calibration on the proton drive before instantiating the simulation."
+            )
 
         nextReport = [None] * len(self.calibration_reporters)
         anyReport = False
@@ -141,15 +164,61 @@ class ConstantPHSimulation(Simulation):
             nextReport[i] = reporter.describeNextReport(self)
             if 0 < nextReport[i][0] <= 1:
                 anyReport = True
-        self.last_dev = self.sams.adapt_zetas(self.drive.calibration_state._update_rule, stage=self.drive.calibration_state._stage, b=self.drive.calibration_state._beta_sams, end_of_burnin=self.drive.calibration_state._end_of_burnin)
-        self.last_gk = self.drive.calibration_state.free_energies
 
+        # Check stages
         # If the histogram is flat below the criterion
         # Flatness is defined as the sum of absolute deviations
-        if self.last_dev < self.drive.calibration_state._flatness_criterion and self.drive.calibration_state._stage == Stage.BURNIN and self.drive.calibration_state._current_adaptation > self.drive.calibration_state._min_burn:
-            log.info("Histogram flat below {}. Initiating the slow-gain phase.".format(self.drive.calibration_state._flatness_criterion))
-            self.drive.calibration_state._stage = Stage.SLOWGAIN
-            self.drive.calibration_state._end_of_burnin = int(self.drive.calibration_state._current_adaptation)
+        # if minimum iterations have been performed, start SAMS decay
+        if (
+            self.drive.calibration_state._current_adaptation == 0
+            and self.drive.calibration_state._stage is Stage.NODECAY
+        ):
+            log.info("Burn-in iterations complete, starting SAMS.")
+            self.drive.calibration_state._stage = Stage.SLOWDECAY
+        # If flatter than criterion, decay the gain faster
+        elif (
+            self.last_dev < self.drive.calibration_state._flatness_criterion
+            and self.drive.calibration_state._stage == Stage.SLOWDECAY
+            and self.drive.calibration_state._current_adaptation
+            > self.drive.calibration_state._min_slow
+        ):
+            log.info(
+                "Histogram flat below {}. Initiating the fast-decay phase at iteration {}.".format(
+                    self.drive.calibration_state._flatness_criterion,
+                    self.drive.calibration_state._current_adaptation,
+                )
+            )
+            self.drive.calibration_state._stage = Stage.FASTDECAY
+            self.drive.calibration_state._end_of_slowdecay = int(
+                self.drive.calibration_state._current_adaptation
+            )
+        # If 10x flatter than criterion, stop adapting
+        elif (
+            self.last_dev < self.drive.calibration_state._flatness_criterion / 10
+            and self.drive.calibration_state._stage == Stage.FASTDECAY
+            and self.drive.calibration_state._current_adaptation
+            > self.drive.calibration_state._end_of_slowdecay
+            + self.drive.calibration_state._min_fast
+        ):
+            log.info(
+                "Histogram flat below {}. Initiating the equilibrium phase at iteration {}.".format(
+                    self.drive.calibration_state._flatness_criterion / 10,
+                    self.drive.calibration_state._current_adaptation,
+                )
+            )
+            self.drive.calibration_state._stage = Stage.EQUILIBRIUM
+
+        # No adaptation performed if the simulation is in equilibrium
+        if self.drive.calibration_state._stage is not Stage.EQUILIBRIUM:
+            # adapt the zeta/g_k values, and the result is the deviation from the target histogram.
+            self.last_dev = self.sams.adapt_zetas(
+                self.drive.calibration_state._update_rule,
+                stage=self.drive.calibration_state._stage,
+                b=self.drive.calibration_state._beta_sams,
+                end_of_slowdecay=self.drive.calibration_state._end_of_slowdecay,
+            )
+
+            self.last_gk = self.drive.calibration_state.free_energies
 
         if anyReport:
             for reporter, nextR in zip(self.calibration_reporters, nextReport):

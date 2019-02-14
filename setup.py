@@ -37,7 +37,6 @@ def find_package_data(data_root, package_root):
 CLASSIFIERS = """\
 Intended Audience :: Science/Research
 Intended Audience :: Developers
-Programming Language :: C++
 Programming Language :: Python
 Development Status :: 2 - Pre-Alpha
 Topic :: Scientific/Engineering
@@ -45,7 +44,6 @@ Operating System :: POSIX
 Operating System :: Unix
 Operating System :: MacOS
 Programming Language :: Python :: 3
-Programming Language :: Python :: 3.5
 Programming Language :: Python :: 3.6
 """
 
