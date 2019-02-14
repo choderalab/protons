@@ -106,23 +106,31 @@ class SAMSCalibrationEngine:
 
         # TODO state counts fix
         # These need to be taken from full calibration run
-        Nk = (
-            self._calibration_state.observed_counts
-            / self._calibration_state.observed_counts.sum()
-        )
-        target = self._calibration_state.targets
-        # Return the maximum deviation of any one state from the target histogram.
-        target_deviation = max(abs(target - Nk))
-        log.debug(
-            "Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation"
-            % (
-                self._calibration_state._current_adaptation,
-                str(zeta_t),
-                str(Nk),
-                target_deviation * 100,
+        if self._calibration_state._current_adaptation > 0:
+            Nk = (
+                self._calibration_state.observed_counts
+                / self._calibration_state.observed_counts.sum()
             )
-        )
-        return target_deviation
+            target = self._calibration_state.targets
+            # Return the maximum deviation of any one state from the target histogram.
+            target_deviation = max(abs(target - Nk))
+
+            log.debug(
+                "Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation"
+                % (
+                    self._calibration_state._current_adaptation,
+                    str(zeta_t),
+                    str(Nk),
+                    target_deviation * 100,
+                )
+            )
+            return target_deviation
+        else:
+            log.debug(
+                "Adaptation step %8d : still in burn-in."
+                % self._calibration_state._current_adaptation
+            )
+            return 1.0
 
     def _binary_update(
         self,
@@ -160,10 +168,14 @@ class SAMSCalibrationEngine:
         )
 
         # Update count of current state weights.
-        #  Use sqrt to make recent states count more
-        counts = self._calibration_state.observed_counts
-        counts[current_state] += np.sqrt(self._calibration_state._current_adaptation)
-        self._calibration_state.observed_counts = counts
+        # Use sqrt to make recent states count more
+        # Only performed if past burn-in
+        if self._calibration_state._current_adaptation > 0:
+            counts = self._calibration_state.observed_counts
+            counts[current_state] += np.sqrt(
+                self._calibration_state._current_adaptation
+            )
+            self._calibration_state.observed_counts = counts
 
         return update
 
@@ -203,10 +215,12 @@ class SAMSCalibrationEngine:
         )
 
         # Update count of current state weights.
-        #  Use sqrt to make recent states count more
-        self._calibration_state.observed_counts += (
-            np.sqrt(self._calibration_state._current_adaptation) * w_j
-        )
+        # Use sqrt to make recent states count more
+        # Only use if past the burn in phase
+        if self._calibration_state._current_adaptation > 0:
+            self._calibration_state.observed_counts += (
+                np.sqrt(self._calibration_state._current_adaptation) * w_j
+            )
         return update
 
     def _gain_factor(self, b=1.0, stage=Stage.FASTDECAY, end_of_slowdecay=0):

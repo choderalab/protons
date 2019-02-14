@@ -170,7 +170,7 @@ def GBSAGBnForce(solventDielectric=78.5, soluteDielectric=1, SA=None, cutoff=Non
     custom.addGlobalParameter("solventDielectric", solventDielectric)
     custom.addGlobalParameter("soluteDielectric", soluteDielectric)
     custom.addGlobalParameter("offset", 0.009)
-    custom.addGlobalParameter("neckScale", 0.361825)
+    custom.addGlobalParameter("neckScale", 0.361_825)
     custom.addGlobalParameter("neckCut", 0.68)
 
     custom.addFunction("getd0", d0, 0, 440)
@@ -226,8 +226,8 @@ def GBSAGBn2Force(solventDielectric=78.5, soluteDielectric=1, SA=None, cutoff=No
 
     custom.addGlobalParameter("solventDielectric", solventDielectric)
     custom.addGlobalParameter("soluteDielectric", soluteDielectric)
-    custom.addGlobalParameter("offset", 0.0195141)
-    custom.addGlobalParameter("neckScale", 0.826836)
+    custom.addGlobalParameter("offset", 0.019_514_1)
+    custom.addGlobalParameter("neckScale", 0.826_836)
     custom.addGlobalParameter("neckCut", 0.68)
 
     custom.addFunction("getd0", d0, 0, 440)

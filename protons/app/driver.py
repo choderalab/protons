@@ -815,6 +815,8 @@ class _SAMSState:
         beta_sams: float = 0.5,
         flatness_criterion: float = 0.05,
         min_burn: int = 200,
+        min_slow: int = 200,
+        min_fast: int = 200,
     ):
         """Set up tracking for SAMS calibration weights.
 
@@ -827,7 +829,8 @@ class _SAMSState:
         beta_sams - SAMS two-stage coefficient to determine gain in first stage
         flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
         min_burn - minimum iterations before gain decay is initiated
-
+        min_slow - minimum number of SAMS iterations before fast decay is initiated.
+        min_fast - minimum number of SAMS iterations before equilibrium stage is initiated.
         """
 
         # Contains SAMS free energy estimates
@@ -845,6 +848,8 @@ class _SAMSState:
         self._beta_sams: float = beta_sams
         self._flatness_criterion = flatness_criterion
         self._min_burn: int = min_burn
+        self._min_slow: int = min_slow
+        self._min_fast: int = min_fast
 
         # Starting adaptation uses negative numbers to indicate burn-in
         self._current_adaptation: int = -1 * min_burn
@@ -1104,6 +1109,9 @@ class _SAMSState:
         root.set("beta_sams", str(self._beta_sams))
         root.set("flatness_criterion", str(self._flatness_criterion))
         root.set("min_burn", str(self._min_burn))
+        root.set("min_slow", str(self._min_slow))
+        root.set("min_fast", str(self._min_fast))
+
         root.set("adaptation", str(self._current_adaptation))
         root.set("stage", str(self._stage.value))
         root.set("end_of_slowdecay", str(self._end_of_slowdecay))
@@ -1187,6 +1195,8 @@ class _SAMSState:
         instance._beta_sams = float(root.get("beta_sams"))
         instance._flatness_criterion = float(root.get("flatness_criterion"))
         instance._min_burn = int(root.get("min_burn"))
+        instance._min_slow = int(root.get("min_slow"))
+        instance._min_fast = int(root.get("min_fast"))
         instance._current_adaptation = int(root.get("adaptation"))
         instance._stage = Stage(int(root.get("stage")))
         instance._end_of_slowdecay = int(root.get("end_of_slowdecay"))
@@ -1701,9 +1711,11 @@ class NCMCProtonDrive(_BaseDrive):
         approach: SAMSApproach,
         group_index: Optional[int] = None,
         update_rule: UpdateRule = UpdateRule.BINARY,
-        beta_sams: float = 0.5,
-        flatness_criterion: float = 0.15,
-        min_burn: int = 100,
+        beta_sams: float = 0.6,
+        flatness_criterion: float = 0.05,
+        min_burn: int = 200,
+        min_slow: int = 200,
+        min_fast: int = 200,
     ):
         """Prepare the drive to read g_k values from a calibration instead of its defaults.
 
@@ -1717,9 +1729,9 @@ class NCMCProtonDrive(_BaseDrive):
         update_rule - The update rule to use
         beta_sams - SAMS two-stage coefficient to determine gain in first stage
         flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
-        min_burn - minimum iterations before slow-gain may be starteds
-
-
+        min_burn - minimum iterations before gain decay is initiated
+        min_slow - minimum number of SAMS iterations before fast decay is initiated.
+        min_fast - minimum number of SAMS iterations before equilibrium stage is initiated.
 
         Raises
         ------
@@ -1736,6 +1748,8 @@ class NCMCProtonDrive(_BaseDrive):
             beta_sams=beta_sams,
             flatness_criterion=flatness_criterion,
             min_burn=min_burn,
+            min_slow=min_slow,
+            min_fast=min_fast,
         )
 
         if approach is SAMSApproach.ONESITE:

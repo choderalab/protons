@@ -359,7 +359,7 @@ class Modeller(modeller.Modeller):
                 bondedTo.append([])
             for atom1, atom2 in newTopology.bonds():
                 if atom1.element == elem.hydrogen or atom2.element == elem.hydrogen:
-                    bonds.addBond(atom1.index, atom2.index, 0.1, 100000.0)
+                    bonds.addBond(atom1.index, atom2.index, 0.1, 100_000.0)
                 bondedTo[atom1.index].append(atom2)
                 bondedTo[atom2.index].append(atom1)
             for residue in newTopology.residues():

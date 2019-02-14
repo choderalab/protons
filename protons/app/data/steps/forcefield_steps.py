@@ -4,7 +4,7 @@ import subprocess
 import shlex
 
 
-@given(u"I use the current directory as working directory")
+@given("I use the current directory as working directory")
 def step_use_curdir_as_working_directory(context):
     """
     Uses the current directory as working directory
@@ -14,7 +14,7 @@ def step_use_curdir_as_working_directory(context):
     assert os.path.isdir(context.workdir), "The working directory does not exist."
 
 
-@given(u'the directory "{directory}" exists')
+@given('the directory "{directory}" exists')
 def step_the_directory_exists(context, directory):
     """
     Test if a directory exists
@@ -25,7 +25,7 @@ def step_the_directory_exists(context, directory):
     assert os.path.isdir(path), "The directory does not exist."
 
 
-@given(u'a file named "{filename}" exists')
+@given('a file named "{filename}" exists')
 def step_a_file_named_filename_exists(context, filename):
     """Test if a file exists"""
     filename_ = os.path.join(context.workdir, filename)
@@ -33,7 +33,7 @@ def step_a_file_named_filename_exists(context, filename):
     assert os.path.isfile(filename_), "Target {} is not a file.".format(filename_)
 
 
-@given(u'a file named "{filename}" exists in the directory "{directory}"')
+@given('a file named "{filename}" exists in the directory "{directory}"')
 def step_a_file_named_filename_exists_in_the_directory_directory(
     context, filename, directory
 ):
@@ -43,14 +43,14 @@ def step_a_file_named_filename_exists_in_the_directory_directory(
     assert os.path.isfile(filename_), "Target {} is not a file.".format(filename_)
 
 
-@when(u'I run "{command}"')
+@when('I run "{command}"')
 def step_i_run_command(context, command):
     """Run a command"""
     command_ = shlex.split(command)
     context.output = subprocess.check_output(command_)
 
 
-@when(u'I successfully run "{command}"')
+@when('I successfully run "{command}"')
 def step_i_successfully_run_command(context, command):
     """Check that the command is ran successfully"""
     try:
@@ -64,20 +64,20 @@ def step_i_successfully_run_command(context, command):
         )
 
 
-@then(u'a file named "{filename}" should exist')
+@then('a file named "{filename}" should exist')
 def step_a_file_named_filename_should_exist(context, filename):
     """Test if a file exists"""
     step_a_file_named_filename_exists(context, filename)
 
 
-@then(u'a temporary file named "{filename}" should exist')
+@then('a temporary file named "{filename}" should exist')
 def step_a_temporary_file_named_filename_should_exist(context, filename):
     """Test if a file exists"""
     step_a_file_named_filename_should_exist(context, filename)
     context.tmpfiles.append(os.path.join(context.workdir, filename))
 
 
-@then(u'a file named "{filename}" should exist in the directory "{directory}"')
+@then('a file named "{filename}" should exist in the directory "{directory}"')
 def step_a_file_named_filename_should_exist_in_the_directory_directory(
     context, filename, directory
 ):
@@ -87,9 +87,7 @@ def step_a_file_named_filename_should_exist_in_the_directory_directory(
     )
 
 
-@then(
-    u'a temporary file named "{filename}" should exist in the directory "{directory}"'
-)
+@then('a temporary file named "{filename}" should exist in the directory "{directory}"')
 def step_a_temporary_file_named_filename_should_exist_in_the_directory_directory(
     context, filename, directory
 ):

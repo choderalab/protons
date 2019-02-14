@@ -91,7 +91,7 @@ class ConstantPHSimulation(Simulation):
             self.sams = None
 
         self.calibration_reporters = list()  # keeps track of calibration results
-        self.last_dev = None  # deviation at last iteration if sams
+        self.last_dev = 1.0  # deviation at last iteration if sams
         self.last_gk = None  # weights at last iteration if sams
 
         return
@@ -153,6 +153,10 @@ class ConstantPHSimulation(Simulation):
         """
         if self.drive.calibration_state is None:
             raise ValueError("Proton drive has no calibration state attached.")
+        elif self.sams is None:
+            raise ValueError(
+                "Please enable calibration on the proton drive before instantiating the simulation."
+            )
 
         nextReport = [None] * len(self.calibration_reporters)
         anyReport = False
@@ -160,6 +164,49 @@ class ConstantPHSimulation(Simulation):
             nextReport[i] = reporter.describeNextReport(self)
             if 0 < nextReport[i][0] <= 1:
                 anyReport = True
+
+        # Check stages
+        # If the histogram is flat below the criterion
+        # Flatness is defined as the sum of absolute deviations
+        # if minimum iterations have been performed, start SAMS decay
+        if (
+            self.drive.calibration_state._current_adaptation == 0
+            and self.drive.calibration_state._stage is Stage.NODECAY
+        ):
+            log.info("Burn-in iterations complete, starting SAMS.")
+            self.drive.calibration_state._stage = Stage.SLOWDECAY
+        # If flatter than criterion, decay the gain faster
+        elif (
+            self.last_dev < self.drive.calibration_state._flatness_criterion
+            and self.drive.calibration_state._stage == Stage.SLOWDECAY
+            and self.drive.calibration_state._current_adaptation
+            > self.drive.calibration_state._min_slow
+        ):
+            log.info(
+                "Histogram flat below {}. Initiating the fast-decay phase at iteration {}.".format(
+                    self.drive.calibration_state._flatness_criterion,
+                    self.drive.calibration_state._current_adaptation,
+                )
+            )
+            self.drive.calibration_state._stage = Stage.FASTDECAY
+            self.drive.calibration_state._end_of_slowdecay = int(
+                self.drive.calibration_state._current_adaptation
+            )
+        # If 10x flatter than criterion, stop adapting
+        elif (
+            self.last_dev < self.drive.calibration_state._flatness_criterion / 10
+            and self.drive.calibration_state._stage == Stage.FASTDECAY
+            and self.drive.calibration_state._current_adaptation
+            > self.drive.calibration_state._end_of_slowdecay
+            + self.drive.calibration_state._min_fast
+        ):
+            log.info(
+                "Histogram flat below {}. Initiating the equilibrium phase at iteration {}.".format(
+                    self.drive.calibration_state._flatness_criterion / 10,
+                    self.drive.calibration_state._current_adaptation,
+                )
+            )
+            self.drive.calibration_state._stage = Stage.EQUILIBRIUM
 
         # No adaptation performed if the simulation is in equilibrium
         if self.drive.calibration_state._stage is not Stage.EQUILIBRIUM:
@@ -172,35 +219,6 @@ class ConstantPHSimulation(Simulation):
             )
 
             self.last_gk = self.drive.calibration_state.free_energies
-
-            # If the histogram is flat below the criterion
-            # Flatness is defined as the sum of absolute deviations
-            # if minimum iterations have been performed, start SAMS decay
-            if (
-                self.drive.calibration_state._current_adaptation == 0
-                and self.drive.calibration_state._stage is Stage.NODECAY
-            ):
-                self.drive.calibration_state._stage = Stage.SLOWDECAY
-            # If flatter than criterion, decay the gain faster
-            elif (
-                self.last_dev < self.drive.calibration_state._flatness_criterion
-                and self.drive.calibration_state._stage == Stage.SLOWDECAY
-            ):
-                log.info(
-                    "Histogram flat below {}. Initiating the slow-gain phase.".format(
-                        self.drive.calibration_state._flatness_criterion
-                    )
-                )
-                self.drive.calibration_state._stage = Stage.FASTDECAY
-                self.drive.calibration_state._end_of_slowdecay = int(
-                    self.drive.calibration_state._current_adaptation
-                )
-            # If 10x flatter than criterion, stop adapting
-            elif (
-                self.last_dev < self.drive.calibration_state._flatness_criterion / 10
-                and self.drive.calibration_state._stage == Stage.FASTDECAY
-            ):
-                self.drive.calibration_state._stage = Stage.EQUILIBRIUM
 
         if anyReport:
             for reporter, nextR in zip(self.calibration_reporters, nextReport):

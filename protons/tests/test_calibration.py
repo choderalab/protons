@@ -200,7 +200,7 @@ class TestSAMS:
             pep.simulation.step(1)
             pep.simulation.update(1)
 
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.NODECAY)
         log.setLevel(old_log_level)
 
     def test_onesite_sams_sampling_global(self):
@@ -216,7 +216,7 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.SLOWDECAY)
+            sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.NODECAY)
         log.setLevel(old_log_level)
 
     def test_multisite_sams_sampling(self):
@@ -231,7 +231,7 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.NODECAY)
         log.setLevel(old_log_level)
         return
 
@@ -247,6 +247,41 @@ class TestSAMS:
                 log.setLevel(logging.DEBUG)
             pep.simulation.step(1)
             pep.simulation.update(1)
-            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.SLOWDECAY)
+            sampler.adapt_zetas(UpdateRule.BINARY, b=0.51, stage=Stage.NODECAY)
         log.setLevel(old_log_level)
         return
+
+    def test_onesite_sams_sampling_binary_all_stages(self):
+        """Test the one site sams sampling approach with binary updates through all 4 stages of the algorithm"""
+        old_log_level = log.getEffectiveLevel()
+        log.setLevel(logging.INFO)
+        pep = self.setup_peptide_implicit("yeah", createsim=False)
+        pep.drive.enable_calibration(
+            SAMSApproach.ONESITE,
+            group_index=0,
+            min_burn=0,
+            min_fast=200,
+            min_slow=200,
+            flatness_criterion=0.1,
+        )
+        pep.simulation = app.ConstantPHSimulation(
+            pep.topology,
+            pep.system,
+            pep.integrator,
+            pep.drive,
+            platform=TestSAMS.platform,
+        )
+        pep.simulation.context.setPositions(pep.positions)
+        pep.context = pep.simulation.context
+        pep.simulation.minimizeEnergy()
+
+        total_iterations = 50000
+        for x in range(total_iterations):
+            if x == total_iterations - 1:
+                log.setLevel(logging.DEBUG)
+            pep.simulation.step(1)
+            pep.simulation.update(1)
+            pep.simulation.adapt()
+
+        # log.info(pep.drive.calibration_state.observed_counts)
+        log.setLevel(old_log_level)

@@ -126,14 +126,14 @@ class TestLigandParameterizationExplicit(object):
     def test_parametrize_molecule(self):
         """Generate parameters for a series of protonation states."""
         isomer_dicts = [
-            {"net_charge": 2, "log_population": -0.20928808598192242},
-            {"net_charge": 1, "log_population": -1.7617330979671824},
-            {"net_charge": 1, "log_population": -4.334626309828816},
-            {"net_charge": 0, "log_population": -6.526412668345948},
-            {"net_charge": 1, "log_population": -6.862455070918535},
-            {"net_charge": 1, "log_population": -6.862455070918535},
-            {"net_charge": 0, "log_population": -8.414900082903793},
-            {"net_charge": 0, "log_population": -8.414900082903793},
+            {"net_charge": 2, "log_population": -0.209_288_085_981_922_42},
+            {"net_charge": 1, "log_population": -1.761_733_097_967_182_4},
+            {"net_charge": 1, "log_population": -4.334_626_309_828_816},
+            {"net_charge": 0, "log_population": -6.526_412_668_345_948},
+            {"net_charge": 1, "log_population": -6.862_455_070_918_535},
+            {"net_charge": 1, "log_population": -6.862_455_070_918_535},
+            {"net_charge": 0, "log_population": -8.414_900_082_903_793},
+            {"net_charge": 0, "log_population": -8.414_900_082_903_793},
         ]
 
         unique_filename = "{}.ffxml".format(str(uuid4()))
