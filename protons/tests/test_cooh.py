@@ -403,7 +403,7 @@ class TestCarboxylicAcid:
         """Move dummies with monte carlo and evaluate the energy differences."""
 
         md_steps_between_mc = 100
-        total_loops = 500
+        total_loops = 100
         viologen = self.setup_viologen_vacuum()
         # viologen = self.setup_viologen_water()
 
@@ -475,8 +475,8 @@ class TestCarboxylicAcid:
             assert len(drive.titrationGroups[0].titration_states[3]._mc_moves["COOH"])
         drive.attach_context(viologen.context)
         drive.adjust_to_ph(7.0)
-        for iteration in range(50):
-            viologen.integrator.step(100)
+        for iteration in range(15):
+            viologen.integrator.step(10)
             drive.update("COOH", nattempts=1)
 
         return
@@ -502,7 +502,7 @@ class TestCarboxylicAcid:
         drive.attach_context(viologen.context)
         drive.adjust_to_ph(7.0)
         for iteration in range(1):
-            viologen.integrator.step(100)
+            viologen.integrator.step(10)
             drive.update("COOH", nattempts=1)
 
         x = drive.state_to_xml()
@@ -536,8 +536,8 @@ class TestCarboxylicAcid:
             )
 
         newdrive.attach_context(viologen.context)
-        for iteration in range(50):
-            viologen.integrator.step(100)
+        for iteration in range(3):
+            viologen.integrator.step(10)
             newdrive.update("COOH", nattempts=1)
         newdrive.update(UniformProposal(), nattempts=1)
 

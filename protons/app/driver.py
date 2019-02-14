@@ -582,27 +582,25 @@ class _TitrationState:
 
         # instantiate supported MCMoves from xml
         # throws KeyError if there is an unimplemented move present
-        for mcmove in state.xpath("MCMoves")[0]:
-            for child in mcmove.iterchildren():
-                if child.tag == "COOH":
-                    for grandchild in child.iterchildren():
-                        if grandchild.tag == "COOHDummyMover":
-                            mover = COOHDummyMover.from_xml(grandchild)
-                            try:
-                                obj._mc_moves["COOH"].append(mover)
-                            except KeyError:
-                                obj._mc_moves["COOH"] = [mover]
-                        else:
-                            raise KeyError(
-                                "Unknown COOH movetype found in XML: {}".format(
-                                    grandchild.tag
-                                )
+        for child in state.xpath("MCMoves")[0].iterchildren():
+            if child.tag == "COOH":
+                for grandchild in child.iterchildren():
+                    if grandchild.tag == "COOHDummyMover":
+                        mover = COOHDummyMover.from_xml(grandchild)
+                        try:
+                            obj._mc_moves["COOH"].append(mover)
+                        except KeyError:
+                            obj._mc_moves["COOH"] = [mover]
+                    else:
+                        raise KeyError(
+                            "Unknown COOH movetype found in XML: {}".format(
+                                grandchild.tag
                             )
-                else:
-                    raise KeyError(
-                        "Unsupported MC movetype found in XML: {}".format(child.tag)
-                    )
-            pass
+                        )
+            else:
+                raise KeyError(
+                    "Unsupported MC movetype found in XML: {}".format(child.tag)
+                )
 
         return obj
 
