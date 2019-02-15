@@ -5,6 +5,7 @@ from protons import app
 from protons.app import log
 import numpy as np
 from io import StringIO
+from typing import Union
 
 xmls = mm.XmlSerializer
 import datetime
@@ -100,7 +101,7 @@ def xml_to_topology(topology_elem: etree.Element) -> app.Topology:
 
 def create_calibration_checkpoint_file(
     filename: str,
-    drive: app.ForceFieldProtonDrive,
+    drive: Union[app.ForceFieldProtonDrive, app.AmberProtonDrive, app.NCMCProtonDrive],
     context: mm.Context,
     system: mm.System,
     integrator: mm.CustomIntegrator,

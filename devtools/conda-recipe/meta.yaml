@@ -56,6 +56,7 @@ requirements:
     - saltswap >=0.5.2 # for counterion coupling
     - beautifulsoup4 # for deserialization of html tables
     - networkx # matching protonation state structures
+    - tqdm # progress bar in scripts
 
 test:
   requires:
