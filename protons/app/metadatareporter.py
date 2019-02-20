@@ -96,6 +96,7 @@ class MetadataReporter:
             time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime())
         )
 
+        # TODO could make use of variable length types for efficiency.
         residue_dim = grp.createDimension("residue", self._ngroups)
         state_dim = grp.createDimension("state")
         atom_dim = grp.createDimension("atom")

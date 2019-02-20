@@ -5,6 +5,7 @@ import netCDF4
 import time
 import numpy as np
 from copy import deepcopy
+from protons import app
 
 
 class NCMCReporter:
@@ -28,14 +29,24 @@ class NCMCReporter:
         self._reportInterval = reportInterval
         if isinstance(netcdffile, str):
             self._out = netCDF4.Dataset(netcdffile, mode="w")
+            # Make a new type for variable length float array
+            self._float64_vl = self._out.createVLType(np.float64, "float64_vl")
         elif isinstance(netcdffile, netCDF4.Dataset):
             self._out = netcdffile
             self._out.sync()  # check if writing works
+
+            # Add variable length float array type if necessary.
+            if "float64_vl" not in self._out.vltypes:
+                self._float64_vl = self._out.createVLType(np.float64, "float64_vl")
+            else:
+                self._float64_vl = self._out.vltypes["float64_vl"]
+
         else:
             raise ValueError(
                 "Please provide a string with the filename location,"
                 " or an opened netCDF4 file with write access."
             )
+
         self._grp = None  # netcdf group that will contain all data.
         self._hasInitialized = False
         self._update = 0  # Number of updates written to the file.
@@ -100,8 +111,8 @@ class NCMCReporter:
         simulation : ConstantPHSimulation
             The Simulation to generate a report for
         """
-        drv = simulation.drive
-        iupdate = self._update
+        drv: app.driver.NCMCProtonDrive = simulation.drive
+        iupdate: int = self._update
         # The iteration of the protonation state update attempt. [update]
         self._grp["update"][iupdate] = simulation.currentUpdate
         for ires, residue in enumerate(drv.titrationGroups):
