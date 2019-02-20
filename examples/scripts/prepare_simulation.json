@@ -46,14 +46,16 @@
   },
   "preprocessing": {
     "minimization_tolerance_kjmol": 1e-5,
-    "minimization_max_iterations": 100,
-    "num_thermalization_steps": 10
+    "minimization_max_iterations": 300,
+    "num_thermalization_steps": 100
   },
   "SAMS": {
-    "beta": 0.5,
-    "flatness_criterion": 0.15,
+    "beta": 0.6,
+    "flatness_criterion": 0.1,
     "sites": "multi",
     "update_rule": "binary",
-    "min_burn": 200
+    "min_burn": 200,
+    "min_slow": 200,
+    "min_fast": 200
   }
 }
