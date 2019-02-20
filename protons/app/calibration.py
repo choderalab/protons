@@ -68,13 +68,23 @@ class SAMSCalibrationEngine:
         # zeta^{t-1}
         zeta = self._calibration_state.free_energies
 
+        # Stage dependend prep work
+
         # Only increase adaptation number if adaptation is expected
         if stage in [Stage.NODECAY, Stage.SLOWDECAY, Stage.FASTDECAY]:
             self._calibration_state._current_adaptation += 1
 
-        elif stage == Stage.EQUILIBRIUM:
-            return
+        elif stage is Stage.EQUILIBRIUM:
+            # Update the histogram with a single count
+            current_state = self._calibration_state.state_index(
+                self.driver.titrationStates
+            )
+            counts = self._calibration_state.observed_counts
+            counts[current_state] += 1
+            self._calibration_state.observed_counts = counts
+            return self._calibration_state.max_absolute_deviation
 
+        # Perform updates for all stages other than equilibrium
         if update_rule is UpdateRule.BINARY:
             update = self._binary_update(
                 group_index=self.group_index,
@@ -104,23 +114,15 @@ class SAMSCalibrationEngine:
         # Set reference free energy based on new zeta
         self._calibration_state.free_energies = zeta_t
 
-        # TODO state counts fix
         # These need to be taken from full calibration run
         if self._calibration_state._current_adaptation > 0:
-            Nk = (
-                self._calibration_state.observed_counts
-                / self._calibration_state.observed_counts.sum()
-            )
-            target = self._calibration_state.targets
-            # Return the maximum deviation of any one state from the target histogram.
-            target_deviation = max(abs(target - Nk))
-
+            target_deviation = self._calibration_state.max_absolute_deviation
             log.debug(
                 "Adaptation step %8d : zeta_t = %s, N_k = %s, %2f%% deviation"
                 % (
                     self._calibration_state._current_adaptation,
                     str(zeta_t),
-                    str(Nk),
+                    str(self._calibration_state.observed_counts),
                     target_deviation * 100,
                 )
             )
