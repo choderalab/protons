@@ -1035,6 +1035,12 @@ class _SAMSState:
         elif self.approach is SAMSApproach.MULTISITE:
             self._observed_table = counts.reshape(self._observed_table.shape)
 
+    def reset_observed_counts(self):
+        """Reset the observed counts to zero."""
+        self.observed_counts = np.zeros_like(self.observed_counts)
+
+        return
+
     def state_index(self, titration_states) -> int:
         """Find the index of the current titration state in the flattened arrays."""
         if self.approach is SAMSApproach.ONESITE:
