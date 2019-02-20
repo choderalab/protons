@@ -993,6 +993,18 @@ class _SAMSState:
             return self._observed_table.flatten()
 
     @property
+    def deviation_from_target(self) -> np.ndarray:
+        """Return the signed deviation from target for every state."""
+        # Ensure normalization works even if all observations are zero.
+        total = max(1.0, np.sum(self.observed_counts))
+        return (self.observed_counts / total) - self.targets
+
+    @property
+    def max_absolute_deviation(self) -> float:
+        """Return the maximum absolute deviation between sampled and target histogram."""
+        return np.max(np.abs(self.deviation_from_target))
+
+    @property
     def free_energies(self) -> np.ndarray:
         """Return entire row of sams free energies."""
         if self.approach is SAMSApproach.ONESITE:
