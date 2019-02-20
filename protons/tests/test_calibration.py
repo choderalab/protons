@@ -262,7 +262,7 @@ class TestSAMS:
             min_burn=200,
             min_fast=100,
             min_slow=100,
-            flatness_criterion=0.1,
+            flatness_criterion=0.15,
         )
         pep.simulation = app.ConstantPHSimulation(
             pep.topology,
@@ -284,4 +284,77 @@ class TestSAMS:
             pep.simulation.adapt()
 
         # log.info(pep.drive.calibration_state.observed_counts)
+        log.setLevel(old_log_level)
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(
+        os.environ.get("TRAVIS", None) == "true", reason="Skip slow test on travis."
+    )
+    def test_onesite_sams_sampling_binary_all_stages_serialization(self):
+        """Test the one site sams sampling approach with binary updates through all 4 stages of the algorithm
+        and after serialization."""
+        old_log_level = log.getEffectiveLevel()
+        log.setLevel(logging.INFO)
+        pep = self.setup_peptide_implicit("yeah", createsim=False)
+        pep.drive.enable_calibration(
+            SAMSApproach.ONESITE,
+            group_index=0,
+            min_burn=200,
+            min_fast=200,
+            min_slow=200,
+            flatness_criterion=0.15,
+        )
+        pep.simulation = app.ConstantPHSimulation(
+            pep.topology,
+            pep.system,
+            pep.integrator,
+            pep.drive,
+            platform=TestSAMS.platform,
+        )
+        pep.simulation.context.setPositions(pep.positions)
+        pep.context = pep.simulation.context
+        pep.simulation.minimizeEnergy()
+
+        total_iterations = 1000
+        for x in range(total_iterations):
+            pep.simulation.step(1)
+            pep.simulation.update(1)
+            pep.simulation.adapt()
+
+        pep.drive: NCMCProtonDrive
+        drive_state = pep.drive.state_to_xml()
+        new_drive = NCMCProtonDrive(
+            pep.temperature,
+            pep.topology,
+            pep.system,
+            pressure=None,
+            perturbations_per_trial=pep.perturbations_per_trial,
+            propagations_per_step=pep.propagations_per_step,
+        )
+        new_drive.state_from_xml_tree(etree.fromstring(drive_state))
+
+        new_simulation = app.ConstantPHSimulation(
+            pep.topology,
+            pep.system,
+            create_compound_gbaoab_integrator(pep),
+            new_drive,
+            platform=TestSAMS.platform,
+        )
+        old_state: app.State = pep.simulation.context.getState(
+            getPositions=True, getVelocities=True
+        )
+        new_simulation.context.setPositions(old_state.getPositions())
+        new_simulation.context.setVelocities(old_state.getVelocities())
+
+        total_iterations = 1000
+        for x in range(total_iterations):
+            if x == total_iterations - 1:
+                log.setLevel(logging.DEBUG)
+            new_simulation.step(1)
+            new_simulation.update(1)
+            new_simulation.adapt()
+            log.debug("Last deviation: %f", new_simulation.last_dev)
+        log.info(
+            "Observed counts: %s", str(pep.drive.calibration_state.observed_counts)
+        )
         log.setLevel(old_log_level)
