@@ -91,7 +91,7 @@ class ConstantPHSimulation(Simulation):
             self.sams = None
 
         self.calibration_reporters = list()  # keeps track of calibration results
-        self.last_dev = 1.0  # deviation at last iteration if sams
+        self.last_dev = self.drive.calibration_state.max_absolute_deviation
         self.last_gk = None  # weights at last iteration if sams
 
         return
@@ -175,6 +175,7 @@ class ConstantPHSimulation(Simulation):
         ):
             log.info("Burn-in iterations complete, starting SAMS.")
             self.drive.calibration_state._stage = Stage.SLOWDECAY
+            self.drive.calibration_state.reset_observed_counts()
         # If flatter than criterion, decay the gain faster
         elif (
             self.last_dev < self.drive.calibration_state._flatness_criterion
@@ -189,12 +190,13 @@ class ConstantPHSimulation(Simulation):
                 )
             )
             self.drive.calibration_state._stage = Stage.FASTDECAY
+            self.drive.calibration_state.reset_observed_counts()
             self.drive.calibration_state._end_of_slowdecay = int(
                 self.drive.calibration_state._current_adaptation
             )
-        # If 10x flatter than criterion, stop adapting
+        # If 3x flatter than criterion, stop adapting
         elif (
-            self.last_dev < self.drive.calibration_state._flatness_criterion / 10
+            self.last_dev < self.drive.calibration_state._flatness_criterion / 3
             and self.drive.calibration_state._stage == Stage.FASTDECAY
             and self.drive.calibration_state._current_adaptation
             > self.drive.calibration_state._end_of_slowdecay
@@ -202,23 +204,24 @@ class ConstantPHSimulation(Simulation):
         ):
             log.info(
                 "Histogram flat below {}. Initiating the equilibrium phase at iteration {}.".format(
-                    self.drive.calibration_state._flatness_criterion / 10,
+                    self.drive.calibration_state._flatness_criterion / 3,
                     self.drive.calibration_state._current_adaptation,
                 )
             )
             self.drive.calibration_state._stage = Stage.EQUILIBRIUM
+            self.drive.calibration_state.reset_observed_counts()
 
         # No adaptation performed if the simulation is in equilibrium
-        if self.drive.calibration_state._stage is not Stage.EQUILIBRIUM:
-            # adapt the zeta/g_k values, and the result is the deviation from the target histogram.
-            self.last_dev = self.sams.adapt_zetas(
-                self.drive.calibration_state._update_rule,
-                stage=self.drive.calibration_state._stage,
-                b=self.drive.calibration_state._beta_sams,
-                end_of_slowdecay=self.drive.calibration_state._end_of_slowdecay,
-            )
 
-            self.last_gk = self.drive.calibration_state.free_energies
+        # adapt the zeta/g_k values, and the result is the deviation from the target histogram.
+        self.last_dev = self.sams.adapt_zetas(
+            self.drive.calibration_state._update_rule,
+            stage=self.drive.calibration_state._stage,
+            b=self.drive.calibration_state._beta_sams,
+            end_of_slowdecay=self.drive.calibration_state._end_of_slowdecay,
+        )
+
+        self.last_gk = self.drive.calibration_state.free_energies
 
         if anyReport:
             for reporter, nextR in zip(self.calibration_reporters, nextReport):

@@ -993,6 +993,18 @@ class _SAMSState:
             return self._observed_table.flatten()
 
     @property
+    def deviation_from_target(self) -> np.ndarray:
+        """Return the signed deviation from target for every state."""
+        # Ensure normalization works even if all observations are zero.
+        total = max(1.0, np.sum(self.observed_counts))
+        return (self.observed_counts / total) - self.targets
+
+    @property
+    def max_absolute_deviation(self) -> float:
+        """Return the maximum absolute deviation between sampled and target histogram."""
+        return np.max(np.abs(self.deviation_from_target))
+
+    @property
     def free_energies(self) -> np.ndarray:
         """Return entire row of sams free energies."""
         if self.approach is SAMSApproach.ONESITE:
@@ -1034,6 +1046,12 @@ class _SAMSState:
             self._observed_table[self.group_index] = counts
         elif self.approach is SAMSApproach.MULTISITE:
             self._observed_table = counts.reshape(self._observed_table.shape)
+
+    def reset_observed_counts(self):
+        """Reset the observed counts to zero."""
+        self.observed_counts = np.zeros_like(self.observed_counts)
+
+        return
 
     def state_index(self, titration_states) -> int:
         """Find the index of the current titration state in the flattened arrays."""
