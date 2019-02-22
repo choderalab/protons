@@ -12,6 +12,8 @@ import os
 
 travis = os.environ.get("TRAVIS", None)
 
+# TODO write tests for dataframe and array generating functions
+
 
 @pytest.mark.skipif(travis == "true", reason="Tests have segfaulting risk on Linux.")
 class TestBARforSAMS:
