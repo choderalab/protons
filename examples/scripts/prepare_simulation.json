@@ -49,8 +49,8 @@
     "minimization_max_iterations": 300,
     "num_thermalization_steps": 100
   },
-  "free_energies": {
-    "_comment": "This block contains free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",
+  "reference_free_energies": {
+    "_comment": "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",
     "FD3": [
       0.0,
       0.0,
