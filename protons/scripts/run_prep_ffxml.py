@@ -6,22 +6,22 @@ import sys
 import netCDF4
 
 from protons import app
-from protons.app import ForceFieldProtonDrive
+from .. import ForceFieldProtonDrive
 
-from protons.app.logger import log, logging
+from ..app.logger import log, logging
 
 from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
 from typing import List, Dict, Tuple, Callable, Any, AnyStr
 from warnings import warn
-from protons.scripts.utilities import (
+from .utilities import (
     TimeOutError,
     timeout_handler,
     create_calibration_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
-from protons.app.driver import SAMSApproach, Stage, UpdateRule
+from ..app.driver import SAMSApproach, Stage, UpdateRule
 
 log.setLevel(logging.DEBUG)
 
@@ -29,7 +29,7 @@ log.setLevel(logging.DEBUG)
 # Define a main function that can read in a json file with simulation settings, sets up, and runs the simulation.
 
 
-def main(jsonfile):
+def run_prep_ffxml_main(jsonfile):
     """Main simulation loop."""
 
     # TODO Validate json input with json schema?
@@ -327,4 +327,4 @@ if __name__ == "__main__":
         print("Please provide a single json file as input.")
     else:
         # Provide the json file to main function
-        main(sys.argv[1])
+        run_prep_ffxml_main(sys.argv[1])
