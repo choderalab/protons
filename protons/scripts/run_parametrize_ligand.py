@@ -4,21 +4,19 @@ This script parametrizes a ligand.
 """
 
 from sys import argv
-from protons.app.ligands import *
-from protons.app import logger
-from protons.app.template_patches import patch_cooh
-from protons.app.logger import log
-from lxml import etree
+from ..app.ligands import *
+from ..app import logger
+from ..app.template_patches import patch_cooh
+from ..app.logger import log
 import json
 import sys
 import os
 from warnings import warn
 
-
 log.setLevel(logger.logging.DEBUG)
 
 
-def main(args):
+def run_parametrize_main(args):
     """
     Run the program
     Parameters
@@ -155,4 +153,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(argv)
+    run_parametrize_main(argv)

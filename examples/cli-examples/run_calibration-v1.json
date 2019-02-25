@@ -1,7 +1,7 @@
 {
-  "_comment": "This script generates a necessary checkpoint file to start a simulation.",
+  "_comment": "This script runs a calibration starting from a checkpoint.",
   "input": {
-    "_comment": "Simulation requires an mmCIF file and a ffxml residue. Please specify the input directory under dir.",
+    "_comment": "Simulation requires a checkpoint xml file. Please specify the input directory under dir.",
     "dir": "{name}-calibration",
     "checkpoint": "{name}-checkpoint-{previous_run_idx}.xml"
   },

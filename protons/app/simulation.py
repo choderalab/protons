@@ -87,12 +87,14 @@ class ConstantPHSimulation(Simulation):
 
         if self.drive.calibration_state is not None:
             self.sams = SAMSCalibrationEngine(drive)
+            self.last_dev = self.drive.calibration_state.max_absolute_deviation
+            self.last_gk = None  # weights at last iteration if sams
         else:
             self.sams = None
+            self.last_dev = None
+            self.last_gk = None
 
         self.calibration_reporters = list()  # keeps track of calibration results
-        self.last_dev = self.drive.calibration_state.max_absolute_deviation
-        self.last_gk = None  # weights at last iteration if sams
 
         return
 
