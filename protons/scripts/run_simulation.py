@@ -115,8 +115,9 @@ def run_main(jsonfile):
     )
     driver.state_from_xml_tree(drive_element)
 
-    if driver.calibration_state.approach == SAMSApproach.ONESITE:
-        driver.define_pools({"calibration": driver.calibration_state.group_index})
+    if driver.calibration_state is not None:
+        if driver.calibration_state.approach == SAMSApproach.ONESITE:
+            driver.define_pools({"calibration": driver.calibration_state.group_index})
 
     platform = mm.Platform.getPlatformByName("CUDA")
     properties = {
@@ -208,19 +209,21 @@ def run_main(jsonfile):
     # MAIN SIMULATION LOOP STARTS HERE
 
     try:
-
         for i in trange(total_iterations, desc="NCMC attempts"):
             if i == 2:
                 log.info("Simulation seems to be working. Suppressing debugging info.")
                 log.setLevel(logging.INFO)
             simulation.step(md_steps_between_updates)
-            # Perform a few COOH updates in between)
+            # Perform a few COOH updates in between
             driver.update("COOH", nattempts=3)
-            if driver.calibration_state.approach is SAMSApproach.ONESITE:
-                simulation.update(1, pool="calibration")
+            if driver.calibration_state is not None:
+                if driver.calibration_state.approach is SAMSApproach.ONESITE:
+                    simulation.update(1, pool="calibration")
+                else:
+                    simulation.update(1)
+                simulation.adapt()
             else:
                 simulation.update(1)
-            simulation.adapt()
 
     except TimeOutError:
         log.warn("Simulation ran out of time, saving current results.")
