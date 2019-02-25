@@ -6,7 +6,7 @@
     "structure": "{name}-water.cif"
   },
   "output": {
-    "dir": "{name}-calibration",
+    "dir": "{name}-simulation",
     "basename": "{name}"
   },
   "forcefield": {
@@ -46,20 +46,20 @@
   },
   "preprocessing": {
     "minimization_tolerance_kjmol": 1e-5,
-    "minimization_max_iterations": 300,
-    "num_thermalization_steps": 100
+    "minimization_max_iterations": 30,
+    "num_thermalization_steps": 10
   },
   "reference_free_energies": {
     "_comment": "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",
     "FD3": [
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0
+      3.0,
+      1.0,
+      4.0,
+      1.0,
+      5.0,
+      9.0,
+      2.0,
+      7.0
     ]
   }
 }

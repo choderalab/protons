@@ -24,7 +24,7 @@ from .utilities import (
 )
 from ..app.driver import SAMSApproach, Stage, UpdateRule
 
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 # Define a main function that can read in a json file with simulation settings, sets up, and runs the simulation.
@@ -33,8 +33,12 @@ log.setLevel(logging.DEBUG)
 def run_prep_ffxml_main(jsonfile):
     """Main simulation loop."""
 
+    log.info(f"Preparing a run from '{jsonfile}'")
+
     # TODO Validate json input with json schema?
     settings = json.load(open(jsonfile))
+
+    log.debug(f"Loaded these settings. {settings}")
 
     try:
         format_vars: Dict[str, str] = settings["format_vars"]
