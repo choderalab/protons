@@ -4,6 +4,7 @@ import os
 import signal
 import sys
 import netCDF4
+import numpy as np
 
 from protons import app
 from .. import ForceFieldProtonDrive
@@ -18,7 +19,7 @@ from warnings import warn
 from .utilities import (
     TimeOutError,
     timeout_handler,
-    create_calibration_checkpoint_file,
+    create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
 from ..app.driver import SAMSApproach, Stage, UpdateRule
@@ -113,14 +114,15 @@ def run_prep_ffxml_main(jsonfile):
     output_checkpoint_file = f"{obasename}-checkpoint-0.xml"
 
     # Structure preprocessing settings
-    preproc: Dict[str, Any] = settings["preprocessing"]
+    if "preprocessing" in settings:
+        preproc: Dict[str, Any] = settings["preprocessing"]
 
-    # Steps of MD before starting the main loop
-    num_thermalization_steps = int(preproc["num_thermalization_steps"])
-    pre_run_minimization_tolerance: unit.Quantity = float(
-        preproc["minimization_tolerance_kjmol"]
-    ) * unit.kilojoule / unit.mole
-    minimization_max_iterations = int(preproc["minimization_max_iterations"])
+        # Steps of MD before starting the main loop
+        num_thermalization_steps = int(preproc["num_thermalization_steps"])
+        pre_run_minimization_tolerance: unit.Quantity = float(
+            preproc["minimization_tolerance_kjmol"]
+        ) * unit.kilojoule / unit.mole
+        minimization_max_iterations = int(preproc["minimization_max_iterations"])
 
     # System Configuration
     sysprops = settings["system"]
@@ -215,62 +217,82 @@ def run_prep_ffxml_main(jsonfile):
         propagations_per_step=1,
     )
 
-    # # properties = {'CudaPrecision': 'mixed', 'DeterministicForces': 'true',
-    # #               'CudaDeviceIndex': os.environ['CUDA_VISIBLE_DEVICES']}
-    # properties = dict()
+    # TODO allow platform specification for setup
 
     platform = mm.Platform.getPlatformByName("OpenCL")
     properties = {"OpenCLPrecision": "double"}
 
     # Set up calibration mode
     # SAMS settings
-    sams = settings["SAMS"]
 
-    beta_burnin = float(sams["beta"])
-    min_burnin = int(sams["min_burn"])
-    min_slow = int(sams["min_slow"])
-    min_fast = int(sams["min_fast"])
+    if "SAMS" in settings:
+        sams = settings["SAMS"]
 
-    flatness_criterion = float(sams["flatness_criterion"])
-    if sams["update_rule"] == "binary":
-        update_rule = UpdateRule.BINARY
-    elif sams["update_rule"] == "global":
-        update_rule = UpdateRule.GLOBAL
-    else:
-        update_rule = UpdateRule.BINARY
+        beta_burnin = float(sams["beta"])
+        min_burnin = int(sams["min_burn"])
+        min_slow = int(sams["min_slow"])
+        min_fast = int(sams["min_fast"])
 
-    # Assumes calibration residue is always the last titration group if onesite
-
-    if sams["sites"] == "multi":
-        driver.enable_calibration(
-            approach=SAMSApproach.MULTISITE,
-            update_rule=update_rule,
-            flatness_criterion=flatness_criterion,
-            min_burn=min_burnin,
-            min_slow=min_slow,
-            min_fast=min_fast,
-            beta_sams=beta_burnin,
-        )
-    elif sams["sites"] == "one":
-        if "group_index" in sams:
-            calibration_titration_group_index = int(sams["group_index"])
+        flatness_criterion = float(sams["flatness_criterion"])
+        if sams["update_rule"] == "binary":
+            update_rule = UpdateRule.BINARY
+        elif sams["update_rule"] == "global":
+            update_rule = UpdateRule.GLOBAL
         else:
-            calibration_titration_group_index = len(driver.titrationGroups) - 1
+            update_rule = UpdateRule.BINARY
 
-        driver.enable_calibration(
-            approach=SAMSApproach.ONESITE,
-            group_index=calibration_titration_group_index,
-            update_rule=update_rule,
-            flatness_criterion=flatness_criterion,
-            min_burn=min_burnin,
-            min_slow=min_slow,
-            min_fast=min_fast,
-        )
-        # Define residue pools
-        pools = {"calibration": [calibration_titration_group_index]}
-        driver.define_pools(pools)
+        # Assumes calibration residue is always the last titration group if onesite
 
-    # Create SAMS sampler
+        if sams["sites"] == "multi":
+            driver.enable_calibration(
+                approach=SAMSApproach.MULTISITE,
+                update_rule=update_rule,
+                flatness_criterion=flatness_criterion,
+                min_burn=min_burnin,
+                min_slow=min_slow,
+                min_fast=min_fast,
+                beta_sams=beta_burnin,
+            )
+        elif sams["sites"] == "one":
+            if "group_index" in sams:
+                calibration_titration_group_index = int(sams["group_index"])
+            else:
+                calibration_titration_group_index = len(driver.titrationGroups) - 1
+
+            driver.enable_calibration(
+                approach=SAMSApproach.ONESITE,
+                group_index=calibration_titration_group_index,
+                update_rule=update_rule,
+                flatness_criterion=flatness_criterion,
+                min_burn=min_burnin,
+                min_slow=min_slow,
+                min_fast=min_fast,
+            )
+            # Define residue pools
+            pools = {"calibration": [calibration_titration_group_index]}
+            # TODO the pooling feature could eventually be exposed in the json
+            driver.define_pools(pools)
+
+    if "reference_free_energies" in settings:
+        # calibrated free energy values can be provided here
+        gk_dict = settings["reference_free_energies"]
+
+        # Clean comments inside dictionary
+        for key in gk_dict.keys():
+            if key.startswith("_"):
+                del (gk_dict[key])
+
+        for key, value in gk_dict:
+            # Convert to array of float
+            val_array = np.asarray(value).astype(np.float64)
+            if not val_array.ndim == 1:
+                raise ValueError("Reference free energies should be simple lists.")
+            gk_dict[key] = val_array
+
+        driver.import_gk_values(gk_dict)
+
+    # Create simulation object
+    # If calibration is required, this class will automatically deal with it.
     simulation = app.ConstantPHSimulation(
         topology,
         system,
@@ -298,17 +320,18 @@ def run_prep_ffxml_main(jsonfile):
         salinator = None
 
     # Minimize the initial configuration to remove bad contacts
-    simulation.minimizeEnergy(
-        tolerance=pre_run_minimization_tolerance,
-        maxIterations=minimization_max_iterations,
-    )
-    # Slightly equilibrate the system, detect early issues.
-    simulation.step(num_thermalization_steps)
+    if "preprocessing" in settings:
+        simulation.minimizeEnergy(
+            tolerance=pre_run_minimization_tolerance,
+            maxIterations=minimization_max_iterations,
+        )
+        # Slightly equilibrate the system, detect early issues.
+        simulation.step(num_thermalization_steps)
 
     topology_file_content = open(input_pdbx_file, "r").read()
 
     # export the context
-    create_calibration_checkpoint_file(
+    create_protons_checkpoint_file(
         output_checkpoint_file,
         driver,
         simulation.context,

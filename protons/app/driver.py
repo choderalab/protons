@@ -1920,7 +1920,7 @@ class NCMCProtonDrive(_BaseDrive):
 
             return
 
-    def import_gk_values(self, gk_dict, strict=False):
+    def import_gk_values(self, gk_dict: Dict[str, np.ndarray], strict=False):
         """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
 
         If you changed any details, rerun calibrate instead!

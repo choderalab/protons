@@ -19,7 +19,7 @@ from .utilities import (
     deserialize_openmm_element,
     deserialize_state_vector,
     TimeOutError,
-    create_calibration_checkpoint_file,
+    create_protons_checkpoint_file,
 )
 
 
@@ -227,7 +227,7 @@ def run_main(jsonfile):
 
     finally:
         # export the context
-        create_calibration_checkpoint_file(
+        create_protons_checkpoint_file(
             output_checkpoint_file,
             driver,
             simulation.context,
