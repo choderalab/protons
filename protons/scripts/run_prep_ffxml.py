@@ -217,6 +217,24 @@ def run_prep_ffxml_main(jsonfile):
         propagations_per_step=1,
     )
 
+    if "reference_free_energies" in settings:
+        # calibrated free energy values can be provided here
+        gk_dict = settings["reference_free_energies"]
+
+        # Clean comments inside dictionary
+        for key in gk_dict.keys():
+            if key.startswith("_"):
+                del (gk_dict[key])
+
+        for key, value in gk_dict:
+            # Convert to array of float
+            val_array = np.asarray(value).astype(np.float64)
+            if not val_array.ndim == 1:
+                raise ValueError("Reference free energies should be simple lists.")
+            gk_dict[key] = val_array
+
+        driver.import_gk_values(gk_dict)
+
     # TODO allow platform specification for setup
 
     platform = mm.Platform.getPlatformByName("OpenCL")
@@ -272,24 +290,6 @@ def run_prep_ffxml_main(jsonfile):
             pools = {"calibration": [calibration_titration_group_index]}
             # TODO the pooling feature could eventually be exposed in the json
             driver.define_pools(pools)
-
-    if "reference_free_energies" in settings:
-        # calibrated free energy values can be provided here
-        gk_dict = settings["reference_free_energies"]
-
-        # Clean comments inside dictionary
-        for key in gk_dict.keys():
-            if key.startswith("_"):
-                del (gk_dict[key])
-
-        for key, value in gk_dict:
-            # Convert to array of float
-            val_array = np.asarray(value).astype(np.float64)
-            if not val_array.ndim == 1:
-                raise ValueError("Reference free energies should be simple lists.")
-            gk_dict[key] = val_array
-
-        driver.import_gk_values(gk_dict)
 
     # Create simulation object
     # If calibration is required, this class will automatically deal with it.
