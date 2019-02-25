@@ -222,11 +222,16 @@ def run_prep_ffxml_main(jsonfile):
         gk_dict = settings["reference_free_energies"]
 
         # Clean comments inside dictionary
+        to_delete = list()
         for key in gk_dict.keys():
             if key.startswith("_"):
-                del (gk_dict[key])
+                to_delete.append(key)
 
-        for key, value in gk_dict:
+        for key in to_delete:
+            del (gk_dict[key])
+
+        # Make arrays
+        for key, value in gk_dict.items():
             # Convert to array of float
             val_array = np.asarray(value).astype(np.float64)
             if not val_array.ndim == 1:
