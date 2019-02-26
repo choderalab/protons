@@ -1,6 +1,6 @@
 package:
   name: protons-dev
-  version: !!str 0.0.1
+  version: !!str 0.0.1a6
 
 source:
   path: ../../
