@@ -23,7 +23,7 @@ requirements:
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - joblib
     - lxml
-    - parmed <=2.7.3
+    - parmed <=2.7.3 # Newer versions break parameter generation
     - pytest
     - pytest-runner
     - pymbar
@@ -56,6 +56,7 @@ requirements:
     - saltswap >=0.5.2 # for counterion coupling
     - beautifulsoup4 # for deserialization of html tables
     - networkx # matching protonation state structures
+    - tqdm # progress bar in scripts
 
 test:
   requires:
