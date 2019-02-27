@@ -224,7 +224,6 @@ def _mols_to_file(graphmols: list, output_mol2:str):
 
 
 
-
 def _visualise_graphs(graph):
     """Visualize the connected subcomponents of an atom graph"""
     import matplotlib.pyplot as plt
@@ -803,7 +802,6 @@ class _TitratableForceFieldCompiler(object):
                 atom_charge = atom.GetProp('charge')
                 atom_types_dict[atom_name][index] = atom_type
                 atom_charge_dict[atom_name][index] = atom_charge
-
                 G.add_node(atom_name)
 
             # set bonds
@@ -818,7 +816,6 @@ class _TitratableForceFieldCompiler(object):
                 a2_name = a2.GetProp('name')
                 if a2_name.startswith('H'):
                     a2_name, heavy_atom_type = _generate_hydrogen_atom_name(mol, a2)
-
 
                 G.add_edge(a1_name, a2_name)
 
@@ -860,7 +857,6 @@ class _TitratableForceFieldCompiler(object):
         self.all_angles_at_all_states = all_angles_at_all_states
         self.all_torsionss_at_all_states = all_torsionss_at_all_states
 
-    
  
     def _complete_state_registry(self):
         """
@@ -1554,7 +1550,6 @@ class _TitratableForceFieldCompiler(object):
                             continue
 
             params['improper'] = par
-
 
             return params
   
