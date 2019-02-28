@@ -1,6 +1,6 @@
 package:
   name: protons-dev
-  version: !!str 0.0.1
+  version: !!str 0.0.1a6
 
 source:
   path: ../../
@@ -12,12 +12,12 @@ build:
 requirements:
   build:
     - python
-    - openmm >=7.2
+    - openmm <7.3
     - numpy >=1.10
     - scipy >=0.17.0
     - mdtraj # For extracting trajectory parts
-    - openmoltools ==0.7.5
-    - openmmtools >=0.9.3
+    - openmoltools >=0.7.5
+    - openmmtools >=0.9.3,<=0.16.0
     - ambermini >=15.0.4
     - netcdf4 >=1.2.4
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
@@ -36,14 +36,14 @@ requirements:
 
   run:
     - python
-    - openmm >=7.2
+    - openmm <7.3
     - numpy >=1.10
     - scipy >=0.17.0
     - mdtraj # For extracting trajectory parts
     - netcdf4 >=1.2.4
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - openmoltools >=0.7.5
-    - openmmtools >=0.9.3
+    - openmmtools >=0.9.3,<=0.16.0
     - ambermini >=15.0.4
     - parmed <=2.7.3
     - joblib

@@ -1,38 +1,29 @@
-# This script instantiates a file for running constant-pH simulation
 import json
+import logging
 import os
 import signal
+from typing import Dict
 import sys
 import netCDF4
-
-from protons import app
-from protons.app import NCMCProtonDrive
-from protons.app.calibration import SAMSApproach
-from protons.app.logger import log, logging
-
 from lxml import etree
-from tqdm import trange
 from saltswap.wrappers import Salinator
-from simtk import openmm as mm
-from simtk import unit
-from typing import List, Dict, Tuple, Callable, Any, AnyStr
-from protons.scripts.utilities import (
-    TimeOutError,
+from simtk import openmm as mm, unit
+from tqdm import trange
+
+from .. import app
+from ..app import log, NCMCProtonDrive
+from ..app.driver import SAMSApproach
+from .utilities import (
     timeout_handler,
-    create_calibration_checkpoint_file,
-    ExternalGBAOABIntegrator,
     xml_to_topology,
     deserialize_openmm_element,
     deserialize_state_vector,
+    TimeOutError,
+    create_protons_checkpoint_file,
 )
 
-log.setLevel(logging.DEBUG)
 
-
-# Define a main function that can read in a json file with simulation settings, sets up, and runs the simulation.
-
-
-def main(jsonfile):
+def run_main(jsonfile):
     """Main simulation loop."""
 
     # TODO Validate json input with json schema?
@@ -124,8 +115,9 @@ def main(jsonfile):
     )
     driver.state_from_xml_tree(drive_element)
 
-    if driver.calibration_state.approach == SAMSApproach.ONESITE:
-        driver.define_pools({"calibration": driver.calibration_state.group_index})
+    if driver.calibration_state is not None:
+        if driver.calibration_state.approach == SAMSApproach.ONESITE:
+            driver.define_pools({"calibration": driver.calibration_state.group_index})
 
     platform = mm.Platform.getPlatformByName("CUDA")
     properties = {
@@ -217,26 +209,28 @@ def main(jsonfile):
     # MAIN SIMULATION LOOP STARTS HERE
 
     try:
-
         for i in trange(total_iterations, desc="NCMC attempts"):
             if i == 2:
                 log.info("Simulation seems to be working. Suppressing debugging info.")
                 log.setLevel(logging.INFO)
             simulation.step(md_steps_between_updates)
-            # Perform a few COOH updates in between)
+            # Perform a few COOH updates in between
             driver.update("COOH", nattempts=3)
-            if driver.calibration_state.approach is SAMSApproach.ONESITE:
-                simulation.update(1, pool="calibration")
+            if driver.calibration_state is not None:
+                if driver.calibration_state.approach is SAMSApproach.ONESITE:
+                    simulation.update(1, pool="calibration")
+                else:
+                    simulation.update(1)
+                simulation.adapt()
             else:
                 simulation.update(1)
-            simulation.adapt()
 
     except TimeOutError:
         log.warn("Simulation ran out of time, saving current results.")
 
     finally:
         # export the context
-        create_calibration_checkpoint_file(
+        create_protons_checkpoint_file(
             output_checkpoint_file,
             driver,
             simulation.context,
@@ -249,10 +243,9 @@ def main(jsonfile):
         os.chdir(lastdir)
 
 
-# Actual cmdline interface
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Please provide a single json file as input.")
     else:
         # Provide the json file to main function
-        main(sys.argv[1])
+        run_main(sys.argv[1])

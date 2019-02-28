@@ -1,12 +1,12 @@
 {
-  "_comment": "This script generates a necessary checkpoint file to start a simulation.",
+  "_comment": "This script generates a necessary checkpoint file to start a regular constant-pH simulation.",
   "input": {
     "_comment": "Simulation requires an mmCIF file and a ffxml residue. Please specify the input directory under dir.",
     "dir": "{name}-output",
-    "structure": "{name}-vacuum.cif"
+    "structure": "{name}-water.cif"
   },
   "output": {
-    "dir": "{name}-calibration",
+    "dir": "{name}-simulation",
     "basename": "{name}"
   },
   "forcefield": {
@@ -14,8 +14,7 @@
     "default": [
       "amber10-constph.xml",
       "gaff.xml",
-      "amber10-constph-obc2.xml",
-      "gaff-obc2.xml"
+      "tip3p.xml"
     ],
     "_comment2": "Custom generated xml file (needs to be in input dir.",
     "user": [
@@ -29,7 +28,16 @@
   "system": {
     "_comment1": "Systemwide settings, such as temperature, and long range method",
     "_comment2": "If PME left out, nocutoff is used.",
-    "temperature_k": 300.0
+    "PME": {
+      "_comment": "Ewald + periodic system settings",
+      "ewald_error_tolerance": 1.0e-5,
+      "switching_distance_nm": 0.85,
+      "nonbonded_cutoff_nm": 1.0,
+      "barostat_interval": 25,
+      "pressure_atm": 1.0
+    },
+    "temperature_k": 300.0,
+    "salt_concentration_molar": 0.150
   },
   "integrator": {
     "timestep_fs": 2.0,
@@ -38,14 +46,20 @@
   },
   "preprocessing": {
     "minimization_tolerance_kjmol": 1e-5,
-    "minimization_max_iterations": 100,
+    "minimization_max_iterations": 30,
     "num_thermalization_steps": 10
   },
-  "SAMS": {
-    "beta": 0.5,
-    "flatness_criterion": 0.15,
-    "sites": "multi",
-    "update_rule": "binary",
-    "min_burn": 200
+  "reference_free_energies": {
+    "_comment": "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",
+    "FD3": [
+      3.0,
+      1.0,
+      4.0,
+      1.0,
+      5.0,
+      9.0,
+      2.0,
+      7.0
+    ]
   }
 }

@@ -99,7 +99,7 @@ def xml_to_topology(topology_elem: etree.Element) -> app.Topology:
     return loaded.getTopology()
 
 
-def create_calibration_checkpoint_file(
+def create_protons_checkpoint_file(
     filename: str,
     drive: Union[app.ForceFieldProtonDrive, app.AmberProtonDrive, app.NCMCProtonDrive],
     context: mm.Context,
@@ -111,7 +111,7 @@ def create_calibration_checkpoint_file(
     """Write out a checkpoint file for calibration-v1 example scripts."""
 
     date = str(datetime.datetime.now())
-    runtype = "calibration-v1"  # hash version of script in future?
+    runtype = "protons-v1"  # hash version of script in future?
 
     drivexml = serialize_drive(drive)
     integratorxml = serialize_integrator(integrator)
