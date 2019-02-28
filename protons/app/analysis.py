@@ -116,11 +116,15 @@ def equibrium_dataset_to_arrays(
 
     # The number of states should be equal to the shape of the last dimension of the weights array.
     gk = meta["g_k"][group, :]
-    n_states = np.count_nonzero(~gk.mask)
+    if np.isscalar(gk.mask):
+        if gk.mask == False:
+            n_states = gk.size
+    else:
+        n_states = np.count_nonzero(~gk.mask)
 
     # mimic calibration array shape
     n_iters = proposal_work.size
-    gk_iter = np.asarray([gk[~gk.mask] for x in range(n_iters)])
+    gk_iter = np.asarray([gk[0:n_states] for x in range(n_iters)])
 
     return (
         initial_states,
@@ -249,6 +253,9 @@ def _datasets_to_dataframe(
             "Label": [data_label] * proposal_work.size,
             "Stage": list(stages),
         }
+
+        if not has_sams:
+            del (longdict["Stage"])
         # Extract state dependent free energy values
         for i in range(n_states):
             longdict[f"G_{i}"] = gk[:, i]
