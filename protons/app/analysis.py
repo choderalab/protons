@@ -11,6 +11,7 @@ from typing import List, Tuple, Union, Dict
 import pandas as pd
 from protons.app.utils import OutdatedFileError
 from protons.app.driver import SAMSApproach
+from tqdm import tqdm
 
 sns.set_style("ticks")
 
@@ -237,7 +238,7 @@ def _datasets_to_dataframe(
     df = pd.DataFrame(
         columns=["Initial_State", "Proposed_State", "Work", "Replicate", "Length"]
     )
-    for data_label, datasets in dataset_dict.items():
+    for data_label, datasets in tqdm(dataset_dict.items(), "data converted"):
 
         initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_data(
             datasets, has_sams=has_sams
