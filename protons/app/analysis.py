@@ -79,8 +79,61 @@ def calibration_dataset_to_arrays(
     return initial_states, proposed_states, proposal_work, n_states, gk, stage
 
 
-def stitch_calibrations(
-    datasets: List[netCDF4.Dataset]
+def equibrium_dataset_to_arrays(
+    dataset: netCDF4.Dataset, group: int = -1
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray, np.ndarray]:
+    """Extracts the necessary arrays for BAR analysis on a protons netCDF DataSet.
+
+    Parameters
+    ----------
+    dataset - netCDF4 Dataset with 'Protons/SAMS' and 'Protons/NCMC' data
+
+    Returns
+    -------
+    This function returns a tuple of arrays
+
+    initial_states, initial state of the calibrated residue, indexed by update
+    proposed_states, proposed state of the calibrated residue, indexed by update
+    proposal_work, the NCMC work including delta g_k between states
+    n_states, int tne number of states of the calibrated residue
+    gk, the weight, indexed by update, state
+    """
+
+    try:
+        meta = dataset["Protons/Metadata"]
+    except KeyError:
+        raise ValueError("This data set does not appear to have Metadata.")
+
+    try:
+        ncmc = dataset["Protons/NCMC"]
+    except KeyError:
+        raise ValueError("This data set does not appear to have NCMC data.")
+
+    # This if statement checks if the group index is an integer, or undefined/masked (multisite calibration)
+    initial_states = ncmc["initial_state"][:, group]
+    proposed_states = ncmc["proposed_state"][:, group]
+    proposal_work = ncmc["total_work"][:]
+
+    # The number of states should be equal to the shape of the last dimension of the weights array.
+    gk = meta["g_k"][group, :]
+    n_states = np.count_nonzero(~gk.mask)
+
+    # mimic calibration array shape
+    n_iters = proposal_work.size
+    gk_iter = np.asarray([gk[~gk.mask] for x in range(n_iters)])
+
+    return (
+        initial_states,
+        proposed_states,
+        proposal_work,
+        n_states,
+        gk_iter,
+        np.asarray([]),
+    )
+
+
+def stitch_data(
+    datasets: List[netCDF4.Dataset], has_sams=True
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray, np.ndarray]:
     """Collect data from multiple netCDF datasets and return them as single arrays."""
     initial_states_collection: List[np.ndarray] = list()
@@ -89,13 +142,17 @@ def stitch_calibrations(
     n_states_reference: int = 0
     gk_collection: List[np.ndarray] = list()
     stage_collection: List[np.ndarray] = list()
-
     # Start gathering datasets in lists, and concatenate them in the end.
 
     for d, dataset in enumerate(datasets):
-        initial_states, proposed_states, proposal_work, n_states, gk, stages = calibration_dataset_to_arrays(
-            dataset
-        )
+        if has_sams:
+            initial_states, proposed_states, proposal_work, n_states, gk, stages = calibration_dataset_to_arrays(
+                dataset
+            )
+        else:
+            initial_states, proposed_states, proposal_work, n_states, gk, stages = equibrium_dataset_to_arrays(
+                dataset
+            )
 
         if d == 0:
             n_states_reference = n_states
@@ -175,7 +232,7 @@ def _datasets_to_dataframe(dataset_dict: Dict[str, List[netCDF4.Dataset]],):
     )
     for data_label, datasets in dataset_dict.items():
 
-        initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_calibrations(
+        initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_data(
             datasets
         )
 
@@ -235,7 +292,7 @@ def bar_all_states(
         group = dataset["Protons/SAMS/group_index"][0]
         approach = SAMSApproach(dataset["Protons/SAMS/approach"][0])
     elif type(dataset) == list:
-        initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_calibrations(
+        initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_data(
             dataset
         )
         group = dataset[0]["Protons/SAMS/group_index"][0]
@@ -463,7 +520,7 @@ def plot_calibration_weight_traces(
     if type(dataset) == netCDF4.Dataset:
         n_states, gk = calibration_dataset_to_arrays(dataset)[-3:-1]
     elif type(dataset) == list:
-        n_states, gk = stitch_calibrations(dataset)[-3:-1]
+        n_states, gk = stitch_data(dataset)[-3:-1]
     cp = sns.color_palette("husl", n_states)
 
     if bar:
