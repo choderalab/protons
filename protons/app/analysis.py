@@ -181,6 +181,7 @@ def stitch_data(
 def create_ncmc_benchmark_dataframe(
     labeled_sets: Dict[str, List[netCDF4.Dataset]],
     timestep_ps: float = 0.002,
+    has_sams: bool = True,
     extract_equilibrium: bool = True,
 ) -> pd.DataFrame:
     """Create a dataframe for analyzing NCMC benchmark results.
@@ -192,7 +193,7 @@ def create_ncmc_benchmark_dataframe(
     extract_equilibrium - If true, will only return samples that were from equilibrium SAMS stage.
     """
 
-    df = _datasets_to_dataframe(labeled_sets)
+    df = _datasets_to_dataframe(labeled_sets, has_sams=has_sams)
     df = _calculate_ncmc_properties(df, timestep_ps=timestep_ps)
     if extract_equilibrium:
         df = df.loc[df["Stage"] == 2]
@@ -218,7 +219,9 @@ def _calculate_ncmc_properties(df: pd.DataFrame, timestep_ps: float = 0.002):
     return df
 
 
-def _datasets_to_dataframe(dataset_dict: Dict[str, List[netCDF4.Dataset]],):
+def _datasets_to_dataframe(
+    dataset_dict: Dict[str, List[netCDF4.Dataset]], has_sams: bool = True
+):
     """Private function to prepare a dataframe for comparing multiple runs.
 
     Parameters
@@ -233,7 +236,7 @@ def _datasets_to_dataframe(dataset_dict: Dict[str, List[netCDF4.Dataset]],):
     for data_label, datasets in dataset_dict.items():
 
         initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_data(
-            datasets
+            datasets, has_sams=has_sams
         )
 
         # TODO see if we need to handle variable length NCMC protocols too
