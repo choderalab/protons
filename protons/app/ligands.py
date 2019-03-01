@@ -14,7 +14,7 @@ from collections import OrderedDict
 import openmoltools as omt
 from lxml import etree, objectify
 from openeye import oechem
-from openmoltools import forcefield_generators as omtff
+from . import forcefield_generators as omtff
 from .logger import log
 import numpy as np
 import networkx as nx
@@ -1427,7 +1427,9 @@ def generate_protons_ffxml(
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
         log.info("ffxml generation for {}".format(isomer_index))
-        ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+        ffxml = omtff.generateForceFieldFromMolecules(
+            [oemolecule], normalize=False, assign_formal_charges=True
+        )
         log.info(ffxml)
         isomers[isomer_index]["ffxml"] = etree.fromstring(ffxml, parser=xmlparser)
         isomers[isomer_index]["pH"] = pH
