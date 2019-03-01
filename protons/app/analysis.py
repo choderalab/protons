@@ -140,7 +140,14 @@ def equibrium_dataset_to_arrays(
 def stitch_data(
     datasets: List[netCDF4.Dataset], has_sams=True
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int, np.ndarray, np.ndarray]:
-    """Collect data from multiple netCDF datasets and return them as single arrays."""
+    """Collect data from multiple netCDF datasets and return them as single arrays.
+    
+    Parameters
+    ----------
+    datasets - ordered list of netCDF data set
+    has_sams - set to True if the data is calibration data, set to False if equilibrium data without a SAMS group in the netCDF file
+
+    """
     initial_states_collection: List[np.ndarray] = list()
     proposed_states_collection: List[np.ndarray] = list()
     proposal_work_collection: List[np.ndarray] = list()
@@ -195,12 +202,13 @@ def create_ncmc_benchmark_dataframe(
     ----------
     labeled_sets - a collection of datasets that have unique labels, provided as a dict of lists.
     timestep_ps - the timestep the simulations used in picoseconds. Used to convert protocol length to time.
-    extract_equilibrium - If true, will only return samples that were from equilibrium SAMS stage.
+    has_sams - True if analyzing calibration data, set to False for equilbrium simulations without SAMS data present
+    extract_equilibrium - If true, will only return samples that were from equilibrium SAMS stage. Requires SAMS data to be present
     """
 
     df = _datasets_to_dataframe(labeled_sets, has_sams=has_sams)
     df = _calculate_ncmc_properties(df, timestep_ps=timestep_ps)
-    if extract_equilibrium:
+    if extract_equilibrium and has_sams:
         df = df.loc[df["Stage"] == 2]
 
     return df
@@ -218,6 +226,8 @@ def _calculate_ncmc_properties(df: pd.DataFrame, timestep_ps: float = 0.002):
     df["Pair"] = df["Initial_State"] + "->" + df["Proposed_State"]
     df["P_accept"] = np.exp(-1 * df["Work"])
     df[df["P_accept"] > 1.0] = 1.0
+    df["ln_P_accept"] = np.log(df.P_accept)
+    df[log10_P_accept] = np.log10(df.P_accept)
     df["picoseconds"] = df["Length"] * timestep_ps
     df["Efficiency"] = df["P_accept"] / df["picoseconds"]
 
@@ -233,11 +243,11 @@ def _datasets_to_dataframe(
     ----------
     dataset_dict - A dictionary where the key is the label for the dataset and the value
         is a list of netCDF4 datasets.
+    has_sams - set to True if SAMS block present (e.g. data is calibration data.) or False for equilibrium only simulations.
+    
     """
 
-    df = pd.DataFrame(
-        columns=["Initial_State", "Proposed_State", "Work", "Replicate", "Length"]
-    )
+    df = pd.DataFrame(columns=["Initial_State", "Proposed_State", "Work", "Length"])
     for data_label, datasets in tqdm(dataset_dict.items(), "data converted"):
 
         initial_states, proposed_states, proposal_work, n_states, gk, stages = stitch_data(
