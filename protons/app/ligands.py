@@ -1347,7 +1347,7 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
         bondfixedfile.write(fixed_mol2_contents)
 
     ifs = oechem.oemolistream()
-    ifs.open(bondfixedfile)
+    ifs.open(bondfixmol2)
 
     # make oemols for mapping
     graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
