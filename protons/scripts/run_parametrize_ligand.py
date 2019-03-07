@@ -16,7 +16,7 @@ from warnings import warn
 log.setLevel(logger.logging.DEBUG)
 
 
-def run_parametrize_main(args):
+def run_parametrize_main(inputfile):
     """
     Run the program
     Parameters
@@ -25,11 +25,7 @@ def run_parametrize_main(args):
 
     """
 
-    if len(args) != 2:
-        print("Please provide a single json input file.")
-        sys.exit(1)
-
-    with open(args[1].strip(), "r") as settingsfile:
+    with open(inputfile.strip(), "r") as settingsfile:
         settings = json.load(settingsfile)
 
     # Check all available fields.
@@ -43,6 +39,7 @@ def run_parametrize_main(args):
             "No parameters were provided. Will proceed, but please make sure your documents are named adequately.",
             UserWarning,
         )
+        prms = dict()
 
     try:
         format_vars = prms["format_vars"]
@@ -158,4 +155,8 @@ def run_parametrize_main(args):
 
 
 if __name__ == "__main__":
-    run_parametrize_main(argv)
+
+    if len(argv) != 2:
+        print("Please provide a single json input file.")
+        sys.exit(1)
+    run_parametrize_main(argv[1])
