@@ -430,7 +430,7 @@ class _TitrationState:
         self.bonded_par = None
 
     @classmethod
-    def from_lists(cls, g_k, nonbonded_par, bonded_par, angle_par, proper_par, improper_par, proton_count):
+    def from_lists(cls, g_k, lookup_for_parameters, proton_count):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
 
         Returns
@@ -439,15 +439,7 @@ class _TitrationState:
         """
         obj = cls()
         obj.g_k = g_k  # dimensionless quantity
-        obj.charges = copy.deepcopy(nonbonded_par['atom_charges'])
-        obj.epsilon = copy.deepcopy(nonbonded_par['atom_epsilon'])
-        obj.sigma = copy.deepcopy(nonbonded_par['atom_sigma'])
-        obj.atom_type = copy.deepcopy(nonbonded_par['atom_type'])
-        obj.atom_name = copy.deepcopy(nonbonded_par['atom_name'])
-        obj.bonded_par = copy.deepcopy(bonded_par)
-        obj.angle_par = copy.deepcopy(angle_par)
-        obj.proper_par = copy.deepcopy(proper_par)
-        obj.improper_par = copy.deepcopy(improper_par)
+        obj.lookup_for_parameters = copy.deepcopy(lookup_for_parameters)
         obj.proton_count = proton_count
         # Note that forces are to be manually added by force caching functionality in ProtonDrives
         obj._forces = list()
@@ -1518,7 +1510,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         return len(self.titrationGroups[titration_group_index])
 
-    def _add_titration_state(self, titration_group_index, relative_energy, nonbonded_par, bonded_par, angle_par, proper_par, improper_par, proton_count):
+    def _add_titration_state(self, titration_group_index, relative_energy, lookup_for_parameters, proton_count):
         """
         Add a titration state to a titratable group.
 
@@ -1545,10 +1537,15 @@ class NCMCProtonDrive(_BaseDrive):
         if titration_group_index not in range(self._get_num_titratable_groups()):
             raise Exception("Invalid titratable group requested.  Requested %d, valid groups are in range(%d)." %
                             (titration_group_index, self._get_num_titratable_groups()))
-        if len(nonbonded_par['atom_charges']) != len(self.titrationGroups[titration_group_index].atom_indices):
+        
+        charge_list = []
+        for atom in lookup_for_parameters['nonbonded']:
+            charge_list.append(lookup_for_parameters['nonbonded'][atom]['charge'])
+
+        if len(charge_list) != len(self.titrationGroups[titration_group_index].atom_indices):
             raise Exception('The number of charges must match the number (and order) of atoms in the defined titration group.')
 
-        state = _TitrationState.from_lists(relative_energy * self.beta, nonbonded_par, bonded_par, angle_par, proper_par, improper_par, proton_count)
+        state = _TitrationState.from_lists(relative_energy * self.beta, lookup_for_parameters, proton_count)
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
@@ -1888,11 +1885,8 @@ class NCMCProtonDrive(_BaseDrive):
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index][titration_state_index]
         atom_indices = titration_group.atom_indices
-        atom_type_by_atom_index = dict(zip(atom_indices, titration_state.atom_type))
         atom_name_by_atom_index = dict(zip(atom_indices, titration_state.atom_name))
-        atom_charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
-        atom_epsilon_by_atom_index = dict(zip(atom_indices, titration_state.epsilon))
-        atom_sigma_by_atom_index = dict(zip(atom_indices, titration_state.sigma))
+        print(atom_name_by_atom_index)
 
         titration_state.atom_type_by_atom_index = atom_type_by_atom_index
         titration_state.atom_name_by_atom_index = atom_name_by_atom_index
@@ -2790,89 +2784,44 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
     def _generating_parameter_lookup_dicts(self, state_block):
         bonded_par = dict()
         angle_par = dict()
-        torsion_par = dict()
         proper_par = dict()
         improper_par = dict()
         nonbonded_par = dict()
-
 
         # Extract charges for this titration state.
         # is defined in elementary_charge units
         logging.info('###############')
         state_index = int(state_block.get("index"))
         logging.info('-- Looking at parameters of State: {}'.format(state_index))
-        # Parameters for state
-        # 
-        nonbonded_par['atom_charges'] = []
-        nonbonded_par['atom_epsilon'] = []
-        nonbonded_par['atom_sigma'] = []
-        nonbonded_par['atom_type'] = []
-        nonbonded_par['atom_name'] = []
 
         # build atom properties
         for index, atom in enumerate(state_block.xpath("Atom")):
-            nonbonded_par['atom_charges'].append(float(atom.get("charge")))
-            nonbonded_par['atom_epsilon'].append(float(atom.get("epsilon")))
-            nonbonded_par['atom_sigma'].append(float(atom.get("sigma")))
-            nonbonded_par['atom_type'].append(atom.get('type'))
-            nonbonded_par['atom_name'].append(atom.get('name'))
+            nonbonded_par[atom.get('name')] = { 'charge' : float(atom.get("charge")), 
+                                                'epsilon' : float(atom.get("epsilon")), 
+                                                'sigma' : float(atom.get("sigma")), 
+                                                'type' : atom.get('type') }
 
         # build bond properties
         for index, bond in enumerate(state_block.xpath("Bond")):
-            key = tuple([bond.get('name1'), bond.get('name2')])
-            bond_length = (bond.get('length'))
-            bond_k = (bond.get('k'))
-            d = dict()
-            d['bond_length'] = bond_length
-            d['bond_k'] = bond_k
-            bonded_par[key] = d
+            key = (bond.get('name1'), bond.get('name2'))
+            bonded_par[key] = { 'bond_length' : bond.get('length'), 'k': bond.get('k')}
 
         # build angle properties
         for index, angle in enumerate(state_block.xpath("Angle")):
-            key = tuple([angle.get('name1'), angle.get('name2'), angle.get('name3')])
-            angle_value = (angle.get('angle'))
-            angle_k = (angle.get('k'))
-            d = dict()
-            d['angle'] = angle_value
-            d['k'] = angle_k
-            angle_par[key] = d
+            key = (angle.get('name1'), angle.get('name2'), angle.get('name3'))
+            angle_par[key] = {'angle' : angle.get('angle'), 'k' : angle.get('k')}
 
         # build torsion properties
         logging.info('Parsing proper parameters from ffxml file')
         for index, proper in enumerate(state_block.xpath("Proper")):
-            key = tuple(([proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4')]))
-
-            d = dict()
-            #logging.warning(etree.tostring(proper))
-            nr_of_parameter_sets = ['period' in x for x in list(proper.attrib)].count(True)    
-            add_parameter_with_index = 1
-            for get_parameter_with_index in range(1, nr_of_parameter_sets+1):
-                k = proper.get('k' + str(get_parameter_with_index))
-                periodicity = proper.get('periodicity' + str(get_parameter_with_index))
-                phase = proper.get('phase' + str(get_parameter_with_index))
-                if float(proper.get('k' + str(get_parameter_with_index))) == 0.0 and nr_of_parameter_sets != 1:
-                    logging.warning('{}: {}-{}-{}-{}'.format(index, proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4')))
-                    logging.warning('Ignoring the following parameter set: phase: {} periodicity: {} k: {} because k is ZERO!'.format(phase, periodicity, k))
-                    continue
-                else:
-                    d['periodicity' + str(add_parameter_with_index)] = (proper.get('periodicity' + str(get_parameter_with_index)))
-                    d['phase' + str(add_parameter_with_index)] = (proper.get('phase' + str(get_parameter_with_index)))
-                    d['k' + str(add_parameter_with_index)] = (proper.get('k' + str(get_parameter_with_index)))
-                    add_parameter_with_index += 1
-            
-            proper_par[key] = d
+            key = (proper.get('name1'), proper.get('name2'), proper.get('name3'), proper.get('name4'))
+            proper_par[key] = dict(proper.items())
 
         for index, improper in enumerate(state_block.xpath("Improper")):
-            key = tuple(([improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4')]))
-            d = dict()
+            key = (improper.get('name1'), improper.get('name2'), improper.get('name3'), improper.get('name4'))
+            improper_par[key] = dict(improper.items())
 
-            d['periodicity1'] = (improper.get('periodicity1'))
-            d['phase1'] = (improper.get('phase1'))
-            d['k1'] = (improper.get('k1'))
-            improper_par[key] = d
-
-        return nonbonded_par, bonded_par, angle_par, torsion_par, proper_par, improper_par
-
+        return {'nonbonded' : nonbonded_par, 'bonded' : bonded_par, 'angle' : angle_par, 'proper' : proper_par, 'improper' : improper_par}
 
 
 
@@ -2969,11 +2918,11 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
                 # Read in parameters for state from ffxl and generate lookup dicts
-                nonbonded_par, bonded_par, angle_par, torsion_par, proper_par, improper_par = self._generating_parameter_lookup_dicts(state_block)
+                lookup_for_parameters = self._generating_parameter_lookup_dicts(state_block)
 
                 # Create titration state.
-                self._add_titration_state(group_index, relative_energy, nonbonded_par, bonded_par, angle_par, proper_par, improper_par, proton_count)
-                self._look_at_torsions(group_index, state_index)
+                self._add_titration_state(group_index, relative_energy, lookup_for_parameters, proton_count)
+                #self._look_at_torsions(group_index, state_index)
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
