@@ -97,10 +97,15 @@ def run_parametrize_main(args):
     state_mol2 = f"{obase}-states.mol2"
 
     if not run_epik:
-        # mae file with epik results
-        oepik = inp["epik"].format(**format_vars)
+        # Previously generated mae file with the output from epik
+        oepik = epik["input"]["epik"].format(**format_vars)
     else:
-        oepik = f"{obase}-epik-out.mae"
+        if "smiles" in epik["input"]:
+            iepik = smiles_to_mae(epik["input"]["smiles"].format(**format_vars))
+        elif "mae" in epik["input"]:
+            iepik = epik["in"]["mae"].format(**format_vars)
+
+        oepik = epik["output"]["mae"].format(**format_vars)
 
     if not os.path.isdir(odir):
         os.makedirs(odir)

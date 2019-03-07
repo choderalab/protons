@@ -24,6 +24,7 @@ from simtk.openmm import openmm
 from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
 from distutils.version import StrictVersion
+from typing import Optional
 import parmed
 
 
@@ -1126,6 +1127,28 @@ def _write_ffxml(xml_compiler, filename=None):
             fstream.write(xmlstring)
     else:
         return xmlstring
+
+
+def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
+    """Convert a smiles string to a .mae file using schrodinger."""
+    converter_path = os.path.join(
+        os.environ["SCHRODINGER"], "utilities", "smiles_to_mae"
+    )
+
+    tmpname: str = uuid.uuid4()
+    sminame = os.path.abspath(f"{tmpname}.smi")
+    if oname is not None:
+        maename = oname
+    else:
+        maename = os.path.abspath(f"{tmpname}.mae")
+
+    with open(sminame) as smifile:
+        smifile.write(smiles)
+
+    cmd = [converter_path, sminame, maename]
+    omt.schrodinger.run_and_log_error(cmd)
+
+    return maename
 
 
 def generate_epik_states(
