@@ -113,7 +113,6 @@ def run_parametrize_main(inputfile):
     # TODO copy files over to output dir?
     # run epik
     if run_epik:
-        iepik = epik["input"].format(**format_vars)
         iepik_path = os.path.abspath(os.path.join(idir, iepik))
         if not os.path.isfile(iepik_path):
             raise IOError("Could not find epik input at {}.".format(**locals()))
