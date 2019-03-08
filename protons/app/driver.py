@@ -421,13 +421,10 @@ class _TitrationState:
         """Instantiate a _TitrationState"""
 
         self.g_k = None  # dimensionless quantity
-        self.charges = list()
         self.proton_count = None
         self._forces = list()
         self._target_weight = None
-        self.epsilon = list()
-        self.sigma = list()
-        self.bonded_par = None
+        self.lookup_for_parameters = None
 
     @classmethod
     def from_lists(cls, g_k, lookup_for_parameters, proton_count):
@@ -993,7 +990,7 @@ class NCMCProtonDrive(_BaseDrive):
         # Store force object pointers.
         # TODO: Add Custom forces.
         #force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
-        force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce']
+        force_classes_to_update = ['NonbondedForce', 'HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']
         #force_classes_to_update = ['NonbondedForce']
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
@@ -1884,20 +1881,19 @@ class NCMCProtonDrive(_BaseDrive):
 
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index][titration_state_index]
+
         atom_indices = titration_group.atom_indices
-        atom_name_by_atom_index = dict(zip(atom_indices, titration_state.atom_name))
-        print(atom_name_by_atom_index)
+        ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
+        parameters = titration_state.lookup_for_parameters
 
-        titration_state.atom_type_by_atom_index = atom_type_by_atom_index
-        titration_state.atom_name_by_atom_index = atom_name_by_atom_index
-
-        bonded_par = titration_state.bonded_par
-        angle_par = titration_state.angle_par
-        proper_par = copy.deepcopy(titration_state.proper_par)
-
-        charge_by_atom_index = dict(zip(atom_indices, titration_state.charges))
         # Store the parameters per individual force
         f_params = list()
+
+        openMM_indices_to_atom_name = dict()
+        for atom_name in parameters['nonbonded']:
+            openMM_indices_to_atom_name[ffxml_indices_to_openMM_indices[parameters['nonbonded'][atom_name]['ffxml_index']]] = atom_name
+
+        print(openMM_indices_to_atom_name)
 
         for force_index, force in enumerate(self.forces_to_update):
 
@@ -1912,23 +1908,20 @@ class NCMCProtonDrive(_BaseDrive):
                 f_params.append(dict(atoms=list()))
                 atom_string_from_openMM = 'OpenMM: Atom-ID: {:>3d} Atom-Name: {:>4} Atom-Type: {:>3} Charge: {} Epsilon: {} Sigma: {}'
                 atom_string_from_ffxml = 'FFXML: Atom-ID: {:>3d} Atom-Name: {:>4} Atom-Type: {:>3} Charge: {} Epsilon: {} Sigma: {}'
-                for atom_index in atom_indices:
-                    
+                
+                for atom_index in atom_indices:  
                     if force_classname == 'GBSAOBCForce':
-                        current_parameters = {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
+                        current_parameters = {key: value for (key, value) in zip(['charge', 'radius', 'scaleFactor'], map(strip_in_unit_system, force.getParticleParameters(openMM_atom_index)))}
                         f_params[force_index]['atoms'].append(current_parameters)
                     else:                        
                         charge, sigma, epsilon = map(strip_in_unit_system, force.getParticleParameters(atom_index))
-                        logging.info(atom_string_from_openMM.format(atom_index, atom_name_by_atom_index[atom_index], atom_type_by_atom_index[atom_index], charge, epsilon, sigma))
+                        atom_name = openMM_indices_to_atom_name[atom_index]
+                        atom_type = parameters['nonbonded'][atom_name]['type']
+                        current_parameters = {key: value for (key, value) in parameters['nonbonded'][atom_name].items()}
+                        current_parameters['name'] = atom_name
 
-                        current_parameters = {key: value for (key, value) in zip(['charge', 'sigma', 'epsilon'], map(strip_in_unit_system, force.getParticleParameters(atom_index)))}
-                        current_parameters['atom_index'] = atom_index
-                        current_parameters['atom_name'] = atom_name_by_atom_index[atom_index]
-                        current_parameters['atom_type'] = atom_type_by_atom_index[atom_index]
-                        current_parameters['charge'] = atom_charge_by_atom_index[atom_index]
-                        current_parameters['sigma'] = atom_sigma_by_atom_index[atom_index]
-                        current_parameters['epsilon'] = atom_epsilon_by_atom_index[atom_index]
-                        logging.info(atom_string_from_ffxml.format(atom_index, current_parameters['atom_name'], current_parameters['atom_type'], current_parameters['charge'], current_parameters['epsilon'], current_parameters['sigma']))
+                        logging.info(atom_string_from_openMM.format(atom_index, atom_name, atom_type, charge, epsilon, sigma))
+                        logging.info(atom_string_from_ffxml.format(atom_index, current_parameters['name'], current_parameters['type'], current_parameters['charge'], current_parameters['epsilon'], current_parameters['sigma']))
 
                         f_params[force_index]['atoms'].append(current_parameters)
 
@@ -1941,19 +1934,17 @@ class NCMCProtonDrive(_BaseDrive):
                 for bond_index in range(force.getNumBonds()):
                     logging.info('####################')
                     a1, a2, length, k = force.getBondParameters(bond_index)     
-                    logging.info(bond_string_from_openmm.format(bond_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], strip_in_unit_system(length), strip_in_unit_system(k)))
+                    atom_name1 = openMM_indices_to_atom_name[a1]
+                    atom_name2 = openMM_indices_to_atom_name[a2]
 
                     # update current parameters with particular titration state
-                    current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'length', 'k'], map(strip_in_unit_system, force.getBondParameters(bond_index)))}
-                    a1_atom_name = atom_name_by_atom_index[a1]
-                    a2_atom_name = atom_name_by_atom_index[a2]
+                    current_parameters = {key: value for (key, value) in parameters['bonded'][(atom_name1,atom_name2)].items()}
+                    logging.info(bond_string_from_openmm.format(bond_index, atom_name1, atom_name2, strip_in_unit_system(length), strip_in_unit_system(k)))
+                    logging.info(bond_string_from_ffxml.format(bond_index, atom_name1, atom_name2, current_parameters['length'], current_parameters['k']))
 
-                    current_parameters['length'] = bonded_par[tuple([a1_atom_name, a2_atom_name])]['bond_length']
-                    current_parameters['k'] = bonded_par[tuple([a1_atom_name, a2_atom_name])]['bond_k'] 
-                    
-                    logging.info(bond_string_from_ffxml.format(bond_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], current_parameters['length'], current_parameters['k']))
-                    f_params[force_index]['bonds'].append(current_parameters)
-
+                    f_params[force_index]['bonds'].append(current_parameters)         
+            
+            
             elif force_classname == 'HarmonicAngleForce':
                 f_params.append(dict(angles=list()))
                 angle_string_from_openmm = 'OpenMM: Angle-ID: {} Atom-name1: {} Atom-name2: {} Atom-name3: {} angle: {} k: {}'
@@ -1962,19 +1953,16 @@ class NCMCProtonDrive(_BaseDrive):
                 for angle_index in range(force.getNumAngles()):
                     logging.info('####################')
                     a1, a2, a3, angle_value, k = force.getAngleParameters(angle_index)
-                    logging.info(angle_string_from_ffxml.format(angle_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], strip_in_unit_system(angle_value), strip_in_unit_system(k)))
+                    atom_name1 = openMM_indices_to_atom_name[a1]
+                    atom_name2 = openMM_indices_to_atom_name[a2]
+                    atom_name3 = openMM_indices_to_atom_name[a3]
+
+                    current_parameters = {key: value for (key, value) in parameters['angle'][(atom_name1,atom_name2,atom_name3)].items()}
+
+                    logging.info(angle_string_from_openmm.format(angle_index, atom_name1, atom_name2, atom_name3, current_parameters['angle'] , current_parameters['k']))
+                    logging.info(angle_string_from_ffxml.format(angle_index, atom_name1, atom_name2, atom_name3, strip_in_unit_system(angle_value), strip_in_unit_system(k)))
 
                     # update current parameters with particular titration state
-                    current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'angle', 'k'], map(strip_in_unit_system, force.getAngleParameters(angle_index)))}
-
-                    a1_atom_name = atom_name_by_atom_index[a1]
-                    a2_atom_name = atom_name_by_atom_index[a2]
-                    a3_atom_name = atom_name_by_atom_index[a3]
-
-                    current_parameters['angle'] = angle_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name])]['angle']
-                    current_parameters['k'] = angle_par[tuple([a1_atom_name, a2_atom_name, a3_atom_name])]['k']  
-                    
-                    logging.info(angle_string_from_openmm.format(angle_index, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], current_parameters['angle'] , current_parameters['k']))
                     f_params[force_index]['angles'].append(current_parameters)
 
             
@@ -1987,35 +1975,25 @@ class NCMCProtonDrive(_BaseDrive):
                 for torsion_index in range(force.getNumTorsions()):
                     logging.info('####################')
                     a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
-                    a1_atom_name = atom_name_by_atom_index[a1]
-                    a2_atom_name = atom_name_by_atom_index[a2]
-                    a3_atom_name = atom_name_by_atom_index[a3]
-                    a4_atom_name = atom_name_by_atom_index[a4]
-                    logging.info(proper_string_from_openmm.format(torsion_index, a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name, strip_in_unit_system(periodicity), strip_in_unit_system(phase), strip_in_unit_system(k)))
-                    current_parameters = {key: value for (key, value) in zip(['a1', 'a2', 'a3', 'a4', 'periodicity1', 'phase1', 'k1'], map(strip_in_unit_system, force.getTorsionParameters(torsion_index)))}
+                    atom_name1 = openMM_indices_to_atom_name[a1]
+                    atom_name2 = openMM_indices_to_atom_name[a2]
+                    atom_name3 = openMM_indices_to_atom_name[a3]
+                    atom_name4 = openMM_indices_to_atom_name[a4]
 
-
-                    key = tuple([a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name]) 
+                    logging.info(proper_string_from_openmm.format(torsion_index, atom_name1, atom_name2, atom_name3, atom_name4, strip_in_unit_system(periodicity), strip_in_unit_system(phase), strip_in_unit_system(k)))
+                    key = (atom_name1, atom_name2, atom_name3, atom_name4)
                     
-                    if key in proper_par:
-                        if 'nr-of-uses' in proper_par[key]:
-                            proper_par[key]['nr-of-uses'] = int(proper_par[key]['nr-of-uses']) +1
-                            nr_of_uses = int(proper_par[key]['nr-of-uses'])
-                        else:
-                            nr_of_uses = 1
-                            proper_par[key]['nr-of-uses'] = nr_of_uses
-                        
-                        current_parameters['periodicity1'] = proper_par[key]['periodicity' + str(nr_of_uses)]
-                        current_parameters['phase1'] = proper_par[key]['phase' + str(nr_of_uses)]
-                        current_parameters['k1'] = proper_par[key]['k' + str(nr_of_uses)]
+                    if key in parameters['proper']:
+                        parameters['proper']
+                        current_parameters = {key: value for (key, value) in parameters['proper'][(key)].items()}
                         f_params[force_index]['torsion'].append(current_parameters)
-                        logging.info(proper_string_from_ffxml.format(torsion_index, a1_atom_name, a2_atom_name, a3_atom_name, a4_atom_name, current_parameters['periodicity1'], current_parameters['phase1'], current_parameters['k1']))
+                        logging.info(proper_string_from_ffxml.format(torsion_index, atom_name1, atom_name2, atom_name3, atom_name4, current_parameters['periodicity1'], current_parameters['phase1'], current_parameters['k1']))
 
                     else:
                         # improper parameters
-                        logging.warning("FOUND IMPROPER - NOT IMPLEMENTED YET : {}-{}-{}-{}".format(atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4]))
+                        logging.warning("FOUND IMPROPER - NOT IMPLEMENTED YET : {}-{}-{}-{}".format(atom_name1, atom_name2, atom_name3, atom_name4))
                         logging.warning('With atom indeces: {}-{}-{}-{}.'.format(a1, a2, a3, a4))
-                        logging.warning('With atom types: {}-{}-{}-{}.'.format(atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]))
+                        #logging.warning('With atom types: {}-{}-{}-{}.'.format(atom_type_by_atom_index[a1], atom_type_by_atom_index[a2], atom_type_by_atom_index[a3], atom_type_by_atom_index[a4]))
                         logging.warning('Setting everything to zero.')
                         
                         current_parameters['periodicity1'] = 0.0
@@ -2034,13 +2012,18 @@ class NCMCProtonDrive(_BaseDrive):
                     [particle1, particle2, chargeProd, sigma, epsilon] = map(
                         strip_in_unit_system, force.getExceptionParameters(exception_index))
 
+                    # NOTE: mw: not sure if this does what it is intendent to do
+                    atom_name1 = openMM_indices_to_atom_name[particle1]
+                    atom_name2 = openMM_indices_to_atom_name[particle2]
+                    parameters['nonbonded'][atom_name1]['charge']
+
                     # Deal with exceptions between atoms outside of titratable residue
                     try:
-                        charge_1 = charge_by_atom_index[particle1]
+                        charge_1 = parameters['nonbonded'][atom_name1]['charge']
                     except KeyError:
                         charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
                     try:
-                        charge_2 = charge_by_atom_index[particle2]
+                        charge_2 = parameters['nonbonded'][atom_name2]['charge']
                     except KeyError:
                         charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
 
@@ -2796,15 +2779,18 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
 
         # build atom properties
         for index, atom in enumerate(state_block.xpath("Atom")):
+            print(index)
+            print(atom.get('name'))
             nonbonded_par[atom.get('name')] = { 'charge' : float(atom.get("charge")), 
                                                 'epsilon' : float(atom.get("epsilon")), 
                                                 'sigma' : float(atom.get("sigma")), 
-                                                'type' : atom.get('type') }
+                                                'type' : atom.get('type'),
+                                                'ffxml_index' :  int(index)}
 
         # build bond properties
         for index, bond in enumerate(state_block.xpath("Bond")):
             key = (bond.get('name1'), bond.get('name2'))
-            bonded_par[key] = { 'bond_length' : bond.get('length'), 'k': bond.get('k')}
+            bonded_par[key] = { 'length' : bond.get('length'), 'k': bond.get('k')}
 
         # build angle properties
         for index, angle in enumerate(state_block.xpath("Angle")):
