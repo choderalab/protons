@@ -227,7 +227,7 @@ def _calculate_ncmc_properties(df: pd.DataFrame, timestep_ps: float = 0.002):
     df["P_accept"] = np.exp(-1 * df["Work"])
     df[df["P_accept"] > 1.0] = 1.0
     df["ln_P_accept"] = np.log(df.P_accept)
-    df[log10_P_accept] = np.log10(df.P_accept)
+    df["log10_P_accept"] = np.log10(df.P_accept)
     df["picoseconds"] = df["Length"] * timestep_ps
     df["Efficiency"] = df["P_accept"] / df["picoseconds"]
 
