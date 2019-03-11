@@ -1142,7 +1142,7 @@ def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
     else:
         maename = os.path.abspath(f"{tmpname}.mae")
 
-    with open(sminame,'w') as smifile:
+    with open(sminame, "w") as smifile:
         smifile.write(smiles)
 
     cmd = [converter_path, sminame, maename]

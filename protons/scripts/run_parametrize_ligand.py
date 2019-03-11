@@ -98,9 +98,15 @@ def run_parametrize_main(inputfile):
         oepik = epik["input"]["epik"].format(**format_vars)
     else:
         if "smiles" in epik["input"]:
+            # Converts smiles to maestro file and uses that maestro file as input
             iepik = smiles_to_mae(epik["input"]["smiles"].format(**format_vars))
+            try:
+                shutil.copy(iepik, os.path.join(idir, iepik))
+            except shutil.SameFileError:
+                pass
         elif "mae" in epik["input"]:
-            iepik = epik["in"]["mae"].format(**format_vars)
+            # Uses the user-specified maestro file
+            iepik = epik["input"]["mae"].format(**format_vars)
 
         oepik = epik["output"]["mae"].format(**format_vars)
 
@@ -108,7 +114,7 @@ def run_parametrize_main(inputfile):
         os.makedirs(odir)
 
     lastdir = os.getcwd()
-
+    print(oepik)
     # Begin processing
     # TODO copy files over to output dir?
     # run epik
@@ -127,8 +133,6 @@ def run_parametrize_main(inputfile):
             workdir=odir,
             tautomerize=tautomerize,
         )
-
-    shutil.copyfile(oepik, os.path.join(odir, oepik))
 
     os.chdir(odir)
 
