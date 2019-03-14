@@ -14,7 +14,7 @@ from collections import OrderedDict
 import openmoltools as omt
 from lxml import etree, objectify
 from openeye import oechem
-from openmoltools import forcefield_generators as omtff
+from ..app import forcefield_generators as omtff
 from .logger import log
 import numpy as np
 import networkx as nx
