@@ -7,7 +7,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 import netCDF4
-from typing import List, Tuple, Union, Dict
+from typing import List, Tuple, Union, Dict, Optional
 import pandas as pd
 from protons.app.utils import OutdatedFileError
 from protons.app.driver import SAMSApproach
@@ -989,3 +989,279 @@ def plot_work_per_step(
             )
             label = ""
     return
+
+
+def get_stage_data(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]]
+) -> np.ndarray:
+    """Retrieve stage, and adaptation as numpy arrays of integers."""
+
+    stages = list()
+    adapts = list()
+
+    if type(dataset) == netCDF4.Dataset:
+        stages.append(dataset["Protons/SAMS/stage"][:])
+        adapts.append(dataset["Protons/SAMS/adaptation"][:])
+
+    elif type(dataset) == list:
+        for ds in dataset:
+            stages.append(ds["Protons/SAMS/stage"][:])
+            adapts.append(ds["Protons/SAMS/adaptation"][:])
+
+    return np.ma.concatenate(stages), np.ma.concatenate(adapts)
+
+
+def get_flatness_data(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]]
+) -> np.ndarray:
+    """Retrieve stage, and adaptation as numpy arrays of integers."""
+
+    flatness = list()
+    adapts = list()
+
+    if type(dataset) == netCDF4.Dataset:
+        flatness.append(dataset["Protons/SAMS/flatness"][:])
+        adapts.append(dataset["Protons/SAMS/adaptation"][:])
+
+    elif type(dataset) == list:
+        for ds in dataset:
+            flatness.append(ds["Protons/SAMS/flatness"][:])
+            adapts.append(ds["Protons/SAMS/adaptation"][:])
+
+    return np.ma.concatenate(flatness), np.ma.concatenate(adapts)
+
+
+def plot_calibration_flatness(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]],
+    sams_only: bool = False,
+    plot_burnin: bool = False,
+    ax: Optional[plt.Axes] = None,
+    title: Optional[str] = "Calibration flatness",
+) -> Tuple[Optional[plt.Figure], plt.Axes]:
+    """Plot the histogram flatness as a function of the iteration.
+
+    Parameters
+    ----------
+    dataset - A netCDF calibration dataset, or list of data sets.
+    sams_only - Set to True to not plot the equilibrium stage.
+    plot_burnin - Set to True to plot the burn in.
+    ax - optional, an axes object to plot in. If not provided a new one is generated.
+    title - title of the plot.
+
+    Note
+    ----
+    By default the burn in is not plotted since flatness is not evaluated and reported as 1.0/100% deviation.
+
+    Returns
+    -------
+    fig, ax containing the plot
+
+    """
+
+    fig = None
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    colors = {-1: "red", 0: "blue", 1: "green", 2: "black"}
+    styles = {-1: "-", 0: "--", 1: "-.", 2: ":"}
+    stage_names = {-1: "Burn-in", 0: "Slow-decay", 1: "Fast-decay", 2: "Equilibrium"}
+
+    if type(dataset) == netCDF4.Dataset:
+        n_states, gk, stages = calibration_dataset_to_arrays(dataset)[-3:]
+    elif type(dataset) == list:
+        n_states, gk, stages = stitch_data(dataset, has_sams=True)[-3:]
+
+    flatness, adapts = get_flatness_data(dataset)
+
+    ax.margins(x=0)
+    ax.set_title(title, fontsize=18)
+    ax.set_xlabel("Update", fontsize=18)
+    ax.set_ylabel(r"Deviation from target", fontsize=18)
+    flatness_state = flatness[:]
+    iter_nums = np.arange(flatness_state.size)
+    for stage in colors.keys():
+        if not plot_burnin and stage == -1:
+            continue
+        indexes = np.where(stages == stage)
+        if sams_only:
+            # If sams only plotting desired, plot based on adaptation number (cancels out eq. parts)
+            x_values = adapts[indexes]
+        else:
+            x_values = iter_nums[indexes]
+
+        ax.plot(
+            x_values,
+            flatness_state[indexes],
+            color=colors[stage],
+            ls=styles[stage],
+            label=stage_names[stage],
+        )
+    return fig, ax
+
+
+def plot_calibration_staging_per_state(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]],
+    sams_only: bool = True,
+    plot_burnin: bool = True,
+    axes: Optional[List[plt.Axes]] = None,
+):
+    """Separately plot the calibration weights of each state and indicate their stage.
+
+    Parameters
+    ----------
+    dataset - Dataset or list of Datasets containing calibration data.
+    sams_only - set to True to not plot the equilibrium stage
+    plot_burnin - set to False to not plot the burnin stage
+    axes - list of axes for plotting the different states.
+        Needs to be equal to number of states -1 (since first state is always 0 and not plotted).
+    """
+
+    colors = {-1: "red", 0: "blue", 1: "green", 2: "black"}
+    styles = {-1: "-", 0: "--", 1: "-.", 2: ":"}
+    stage_names = {-1: "Burn-in", 0: "Slow-decay", 1: "Fast-decay", 2: "Equilibrium"}
+
+    if type(dataset) == netCDF4.Dataset:
+        n_states, gk = calibration_dataset_to_arrays(dataset)[-3:-1]
+    elif type(dataset) == list:
+        n_states, gk = stitch_data(dataset, has_sams=True)[-3:-1]
+
+    figures: List[plt.Figure] = list()
+    if axes is None:
+        axes: List[plt.Axes] = list()
+        for x in range(1, n_states):
+            fig, ax = plt.subplots()
+            figures.append(fig)
+            axes.append(ax)
+    else:
+        if len(axes) != n_states - 1:
+            raise ValueError(
+                "The number of axes provided should be equal to the number of states, minus one."
+            )
+
+    stages, adapts = get_stage_data(dataset)
+
+    # Don't plot state 0 as it should be 0 by definition
+    for state in range(1, n_states):
+        ax = axes[state - 1]
+        ax.margins(x=0)
+        ax.set_title(f"State {state}", fontsize=18)
+        # Make the y-axis label, ticks and tick labels match the line color.
+        ax.set_xlabel("Update", fontsize=18)
+        ax.set_ylabel(r"$g_k/RT$ (unitless) relative to state 1", fontsize=18)
+        gk_state = gk[:, state]
+        iter_nums = np.arange(gk_state.size)
+        for stage in colors.keys():
+            if not plot_burnin and stage == -1:
+                continue
+            indexes = np.where(stages == stage)
+            if sams_only:
+                # If sams only plotting desired, plot based on adaptation number (cancels out eq. parts)
+                x_values = adapts[indexes]
+            else:
+                x_values = iter_nums[indexes]
+
+            ax.plot(
+                x_values,
+                gk_state[indexes],
+                color=colors[stage],
+                ls=styles[stage],
+                label=stage_names[stage],
+            )
+    return figures, axes
+
+
+def plot_calibration_staging_joint(
+    dataset: Union[netCDF4.Dataset, List[netCDF4.Dataset]],
+    sams_only: bool = True,
+    plot_burnin: bool = True,
+    ax: Optional[plt.Axes] = None,
+    title: Optional[str] = "Calibration stages",
+):
+    """Plot calibration traces for all states whilst highlighting the stages in the background."""
+
+    fig = None
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    ax.margins(x=0)
+
+    ax.set_title(title, fontsize=18)
+    ax.set_xlabel("Update", fontsize=18)
+    ax.set_ylabel(r"$g_k/RT$ (unitless) relative to state 1", fontsize=18)
+
+    stage_hatches = {-1: "xxx", 0: "//", 1: "--", 2: ""}
+    stage_names = {-1: "Burn-in", 0: "Slow-decay", 1: "Fast-decay", 2: "Equilibrium"}
+
+    if type(dataset) == netCDF4.Dataset:
+        n_states, gk, stages = calibration_dataset_to_arrays(dataset)[-3:]
+    elif type(dataset) == list:
+        n_states, gk, stages = stitch_data(dataset, has_sams=True)[-3:]
+
+    colors = sns.color_palette("hls", n_states)
+    stages, adapts = get_stage_data(dataset)
+    # Every stage boundary is 1, everything else is 0
+    stage_boundaries = np.argwhere(np.diff(stages)) + 1
+
+    # Don't plot state 0 as it should be 0 by definition
+    for state in range(1, n_states):
+        gk_state = gk[:, state]
+        iter_nums = np.arange(gk_state.size)
+        labeled = True
+        for stage in stage_hatches.keys():
+            if not plot_burnin and stage == -1:
+                continue
+            indexes = np.where(stages == stage)
+            if sams_only:
+                # If sams only plotting desired, plot based on adaptation number (cancels out eq. parts)
+                if stage == 2:
+                    continue
+                x_values = adapts[indexes]
+
+            else:
+                x_values = iter_nums[indexes]
+
+            if labeled:
+                labeled = False
+                label = f"State {state}"
+            else:
+                label = ""
+            ax.plot(x_values, gk_state[indexes], color=colors[state - 1], label=label)
+
+    # Fix current x limits on plot
+    ax.set_xlim(*ax.get_xlim())
+
+    # plot the background
+    prev_bound = 0
+
+    for stage in stage_hatches.keys():
+        try:
+            current_bound = stage_boundaries[stage + 1]
+        except IndexError:
+            current_bound = -1
+
+        if not plot_burnin and stage == -1:
+            continue
+
+        if sams_only:
+            # If sams only plotting desired, plot based on adaptation number (cancels out eq. parts)
+            lower = adapts[prev_bound]
+            upper = adapts[current_bound]
+            if stage == 2:
+                continue
+        else:
+            lower = iter_nums[prev_bound]
+            upper = iter_nums[current_bound]
+
+        ax.axvspan(
+            lower,
+            upper,
+            facecolor="none",
+            edgecolor="black",
+            alpha=0.3,
+            hatch=stage_hatches[stage],
+            label=stage_names[stage],
+        )
+        prev_bound = current_bound
+    ax.legend(fontsize=12, prop={"size": 16})
+
+    return fig, ax
