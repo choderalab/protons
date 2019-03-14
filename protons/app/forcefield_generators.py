@@ -246,7 +246,7 @@ def _writeMolecule(molecule, output_filename, standardize=True):
         Standardize molecular properties such as atom names in the output file.
 
     """
-    from openmoltools.openeye import molecule_to_mol2
+    from .openeye import molecule_to_mol2
 
     molecule_to_mol2(
         molecule,

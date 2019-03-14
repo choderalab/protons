@@ -11,7 +11,7 @@ import tempfile
 import mdtraj
 import uuid
 from collections import OrderedDict
-import openmoltools as omt
+from . import schrodinger
 from lxml import etree, objectify
 from openeye import oechem
 from ..app import forcefield_generators as omtff
@@ -1146,7 +1146,7 @@ def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
         smifile.write(smiles)
 
     cmd = [converter_path, sminame, maename]
-    omt.schrodinger.run_and_log_error(cmd)
+    schrodinger.run_and_log_error(cmd)
 
     return maename
 
@@ -1183,7 +1183,7 @@ def generate_epik_states(
         if workdir is not None:
             os.chdir(workdir)
             log.debug("Log files can be found in {}".format(workdir))
-        omt.schrodinger.run_epik(
+        schrodinger.run_epik(
             inputmae,
             outputmae,
             ph=pH,
@@ -1211,7 +1211,7 @@ def retrieve_epik_info(epik_mae: str) -> list:
 
     penalty_tag = "r_epik_State_Penalty"
     net_charge_tag = "i_epik_Tot_Q"
-    props = omt.schrodinger.run_proplister(epik_mae)
+    props = schrodinger.run_proplister(epik_mae)
 
     all_info = list()
 
@@ -1244,7 +1244,7 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpfilename = "{}.mol2".format(unique_filename)
-    omt.schrodinger.run_structconvert(epik_mae, tmpfilename)
+    schrodinger.run_structconvert(epik_mae, tmpfilename)
 
     ifs = oechem.oemolistream()
     ifs.open(tmpfilename)

@@ -26,6 +26,12 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
+def parse_ligand_filename(filename):
+    """Split ligand filename into name and extension.  "./ligand.mol2" -> ("ligand", ".mol2")"""
+    name, ext = os.path.splitext(os.path.split(filename)[1])
+    return name, ext
+
+
 def getoutput(cmd):
     """Compatibility function to substitute deprecated commands.getoutput in Python2.7"""
     try:
@@ -399,8 +405,7 @@ def run_antechamber(
     frcmod_filename : str
         Amber frcmod file produced by prmchk
     """
-    utils = import_("openmoltools.utils")
-    ext = utils.parse_ligand_filename(input_filename)[1]
+    ext = parse_ligand_filename(input_filename)[1]
 
     if not gaff_version in ["gaff", "gaff2"]:
         raise Exception("Error: gaff_version must be one of 'gaff' or 'gaff2'")

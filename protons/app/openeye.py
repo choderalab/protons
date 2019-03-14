@@ -13,11 +13,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 import shutil
 import os
 import mdtraj as md
-from openmoltools.utils import import_, enter_temp_directory, create_ffxml_file
-from openmoltools.amber import run_antechamber
+from mdtraj.utils import enter_temp_directory
+from mdtraj.utils.delay_import import import_
+from .amber import run_antechamber
+from . import amber_parser
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def create_ffxml_file(
+    gaff_mol2_filenames,
+    frcmod_filenames,
+    ffxml_filename=None,
+    override_mol2_residue_name=None,
+):
+    """Process multiple gaff mol2 files and frcmod files using the XML conversion and write to an XML file.
+    Parameters
+    ----------
+    gaff_mol2_filenames : list of str
+        The names of the gaff mol2 files
+    frcmod_filenames : str
+        The names of the gaff frcmod files
+    ffxml_filename : str, optional, default=None
+        Optional name of output ffxml file to generate.  If None, no file
+        will be generated.
+    override_mol2_residue_name : str, default=None
+            If given, use this name to override mol2 residue names.
+    Returns
+    -------
+    ffxml_stringio : str
+        StringIO representation of ffxml file containing residue entries for each molecule.
+    """
+
+    # Generate ffxml file.
+    parser = amber_parser.AmberParser(
+        override_mol2_residue_name=override_mol2_residue_name
+    )
+
+    amber = import_("openmoltools.amber")
+    GAFF_DAT_FILENAME = amber.find_gaff_dat()
+    filenames = [GAFF_DAT_FILENAME]
+    filenames.extend([filename for filename in gaff_mol2_filenames])
+    filenames.extend([filename for filename in frcmod_filenames])
+
+    parser.parse_filenames(filenames)
+
+    ffxml_stream = parser.generate_xml()
+
+    if ffxml_filename is not None:
+        outfile = open(ffxml_filename, "w")
+        outfile.write(ffxml_stream.read())
+        outfile.close()
+        ffxml_stream.seek(0)
+
+    return ffxml_stream
 
 
 # Note: We recommend having every function return *copies* of input, to avoid headaches associated with in-place changes
