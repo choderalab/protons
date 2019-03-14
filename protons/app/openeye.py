@@ -73,6 +73,57 @@ def create_ffxml_file(
 # Note: We recommend having every function return *copies* of input, to avoid headaches associated with in-place changes
 
 
+def assignELF10charges(molecule, max_confs=800, strictStereo=True):
+    """
+     This function computes atomic partial charges for an OEMol by
+     using the ELF10 method
+
+    Parameters:
+    -----------
+    molecule : OEMol object
+        The molecule that needs to be charged
+    max_confs : integer
+        The max number of conformers used to calculate the atomic partial charges
+    strictStereo : bool
+        a flag used to check if atoms need to have assigned stereo chemistry or not
+
+    Return:
+    -------
+    mol_copy : OEMol
+        a copy of the original molecule with assigned atomic partial charges
+    """
+
+    oechem = import_("openeye.oechem")
+    if not oechem.OEChemIsLicensed():
+        raise (ImportError("Need License for OEChem!"))
+    oequacpac = import_("openeye.oequacpac")
+    if not oequacpac.OEQuacPacIsLicensed():
+        raise (ImportError("Need License for oequacpac!"))
+
+    mol_copy = molecule.CreateCopy()
+
+    # The passed molecule could have already conformers. If the conformer number
+    # does not exceed the max_conf threshold then max_confs conformations will
+    # be generated
+    if not mol_copy.GetMaxConfIdx() > 200:
+        # Generate up to max_confs conformers
+        mol_copy = generate_conformers(
+            mol_copy, max_confs=max_confs, strictStereo=strictStereo
+        )
+
+    # Assign MMFF Atom types
+    if not oechem.OEMMFFAtomTypes(mol_copy):
+        raise RuntimeError("MMFF atom type assignment returned errors")
+
+    # ELF10 charges
+    status = oequacpac.OEAssignCharges(mol_copy, oequacpac.OEAM1BCCELF10Charges())
+
+    if not status:
+        raise RuntimeError("OEAssignCharges returned error code %d" % status)
+
+    return mol_copy
+
+
 def get_charges(
     molecule,
     max_confs=800,

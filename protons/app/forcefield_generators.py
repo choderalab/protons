@@ -21,7 +21,7 @@ import numpy as np
 import os, os.path, sys
 from simtk.openmm.app import ForceField
 from .amber import run_antechamber
-from .openeye import get_charges
+from .openeye import get_charges, assignELF10charges
 from simtk.openmm.app.element import Element
 import parmed
 
@@ -411,6 +411,7 @@ def generateForceFieldFromMolecules(
     generateUniqueNames=False,
     normalize=True,
     gaff_version="gaff",
+    use_recommended: bool = True,
 ):
     """
     Generate ffxml file containing additional parameters and residue templates for simtk.openmm.app.ForceField using GAFF/AM1-BCC.
@@ -434,6 +435,7 @@ def generateForceFieldFromMolecules(
         explicit hydrogens, and renaming by IUPAC name.
     gaff_version : str, default = 'gaff'
         One of ['gaff', 'gaff2']; selects which atom types to use.
+    userecommended : Use the recommended Elf10 charge method.
 
     Returns
     -------
@@ -487,14 +489,20 @@ def generateForceFieldFromMolecules(
 
         # Generate canonical AM1-BCC charges and a reference conformation.
         if not ignoreFailures:
-            molecule = get_charges(
-                molecule, strictStereo=False, keep_confs=1, normalize=normalize
-            )
-        else:
-            try:
+            if not use_recommended:
                 molecule = get_charges(
                     molecule, strictStereo=False, keep_confs=1, normalize=normalize
                 )
+            else:
+                molecule = assignELF10charges(molecule, strictStereo=False)
+        else:
+            try:
+                if not use_recommended:
+                    molecule = get_charges(
+                        molecule, strictStereo=False, keep_confs=1, normalize=normalize
+                    )
+                else:
+                    molecule = assignELF10charges(molecule, strictStereo=False)
             except:
                 failed_molecule_list.append(molecule)
 
