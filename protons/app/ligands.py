@@ -1449,6 +1449,9 @@ def generate_protons_ffxml(
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
+
+        # Ensure that name is simple and has no space in it
+        oemolecule.SetTitle(f"ISOMER-{isomer_index}")
         log.debug("ffxml generation for {}".format(isomer_index))
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
         log.debug(ffxml)
