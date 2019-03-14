@@ -2878,7 +2878,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Extracting the final state's weight.
         g_final = self.calculate_gk()
-
+        print(g_final, g_initial)
         # Extract the internally calculated work from the integrator
         work += g_final - g_initial
 

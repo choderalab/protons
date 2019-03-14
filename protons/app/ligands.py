@@ -11,10 +11,10 @@ import tempfile
 import mdtraj
 import uuid
 from collections import OrderedDict
-import openmoltools as omt
+from . import schrodinger
 from lxml import etree, objectify
 from openeye import oechem
-from openmoltools import forcefield_generators as omtff
+from ..app import forcefield_generators as omtff
 from .logger import log
 import numpy as np
 import networkx as nx
@@ -24,6 +24,7 @@ from simtk.openmm import openmm
 from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
 from distutils.version import StrictVersion
+from typing import Optional
 import parmed
 
 
@@ -1128,6 +1129,28 @@ def _write_ffxml(xml_compiler, filename=None):
         return xmlstring
 
 
+def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
+    """Convert a smiles string to a .mae file using schrodinger."""
+    converter_path = os.path.join(
+        os.environ["SCHRODINGER"], "utilities", "smiles_to_mae"
+    )
+
+    tmpname: str = uuid.uuid4()
+    sminame = os.path.abspath(f"{tmpname}.smi")
+    if oname is not None:
+        maename = oname
+    else:
+        maename = os.path.abspath(f"{tmpname}.mae")
+
+    with open(sminame, "w") as smifile:
+        smifile.write(smiles)
+
+    cmd = [converter_path, sminame, maename]
+    schrodinger.run_and_log_error(cmd)
+
+    return maename
+
+
 def generate_epik_states(
     inputmae: str,
     outputmae: str,
@@ -1153,14 +1176,14 @@ def generate_epik_states(
     Epik doesn't retain the input protonation if it's non-relevant.
 
     """
-    log.info("Running Epik to detect protomers and tautomers...")
+    log.debug("Running Epik to detect protomers and tautomers...")
     inputmae = os.path.abspath(inputmae)
     oldwd = os.getcwd()
     try:
         if workdir is not None:
             os.chdir(workdir)
-            log.info("Log files can be found in {}".format(workdir))
-        omt.schrodinger.run_epik(
+            log.debug("Log files can be found in {}".format(workdir))
+        schrodinger.run_epik(
             inputmae,
             outputmae,
             ph=pH,
@@ -1188,7 +1211,7 @@ def retrieve_epik_info(epik_mae: str) -> list:
 
     penalty_tag = "r_epik_State_Penalty"
     net_charge_tag = "i_epik_Tot_Q"
-    props = omt.schrodinger.run_proplister(epik_mae)
+    props = schrodinger.run_proplister(epik_mae)
 
     all_info = list()
 
@@ -1221,7 +1244,7 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpfilename = "{}.mol2".format(unique_filename)
-    omt.schrodinger.run_structconvert(epik_mae, tmpfilename)
+    schrodinger.run_structconvert(epik_mae, tmpfilename)
 
     ifs = oechem.oemolistream()
     ifs.open(tmpfilename)
@@ -1414,10 +1437,10 @@ def generate_protons_ffxml(
         )
 
     # Grab data from sdf file and make a file containing the charge and penalty
-    log.info("Processing Epik output...")
+    log.debug("Processing Epik output...")
     isomers = isomer_dicts
 
-    log.info("Parametrizing the isomers...")
+    log.debug("Parametrizing the isomers...")
     xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
     # Open the Epik output into OEMols
@@ -1426,16 +1449,16 @@ def generate_protons_ffxml(
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
-        log.info("ffxml generation for {}".format(isomer_index))
+        log.debug("ffxml generation for {}".format(isomer_index))
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
-        log.info(ffxml)
+        log.debug(ffxml)
         isomers[isomer_index]["ffxml"] = etree.fromstring(ffxml, parser=xmlparser)
         isomers[isomer_index]["pH"] = pH
 
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
     _write_ffxml(compiler, outputffxml)
-    log.info("Done!  Your result is located here: {}".format(outputffxml))
+    log.debug("Done!  Your result is located here: {}".format(outputffxml))
 
     return outputffxml
 
