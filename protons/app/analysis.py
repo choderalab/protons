@@ -282,6 +282,7 @@ def bar_all_states(
     bootstrap: bool = False,
     num_bootstrap_samples: int = 1000,
     to_first_state_only: bool = True,
+    equilibrium_only: bool = True,
 ):
     """
     Run BAR between the first state and all other states.
@@ -293,6 +294,7 @@ def bar_all_states(
     num_bootstrap_samples - int, the number of samples for bootstrapping
     to_first_state_only - only calculate values for pairswith first state by default, set to false for bar estimate
     between every pair of states
+    equilibrium_only - analyze only samples from equilibrium simulations
 
     Notes
     -----
@@ -323,6 +325,17 @@ def bar_all_states(
             f"Not sure how to handle type ({str(type(dataset))}) of dataset. Please provide a netCDF4 data set or a list of data sets."
         )
 
+    if equilibrium_only:
+        valid_indices = stages == 2
+        initial_states, proposed_states, proposal_work, n_states, gk, stages = (
+            initial_states[valid_indices],
+            proposed_states[valid_indices],
+            proposal_work[valid_indices],
+            n_states,
+            gk[valid_indices],
+            stages[valid_indices],
+        )
+
     bars_per_transition = dict()
     outer = range(1) if to_first_state_only else range(n_states)
     for from_state in outer:
@@ -347,6 +360,18 @@ def bar_all_states(
             forward, reverse = _gather_transitions(
                 from_state, to_state, initial_states, proposed_states, proposal_work, gk
             )
+            skip = False
+            if forward.size == 0:
+                log.warn(f"No forward trajectories for {transition}")
+                skip = True
+
+            if reverse.size == 0:
+                log.warn(f"No reverse trajectories for {transition}")
+                skip = True
+
+            if skip:
+                bars_per_transition[transition] = (np.nan, np.nan)
+                continue
 
             if bootstrap:
                 bar_estimate, bar_sd = _nonparametric_bootstrap_bar(
@@ -480,8 +505,8 @@ def _gather_transitions(
     reverse = np.array(reverse)
     num_forward = forward.size
     num_reverse = reverse.size
-    log.debug("forward", "reverse")
-    log.debug(num_forward, num_reverse)
+    log.debug("forward, reverse")
+    log.debug("%d, %d", num_forward, num_reverse)
 
     return forward, reverse
 
