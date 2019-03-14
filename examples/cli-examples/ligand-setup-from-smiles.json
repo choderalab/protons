@@ -20,8 +20,8 @@
   },
   "input": {
     "_comment": "A pdb file as source for the calibration structure.",
-    "dir": "./",
-    "structure": "{name}-source.pdb"
+    "dir": "./"
+
   },
   "epik": {
     "input": {

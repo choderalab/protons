@@ -1176,13 +1176,13 @@ def generate_epik_states(
     Epik doesn't retain the input protonation if it's non-relevant.
 
     """
-    log.info("Running Epik to detect protomers and tautomers...")
+    log.debug("Running Epik to detect protomers and tautomers...")
     inputmae = os.path.abspath(inputmae)
     oldwd = os.getcwd()
     try:
         if workdir is not None:
             os.chdir(workdir)
-            log.info("Log files can be found in {}".format(workdir))
+            log.debug("Log files can be found in {}".format(workdir))
         omt.schrodinger.run_epik(
             inputmae,
             outputmae,
@@ -1437,10 +1437,10 @@ def generate_protons_ffxml(
         )
 
     # Grab data from sdf file and make a file containing the charge and penalty
-    log.info("Processing Epik output...")
+    log.debug("Processing Epik output...")
     isomers = isomer_dicts
 
-    log.info("Parametrizing the isomers...")
+    log.debug("Parametrizing the isomers...")
     xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
     # Open the Epik output into OEMols
@@ -1449,16 +1449,16 @@ def generate_protons_ffxml(
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
-        log.info("ffxml generation for {}".format(isomer_index))
+        log.debug("ffxml generation for {}".format(isomer_index))
         ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
-        log.info(ffxml)
+        log.debug(ffxml)
         isomers[isomer_index]["ffxml"] = etree.fromstring(ffxml, parser=xmlparser)
         isomers[isomer_index]["pH"] = pH
 
     ifs.close()
     compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
     _write_ffxml(compiler, outputffxml)
-    log.info("Done!  Your result is located here: {}".format(outputffxml))
+    log.debug("Done!  Your result is located here: {}".format(outputffxml))
 
     return outputffxml
 

@@ -13,7 +13,7 @@ import sys
 import os
 from warnings import warn
 
-log.setLevel(logger.logging.DEBUG)
+log.setLevel(logger.logging.INFO)
 
 
 def run_parametrize_main(inputfile):
@@ -77,8 +77,15 @@ def run_parametrize_main(inputfile):
 
     # retrieve input fields
     idir = inp["dir"].format(**format_vars)
-    istructure = inp["structure"].format(**format_vars)
-    ical_path = os.path.abspath(os.path.join(idir, istructure))
+    if "structure" in inp:
+        istructure = inp["structure"].format(**format_vars)
+        ical_path = os.path.abspath(os.path.join(idir, istructure))
+        create_systems = True
+        if not os.path.isfile(ical_path):
+            raise FileNotFoundError(f"Could not find the structure file: {ical_path}.")
+    else:
+        log.warn("Warning 🛂: No calibration structures are created for this system.")
+        create_systems = False
 
     # Hydrogen definitions
     odir = out["dir"].format(**format_vars)
@@ -114,14 +121,17 @@ def run_parametrize_main(inputfile):
         os.makedirs(odir)
 
     lastdir = os.getcwd()
-    print(oepik)
+
     # Begin processing
     # TODO copy files over to output dir?
     # run epik
     if run_epik:
+        log.info("⚗ Running Epik to generate protonation states.")
         iepik_path = os.path.abspath(os.path.join(idir, iepik))
         if not os.path.isfile(iepik_path):
-            raise IOError("Could not find epik input at {}.".format(**locals()))
+            raise FileNotFoundError(
+                "💥: Could not find epik input at {}.".format(**locals())
+            )
 
         max_penalty = float(epik["parameters"]["max_penalty"])
         tautomerize = bool(epik["parameters"]["tautomerize"])
@@ -137,24 +147,34 @@ def run_parametrize_main(inputfile):
     os.chdir(odir)
 
     # process into mol2
+    log.info("🛠 Processing epik results.")
     epik_results_to_mol2(oepik, state_mol2)
 
     # Retrieve protonation state weights et cetera from epik output file
     isomer_info = retrieve_epik_info(oepik)
 
     # parametrize
+    log.info("🔬 Attempting to parameterize protonation states (takes a while).")
     generate_protons_ffxml(state_mol2, isomer_info, offxml, pH, resname=resname)
     # create hydrogens
+    log.info("🛠 Creating hydrogen definitions for ligand.")
     create_hydrogen_definitions(offxml, ohxml)
+    log.info("💊 Adding residue patches for carboxylic acid sampling (if applicable).")
     patch_cooh(offxml, resname)
 
     # set up calibration system
-    extract_residue(ical_path, oextres, resname=resname)
+    if create_systems:
+        log.info(
+            "🏊 Creating solvated systems for performing calibration (takes a while)."
+        )
+        extract_residue(ical_path, oextres, resname=resname)
 
-    # prepare solvated system
-    prepare_calibration_systems(oextres, obase, offxml, ohxml)
+        # prepare solvated system
+        prepare_calibration_systems(oextres, obase, offxml, ohxml)
 
-    os.chdir(lastdir)
+        os.chdir(lastdir)
+
+    log.info(f"🖖 Script finished. Find your results in {odir}")
 
 
 if __name__ == "__main__":
