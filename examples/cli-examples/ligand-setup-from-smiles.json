@@ -16,7 +16,8 @@
     "pH": 7.4,
     "format_vars" : {
       "name": "crizotinib"
-    }
+    },
+    "omega_max_confs": 100
   },
   "input": {
     "_comment": "A pdb file as source for the calibration structure.",

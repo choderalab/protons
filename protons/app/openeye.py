@@ -73,7 +73,7 @@ def create_ffxml_file(
 # Note: We recommend having every function return *copies* of input, to avoid headaches associated with in-place changes
 
 
-def assignELF10charges(molecule, max_confs=800, strictStereo=True):
+def assignELF10charges(molecule, max_confs: int = -1, strictStereo=True):
     """
      This function computes atomic partial charges for an OEMol by
      using the ELF10 method
@@ -83,7 +83,8 @@ def assignELF10charges(molecule, max_confs=800, strictStereo=True):
     molecule : OEMol object
         The molecule that needs to be charged
     max_confs : integer
-        The max number of conformers used to calculate the atomic partial charges
+        The max number of conformers used to calculate the atomic partial charges.
+        Select -1 to use dense conformers. 
     strictStereo : bool
         a flag used to check if atoms need to have assigned stereo chemistry or not
 
@@ -100,16 +101,21 @@ def assignELF10charges(molecule, max_confs=800, strictStereo=True):
     if not oequacpac.OEQuacPacIsLicensed():
         raise (ImportError("Need License for oequacpac!"))
 
-    mol_copy = molecule.CreateCopy()
+    oeomega = import_("openeye.oeomega")
 
-    # The passed molecule could have already conformers. If the conformer number
-    # does not exceed the max_conf threshold then max_confs conformations will
-    # be generated
-    if not mol_copy.GetMaxConfIdx() > 200:
-        # Generate up to max_confs conformers
-        mol_copy = generate_conformers(
-            mol_copy, max_confs=max_confs, strictStereo=strictStereo
-        )
+    mol_copy = molecule.CreateCopy()
+    if max_confs < 0:
+        omegaOpts = oeomega.OEOmegaOptions(oeomega.OEOmegaSampling_Dense)
+        omega = oeomega.OEOmega(omegaOpts)
+        omega.SetStrictStereo(strictStereo)
+        if not omega(mol_copy):
+            raise Exception("Omega failed.")
+    else:
+        if not mol_copy.GetMaxConfIdx() > max_confs:
+            # Generate up to max_confs conformers
+            mol_copy = generate_conformers(
+                mol_copy, max_confs=max_confs, strictStereo=strictStereo
+            )
 
     # Assign MMFF Atom types
     if not oechem.OEMMFFAtomTypes(mol_copy):
