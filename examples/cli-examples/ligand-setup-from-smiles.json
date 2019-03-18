@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "This is to setup the 1D ligand (PDB residue name FD3) by",
+    "This is to setup crizotinib from smiles",
     "running through epik",
     "parametrizing the states",
     "and then creating a unified template.",
@@ -12,24 +12,26 @@
   ],
   "parameters": {
     "_comment": "Any settings for the methods, or formatting fields for filenames should be entered here.",    
-    "pdb_resname": "FD3",
-    "pH": 7.8,
+    "pdb_resname": "EBI",
+    "pH": 7.4,
     "format_vars" : {
-      "name": "1D"
+      "name": "crizotinib"
     }
   },
   "input": {
     "_comment": "A pdb file as source for the calibration structure.",
-    "dir": "./",
-    "structure": "{name}-source.pdb"
+    "dir": "./"
+
   },
   "epik": {
-    "input": "{name}-input.mae",
+    "input": {
+      "smiles": "C[C@H](c1c(ccc(c1Cl)F)Cl)Oc2cc(cnc2N)c3cnn(c3)C4CCNCC4"
+    },
     "output": {
-      "mae": "1D-7.8-10kT-epik.mae"
+      "mae": "{name}-epik.mae"
     },
     "parameters": {
-      "max_penalty": 10,
+      "max_penalty": 5,
       "tautomerize": false
     }
   },
