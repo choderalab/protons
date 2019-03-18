@@ -75,6 +75,11 @@ def run_parametrize_main(inputfile):
     # 3 letter residue name
     resname = prms["pdb_resname"]
 
+    if "omega_max_confs" in prms:
+        max_confs = int(prms["omega_max_confs"])
+    else:
+        max_confs = 200
+
     # retrieve input fields
     idir = inp["dir"].format(**format_vars)
     if "structure" in inp:
@@ -84,7 +89,9 @@ def run_parametrize_main(inputfile):
         if not os.path.isfile(ical_path):
             raise FileNotFoundError(f"Could not find the structure file: {ical_path}.")
     else:
-        log.warn("Warning 🛂: No calibration structures are created for this system.")
+        log.warn(
+            "Warning 🛂: No calibration systems will be created for this system, since no structure was provided."
+        )
         create_systems = False
 
     # Hydrogen definitions
@@ -155,7 +162,13 @@ def run_parametrize_main(inputfile):
 
     # parametrize
     log.info("🔬 Attempting to parameterize protonation states (takes a while).")
-    generate_protons_ffxml(state_mol2, isomer_info, offxml, pH, resname=resname)
+    if max_confs < 0:
+        log.info(
+            "☢ Warning: Dense conformer selection. Parameterization will take longer than usual."
+        )
+    generate_protons_ffxml(
+        state_mol2, isomer_info, offxml, pH, resname=resname, omega_max_confs=max_confs
+    )
     # create hydrogens
     log.info("🛠 Creating hydrogen definitions for ligand.")
     create_hydrogen_definitions(offxml, ohxml)
@@ -173,6 +186,8 @@ def run_parametrize_main(inputfile):
         prepare_calibration_systems(oextres, obase, offxml, ohxml)
 
         os.chdir(lastdir)
+    else:
+        log.info("🚱 Solvated system generation skipped.")
 
     log.info(f"🖖 Script finished. Find your results in {odir}")
 

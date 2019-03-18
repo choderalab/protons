@@ -1520,6 +1520,7 @@ def generate_protons_ffxml(
     outputffxml: str,
     pH: float,
     resname: str = "LIG",
+    omega_max_confs: int = 200,
 ):
     """
     Compile a protons ffxml file from a preprocessed mol2 file, and a dictionary of states and charges.
@@ -1536,6 +1537,8 @@ def generate_protons_ffxml(
         location for output xml file containing all ligand states and their parameters
     pH : float
         The pH that these states are valid for.
+    omega_max_confs : the max number of conformers that will be used to generate partial charges
+        Hint: set to -1 for dense conformer sampling. Can help with AM1-BCC convergence but is much slower.
 
     Other Parameters
     ----------------
@@ -1576,7 +1579,9 @@ def generate_protons_ffxml(
         # Ensure that name is simple and has no space in it
         oemolecule.SetTitle(f"ISOMER-{isomer_index}")
         log.debug("ffxml generation for {}".format(isomer_index))
-        ffxml = omtff.generateForceFieldFromMolecules([oemolecule], normalize=False)
+        ffxml = omtff.generateForceFieldFromMolecules(
+            [oemolecule], normalize=False, omega_max_confs=omega_max_confs
+        )
         log.debug(ffxml)
         isomers[isomer_index]["ffxml"] = etree.fromstring(ffxml, parser=xmlparser)
         isomers[isomer_index]["pH"] = pH
