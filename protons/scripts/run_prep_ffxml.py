@@ -149,6 +149,7 @@ def run_prep_ffxml_main(jsonfile):
         switching_distance = float(pmeprops["switching_distance_nm"]) * unit.nanometers
         nonbondedCutoff = float(pmeprops["nonbonded_cutoff_nm"]) * unit.nanometers
         pressure = float(pmeprops["pressure_atm"]) * unit.atmosphere
+        disp_corr = bool(pmeprops["dispersion_correction"])
 
         system = forcefield.createSystem(
             topology,
@@ -161,8 +162,8 @@ def run_prep_ffxml_main(jsonfile):
         for force in system.getForces():
             if isinstance(force, mm.NonbondedForce):
                 force.setUseSwitchingFunction(True)
-
                 force.setSwitchingDistance(switching_distance)
+                force.setUseDispersionCorrection(disp_corr)
 
         # TODO disable in implicit solvent
         # NPT simulation
@@ -204,12 +205,6 @@ def run_prep_ffxml_main(jsonfile):
     compound_integrator.addIntegrator(ncmc_propagation_integrator)
     compound_integrator.setCurrentIntegrator(0)
 
-    # Script specific settings
-
-    # Register the timeout handling
-    signal.signal(signal.SIGABRT, timeout_handler)
-    script_timeout = 3600  # 1 h
-
     driver = ForceFieldProtonDrive(
         temperature,
         topology,
@@ -217,7 +212,7 @@ def run_prep_ffxml_main(jsonfile):
         forcefield,
         user_ff_paths + ["amber10-constph.xml"],
         pressure=pressure,
-        perturbations_per_trial=10000,
+        perturbations_per_trial=100_000,
         propagations_per_step=1,
     )
 
