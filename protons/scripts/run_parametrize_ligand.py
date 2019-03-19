@@ -113,7 +113,10 @@ def run_parametrize_main(inputfile):
     else:
         if "smiles" in epik["input"]:
             # Converts smiles to maestro file and uses that maestro file as input
-            iepik = smiles_to_mae(epik["input"]["smiles"].format(**format_vars))
+            iepik = smiles_to_mae(
+                epik["input"]["smiles"].format(**format_vars),
+                oname=f"{obase}-from-smiles.mae",
+            )
             try:
                 shutil.copy(iepik, os.path.join(idir, iepik))
             except shutil.SameFileError:
@@ -155,7 +158,7 @@ def run_parametrize_main(inputfile):
 
     # process into mol2
     log.info("🛠 Processing epik results.")
-    epik_results_to_mol2(oepik, state_mol2)
+    epik_results_to_mol2(oepik, state_mol2, patch_bonds=True, keep_intermediate=False)
 
     # Retrieve protonation state weights et cetera from epik output file
     isomer_info = retrieve_epik_info(oepik)

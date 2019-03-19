@@ -1261,6 +1261,7 @@ def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
 
     cmd = [converter_path, sminame, maename]
     schrodinger.run_and_log_error(cmd)
+    os.remove(sminame)
 
     return maename
 
@@ -1339,7 +1340,12 @@ def retrieve_epik_info(epik_mae: str) -> list:
     return all_info
 
 
-def epik_results_to_mol2(epik_mae: str, output_mol2: str):
+def epik_results_to_mol2(
+    epik_mae: str,
+    output_mol2: str,
+    patch_bonds: bool = True,
+    keep_intermediate: bool = False,
+):
     """
     Map the hydrogen atoms between Epik states, and return a mol2 file that
     should be ready to parametrize.
@@ -1347,6 +1353,9 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     Parameters
     ----------
     epik_mae: location of the maestro file produced by Epik.
+    output_mol2: location of the mol2 output file that is to be produced.
+    patch_bonds: Force integer order bond information in the mol2 file, can help with bond perception in OpenEye.
+    keep_intermediate: Leave intermediate files after processing.
 
     Notes
     -----
@@ -1355,22 +1364,37 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
     """
     if not output_mol2[-5:] == ".mol2":
         output_mol2 += ".mol2"
+
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpmol2 = "{}.mol2".format(unique_filename)
-    tmpsd = "{}.sd".format(unique_filename)
+
+    #  List of files to delete at the end.
+    tmpfiles: List[str] = [tmpmol2]
     schrodinger.run_structconvert(epik_mae, tmpmol2)
-    schrodinger.run_structconvert(epik_mae, tmpsd)
-    bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
 
-    sd_bonds = get_sd_bonds(tmpsd)
-    fixed_mol2_contents = replace_mol2_bonds(tmpmol2, sd_bonds)
+    if patch_bonds:
+        tmpsd = "{}.sd".format(unique_filename)
+        tmpfiles.append(tmpsd)
+        schrodinger.run_structconvert(epik_mae, tmpsd)
+        bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
 
-    with open(bondfixmol2, "w") as bondfixedfile:
-        bondfixedfile.write(fixed_mol2_contents)
+        sd_bonds = get_sd_bonds(tmpsd)
+        fixed_mol2_contents = replace_mol2_bonds(tmpmol2, sd_bonds)
+
+        with open(bondfixmol2, "w") as bondfixedfile:
+            bondfixedfile.write(fixed_mol2_contents)
+
+        tmpfiles.append(bondfixmol2)
+
+        # File to be used for unifying atom names between states.
+        intermediate_mol2 = bondfixmol2
+    else:
+        # File to be used for unifying atom names between states.
+        intermediate_mol2 = tmpmol2
 
     ifs = oechem.oemolistream()
-    ifs.open(bondfixmol2)
+    ifs.open(intermediate_mol2)
 
     # make oemols for mapping
     graphmols = [oechem.OEGraphMol(mol) for mol in ifs.GetOEGraphMols()]
@@ -1489,7 +1513,10 @@ def epik_results_to_mol2(epik_mae: str, output_mol2: str):
         h_count += extra_h_count
 
     _mols_to_file(graphmols, output_mol2)
-    os.remove(tmpmol2)
+
+    if not keep_intermediate:
+        for fname in tmpfiles:
+            os.remove(fname)
 
 
 def _mols_to_file(graphmols: list, output_mol2: str):
