@@ -20,10 +20,9 @@ requirements:
     - hdf4 >4.2.11 # Pinned because of issue with netcdf4
     - openmmtools >=0.9.3,<=0.16.0
     - ambermini >=15.0.4
-    - parmed <=2.7.3
+    - parmed <=2.7.3    -
     - joblib
     - lxml
-    - parmed
     - pymbar
     - seaborn
     - matplotlib
@@ -32,6 +31,7 @@ requirements:
     - beautifulsoup4 # for deserialization of html tables
     - networkx # matching protonation state structures
     - tqdm # progress bar in scripts
+    - pyyaml # parsing json/yaml in scripts
 
   run:
     - python ==3.6
@@ -46,7 +46,6 @@ requirements:
     - parmed <=2.7.3
     - joblib
     - lxml
-    - parmed
     - pymbar
     - seaborn
     - matplotlib
@@ -55,6 +54,7 @@ requirements:
     - beautifulsoup4 # for deserialization of html tables
     - networkx # matching protonation state structures
     - tqdm # progress bar in scripts
+    - pyyaml # parsing json/yaml in scripts
 
 test:
   requires:

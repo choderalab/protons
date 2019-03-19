@@ -1,7 +1,7 @@
-import json
 import logging
 import os
 import signal
+import yaml
 from typing import Dict
 import sys
 import netCDF4
@@ -26,8 +26,8 @@ from .utilities import (
 def run_main(jsonfile):
     """Main simulation loop."""
 
-    # TODO Validate json input with json schema?
-    settings = json.load(open(jsonfile))
+    # TODO Validate yaml/json input with json schema?
+    settings = yaml.load(open(jsonfile, "r"))
 
     try:
         format_vars: Dict[str, str] = settings["format_vars"]

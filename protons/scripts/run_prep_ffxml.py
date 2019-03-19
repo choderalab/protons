@@ -1,10 +1,10 @@
 # This script instantiates a file for running constant-pH simulation
-import json
+
 import os
 import signal
 import sys
-import netCDF4
 import numpy as np
+import yaml
 
 from protons import app
 from .. import ForceFieldProtonDrive
@@ -36,7 +36,7 @@ def run_prep_ffxml_main(jsonfile):
     log.info(f"Preparing a run from '{jsonfile}'")
 
     # TODO Validate json input with json schema?
-    settings = json.load(open(jsonfile))
+    settings = yaml.load(open(jsonfile, "r"))
 
     log.debug(f"Loaded these settings. {settings}")
 
