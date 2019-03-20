@@ -412,6 +412,7 @@ def generateForceFieldFromMolecules(
     normalize=True,
     gaff_version="gaff",
     use_recommended: bool = True,
+    omega_max_confs: int = 200,
 ):
     """
     Generate ffxml file containing additional parameters and residue templates for simtk.openmm.app.ForceField using GAFF/AM1-BCC.
@@ -435,7 +436,9 @@ def generateForceFieldFromMolecules(
         explicit hydrogens, and renaming by IUPAC name.
     gaff_version : str, default = 'gaff'
         One of ['gaff', 'gaff2']; selects which atom types to use.
-    userecommended : Use the recommended Elf10 charge method.
+    use_recommended : Use the recommended Elf10 charge method.
+    omega_max_confs: Max number of conformers for omega.
+        Set to -1 use dense conformer mode (for now only works with ELF10 method) helps with AM1BCC convergence issues.
 
     Returns
     -------
@@ -463,6 +466,8 @@ def generateForceFieldFromMolecules(
                     "Molecule '%s' has template name collision." % template_name
                 )
             template_names.add(template_name)
+
+    nconf = omega_max_confs
 
     # Process molecules.
     import tempfile
@@ -494,7 +499,9 @@ def generateForceFieldFromMolecules(
                     molecule, strictStereo=False, keep_confs=1, normalize=normalize
                 )
             else:
-                molecule = assignELF10charges(molecule, strictStereo=False)
+                molecule = assignELF10charges(
+                    molecule, strictStereo=False, max_confs=nconf
+                )
         else:
             try:
                 if not use_recommended:
@@ -502,7 +509,9 @@ def generateForceFieldFromMolecules(
                         molecule, strictStereo=False, keep_confs=1, normalize=normalize
                     )
                 else:
-                    molecule = assignELF10charges(molecule, strictStereo=False)
+                    molecule = assignELF10charges(
+                        molecule, strictStereo=False, max_confs=nconf
+                    )
             except:
                 failed_molecule_list.append(molecule)
 

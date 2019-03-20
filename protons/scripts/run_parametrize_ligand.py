@@ -8,7 +8,7 @@ from ..app.ligands import *
 from ..app import logger
 from ..app.template_patches import patch_cooh
 from ..app.logger import log
-import json
+import yaml
 import sys
 import os
 from warnings import warn
@@ -26,7 +26,7 @@ def run_parametrize_main(inputfile):
     """
 
     with open(inputfile.strip(), "r") as settingsfile:
-        settings = json.load(settingsfile)
+        settings = yaml.load(settingsfile)
 
     # Check all available fields.
     # TODO use json schema for this
@@ -75,6 +75,11 @@ def run_parametrize_main(inputfile):
     # 3 letter residue name
     resname = prms["pdb_resname"]
 
+    if "omega_max_confs" in prms:
+        max_confs = int(prms["omega_max_confs"])
+    else:
+        max_confs = 200
+
     # retrieve input fields
     idir = inp["dir"].format(**format_vars)
     if "structure" in inp:
@@ -84,7 +89,9 @@ def run_parametrize_main(inputfile):
         if not os.path.isfile(ical_path):
             raise FileNotFoundError(f"Could not find the structure file: {ical_path}.")
     else:
-        log.warn("Warning 🛂: No calibration structures are created for this system.")
+        log.warn(
+            "Warning 🛂: No calibration systems will be created for this system, since no structure was provided."
+        )
         create_systems = False
 
     # Hydrogen definitions
@@ -106,7 +113,10 @@ def run_parametrize_main(inputfile):
     else:
         if "smiles" in epik["input"]:
             # Converts smiles to maestro file and uses that maestro file as input
-            iepik = smiles_to_mae(epik["input"]["smiles"].format(**format_vars))
+            iepik = smiles_to_mae(
+                epik["input"]["smiles"].format(**format_vars),
+                oname=f"{obase}-from-smiles.mae",
+            )
             try:
                 shutil.copy(iepik, os.path.join(idir, iepik))
             except shutil.SameFileError:
@@ -148,14 +158,20 @@ def run_parametrize_main(inputfile):
 
     # process into mol2
     log.info("🛠 Processing epik results.")
-    epik_results_to_mol2(oepik, state_mol2)
+    epik_results_to_mol2(oepik, state_mol2, patch_bonds=True, keep_intermediate=False)
 
     # Retrieve protonation state weights et cetera from epik output file
     isomer_info = retrieve_epik_info(oepik)
 
     # parametrize
     log.info("🔬 Attempting to parameterize protonation states (takes a while).")
-    generate_protons_ffxml(state_mol2, isomer_info, offxml, pH, resname=resname)
+    if max_confs < 0:
+        log.info(
+            "☢ Warning: Dense conformer selection. Parameterization will take longer than usual."
+        )
+    generate_protons_ffxml(
+        state_mol2, isomer_info, offxml, pH, resname=resname, omega_max_confs=max_confs
+    )
     # create hydrogens
     log.info("🛠 Creating hydrogen definitions for ligand.")
     create_hydrogen_definitions(offxml, ohxml)
@@ -173,6 +189,8 @@ def run_parametrize_main(inputfile):
         prepare_calibration_systems(oextres, obase, offxml, ohxml)
 
         os.chdir(lastdir)
+    else:
+        log.info("🚱 Solvated system generation skipped.")
 
     log.info(f"🖖 Script finished. Find your results in {odir}")
 
