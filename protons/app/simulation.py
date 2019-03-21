@@ -67,6 +67,8 @@ class ConstantPHSimulation(Simulation):
         if pools is not None:
             drive.define_pools(pools)
 
+
+
         return
 
     def step(self, steps):
@@ -77,6 +79,7 @@ class ConstantPHSimulation(Simulation):
                           volume=True, density=True))
 
         self._simulate(endStep=self.currentStep + steps)
+        #self.drive._log_forces(0)
 
     def update(self, updates, move=None, pool=None):
         """Advance the simulation by propagating the protonation states a specified number of times.
