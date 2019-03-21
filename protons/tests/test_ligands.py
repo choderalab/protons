@@ -4,9 +4,8 @@ import pytest
 from lxml import etree
 from uuid import uuid4
 from protons import app as protons_app
-from openmoltools import forcefield_generators as omtff
-from openmoltools.schrodinger import is_schrodinger_suite_installed
-from openmoltools.amber import find_gaff_dat
+from protons.app.schrodinger import is_schrodinger_suite_installed
+from protons.app.amber import find_gaff_dat
 from simtk import unit
 from simtk.openmm import app, Vec3
 from os import path, remove
