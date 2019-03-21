@@ -267,7 +267,7 @@ class TestNCMCReporter(object):
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
 
         newreporter = ncr.NCMCReporter(filename, 1, cumulativeworkInterval=1)
         simulation.update_reporters.append(newreporter)

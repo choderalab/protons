@@ -24,6 +24,7 @@ from .proposals import (
 )
 from .topology import Topology
 from .pka import available_pkas
+from .ions import NeutralChargeRule, choose_neutralizing_ions_by_method
 from simtk.openmm import app
 from numbers import Number
 import re
@@ -463,7 +464,15 @@ class _TitrationState:
 
         self.g_k = None  # dimensionless quantity
         self.charges = list()
-        self.proton_count = None
+        self.proton_count = (
+            None
+        )  # Number of titratable protons compared to the most deprotonated state
+        self._cation_count = (
+            None
+        )  # Number of cations to maintain charge compared to other states
+        self._anion_count = (
+            None
+        )  # Number of anions to maintain charge compared to other states
         self._forces = list()
         self._target_weight = None
         # MC moves should be functions that take the positions, and return updated positions,
@@ -473,9 +482,11 @@ class _TitrationState:
     @classmethod
     def from_lists(
         cls,
-        g_k,
-        charges,
-        proton_count,
+        g_k: float,
+        charges: List[float],
+        proton_count: int,
+        cation_count: int,
+        anion_count: int,
         cooh_movers: Optional[List[COOHDummyMover]] = None,
     ):
         """Instantiate a _TitrationState from g_k, proton count and a list of the charges
@@ -488,6 +499,8 @@ class _TitrationState:
         obj.g_k = g_k  # dimensionless quantity
         obj.charges = copy.deepcopy(charges)
         obj.proton_count = proton_count
+        obj._cation_count = cation_count
+        obj._anion_count = anion_count
         # Note that forces are to be manually added by force caching functionality in ProtonDrives
         obj._forces = list()
         obj._target_weight = None
@@ -518,6 +531,8 @@ class _TitrationState:
         # prevent accidental modification
         state = copy.deepcopy(state_element)
         obj.proton_count = int(state.get("proton_count"))
+        obj._cation_count = int(state.get("cation_count"))
+        obj._anion_count = int(state.get("anion_count"))
         target_weight = state.get("target_weight")
         obj._target_weight = (
             None if target_weight == "None" else np.float64(target_weight)
@@ -533,7 +548,6 @@ class _TitrationState:
             obj.charges[charge_index] = charge_value
 
         # forces is a list of forces, though currently in practice its of length one and contains only nonbonded force
-        # TODO implement GBSA forces or custom forces here
         # Inside each force is a dict containing 'atoms', and 'exceptions'
         # 'atoms' and 'exceptions' are lists
         # Inside of the list are dicts.
@@ -610,6 +624,26 @@ class _TitrationState:
         return int(round(sum(self.charges)))
 
     @property
+    def anion_count(self) -> int:
+        return self._anion_count
+
+    @anion_count.setter
+    def anion_count(self, n_anions: int):
+        if type(n_anions) != int:
+            raise TypeError("The anion count should be integer.")
+        self._anion_count = n_anions
+
+    @property
+    def cation_count(self) -> int:
+        return self._cation_count
+
+    @cation_count.setter
+    def cation_count(self, n_cations: int):
+        if type(n_cations) != int:
+            raise TypeError("The cation count should be integer.")
+        self._cation_count = n_cations
+
+    @property
     def forces(self):
         return self._forces
 
@@ -638,6 +672,8 @@ class _TitrationState:
         # Only serializing values that are not properties.
         state = E.TitrationState(
             proton_count=str(self.proton_count),
+            cation_count=str(self._cation_count),
+            anion_count=str(self._anion_count),
             target_weight=str(self.target_weight),
             index=index,
             g_k=str(self.g_k),
@@ -1446,7 +1482,7 @@ class _BaseDrive(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def attach_swapper(self, swapper: Swapper, proposal=None):
+    def enable_neutralizing_ions(self, swapper: Swapper, proposal=None):
         """Attach a saltswap.swapper object that is used for maintaining total charges.
 
         The `swapper` will be used for bookkeeping of solvent/buffer ions in the system. In order to
@@ -1545,7 +1581,7 @@ class NCMCProtonDrive(_BaseDrive):
         self.calibration_state: _SAMSState = None
 
         # A salt swap swapper can later be attached to enable counterion coupling to protonation state changes
-        # Using the `attach_swapper` method
+        # Using the `enable_neutralizing_ions` method
         self.swapper = None
         # The total excess charge from ions, applied as counter-charge to protonation state changes.
         # Positive indicates the amount of cations that have been added to the system
@@ -1553,11 +1589,11 @@ class NCMCProtonDrive(_BaseDrive):
         # The drive should never add cations and anions at the same time.
         self.excess_ions = 0
 
-        # A dict of ion parameters, indexed by integers. Set from the swapper in attach_swapper.
+        # A dict of ion parameters, indexed by integers. Set from the swapper in enable_neutralizing_ions.
         self._ion_parameters = None
 
         # The method used to select ions. Should be a subclass of SaltSwapProposal
-        # This variable is set using the `attach_swapper` method.
+        # This variable is set using the `enable_neutralizing_ions` method.
         self.swap_proposal = None
 
         # Record the forces that need to be switched off for NCMC
@@ -1689,7 +1725,12 @@ class NCMCProtonDrive(_BaseDrive):
         for force_index, force in enumerate(self.forces_to_update):
             force.updateParametersInContext(self.context)
 
-    def attach_swapper(self, swapper: Swapper, proposal: SaltSwapProposal = None):
+    def enable_neutralizing_ions(
+        self,
+        swapper: Swapper,
+        proposal: SaltSwapProposal = None,
+        neutral_charge_rule: NeutralChargeRule = NeutralChargeRule.REPLACEMENT_IONS,
+    ):
         """
         Provide a saltswapper to enable maintaining charge neutrality.
 
@@ -1698,6 +1739,7 @@ class NCMCProtonDrive(_BaseDrive):
         swapper - a saltswap.Swapper object that is used for ion manipulation and bookkeeping.
         proposal - optional, a SaltSwapProposal derived class that is used to select ions. If not provided it uses
         the OneDirectionChargeProposal
+        neutral_charge_rule - The rule that assigns what ions should accompany each state to maintain charge neutrality.
 
         """
         if not isinstance(swapper, Swapper):
@@ -1720,6 +1762,22 @@ class NCMCProtonDrive(_BaseDrive):
             self.swap_proposal = proposal
         else:
             self.swap_proposal = OneDirectionChargeProposal()
+
+        # Assign ions to each state depending on the specified rule
+        for r, residue in enumerate(self.titrationGroups):
+            for s, state in enumerate(residue.titration_states):
+                # Determine the amount of ions that accompany the state
+                if s == 0:
+                    n_cations, n_anions = 0, 0
+                else:
+                    reference_charge = residue.titration_states[0].total_charge
+                    this_state_charge = state.total_charge
+                    n_cations, n_anions = choose_neutralizing_ions_by_method(
+                        reference_charge, this_state_charge, neutral_charge_rule
+                    )
+                state.cation_count = n_cations
+                state.anion_count = n_anions
+
         return
 
     def enable_calibration(
@@ -2325,6 +2383,8 @@ class NCMCProtonDrive(_BaseDrive):
         relative_energy,
         charges,
         proton_count: int,
+        cation_count: int,
+        anion_count: int,
         cooh_movers: Optional[List[COOHDummyMover]] = None,
     ):
         """
@@ -2341,6 +2401,10 @@ class NCMCProtonDrive(_BaseDrive):
             the atomic charges for this titration state
         proton_count : int
             number of protons in this titration state
+        cation_count: int
+            number of cations added/removed to maintain charge neutrality
+        anion_count: int
+            number of anions added/removed to maintain charge neutrality
         cooh_movers : list of COOHDummyMovers that this state can use
 
         Notes
@@ -2366,6 +2430,8 @@ class NCMCProtonDrive(_BaseDrive):
             relative_energy * self.beta,
             copy.deepcopy(charges),
             proton_count,
+            cation_count,
+            anion_count,
             cooh_movers,
         )
         self.titrationGroups[titration_group_index].add_state(state)
@@ -2466,6 +2532,8 @@ class NCMCProtonDrive(_BaseDrive):
         titration_state_index : int
             the titration state to set as active
         """
+
+        # TODO add concerted salt update
 
         # Check parameters for validity.
         self._validate_indices(titration_group_index, titration_state_index)
@@ -2878,7 +2946,6 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Extracting the final state's weight.
         g_final = self.calculate_gk()
-        print(g_final, g_initial)
         # Extract the internally calculated work from the integrator
         work += g_final - g_initial
 
@@ -3357,13 +3424,13 @@ class AmberProtonDrive(NCMCProtonDrive):
 
     def __init__(
         self,
-        temperature,
-        topology,
-        system,
-        cpin_filename,
-        pressure=None,
-        perturbations_per_trial=0,
-        propagations_per_step=1,
+        temperature: unit.Quantity,
+        topology: app.Topology,
+        system: mm.System,
+        cpin_filename: str,
+        pressure: Optional[unit.Quantity] = None,
+        perturbations_per_trial: int = 0,
+        propagations_per_step: int = 1,
     ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
@@ -3384,6 +3451,8 @@ class AmberProtonDrive(NCMCProtonDrive):
             Number of perturbation steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
         propagations_per_step : int, optional, default=1
             Number of propagation steps in between perturbation steps.
+        neutral_charge_rule: Rule used to pick ions for maintaining charge neutrality.
+            Default: Replace charges with same sign charge.
 
         Things to do
         ------------
@@ -3463,8 +3532,16 @@ class AmberProtonDrive(NCMCProtonDrive):
                 proton_count = namelist["PROTCNT"][first_state + titration_state]
                 # Create titration state.
 
+                # The amount of ions that accompany the state defaults to 0
+                n_cations, n_anions = 0, 0
+
                 self._add_titration_state(
-                    group_index, relative_energy, charges, proton_count
+                    group_index,
+                    relative_energy,
+                    charges,
+                    proton_count,
+                    n_cations,
+                    n_anions,
                 )
                 self._cache_force(group_index, titration_state)
             # Set default state for this group.
@@ -3620,7 +3697,12 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         return
 
     def _add_xml_titration_groups(
-        self, topology, system, forcefield, ffxml_residues, selected_residue_indices
+        self,
+        topology: app.Topology,
+        system: mm.System,
+        forcefield: app.ForceField,
+        ffxml_residues: Dict[str, etree.ElementTree],
+        selected_residue_indices: List[int],
     ):
         """
         Create titration groups for the selected residues in the topology, using ffxml information gathered earlier.
@@ -3631,6 +3713,8 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         forcefield - OpenMM ForceField object
         ffxml_residues - dict of residue ffxml templates
         selected_residue_indices - Residues to treat using Protons.
+        neutral_charge_rule: Rule used to pick ions for maintaining charge neutrality.
+            Default: Replace charges with same sign charge.
 
         Returns
         -------
@@ -3727,8 +3811,9 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             )
 
             # Define titration states.
-
-            for state_block in protons_block.xpath("State"):
+            for state_block in sorted(
+                protons_block.xpath("State"), key=lambda x: int(x.get("index"))
+            ):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
                 state_index = int(state_block.get("index"))
@@ -3778,9 +3863,17 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                         COOHDummyMover.from_system(system, cooh_system_indices)
                     )
 
+                # Determine the amount of ions that accompany the state
+                n_cations, n_anions = 0, 0
                 # Create titration state.
                 self._add_titration_state(
-                    group_index, relative_energy, charges, proton_count, cooh_movers
+                    group_index,
+                    relative_energy,
+                    charges,
+                    proton_count,
+                    n_cations,
+                    n_anions,
+                    cooh_movers,
                 )
                 self._cache_force(group_index, state_index)
 

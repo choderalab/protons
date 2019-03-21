@@ -177,7 +177,7 @@ class TestTitrationReporter(object):
             cationName="Na+",
             anionName="Cl-",
         )
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
 
         num_titratable = len(driver.titrationGroups)
         simulation = app.ConstantPHSimulation(

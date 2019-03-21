@@ -18,6 +18,7 @@ from protons.app import ForceField
 from protons.app import SAMSCalibrationEngine
 from protons.app import UniformProposal
 from protons.app.proposals import OneDirectionChargeProposal
+from protons.app import ions
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator, hasCUDA
 
@@ -885,7 +886,166 @@ class TestForceFieldImidazoleSaltswap:
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_noions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.NO_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 0
+        ), "No anions should be added/removed"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == 0
+        ), "No cations should be added/removed."
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_counterions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.COUNTER_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 1
+        ), "One anion should be added as counter charge"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == 0
+        ), "No cations should be added/removed."
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_replacementions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.REPLACEMENT_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 0
+        ), "No anions should be added as counter charge"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == -1
+        ), "One cations should be removed."
 
         driver.adjust_to_ph(7.4)
         compound_integrator.step(1)
@@ -924,7 +1084,7 @@ class TestForceFieldImidazoleSaltswap:
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
 
         driver.adjust_to_ph(7.4)
         swap_proposal = OneDirectionChargeProposal()

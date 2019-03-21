@@ -167,7 +167,7 @@ def run_main(jsonfile):
         deserialize_state_vector(saltswap_element, swapper)
         # If counterion is false, openmm automatically uses a neutralizing background charge
         if run["counter-ion"]:
-            driver.attach_swapper(swapper)
+            driver.enable_neutralizing_ions(swapper)
 
     else:
         salinator = None
