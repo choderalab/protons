@@ -2634,9 +2634,6 @@ class AmberProtonDrive(NCMCProtonDrive):
 
     
 
-
-
-
 class ForceFieldProtonDrive(NCMCProtonDrive):
     """
     The ForceFieldProtonDrive is a Monte Carlo driver for protonation state changes and tautomerism in OpenMM.
@@ -3186,8 +3183,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
         self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
 
-
-
     def _update_forces(self, titration_group_index, final_titration_state_index, initial_titration_state_index=None, fractional_titration_state=1.0, final=False):
         """
         Update the force parameters to a new tautomer state by reading them from the cache.
@@ -3239,10 +3234,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 
                 # Update forces using appropriately blended parameters
                 for atom_idx in atom_name_by_atom_index:
-
-                    atom_name = atom_name_by_atom_index[atom_idx]
-                    atom_initial = cache_initial_forces[force_index]['atoms'][atom_name]
-                    atom_final = cache_final_forces[force_index]['atoms'][atom_name]
+                    atom_initial = cache_initial_forces[force_index]['atoms'][atom_idx]
+                    atom_final = cache_final_forces[force_index]['atoms'][atom_idx]
                     atom = {}
 
                     # only change parameters if needed, otherwise keep old parameters 
@@ -3288,7 +3281,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 for bond_idx in cache_initial_forces[force_index]['bonds']:
                     bond_initial = cache_initial_forces[force_index]['bonds'][bond_idx]
                     bond_final = cache_final_forces[force_index]['bonds'][bond_idx]
-                    bond = {'atom1_idx' : bond_initial['atom1_idx'], 'atom2_idx' : bond_initial['atom2_idx'], 'bond_index' : bond_initial['bond_index']}
+                    bond = {'atom1_idx' : bond_initial['atom1_idx'], 'atom2_idx' : bond_initial['atom2_idx'], 'bond_index' : bond_idx}
 
                     # update bonds that changed parameters
                     if bond_initial['length'] != bond_final['length'] or bond_initial['k'] != bond_final['k']:
@@ -3363,7 +3356,136 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
 
 class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
-  
+    
+    def __init__(self, temperature, topology, system, forcefield, ffxml_files, pressure=None, perturbations_per_trial=0, propagations_per_step=1, residues_by_name=None, residues_by_index=None):
+
+
+        """
+        Initialize a Monte Carlo titration driver for simulation of tautomer states
+
+        Parameters
+        ----------
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature at which the system is to be simulated.
+        topology : protons.app.Topology
+            Topology of the system
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        ffxml_files : str or list of str
+            Single ffxml filename, or list of ffxml filenames containing protons information.
+        forcefield : simtk.openmm.app.ForceField
+            ForceField parameters used to make a system.
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional
+            For explicit solvent simulations, the pressure.
+        perturbations_per_trial : int, optional, default=0
+            Number of steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        propagations_per_step : int, optional, default=1
+            Number of propagation steps in between perturbation steps.
+
+        #NOTE: here we indicate the residue that should be treated as titratable 
+
+        residues_by_index : list of int
+            Residues in topology by index that should be treated as titratable
+        residues_by_name : list of str
+            Residues by name in topology that should be treated as titratable
+
+        Notes
+        -----
+        If neither residues_by_index, or residues_by_name are specified, all possible residues with Protons parameters
+        will be treated.
+
+        """
+        # Input validation
+        if residues_by_name is not None:
+            if not isinstance(residues_by_name, list):
+                raise TypeError("residues_by_name needs to be a list")
+
+        if residues_by_index is not None:
+            if not isinstance(residues_by_index, list):
+                raise TypeError("residues_by_index needs to be a list")
+
+        super(TautomerForceFieldProtonDrive, self).__init__(temperature, topology, system, pressure, perturbations_per_trial=perturbations_per_trial, propagations_per_step=propagations_per_step)
+
+        ffxml_residues = self._parse_ffxml_files(ffxml_files)
+
+        # Collect all of the residues that need to be treated
+        all_residues = list(topology.residues())
+        selected_residue_indices = list()
+
+        # Validate user specified indices
+        if residues_by_index is not None:
+            for residue_index in residues_by_index:
+                residue = all_residues[residue_index]
+                if residue.name not in ffxml_residues:
+                    raise ValueError("Residue '{}:{}' is not treatable using protons. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue.name, residue.index))
+            selected_residue_indices.extend(residues_by_index)
+
+        # Validate user specified residue names
+        if residues_by_name is not None:
+            for residue_name in residues_by_name:
+                if residue_name not in ffxml_residues:
+                    raise ValueError("Residue type '{}' is not a protons compatible residue. Please provide Protons parameters using an ffxml file, or deselect it.".format(residue_name))
+
+            for residue in all_residues:
+                if residue.name in residues_by_name:
+                    selected_residue_indices.append(residue.index)
+                    logging.info('Selected residue indeces: {}'.format(selected_residue_indices))
+        # If no names or indices are specified, make all compatible residues titratable
+        if residues_by_name is None and residues_by_index is None:
+            for residue in all_residues:
+                if residue.name in ffxml_residues:
+                    selected_residue_indices.append(residue.index)
+
+        # Remove duplicate indices and sort
+        selected_residue_indices = sorted(list(set(selected_residue_indices)))
+        self._add_xml_titration_groups(topology, forcefield, ffxml_residues, selected_residue_indices)
+
+        return
+    def _parse_ffxml_files(self, ffxml_files):
+        """
+        Read an ffxml file, or a list of ffxml files, and extract the residues that have Protons information.
+
+        Parameters
+        ----------
+        ffxml_files single object, or list of
+            - a file name/path
+            - a file object
+            - a file-like object
+            - a URL using the HTTP or FTP protocol
+        The file should contain ffxml residues that have a <Protons> block.
+
+        Returns
+        -------
+        ffxml_residues - dict of all residue blocks that were detected, with residue names as keys.
+
+        """
+        if not isinstance(ffxml_files, list):
+            ffxml_files = [ffxml_files]
+
+        xmltrees = list()
+        ffxml_residues = dict()
+        # Collect xml parameters from provided input files
+        for file in ffxml_files:
+            try:
+                tree = etree.parse(file)
+                xmltrees.append(tree)
+            except IOError:
+                full_path = os.path.join(os.path.dirname(__file__), 'data', file)
+                tree = etree.parse(full_path)
+                xmltrees.append(tree)
+
+        for xmltree in xmltrees:
+            # All residues that contain a protons block
+            for xml_residue in xmltree.xpath('/ForceField/Residues/Residue[Protons]'):
+                xml_resname = xml_residue.get("name")
+                if not xml_resname in ffxml_residues:
+                    # Store the protons block of the residue
+                    ffxml_residues[xml_resname] = xml_residue
+                else:
+                    raise ValueError("Duplicate residue name found in parameters: {}".format(xml_resname))
+
+        return ffxml_residues
+
 
     def _add_xml_titration_groups(self, topology, forcefield, ffxml_residues, selected_residue_indices):
         """
@@ -3445,7 +3567,6 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             
             ################################################
             ################################################
-            # NOTE: mw entry point!
             ################################################
             ################################################
 
