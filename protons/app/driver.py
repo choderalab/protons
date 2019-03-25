@@ -14,15 +14,15 @@ import numpy as np
 import os
 from simtk import unit
 from simtk import openmm as mm
-import saltswap
 from saltswap.swapper import Swapper
 from .proposals import (
     _StateProposal,
     SaltSwapProposal,
-    OneDirectionChargeProposal,
+    UniformSwapProposal,
     COOHDummyMover,
 )
 from .topology import Topology
+from .saltswap_utils import update_fractional_stateVector
 from .pka import available_pkas
 from .ions import NeutralChargeRule, choose_neutralizing_ions_by_method
 from simtk.openmm import app
@@ -51,6 +51,7 @@ class _TitratableResidue:
         Notes
         -----
         This class should not be instantiated directly. Use `from_lists` or `from_serialized_xml` instead.
+        This class is intended for internal use by the ProtonDrive.
 
         """
         # The indices of the residue atoms in the system
@@ -364,9 +365,10 @@ class _TitratableResidue:
         return self._state
 
     @state.setter
-    def state(self, state):
+    def state(self, state: int):
         """
-        state - int
+        Set the titration state index. Warning: does not update the parameters.
+        This should only be modified by a proton drive.
         """
 
         if state > len(self):
@@ -457,10 +459,10 @@ class _TitratableResidue:
 
 
 class _TitrationState:
-    """Representation of a titration state"""
+    """Representation of a titration state."""
 
     def __init__(self):
-        """Instantiate a _TitrationState"""
+        """Instantiate a _TitrationState, for internal use by ProtonDrive classes."""
 
         self.g_k = None  # dimensionless quantity
         self.charges = list()
@@ -1582,12 +1584,7 @@ class NCMCProtonDrive(_BaseDrive):
 
         # A salt swap swapper can later be attached to enable counterion coupling to protonation state changes
         # Using the `enable_neutralizing_ions` method
-        self.swapper = None
-        # The total excess charge from ions, applied as counter-charge to protonation state changes.
-        # Positive indicates the amount of cations that have been added to the system
-        # Negative indicates the amount of anions that have been added to the system
-        # The drive should never add cations and anions at the same time.
-        self.excess_ions = 0
+        self.swapper: Swapper = None
 
         # A dict of ion parameters, indexed by integers. Set from the swapper in enable_neutralizing_ions.
         self._ion_parameters = None
@@ -1749,9 +1746,6 @@ class NCMCProtonDrive(_BaseDrive):
 
         nwat, ncat, nani = swapper.get_identity_counts()
 
-        # The excess amount of ions, positive if cations, negative if more anions
-        self.excess_ions = ncat - nani
-
         self._ion_parameters = {
             0: self.swapper.water_parameters,
             1: self.swapper.cation_parameters,
@@ -1761,7 +1755,7 @@ class NCMCProtonDrive(_BaseDrive):
         if proposal is not None:
             self.swap_proposal = proposal
         else:
-            self.swap_proposal = OneDirectionChargeProposal()
+            self.swap_proposal = UniformSwapProposal()
 
         # Assign ions to each state depending on the specified rule
         for r, residue in enumerate(self.titrationGroups):
@@ -2437,7 +2431,7 @@ class NCMCProtonDrive(_BaseDrive):
         self.titrationGroups[titration_group_index].add_state(state)
         return
 
-    def _get_titration_state(self, titration_group_index):
+    def get_titration_state(self, titration_group_index: int) -> int:
         """
         Return the current titration state for the specified titratable group.
 
@@ -2518,8 +2512,12 @@ class NCMCProtonDrive(_BaseDrive):
                 )
             )
 
-    def _set_titration_state(
-        self, titration_group_index, titration_state_index, updateParameters=True
+    def set_titration_state(
+        self,
+        titration_group_index: int,
+        titration_state_index: int,
+        updateContextParameters: bool = True,
+        updateIons: bool = True,
     ):
         """
         Change the titration state of the designated group for the provided state.
@@ -2531,16 +2529,43 @@ class NCMCProtonDrive(_BaseDrive):
             the index of the titratable group whose titration state should be updated
         titration_state_index : int
             the titration state to set as active
+        updateContextParameters : bool
+            automatically update the parameters in context, default True
+        updateIons : update the ions/waters using saltswap alongside the titration state.
         """
 
-        # TODO add concerted salt update
+        initial_titration_states = copy.deepcopy(self.titrationStates)
+        final_titration_states = copy.deepcopy(self.titrationStates)
+        final_titration_states[titration_group_index] = titration_state_index
 
-        # Check parameters for validity.
+        if np.all(initial_titration_states == final_titration_states):
+            return
+
+            # Check parameters for validity.
         self._validate_indices(titration_group_index, titration_state_index)
-
         self._update_forces(titration_group_index, titration_state_index)
+
+        # Update ions
+        if updateIons and self.swapper is not None:
+
+            logp_ratio_salt_proposal, proposed_ion_states, saltswap_residue_indices, saltswap_states = self._select_neutralizing_ions(
+                initial_titration_states, final_titration_states
+            )
+
+            new_salt_vector = copy.deepcopy(self.swapper.stateVector)
+
+            # The saltswap indices are updated to indicate the change of species
+            for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+                saltswap_residue_indices, saltswap_states
+            ):
+                new_salt_vector[saltswap_residue] = to_ion_state
+
+            update_fractional_stateVector(
+                self.swapper, new_salt_vector, fraction=1.0, set_vector_indices=True
+            )
+
         # The context needs to be updated after the force parameters are updated
-        if self.context is not None and updateParameters:
+        if self.context is not None and updateContextParameters:
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(self.context)
         self.titrationGroups[titration_group_index].state = titration_state_index
@@ -2799,11 +2824,10 @@ class NCMCProtonDrive(_BaseDrive):
 
     def _perform_ncmc_protocol(
         self,
-        titration_group_indices,
-        initial_titration_states,
-        final_titration_states,
-        salt_residue_indices=None,
-        salt_states=None,
+        titration_group_indices: List[int],
+        initial_titration_states: List[int],
+        final_titration_states: List[int],
+        final_salt_vector: Optional[np.ndarray] = None,
     ):
         """
         Performs non-equilibrium candidate Monte Carlo (NCMC) for attempting an change from the initial protonation
@@ -2828,12 +2852,8 @@ class NCMCProtonDrive(_BaseDrive):
         final_titration_states :
             The final protonation state of the titration groups
 
-        salt_residue_indices: optional, list of int
-            The indices of saltswap residues that are to be updated during the ncmc protocol.
-
-        salt_states: optional, list of tuples(int,int)
-            The indices of the initial and final states of the specified salt residues.
-
+        final_salt_vector :
+            The saltswap state vector at the end of the protocol.
 
         Returns
         -------
@@ -2847,15 +2867,11 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator = self.ncmc_integrator
         update_salt = False
 
-        if salt_residue_indices is not None and salt_states is not None:
+        if final_salt_vector is not None and self.swapper is not None:
             update_salt = True
-        elif salt_residue_indices is not None and salt_states is None:
-            raise ValueError(
-                "Need to provide states of the salt changes when specifying salt indices."
-            )
-        elif salt_states is not None and salt_residue_indices is None:
-            raise ValueError(
-                "Need to specify the salt_residue_indices when specifying salt state changes."
+        elif final_salt_vector is not None and self.swapper is None:
+            raise RuntimeError(
+                "Can not update saltswap vector because no swapper is attached."
             )
 
         # Reset integrator statistics
@@ -2901,15 +2917,13 @@ class NCMCProtonDrive(_BaseDrive):
                 )
 
             if update_salt:
-                for salt_residue, (from_state, to_state) in zip(
-                    salt_residue_indices, salt_states
-                ):
-                    self.swapper.update_fractional_ion(
-                        salt_residue,
-                        self._ion_parameters[from_state],
-                        self._ion_parameters[to_state],
-                        titration_lambda,
-                    )
+                update_fractional_stateVector(
+                    self.swapper,
+                    final_salt_vector,
+                    fraction=titration_lambda,
+                    set_vector_indices=False,
+                )
+
             for force_index, force in enumerate(self.forces_to_update):
                 force.updateParametersInContext(self.context)
 
@@ -2980,7 +2994,12 @@ class NCMCProtonDrive(_BaseDrive):
             g_total += titration_state.g_k
         return g_total
 
-    def _attempt_state_change(self, proposal, residue_pool=None, reject_on_nan=False):
+    def _attempt_state_change(
+        self,
+        proposal: _StateProposal,
+        residue_pool: Optional[str] = None,
+        reject_on_nan: bool = False,
+    ):
         """
         Attempt a single Monte Carlo protonation state change.
 
@@ -3042,23 +3061,15 @@ class NCMCProtonDrive(_BaseDrive):
         attempt_data.proposed_states = final_titration_states
         attempt_data.logp_ratio_residue_proposal = logp_ratio_residue_proposal
 
+        proposed_ion_states: Optional[np.ndarray] = None
+        initial_ion_states: Optional[np.ndarray] = None
+        logp_ratio_salt_proposal = 0.0
+
         if self.swapper is not None:
             initial_ion_states = copy.deepcopy(self.swapper.stateVector)
-            proposed_ion_states = copy.deepcopy(self.swapper.stateVector)
-            net_charge_difference = self._calculate_charge_differences(
-                initial_titration_states,
-                final_titration_states,
-                titration_group_indices,
+            logp_ratio_salt_proposal, proposed_ion_states, _, _ = self._select_neutralizing_ions(
+                initial_titration_states, final_titration_states
             )
-            saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(
-                self, initial_charge, final_charge
-            )
-
-            # The saltswap indices are updated to indicate the change of species
-            for saltswap_residue, (from_ion_state, to_ion_state) in zip(
-                saltswap_residue_indices, saltswap_states
-            ):
-                proposed_ion_states[saltswap_residue] = to_ion_state
 
             attempt_data.initial_ion_states = initial_ion_states
             attempt_data.proposed_ion_states = proposed_ion_states
@@ -3069,23 +3080,23 @@ class NCMCProtonDrive(_BaseDrive):
             # 0 is the shortcut for instantaneous Monte Carlo
             if self.perturbations_per_trial == 0:
                 # Use instantaneous switching.
+                # Dont update ions inside because they were picked already on the outside.
                 for titration_group_index in titration_group_indices:
-                    self._set_titration_state(
+                    self.set_titration_state(
                         titration_group_index,
                         final_titration_states[titration_group_index],
-                        updateParameters=False,
+                        updateContextParameters=False,
+                        updateIons=False,
                     )
 
                     # If maintaining charge neutrality.
                     if self.swapper is not None:
-                        for saltswap_residue, (from_ion_state, to_ion_state) in zip(
-                            saltswap_residue_indices, saltswap_states
-                        ):
-                            from_parameter = self._ion_parameters[from_ion_state]
-                            to_parameter = self._ion_parameters[to_ion_state]
-                            self.swapper.update_fractional_ion(
-                                saltswap_residue, from_parameter, to_parameter, 1.0
-                            )
+                        update_fractional_stateVector(
+                            self.swapper,
+                            proposed_ion_states,
+                            fraction=1.0,
+                            set_vector_indices=True,
+                        )
 
                 # Push parameter updates to the context
                 for force_index, force in enumerate(self.forces_to_update):
@@ -3103,8 +3114,7 @@ class NCMCProtonDrive(_BaseDrive):
                             titration_group_indices,
                             initial_titration_states,
                             final_titration_states,
-                            saltswap_residue_indices,
-                            saltswap_states,
+                            final_salt_vector=proposed_ion_states,
                         )
                     else:
                         work = self._perform_ncmc_protocol(
@@ -3139,101 +3149,36 @@ class NCMCProtonDrive(_BaseDrive):
             attempt_data.accepted = accept_move
 
             if accept_move:
-                # Accept.
-                if initial_titration_states != final_titration_states:
-                    self.naccepted += 1
-                # Update titration states.
-                for titration_group_index in titration_group_indices:
-                    self._set_titration_state(
-                        titration_group_index,
-                        final_titration_states[titration_group_index],
-                        updateParameters=False,
-                    )
-                for force_index, force in enumerate(self.forces_to_update):
-                    force.updateParametersInContext(self.context)
-
-                # If using NCMC, flip velocities to satisfy super-detailed balance.
-                if self.perturbations_per_trial > 0:
-                    self.context.setVelocities(
-                        -self.context.getState(getVelocities=True).getVelocities(
-                            asNumpy=True
-                        )
-                    )
-
-                # If maintaining charge neutrality using saltswap
-                if self.swapper is not None:
-                    # The excess ion count is updated with the change in counterions
-                    self.excess_ions -= net_charge_difference
-                    # The saltswap indices are updated to indicate the change of species
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
-                        saltswap_residue_indices, saltswap_states
-                    ):
-                        self.swapper.stateVector[saltswap_residue] = to_ion_state
+                self._set_state_accept_proposal(
+                    initial_titration_states,
+                    final_titration_states,
+                    titration_group_indices,
+                    proposed_ion_states,
+                )
 
             else:
-                # Reject.
-                if initial_titration_states != final_titration_states:
-                    self.nrejected += 1
-                # Restore titration states.
-                for titration_group_index in titration_group_indices:
-                    self._set_titration_state(
-                        titration_group_index,
-                        initial_titration_states[titration_group_index],
-                        updateParameters=False,
-                    )
-
-                # If maintaining charge neutrality using saltswap
-                if self.swapper is not None:
-                    # Restore the salt species parameters
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
-                        saltswap_residue_indices, saltswap_states
-                    ):
-                        from_parameter = self._ion_parameters[from_ion_state]
-                        to_parameter = self._ion_parameters[to_ion_state]
-                        self.swapper.update_fractional_ion(
-                            saltswap_residue, from_parameter, to_parameter, 0.0
-                        )
-
-                for force_index, force in enumerate(self.forces_to_update):
-                    force.updateParametersInContext(self.context)
-
-                # If using NCMC, restore coordinates and velocities.
-                if self.perturbations_per_trial > 0:
-                    self.context.setPositions(initial_positions)
-                    self.context.setVelocities(initial_velocities)
-                    self.context.setPeriodicBoxVectors(*initial_box_vectors)
+                self._set_state_reject_proposal(
+                    initial_titration_states,
+                    final_titration_states,
+                    titration_group_indices,
+                    initial_box_vectors,
+                    initial_positions,
+                    initial_velocities,
+                    initial_ion_states,
+                )
 
         except Exception as err:
             if str(err) == "Particle coordinate is nan" and reject_on_nan:
                 logging.warning("NaN during NCMC move, rejecting")
-                # Reject.
-                if initial_titration_states != final_titration_states:
-                    self.nrejected += 1
-                # Restore titration states.
-                for titration_group_index in titration_group_indices:
-                    self._set_titration_state(
-                        titration_group_index,
-                        initial_titration_states[titration_group_index],
-                        updateParameters=False,
-                    )
-
-                # If maintaining charge neutrality using saltswap
-                if self.swapper is not None:
-                    # Restore the salt species parameters
-                    for saltswap_residue, (from_ion_state, to_ion_state) in zip(
-                        saltswap_residue_indices, saltswap_states
-                    ):
-                        from_parameter = self._ion_parameters[from_ion_state]
-                        to_parameter = self._ion_parameters[to_ion_state]
-                        self.swapper.update_fractional_ion(
-                            saltswap_residue, from_parameter, to_parameter, 0.0
-                        )
-
-                for force_index, force in enumerate(self.forces_to_update):
-                    force.updateParametersInContext(self.context)
-                # If using NCMC, restore coordinates and flip velocities.
-                if self.perturbations_per_trial > 0:
-                    self.context.setPositions(initial_positions)
+                self._set_state_reject_proposal(
+                    initial_titration_states,
+                    final_titration_states,
+                    titration_group_indices,
+                    initial_box_vectors,
+                    initial_positions,
+                    initial_velocities,
+                    initial_ion_states,
+                )
             else:
                 raise
         finally:
@@ -3243,7 +3188,133 @@ class NCMCProtonDrive(_BaseDrive):
 
         return
 
-    def _accept_reject(self, log_P_accept) -> bool:
+    def _select_neutralizing_ions(
+        self, initial_titration_states: List[int], final_titration_states: List[int]
+    ):
+        """For a given change in titration states, get the change in ions and propose ions/waters to swap."""
+        proposed_ion_states = copy.deepcopy(self.swapper.stateVector)
+        initial_cations = 0
+        initial_anions = 0
+        proposed_anions = 0
+        proposed_cations = 0
+        for r, residue in enumerate(self.titrationGroups):
+            initial_anions += residue.titration_states[
+                initial_titration_states[r]
+            ].anion_count
+            initial_cations += residue.titration_states[
+                initial_titration_states[r]
+            ].cation_count
+            proposed_anions += residue.titration_states[
+                final_titration_states[r]
+            ].anion_count
+            proposed_cations += residue.titration_states[
+                final_titration_states[r]
+            ].cation_count
+
+        saltswap_residue_indices, saltswap_states, logp_ratio_salt_proposal = self.swap_proposal.propose_swaps(
+            self.swapper,
+            proposed_cations - initial_cations,
+            proposed_anions - initial_anions,
+        )
+        # The saltswap indices are updated to indicate the change of species
+        for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+            saltswap_residue_indices, saltswap_states
+        ):
+            proposed_ion_states[saltswap_residue] = to_ion_state
+        return (
+            logp_ratio_salt_proposal,
+            proposed_ion_states,
+            saltswap_residue_indices,
+            saltswap_states,
+        )
+
+    def _set_state_reject_proposal(
+        self,
+        initial_titration_states: List[int],
+        final_titration_states: List[int],
+        titration_group_indices: List[int],
+        initial_box_vectors,
+        initial_positions: np.ndarray,
+        initial_velocities: np.ndarray,
+        initial_ion_states: Optional[np.ndarray],
+    ):
+        """Restore the state of the drive after rejecting a move."""
+
+        # Update internal statistics counter
+        if initial_titration_states != final_titration_states:
+            self.nrejected += 1
+        # Restore titration states.
+        for titration_group_index in titration_group_indices:
+            self.set_titration_state(
+                titration_group_index,
+                initial_titration_states[titration_group_index],
+                updateContextParameters=False,
+                updateIons=False,
+            )
+        # If maintaining charge neutrality using saltswap
+        if self.swapper is not None:
+
+            if initial_ion_states is None:
+                raise UnboundLocalError(
+                    "Saltswap was enabled but initial_ions_states is None."
+                )
+            # Restore the salt species parameters
+            update_fractional_stateVector(
+                self.swapper, initial_ion_states, fraction=1.0, set_vector_indices=True
+            )
+
+        for force_index, force in enumerate(self.forces_to_update):
+            force.updateParametersInContext(self.context)
+        # If using NCMC, restore coordinates and velocities.
+        if self.perturbations_per_trial > 0:
+            self.context.setPositions(initial_positions)
+            self.context.setVelocities(initial_velocities)
+            self.context.setPeriodicBoxVectors(*initial_box_vectors)
+
+    def _set_state_accept_proposal(
+        self,
+        initial_titration_states,
+        final_titration_states,
+        titration_group_indices,
+        proposed_ion_states: Optional[np.ndarray],
+    ):
+        """Ensure the correct state after accepting a move."""
+
+        # Update internal statistics counter
+        if initial_titration_states != final_titration_states:
+            self.naccepted += 1
+
+        # Update titration states.
+        for titration_group_index in titration_group_indices:
+            self.set_titration_state(
+                titration_group_index,
+                final_titration_states[titration_group_index],
+                updateContextParameters=False,
+                updateIons=False,  # Don't update since the ions to change were already chosen.
+            )
+
+        # If maintaining charge neutrality using saltswap
+        if self.swapper is not None:
+            # Ensure that the ion state vector is correct.
+            if proposed_ion_states is None:
+                raise UnboundLocalError(
+                    "Saltswap was enabled but proposed_ions_states is None."
+                )
+            update_fractional_stateVector(
+                self.swapper, proposed_ion_states, fraction=1.0, set_vector_indices=True
+            )
+
+        # If using NCMC, flip velocities upon accepting to satisfy super-detailed balance.
+        if self.perturbations_per_trial > 0:
+            self.context.setVelocities(
+                -self.context.getState(getVelocities=True).getVelocities(asNumpy=True)
+            )
+
+        # Push any potentially missed chanfes to the context
+        for force_index, force in enumerate(self.forces_to_update):
+            force.updateParametersInContext(self.context)
+
+    def _accept_reject(self, log_P_accept: float) -> bool:
         """Perform acceptance/rejection check according to the Metropolis-Hastings acceptance criterium."""
         return (log_P_accept > 0.0) or (random.random() < math.exp(log_P_accept))
 
@@ -3355,14 +3426,17 @@ class NCMCProtonDrive(_BaseDrive):
 
         Things to do
         ------------
-         * Implement an NCMC version of this?
+         * TODO Implement an NCMC version of this?
+         * TODO Does not work with ions currently
 
         """
-        current_state = self._get_titration_state(group_index)
-        self._set_titration_state(group_index, state_index, updateParameters=True)
+        current_state = self.get_titration_state(group_index)
+        self.set_titration_state(
+            group_index, state_index, updateContextParameters=True, updateIons=False
+        )
         temp_state = self.context.getState(getEnergy=True)
         potential_energy = temp_state.getPotentialEnergy()
-        self._set_titration_state(group_index, current_state)
+        self.set_titration_state(group_index, current_state, updateIons=False)
         return potential_energy
 
     def _calculate_charge_differences(self, from_states, to_states, indices=None):
@@ -3546,7 +3620,9 @@ class AmberProtonDrive(NCMCProtonDrive):
                 self._cache_force(group_index, titration_state)
             # Set default state for this group.
 
-            self._set_titration_state(group_index, namelist["RESSTATE"][group_index])
+            self.set_titration_state(
+                group_index, namelist["RESSTATE"][group_index], updateIons=False
+            )
 
         return
 
@@ -3878,7 +3954,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
-            self._set_titration_state(group_index, 0)
+            self.set_titration_state(group_index, 0, updateIons=False)
 
     def _parse_ffxml_files(self, ffxml_files):
         """

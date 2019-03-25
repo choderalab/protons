@@ -20,7 +20,7 @@ from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
 from protons.app import ForceField
 from protons.app import UniformProposal
 from protons.app.template_patches import patch_cooh
-from protons.app.proposals import OneDirectionChargeProposal, COOHDummyMover
+from protons.app.proposals import UniformSwapProposal, COOHDummyMover
 from protons.tests import get_test_data
 from protons.tests.utilities import (
     SystemSetup,

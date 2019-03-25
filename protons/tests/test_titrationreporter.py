@@ -293,11 +293,11 @@ class TestTitrationReporter(object):
         )
 
         for i in range(len(glu_states)):
-            simulation.drive._set_titration_state(
-                0, glu_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                0, glu_states[i], updateContextParameters=False
             )
-            simulation.drive._set_titration_state(
-                1, his_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                1, his_states[i], updateContextParameters=False
             )
             assert (
                 simulation.drive.titrationGroups[0].state_index == glu_states[i]
@@ -397,11 +397,11 @@ class TestTitrationReporter(object):
         )
 
         for i in range(len(glu_states)):
-            simulation.drive._set_titration_state(
-                0, glu_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                0, glu_states[i], updateContextParameters=False
             )
-            simulation.drive._set_titration_state(
-                1, his_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                1, his_states[i], updateContextParameters=False
             )
             simulation.update_reporters[0].report(simulation)
             # check glu
@@ -510,11 +510,11 @@ class TestTitrationReporter(object):
 
         for i in range(len(glu_states)):
 
-            simulation.drive._set_titration_state(
-                0, glu_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                0, glu_states[i], updateContextParameters=False
             )
-            simulation.drive._set_titration_state(
-                1, his_states[i], updateParameters=False
+            simulation.drive.set_titration_state(
+                1, his_states[i], updateContextParameters=False
             )
             simulation.update_reporters[0].report(simulation)
             tot_charge = 0
