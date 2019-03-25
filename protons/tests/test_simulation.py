@@ -9,7 +9,7 @@ from simtk.openmm import openmm as mm
 from . import get_test_data
 import netCDF4
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
-from protons.app.driver import SAMSApproach, NCMCProtonDrive
+from protons.app.driver import SAMSApproach, NCMCProtonDrive, SamplingMethod
 from uuid import uuid4
 from lxml import etree
 import os
@@ -148,6 +148,76 @@ class TestConstantPHSimulation(object):
             ["amber10-constph.xml"],
             pressure=pressure,
             perturbations_per_trial=0,
+        )
+
+        simulation = app.ConstantPHSimulation(
+            pdb.topology,
+            system,
+            compound_integrator,
+            driver,
+            platform=self._default_platform,
+        )
+        simulation.context.setPositions(pdb.positions)
+        simulation.context.setVelocitiesToTemperature(temperature)
+
+        # Regular MD step
+        simulation.step(1)
+        # Update the titration states using the uniform proposal
+        simulation.update(1)
+        print("Done!")
+
+    def test_create_importance_sampling(self):
+        """Instantiate a ConstantPHSimulation at 300K/1 atm for a small peptide."""
+
+        pdb = app.PDBxFile(
+            get_test_data(
+                "glu_ala_his-solvated-minimized-renamed.cif", "testsystems/tripeptides"
+            )
+        )
+        forcefield = app.ForceField(
+            "amber10-constph.xml", "ions_tip3p.xml", "tip3p.xml"
+        )
+
+        system = forcefield.createSystem(
+            pdb.topology,
+            nonbondedMethod=app.PME,
+            nonbondedCutoff=1.0 * unit.nanometers,
+            constraints=app.HBonds,
+            rigidWater=True,
+            ewaldErrorTolerance=0.0005,
+        )
+
+        temperature = 300 * unit.kelvin
+        integrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=False,
+        )
+        ncmcintegrator = GBAOABIntegrator(
+            temperature=temperature,
+            collision_rate=1.0 / unit.picoseconds,
+            timestep=2.0 * unit.femtoseconds,
+            constraint_tolerance=1.0e-7,
+            external_work=True,
+        )
+
+        compound_integrator = mm.CompoundIntegrator()
+        compound_integrator.addIntegrator(integrator)
+        compound_integrator.addIntegrator(ncmcintegrator)
+        pressure = 1.0 * unit.atmosphere
+
+        system.addForce(mm.MonteCarloBarostat(pressure, temperature))
+        driver = ForceFieldProtonDrive(
+            temperature,
+            pdb.topology,
+            system,
+            forcefield,
+            ["amber10-constph.xml"],
+            pressure=pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
         )
 
         simulation = app.ConstantPHSimulation(

@@ -41,6 +41,18 @@ kB = (1.0 * unit.BOLTZMANN_CONSTANT_kB * unit.AVOGADRO_CONSTANT_NA).in_units_of(
 np.set_printoptions(precision=15)
 
 
+class SamplingMethod(Enum):
+    """Enum for describing different sampling strategies."""
+
+    # MarkovChain Monte carlo sampling of states with Metropolis-Hastings like accept/reject test
+    # Including Non-equilibrium candidate monte carlo (NCMC)
+    MCMC = 0
+
+    # Importance sampling, where only one state is sampled and the work is calculated to switch,
+    # includind annealed importance sampling
+    IMPORTANCE = 1
+
+
 class _TitratableResidue:
     """Representation of a single residue with multiple titration states."""
 
@@ -1529,8 +1541,9 @@ class NCMCProtonDrive(_BaseDrive):
         topology,
         system,
         pressure=None,
-        perturbations_per_trial=0,
-        propagations_per_step=1,
+        perturbations_per_trial: int = 0,
+        propagations_per_step: int = 1,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC,
     ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
@@ -1549,6 +1562,8 @@ class NCMCProtonDrive(_BaseDrive):
             Number of perturbation steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
         propagations_per_step : int, optional, default=1
             Number of propagation steps in between perturbation steps.
+        sampling_method : The method of sampling that is used.
+            See the SamplingMethod enum for the set of supported options (including MCMC and importance sampling).
         """
         # Store parameters.
         self.system = system
@@ -1568,6 +1583,7 @@ class NCMCProtonDrive(_BaseDrive):
         self.naccepted = 0
         self.nrejected = 0
         self.topology = topology
+        self.sampling_method = sampling_method
 
         # Sets of residues that are pooled together to sample exclusively from them
         self.residue_pools = dict()
@@ -1650,6 +1666,8 @@ class NCMCProtonDrive(_BaseDrive):
         if self.pressure is not None:
             xmltree.set("pressure_bar", str(self.pressure / unit.bar))
 
+        xmltree.set("sampling_method", str(self.sampling_method.value))
+
         for res in self.titrationGroups:
             xmltree.append(res.serialize())
 
@@ -1664,6 +1682,9 @@ class NCMCProtonDrive(_BaseDrive):
         if type(xmltree) == str:
             xmltree = etree.fromstring(xmltree)
         drive_xml = xmltree.xpath("//NCMCProtonDrive")[0]
+
+        self.sampling_method = SamplingMethod(int(drive_xml.get("sampling_method")))
+
         for res in drive_xml.xpath("TitratableResidue"):
             self.titrationGroups.append(_TitratableResidue.from_serialized_xml(res))
 
@@ -1807,6 +1828,12 @@ class NCMCProtonDrive(_BaseDrive):
             The code assumes all residues need to be sampled. If you want to exclude a residue from sampling, ensure it
              isn't added to the drive.
         """
+
+        if self.sampling_method is SamplingMethod.IMPORTANCE:
+            raise NotImplementedError(
+                "Calibration should be used with importance sampling."
+            )
+
         state_counts = [len(res) for res in self.titrationGroups]
         self.calibration_state = _SAMSState(
             state_counts,
@@ -3145,18 +3172,30 @@ class NCMCProtonDrive(_BaseDrive):
             # Accept or reject with Metropolis criteria.
             attempt_data.logp_accept = log_P_accept
             log.debug("Acceptance probability: %f", log_P_accept)
-            accept_move = self._accept_reject(log_P_accept)
-            attempt_data.accepted = accept_move
+            if self.sampling_method is SamplingMethod.MCMC:
+                accept_move = self._accept_reject(log_P_accept)
+                attempt_data.accepted = accept_move
 
-            if accept_move:
-                self._set_state_accept_proposal(
-                    initial_titration_states,
-                    final_titration_states,
-                    titration_group_indices,
-                    proposed_ion_states,
-                )
+                if accept_move:
+                    self._set_state_accept_proposal(
+                        initial_titration_states,
+                        final_titration_states,
+                        titration_group_indices,
+                        proposed_ion_states,
+                    )
 
-            else:
+                else:
+                    self._set_state_reject_proposal(
+                        initial_titration_states,
+                        final_titration_states,
+                        titration_group_indices,
+                        initial_box_vectors,
+                        initial_positions,
+                        initial_velocities,
+                        initial_ion_states,
+                    )
+
+            elif self.sampling_method is SamplingMethod.IMPORTANCE:
                 self._set_state_reject_proposal(
                     initial_titration_states,
                     final_titration_states,
@@ -3505,6 +3544,7 @@ class AmberProtonDrive(NCMCProtonDrive):
         pressure: Optional[unit.Quantity] = None,
         perturbations_per_trial: int = 0,
         propagations_per_step: int = 1,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC,
     ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
@@ -3527,6 +3567,8 @@ class AmberProtonDrive(NCMCProtonDrive):
             Number of propagation steps in between perturbation steps.
         neutral_charge_rule: Rule used to pick ions for maintaining charge neutrality.
             Default: Replace charges with same sign charge.
+        sampling_method : The method of sampling that is used.
+            See the SamplingMethod enum for the set of supported options (including MCMC and importance sampling).
 
         Things to do
         ------------
@@ -3541,6 +3583,7 @@ class AmberProtonDrive(NCMCProtonDrive):
             pressure,
             perturbations_per_trial=perturbations_per_trial,
             propagations_per_step=propagations_per_step,
+            sampling_method=sampling_method,
         )
 
         # Load AMBER cpin file defining protonation states.
@@ -3673,6 +3716,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         propagations_per_step=1,
         residues_by_name=None,
         residues_by_index=None,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC,
     ):
 
         """
@@ -3700,6 +3744,8 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             Residues in topology by index that should be treated as titratable
         residues_by_name : list of str, optional
             Residues by name in topology that should be treated as titratable
+        sampling_method : The method of sampling that is used.
+            See the SamplingMethod enum for the set of supported options (including MCMC and importance sampling).
 
         Notes
         -----
@@ -3723,6 +3769,7 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             pressure,
             perturbations_per_trial=perturbations_per_trial,
             propagations_per_step=propagations_per_step,
+            sampling_method=sampling_method,
         )
 
         ffxml_residues = self._parse_ffxml_files(ffxml_files)

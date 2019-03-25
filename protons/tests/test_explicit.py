@@ -14,6 +14,7 @@ from simtk import unit, openmm
 
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
+from protons.app.driver import SamplingMethod
 from protons.app import ForceField
 from protons.app import SAMSCalibrationEngine
 from protons.app import UniformProposal
@@ -503,6 +504,88 @@ class TestAmberPeptide(object):
             UniformProposal(), residue_pool="group2", nattempts=10
         )  # protonation
 
+    def test_peptide_instantaneous_importance_sampling(self):
+        """
+        Run peptide in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), residue_pool="group2", nattempts=10)
+
+    def test_peptide_instantaneous_importance_sampling_states(self):
+        """
+        Run peptide in explicit solvent with importance sampling and check if states change.
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        # hack to always accept.
+        driver._accept_reject = lambda self, logp: True
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        old_state = deepcopy(driver.titrationStates)
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+        new_state = deepcopy(driver.titrationStates)
+        assert np.all(
+            np.asarray(old_state) == np.asarray(new_state)
+        ), "States have changed."
+
     def test_peptide_import_gk(self):
         """
         Import calibrated values for tyrosine
@@ -583,6 +666,71 @@ class TestAmberPeptide(object):
 
         compound_integrator.step(10)  # MD
         driver.update(UniformProposal(), nattempts=10)  # protonation
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(
+        os.environ.get("TRAVIS", None) == "true", reason="Skip slow test on travis."
+    )
+    def test_peptide_ais(self):
+        """
+        Run peptide in explicit solvent with annealed importance sampling
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=2,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(
+        os.environ.get("TRAVIS", None) == "true", reason="Skip slow test on travis."
+    )
+    def test_peptide_ais_ensure_reject(self):
+        """
+        Run peptide in explicit solvent with annealed importance sampling and ensure state does not change
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=2,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+
+        driver._accept_reject = lambda self, logp: True
+
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        old_state = deepcopy(driver.titrationStates)
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+        new_state = deepcopy(driver.titrationStates)
+        assert np.all(
+            np.asarray(old_state) == np.asarray(new_state)
+        ), "States have changed."
 
     def test_peptide_serialization(self):
         """
