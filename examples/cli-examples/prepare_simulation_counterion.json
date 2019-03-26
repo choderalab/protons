@@ -37,7 +37,8 @@
       "pressure_atm": 1.0
     },
     "temperature_k": 300.0,
-    "salt_concentration_molar": 0.150
+    "salt_concentration_molar": 0.150,
+    "neutral_charge_rule": 2
   },
   "integrator": {
     "timestep_fs": 2.0,
