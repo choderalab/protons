@@ -22,7 +22,13 @@ from .utilities import (
     create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
-from ..app.driver import SAMSApproach, Stage, UpdateRule, SamplingMethod
+from ..app.driver import (
+    SAMSApproach,
+    Stage,
+    UpdateRule,
+    SamplingMethod,
+    NeutralChargeRule,
+)
 
 log.setLevel(logging.INFO)
 
@@ -137,6 +143,8 @@ def run_prep_ffxml_main(jsonfile):
         salt_concentration: unit.Quantity = float(
             sysprops["salt_concentration_molar"]
         ) * unit.molar
+    elif "PME" in sysprops:
+        salt_concentration = 0.0 * unit.molar
     else:
         salt_concentration = None
 
@@ -163,10 +171,8 @@ def run_prep_ffxml_main(jsonfile):
         for force in system.getForces():
             if isinstance(force, mm.NonbondedForce):
                 force.setUseSwitchingFunction(True)
-
                 force.setSwitchingDistance(switching_distance)
 
-        # TODO disable in implicit solvent
         # NPT simulation
         system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
     else:
@@ -323,7 +329,7 @@ def run_prep_ffxml_main(jsonfile):
     simulation.context.setPositions(positions)
 
     # After the simulation system has been defined, we can add salt to the system using saltswap.
-    if salt_concentration is not None and "PME" in sysprops:
+    if salt_concentration is not None:
         salinator = Salinator(
             context=simulation.context,
             system=system,
@@ -335,7 +341,17 @@ def run_prep_ffxml_main(jsonfile):
         )
         salinator.neutralize()
         salinator.initialize_concentration()
+        if "neutral_charge_rule" not in sysprops:
+            raise KeyError(
+                "Specification of neutral_charge_rule for explicit solvent required in system."
+            )
+
+        charge_rule = NeutralChargeRule(sysprops["neutral_charge_rule"])
+        driver.enable_neutralizing_ions(
+            salinator.swapper, neutral_charge_rule=charge_rule
+        )
     else:
+        # Implicit solvent
         salinator = None
 
     # Set the fixed titration state in case of importance sampling

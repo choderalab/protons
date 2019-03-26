@@ -150,6 +150,7 @@ def run_main(jsonfile):
 
     saltswap_element = checkpoint_tree.xpath("Saltswap")
     if saltswap_element:
+        # Deserialiation workaround
         saltswap_element = saltswap_element[0]
         salt_concentration = (
             float(saltswap_element.get("salt_concentration_molar")) * unit.molar
@@ -165,9 +166,9 @@ def run_main(jsonfile):
         )
         swapper = salinator.swapper
         deserialize_state_vector(saltswap_element, swapper)
-        # If counterion is false, openmm automatically uses a neutralizing background charge
-        if run["counter-ion"]:
-            driver.enable_neutralizing_ions(swapper)
+        # Assumes the parameters are already set and the ions are set if needed
+        # Don't set the charge rule
+        driver.swapper = swapper
 
     else:
         salinator = None

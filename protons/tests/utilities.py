@@ -4,7 +4,7 @@ import logging
 
 from simtk import unit, openmm
 from simtk.openmm import app
-
+from protons.app.schrodinger import is_schrodinger_suite_installed
 from protons.app.integrators import GHMCIntegrator, GBAOABIntegrator
 
 try:
