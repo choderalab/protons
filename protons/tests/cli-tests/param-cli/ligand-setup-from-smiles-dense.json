@@ -17,7 +17,7 @@
     "format_vars" : {
       "name": "crizotinib"
     },
-    "omega_max_confs": 10
+    "omega_max_confs": -1
   },
   "input": {
     "_comment": "A pdb file as source for the calibration structure.",
@@ -32,7 +32,7 @@
       "mae": "{name}-epik.mae"
     },
     "parameters": {
-      "max_penalty": 5,
+      "max_penalty": 0,
       "tautomerize": false
     }
   },

@@ -109,7 +109,7 @@ def run_parametrize_main(inputfile):
 
     if not run_epik:
         # Previously generated mae file with the output from epik
-        oepik = epik["input"]["epik"].format(**format_vars)
+        oepik = inp["epik"].format(**format_vars)
     else:
         if "smiles" in epik["input"]:
             # Converts smiles to maestro file and uses that maestro file as input

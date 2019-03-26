@@ -11,10 +11,10 @@
     "Ion concentrations should be specified later using saltswap, so this does not include any ions."
   ],
   "parameters": {
-    "_comment": "Any settings for the methods, or formatting fields for filenames should be entered here.",    
+    "_comment": "Any settings for the methods, or formatting fields for filenames should be entered here.",
     "pdb_resname": "FD3",
     "pH": 7.8,
-    "format_vars" : {
+    "format_vars": {
       "name": "1D"
     }
   },
@@ -24,7 +24,9 @@
     "structure": "{name}-source.pdb"
   },
   "epik": {
-    "input": "{name}-input.mae",
+    "input": {
+      "mae": "{name}-input.mae"
+    },
     "output": {
       "mae": "1D-7.8-10kT-epik.mae"
     },
@@ -34,7 +36,7 @@
     }
   },
   "output": {
-    "dir": "{name}-output-with-epik",
-    "basename" : "{name}"
+    "dir": "./",
+    "basename": "{name}"
   }
 }

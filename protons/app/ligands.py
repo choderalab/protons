@@ -1765,7 +1765,7 @@ def prepare_calibration_systems(
         )
 
     _, vacuum_extension = os.path.splitext(vacuum_file)
-    if vacuum_extension == ".pdf":
+    if vacuum_extension == ".pdb":
         pdb = app.PDBFile(vacuum_file)
     elif vacuum_extension == ".cif":
         pdb = app.PDBxFile(vacuum_file)

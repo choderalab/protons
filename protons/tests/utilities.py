@@ -6,6 +6,10 @@ from simtk import unit, openmm
 from simtk.openmm import app
 from protons.app.schrodinger import is_schrodinger_suite_installed
 from protons.app.integrators import GHMCIntegrator, GBAOABIntegrator
+import tempfile
+import shutil
+from typing import List
+
 
 try:
     openmm.Platform.getPlatformByName("CUDA")
@@ -36,6 +40,16 @@ try:
 except Exception as e:
     hasOpenEye = False
     openeye_exception_message = str(e)
+
+
+def files_to_tempdir(files: List[str], suffix="protons-test", prefix="tmp") -> str:
+    """Make a temporary directory in the current directory, copy files over and return the location."""
+    newdir = tempfile.mkdtemp(prefix=prefix, suffix=suffix)
+
+    for filename in files:
+        shutil.copy(filename, newdir)
+
+    return newdir
 
 
 class SystemSetup:
