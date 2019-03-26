@@ -10,7 +10,7 @@ from protons import app
 from .. import ForceFieldProtonDrive
 
 from ..app.logger import log, logging
-
+from itertools import product
 from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
@@ -22,7 +22,7 @@ from .utilities import (
     create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
-from ..app.driver import SAMSApproach, Stage, UpdateRule
+from ..app.driver import SAMSApproach, Stage, UpdateRule, SamplingMethod
 
 log.setLevel(logging.INFO)
 
@@ -88,6 +88,8 @@ def run_prep_ffxml_main(jsonfile):
 
     # Atoms , connectivity, residues
     topology = pdb_object.topology
+    # Store topology for serialization
+    topology_file_content = open(input_pdbx_file, "r").read()
 
     # XYZ positions for every atom
     positions = pdb_object.positions
@@ -210,6 +212,11 @@ def run_prep_ffxml_main(jsonfile):
     signal.signal(signal.SIGABRT, timeout_handler)
     script_timeout = 3600  # 1 h
 
+    if "importance" in settings:
+        sampling_method = SamplingMethod.IMPORTANCE
+    else:
+        sampling_method = SamplingMethod.MCMC
+
     driver = ForceFieldProtonDrive(
         temperature,
         topology,
@@ -252,7 +259,10 @@ def run_prep_ffxml_main(jsonfile):
     # Set up calibration mode
     # SAMS settings
 
-    if "SAMS" in settings:
+    if "SAMS" in settings and "importance" in settings:
+        raise NotImplementedError("Cannot combine SAMS and importance sampling.")
+
+    elif "SAMS" in settings:
         sams = settings["SAMS"]
 
         beta_burnin = float(sams["beta"])
@@ -328,27 +338,102 @@ def run_prep_ffxml_main(jsonfile):
     else:
         salinator = None
 
-    # Minimize the initial configuration to remove bad contacts
-    if "preprocessing" in settings:
-        simulation.minimizeEnergy(
-            tolerance=pre_run_minimization_tolerance,
-            maxIterations=minimization_max_iterations,
+    # Set the fixed titration state in case of importance sampling
+    if sampling_method is SamplingMethod.IMPORTANCE:
+        if "titration_states" in settings["importance"]:
+            fixed_states = settings["importance"]["titration_states"]
+
+            if len(fixed_states) != len(driver.titrationStates):
+                raise IndexError(
+                    "The number of residues specified for importance sampling does not match the number of titratable residues."
+                )
+
+            else:
+                for group_id, state_id in enumerate(fixed_states):
+                    driver.set_titration_state(
+                        group_id,
+                        state_id,
+                        updateContextParameters=True,
+                        updateIons=True,
+                    )
+
+                # Minimize the initial configuration to remove bad contacts
+                if "preprocessing" in settings:
+                    simulation.minimizeEnergy(
+                        tolerance=pre_run_minimization_tolerance,
+                        maxIterations=minimization_max_iterations,
+                    )
+                    # Slightly equilibrate the system, detect early issues.
+                    simulation.step(num_thermalization_steps)
+
+                # export the context
+                create_protons_checkpoint_file(
+                    output_checkpoint_file,
+                    driver,
+                    simulation.context,
+                    simulation.system,
+                    simulation.integrator,
+                    topology_file_content,
+                    salinator=salinator,
+                )
+
+        elif "systematic" in settings["importance"]:
+            if settings["importance"]["systematic"]:
+
+                # Make checkpoint files for the combinatorial space of residue states.
+                for importance_index, state_combination in enumerate(
+                    product(*[np.arange(len(res)) for res in driver.titrationGroups])
+                ):
+                    for res_id, state_id in enumerate(state_combination):
+                        driver.set_titration_state(
+                            res_id,
+                            state_id,
+                            updateContextParameters=True,
+                            updateIons=True,
+                        )
+
+                    # Minimize the initial configuration to remove bad contacts
+                    if "preprocessing" in settings:
+                        simulation.minimizeEnergy(
+                            tolerance=pre_run_minimization_tolerance,
+                            maxIterations=minimization_max_iterations,
+                        )
+                        # Slightly equilibrate the system, detect early issues.
+                        simulation.step(num_thermalization_steps)
+
+                    # export the context
+                    create_protons_checkpoint_file(
+                        f"{obasename}-importance-state-{importance_index}-checkpoint-0.xml",
+                        driver,
+                        simulation.context,
+                        simulation.system,
+                        simulation.integrator,
+                        topology_file_content,
+                        salinator=salinator,
+                    )
+            os.chdir(lastdir)
+
+    else:
+
+        # Minimize the initial configuration to remove bad contacts
+        if "preprocessing" in settings:
+            simulation.minimizeEnergy(
+                tolerance=pre_run_minimization_tolerance,
+                maxIterations=minimization_max_iterations,
+            )
+            # Slightly equilibrate the system, detect early issues.
+            simulation.step(num_thermalization_steps)
+
+        # export the context
+        create_protons_checkpoint_file(
+            output_checkpoint_file,
+            driver,
+            simulation.context,
+            simulation.system,
+            simulation.integrator,
+            topology_file_content,
+            salinator=salinator,
         )
-        # Slightly equilibrate the system, detect early issues.
-        simulation.step(num_thermalization_steps)
-
-    topology_file_content = open(input_pdbx_file, "r").read()
-
-    # export the context
-    create_protons_checkpoint_file(
-        output_checkpoint_file,
-        driver,
-        simulation.context,
-        simulation.system,
-        simulation.integrator,
-        topology_file_content,
-        salinator=salinator,
-    )
 
     os.chdir(lastdir)
 

@@ -49,6 +49,12 @@
     "minimization_max_iterations": 30,
     "num_thermalization_steps": 10
   },
+  "importance": {
+    "_comment": "Add this block if you wish to use importance sampling. Specify the fixed state as a list of integers for each titratable residue.",
+    "titration_states": [
+      4
+    ]
+  },
   "reference_free_energies": {
     "_comment": "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",
     "FD3": [
