@@ -1,0 +1,176 @@
+data_cell
+# Created with OpenMM 7.3, 2018-12-22
+#
+_cell.length_a        63.2770
+_cell.length_b        68.8320
+_cell.length_c        63.7150
+_cell.angle_alpha     90.0000
+_cell.angle_beta      90.0000
+_cell.angle_gamma     90.0000
+#
+loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_seq_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_seq_id
+_struct_conn.ptnr2_label_atom_id
+bond1 covale A FD3      1 C66  A FD3      1 H1  
+bond2 covale A FD3      1 C64  A FD3      1 H2  
+bond3 covale A FD3      1 C63  A FD3      1 H3  
+bond4 covale A FD3      1 C62  A FD3      1 H4  
+bond5 covale A FD3      1 N43  A FD3      1 H5  
+bond6 covale A FD3      1 N43  A FD3      1 H6  
+bond7 covale A FD3      1 N54  A FD3      1 H8  
+bond8 covale A FD3      1 N54  A FD3      1 H7  
+bond9 covale A FD3      1 C34  A FD3      1 H9  
+bond10 covale A FD3      1 C34  A FD3      1 H10 
+bond11 covale A FD3      1 C31  A FD3      1 H11 
+bond12 covale A FD3      1 C71  A FD3      1 H13 
+bond13 covale A FD3      1 C71  A FD3      1 H12 
+bond14 covale A FD3      1 C72  A FD3      1 H15 
+bond15 covale A FD3      1 C72  A FD3      1 H14 
+bond16 covale A FD3      1 C74  A FD3      1 H17 
+bond17 covale A FD3      1 C74  A FD3      1 H16 
+bond18 covale A FD3      1 C75  A FD3      1 H18 
+bond19 covale A FD3      1 C75  A FD3      1 H19 
+bond20 covale A FD3      1 N40  A FD3      1 H20 
+bond21 covale A FD3      1 N40  A FD3      1 H21 
+bond22 covale A FD3      1 N29  A FD3      1 H22 
+bond23 covale A FD3      1 C3   A FD3      1 H23 
+bond24 covale A FD3      1 C4   A FD3      1 H24 
+bond25 covale A FD3      1 C1   A FD3      1 H25 
+bond26 covale A FD3      1 C5   A FD3      1 H26 
+bond27 covale A FD3      1 C6   A FD3      1 H27 
+bond28 covale A FD3      1 C7   A FD3      1 H28 
+bond29 covale A FD3      1 C8   A FD3      1 H29 
+bond30 covale A FD3      1 C65  A FD3      1 C66 
+bond31 covale A FD3      1 C65  A FD3      1 C64 
+bond32 covale A FD3      1 C65  A FD3      1 C34 
+bond33 covale A FD3      1 C66  A FD3      1 C61 
+bond34 covale A FD3      1 C64  A FD3      1 C63 
+bond35 covale A FD3      1 C63  A FD3      1 C62 
+bond36 covale A FD3      1 C62  A FD3      1 C61 
+bond37 covale A FD3      1 C61  A FD3      1 C25 
+bond38 covale A FD3      1 C25  A FD3      1 N43 
+bond39 covale A FD3      1 C25  A FD3      1 N54 
+bond40 covale A FD3      1 C34  A FD3      1 C31 
+bond41 covale A FD3      1 C31  A FD3      1 C35 
+bond42 covale A FD3      1 C31  A FD3      1 N29 
+bond43 covale A FD3      1 C35  A FD3      1 O36 
+bond44 covale A FD3      1 C35  A FD3      1 N81 
+bond45 covale A FD3      1 N81  A FD3      1 C71 
+bond46 covale A FD3      1 N81  A FD3      1 C75 
+bond47 covale A FD3      1 C71  A FD3      1 C72 
+bond48 covale A FD3      1 C72  A FD3      1 N40 
+bond49 covale A FD3      1 C74  A FD3      1 C75 
+bond50 covale A FD3      1 C74  A FD3      1 N40 
+bond51 covale A FD3      1 N29  A FD3      1 S12 
+bond52 covale A FD3      1 S12  A FD3      1 O32 
+bond53 covale A FD3      1 S12  A FD3      1 O33 
+bond54 covale A FD3      1 S12  A FD3      1 C2  
+bond55 covale A FD3      1 C2   A FD3      1 C3  
+bond56 covale A FD3      1 C2   A FD3      1 C1  
+bond57 covale A FD3      1 C3   A FD3      1 C4  
+bond58 covale A FD3      1 C4   A FD3      1 C10 
+bond59 covale A FD3      1 C9   A FD3      1 C10 
+bond60 covale A FD3      1 C9   A FD3      1 C1  
+bond61 covale A FD3      1 C9   A FD3      1 C8  
+bond62 covale A FD3      1 C10  A FD3      1 C5  
+bond63 covale A FD3      1 C5   A FD3      1 C6  
+bond64 covale A FD3      1 C6   A FD3      1 C7  
+bond65 covale A FD3      1 C7   A FD3      1 C8  
+#
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.Cartn_x_esd
+_atom_site.Cartn_y_esd
+_atom_site.Cartn_z_esd
+_atom_site.occupancy_esd
+_atom_site.B_iso_or_equiv_esd
+_atom_site.pdbx_formal_charge
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+ATOM      1 C   C65  . FD3  A ?     1 .    -3.2450     5.7480    20.2080  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C65     1
+ATOM      2 C   C66  . FD3  A ?     1 .    -3.8130     7.0280    20.1030  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C66     1
+ATOM      3 H   H1   . FD3  A ?     1 .    -4.8513     7.1356    20.4065  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H1     1
+ATOM      4 C   C64  . FD3  A ?     1 .    -1.8960     5.5640    19.8250  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C64     1
+ATOM      5 H   H2   . FD3  A ?     1 .    -1.4512     4.5765    19.8449  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H2     1
+ATOM      6 C   C63  . FD3  A ?     1 .    -1.1280     6.6450    19.3710  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C63     1
+ATOM      7 H   H3   . FD3  A ?     1 .    -0.0940     6.4947    19.0646  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H3     1
+ATOM      8 C   C62  . FD3  A ?     1 .    -1.7070     7.9240    19.2760  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C62     1
+ATOM      9 H   H4   . FD3  A ?     1 .    -1.0869     8.7369    18.9069  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H4     1
+ATOM     10 C   C61  . FD3  A ?     1 .    -3.0560     8.1170    19.6400  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C61     1
+ATOM     11 C   C25  . FD3  A ?     1 .    -3.6940     9.4740    19.5440  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C25     1
+ATOM     12 N   N43  . FD3  A ?     1 .    -2.9810    10.4910    19.1390  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  N43     1
+ATOM     13 H   H5   . FD3  A ?     1 .    -3.3699    11.4238    19.1415  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H5     1
+ATOM     14 H   H6   . FD3  A ?     1 .    -2.0109    10.3593    18.8997  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H6     1
+ATOM     15 N   N54  . FD3  A ?     1 .    -4.9560     9.6140    19.8860  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  N54     1
+ATOM     16 H   H8   . FD3  A ?     1 .    -5.4981     8.7933    20.1119  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H8     1
+ATOM     17 H   H7   . FD3  A ?     1 .    -5.4378    10.4848    19.7129  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H7     1
+ATOM     18 C   C34  . FD3  A ?     1 .    -4.0900     4.5600    20.7130  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C34     1
+ATOM     19 H   H9   . FD3  A ?     1 .    -3.7484     3.6416    20.2227  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   H9     1
+ATOM     20 H   H10  . FD3  A ?     1 .    -5.1344     4.6721    20.3903  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H10     1
+ATOM     21 C   C31  . FD3  A ?     1 .    -4.0520     4.3820    22.2420  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C31     1
+ATOM     22 H   H11  . FD3  A ?     1 .    -4.2134     3.3144    22.4374  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H11     1
+ATOM     23 C   C35  . FD3  A ?     1 .    -2.7330     4.7590    22.8850  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C35     1
+ATOM     24 O   O36  . FD3  A ?     1 .    -2.7060     5.8960    23.3530  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  O36     1
+ATOM     25 N   N81  . FD3  A ?     1 .    -1.6530     3.9220    22.9120  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  N81     1
+ATOM     26 C   C71  . FD3  A ?     1 .    -1.5950     2.7340    22.0300  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C71     1
+ATOM     27 H   H13  . FD3  A ?     1 .    -2.5484     2.4492    21.5736  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H13     1
+ATOM     28 H   H12  . FD3  A ?     1 .    -0.8605     2.8964    21.2296  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H12     1
+ATOM     29 C   C72  . FD3  A ?     1 .    -1.1190     1.5670    22.9310  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C72     1
+ATOM     30 H   H15  . FD3  A ?     1 .    -0.8443     0.6955    22.3247  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H15     1
+ATOM     31 H   H14  . FD3  A ?     1 .    -1.9640     1.2801    23.5669  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H14     1
+ATOM     32 C   C74  . FD3  A ?     1 .     0.1300     3.3040    24.3760  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C74     1
+ATOM     33 H   H17  . FD3  A ?     1 .    -0.4830     3.3534    25.2843  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H17     1
+ATOM     34 H   H16  . FD3  A ?     1 .     1.1715     3.4823    24.6671  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H16     1
+ATOM     35 C   C75  . FD3  A ?     1 .    -0.3720     4.4270    23.4370  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C75     1
+ATOM     36 H   H18  . FD3  A ?     1 .     0.3382     4.6016    22.6174  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H18     1
+ATOM     37 H   H19  . FD3  A ?     1 .    -0.4873     5.3610    24.0083  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H19     1
+ATOM     38 N   N40  . FD3  A ?     1 .    -0.0250     1.9370    23.8060  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  N40     1
+ATOM     39 H   H20  . FD3  A ?     1 .     0.8474     1.7525    23.2756  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H20     1
+ATOM     40 H   H21  . FD3  A ?     1 .     0.0280     1.2521    24.5854  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H21     1
+ATOM     41 N   N29  . FD3  A ?     1 .    -5.1560     5.1010    22.8930  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  N29     1
+ATOM     42 H   H22  . FD3  A ?     1 .    -4.7252     5.8219    23.4721  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H22     1
+ATOM     43 S   S12  . FD3  A ?     1 .    -6.0160     4.3560    24.1820  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  S12     1
+ATOM     44 O   O32  . FD3  A ?     1 .    -7.0700     5.2380    24.6080  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  O32     1
+ATOM     45 O   O33  . FD3  A ?     1 .    -6.2660     2.9880    23.8750  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  O33     1
+ATOM     46 C   C2   . FD3  A ?     1 .    -4.7590     4.4100    25.3600  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C2     1
+ATOM     47 C   C3   . FD3  A ?     1 .    -4.4710     5.6480    25.9580  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C3     1
+ATOM     48 H   H23  . FD3  A ?     1 .    -5.0520     6.5362    25.7066  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H23     1
+ATOM     49 C   C4   . FD3  A ?     1 .    -3.4430     5.7550    26.9290  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C4     1
+ATOM     50 H   H24  . FD3  A ?     1 .    -3.2352     6.7111    27.4026  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H24     1
+ATOM     51 C   C9   . FD3  A ?     1 .    -3.0190     3.3300    26.6770  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C9     1
+ATOM     52 C   C10  . FD3  A ?     1 .    -2.7100     4.5860    27.2970  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  C10     1
+ATOM     53 C   C1   . FD3  A ?     1 .    -4.0540     3.2590    25.7070  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C1     1
+ATOM     54 H   H25  . FD3  A ?     1 .    -4.3160     2.2987    25.2654  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H25     1
+ATOM     55 C   C5   . FD3  A ?     1 .    -1.6680     4.6280    28.2750  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C5     1
+ATOM     56 H   H26  . FD3  A ?     1 .    -1.4336     5.5660    28.7732  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H26     1
+ATOM     57 C   C6   . FD3  A ?     1 .    -0.9450     3.4410    28.6250  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C6     1
+ATOM     58 H   H27  . FD3  A ?     1 .    -0.1749     3.4810    29.3939  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H27     1
+ATOM     59 C   C7   . FD3  A ?     1 .    -1.2660     2.2110    28.0000  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C7     1
+ATOM     60 H   H28  . FD3  A ?     1 .    -0.7470     1.3039    28.3040  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H28     1
+ATOM     61 C   C8   . FD3  A ?     1 .    -2.2910     2.1500    27.0330  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A   C8     1
+ATOM     62 H   H29  . FD3  A ?     1 .    -2.5607     1.1909    26.5980  0.0  0.0  ?  ?  ?  ?  ?  .      1  FD3 A  H29     1

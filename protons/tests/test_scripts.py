@@ -45,11 +45,19 @@ class TestParameterizationScript:
         run_parametrize_ligand.run_parametrize_main(json_input)
 
         # check if output files were produced
-        assert os.path.isfile("1D-7.8-10kT-epik.mae"), "No epik output was produced"
-        assert os.path.isfile("1D.xml"), "No forcefield file was produced"
-        assert os.path.isfile("1D-h.xml"), "No hydrogen definitions file was produced"
-        assert os.path.isfile("1D-vacuum.cif"), "No vacuum system file was produced"
-        assert os.path.isfile("1D-water.cif"), "No water system file was produced"
+        assert os.path.isfile(
+            "output/1D-7.8-10kT-epik.mae"
+        ), "No epik output was produced"
+        assert os.path.isfile("output/1D.xml"), "No forcefield file was produced"
+        assert os.path.isfile(
+            "output/1D-h.xml"
+        ), "No hydrogen definitions file was produced"
+        assert os.path.isfile(
+            "output/1D-vacuum.cif"
+        ), "No vacuum system file was produced"
+        assert os.path.isfile(
+            "output/1D-water.cif"
+        ), "No water system file was produced"
         os.chdir(olddir)
         rmtree(tmpdir)  # clean files
 
@@ -70,10 +78,14 @@ class TestParameterizationScript:
         run_parametrize_ligand.run_parametrize_main(json_input)
 
         # check if output files were produced
-        assert os.path.isfile("crizotinib-epik.mae"), "No epik output was produced"
-        assert os.path.isfile("crizotinib.xml"), "No forcefield file was produced"
         assert os.path.isfile(
-            "crizotinib-h.xml"
+            "output/crizotinib-epik.mae"
+        ), "No epik output was produced"
+        assert os.path.isfile(
+            "output/crizotinib.xml"
+        ), "No forcefield file was produced"
+        assert os.path.isfile(
+            "output/crizotinib-h.xml"
         ), "No hydrogen definitions file was produced"
         os.chdir(olddir)
         rmtree(tmpdir)  # clean files
@@ -95,10 +107,16 @@ class TestParameterizationScript:
         run_parametrize_ligand.run_parametrize_main(json_input)
 
         # check if output files were produced
-        assert os.path.isfile("1D.xml"), "No forcefield file was produced"
-        assert os.path.isfile("1D-h.xml"), "No hydrogen definitions file was produced"
-        assert os.path.isfile("1D-vacuum.cif"), "No vacuum system file was produced"
-        assert os.path.isfile("1D-water.cif"), "No water system file was produced"
+        assert os.path.isfile("output/1D.xml"), "No forcefield file was produced"
+        assert os.path.isfile(
+            "output/1D-h.xml"
+        ), "No hydrogen definitions file was produced"
+        assert os.path.isfile(
+            "output/1D-vacuum.cif"
+        ), "No vacuum system file was produced"
+        assert os.path.isfile(
+            "output/1D-water.cif"
+        ), "No water system file was produced"
         os.chdir(olddir)
         rmtree(tmpdir)  # clean files
 
@@ -118,10 +136,14 @@ class TestParameterizationScript:
         run_parametrize_ligand.run_parametrize_main(json_input)
 
         # check if output files were produced
-        assert os.path.isfile("crizotinib-epik.mae"), "No epik output was produced"
-        assert os.path.isfile("crizotinib.xml"), "No forcefield file was produced"
         assert os.path.isfile(
-            "crizotinib-h.xml"
+            "output/crizotinib-epik.mae"
+        ), "No epik output was produced"
+        assert os.path.isfile(
+            "output/crizotinib.xml"
+        ), "No forcefield file was produced"
+        assert os.path.isfile(
+            "output/crizotinib-h.xml"
         ), "No hydrogen definitions file was produced"
         os.chdir(olddir)
         rmtree(tmpdir)
@@ -129,22 +151,134 @@ class TestParameterizationScript:
 
 @pytest.mark.slowtest
 class TestPreparationScript:
-    input_dir = get_test_data("prep-cli", "cli-tests")
+    top_input_dir = get_test_data("prep-cli", "cli-tests")
+
+    # Example template for ligand file names to copy over
+    trypsin_example = {
+        "water": "1D-water.cif",
+        "vacuum": "1D-vacuum.cif",
+        "xml": "1D.xml",
+    }
 
     def test_prepare_sams(self):
-        assert False
+        """Prepare a SAMS/calibration run."""
+        tmpdir = files_to_tempdir(
+            [
+                os.path.join(TestPreparationScript.top_input_dir, filename)
+                for filename in TestPreparationScript.trypsin_example.values()
+            ]
+        )
+        json_input = "prepare_calibration.json"
+        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_prep_ffxml.run_prep_ffxml_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            "output/1D-checkpoint-0.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        os.chdir(olddir)
+        rmtree(tmpdir)
 
     def test_prepare_implicit_solvent(self):
-        assert False
+        """Prepare a SAMS/calibration run in implicit solvent."""
+        json_input = "prepare_calibration_implicit.yaml"
+        example = TestPreparationScript.trypsin_example
+        tmpdir = files_to_tempdir(
+            [
+                os.path.join(TestPreparationScript.top_input_dir, filename)
+                for filename in example.values()
+            ]
+        )
+
+        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_prep_ffxml.run_prep_ffxml_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            "output/1D-checkpoint-0.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        os.chdir(olddir)
+        rmtree(tmpdir)
 
     def test_prepare_equil(self):
-        assert False
+        tmpdir = files_to_tempdir(
+            [
+                os.path.join(TestPreparationScript.top_input_dir, filename)
+                for filename in TestPreparationScript.trypsin_example.values()
+            ]
+        )
+        json_input = "prepare_simulation.json"
+        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_prep_ffxml.run_prep_ffxml_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            "output/1D-checkpoint-0.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        os.chdir(olddir)
+        rmtree(tmpdir)
 
     def test_prepare_ais(self):
-        assert False
+        json_input = "prepare_importance_sampling.json"
+        example = TestPreparationScript.trypsin_example
+        tmpdir = files_to_tempdir(
+            [
+                os.path.join(TestPreparationScript.top_input_dir, filename)
+                for filename in example.values()
+            ]
+        )
 
+        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_prep_ffxml.run_prep_ffxml_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            "output/1D-checkpoint-0.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        os.chdir(olddir)
+        rmtree(tmpdir)
+
+    @pytest.mark.slowtest
     def test_prepare_ais_systematic(self):
-        assert False
+        json_input = "prepare_systematic_importance_sampling.json"
+        example = TestPreparationScript.trypsin_example
+        tmpdir = files_to_tempdir(
+            [
+                os.path.join(TestPreparationScript.top_input_dir, filename)
+                for filename in example.values()
+            ]
+        )
+
+        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_prep_ffxml.run_prep_ffxml_main(json_input)
+
+        # check if output files were produced
+        for index in range(8):
+            assert os.path.isfile(
+                f"output/1D-importance-state-{index}-checkpoint-0.xml"
+            ), f"No checkpoint file was produced in {tmpdir}"
+        os.chdir(olddir)
+        rmtree(tmpdir)
 
 
 class TestRunScript:

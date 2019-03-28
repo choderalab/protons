@@ -37,7 +37,7 @@
     }
   },
   "output": {
-    "dir": "./",
+    "dir": "./output",
     "basename" : "{name}"
   }
 }

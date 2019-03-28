@@ -27,7 +27,7 @@
     "epik": "{name}-epik-out.mae"
   },    
   "output": {
-    "dir": "./",
+    "dir": "./output",
     "basename": "{name}"
   }
   
