@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "This is to setup the 1D ligand (PDB residue name FD3) by",
+    "running through epik",
+    "parametrizing the states",
+    "and then creating a unified template.",
+    "Several output filenames will be completed using",
+    "For convenience, a few formatting strings such as {name}, {pH} are used",
+    "so make sure that those variables are defined in the parameters section of this file.",
+    "It will also create a solvent system that can be used to calibrate the ligand.",
+    "Ion concentrations should be specified later using saltswap, so this does not include any ions."
+  ],
+  "parameters": {
+    "_comment": "Any settings for the methods, or formatting fields for filenames should be entered here.",    
+    "pdb_resname": "FD3",
+    "pH": 7.8,
+    "format_vars" : {
+      "name": "1D"
+    }
+  },
+  "input": {
+    "_comment": "A pdb file as source for the calibration structure.",
+    "dir": "./",
+    "structure": "{name}-source.pdb"
+  },
+  "epik": {
+    "input": "{name}-input.mae",
+    "output": {
+      "mae": "1D-7.8-10kT-epik.mae"
+    },
+    "parameters": {
+      "max_penalty": 10,
+      "tautomerize": false
+    }
+  },
+  "output": {
+    "dir": "{name}-output-with-epik",
+    "basename" : "{name}"
+  }
+}

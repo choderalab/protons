@@ -51,9 +51,15 @@ class GBAOABIntegrator(ThermostatedIntegrator):
 
     """
 
-    def __init__(self, number_R_steps=1, temperature=298.0 * simtk.unit.kelvin,
-                 collision_rate=1.0 / simtk.unit.picoseconds, timestep=1.0 * simtk.unit.femtoseconds,
-                 constraint_tolerance=1e-8, external_work=True):
+    def __init__(
+        self,
+        number_R_steps=1,
+        temperature=298.0 * simtk.unit.kelvin,
+        collision_rate=1.0 / simtk.unit.picoseconds,
+        timestep=1.0 * simtk.unit.femtoseconds,
+        constraint_tolerance=1e-8,
+        external_work=True,
+    ):
         """
         Create a gBAOAB integrator using V (R * number_R_steps) * O (R * number_R_steps) V splitting.
 
@@ -83,15 +89,13 @@ class GBAOABIntegrator(ThermostatedIntegrator):
         self.addGlobalVariable("a", numpy.exp(-gamma * timestep))
 
         # Velocity mixing parameter: random velocity component
-        self.addGlobalVariable("b", numpy.sqrt(1 - numpy.exp(- 2 * gamma * timestep)))
+        self.addGlobalVariable("b", numpy.sqrt(1 - numpy.exp(-2 * gamma * timestep)))
 
         # Positions before application of position constraints
         self.addPerDofVariable("x1", 0)
 
         # Set constraint tolerance
         self.setConstraintTolerance(constraint_tolerance)
-
-
 
         # Begin of integration procedure
 
@@ -106,8 +110,6 @@ class GBAOABIntegrator(ThermostatedIntegrator):
             # Binary toggle to indicate first step
             self.addGlobalVariable("first_step", 0)
 
-
-
             self.addComputeGlobal("perturbed_pe", "energy")
             # Assumes no perturbation is done before doing the initial MD step.
             self.beginIfBlock("first_step < 1")
@@ -116,7 +118,9 @@ class GBAOABIntegrator(ThermostatedIntegrator):
             self.addComputeGlobal("protocol_work", "0.0")
             self.endBlock()
             # the protocol work is incremented
-            self.addComputeGlobal("protocol_work", "protocol_work + (perturbed_pe - unperturbed_pe)")
+            self.addComputeGlobal(
+                "protocol_work", "protocol_work + (perturbed_pe - unperturbed_pe)"
+            )
 
         # Update temperature/barostat dependent state
         self.addUpdateContextState()
@@ -131,7 +135,9 @@ class GBAOABIntegrator(ThermostatedIntegrator):
             self.addComputePerDof("x", "x + ((dt / {}) * v)".format(number_R_steps * 2))
             self.addComputePerDof("x1", "x")  # save pre-constraint positions in x1
             self.addConstrainPositions()  # x is now constrained
-            self.addComputePerDof("v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2))
+            self.addComputePerDof(
+                "v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2)
+            )
             self.addConstrainVelocities()
 
         # O step
@@ -143,7 +149,9 @@ class GBAOABIntegrator(ThermostatedIntegrator):
             self.addComputePerDof("x", "x + ((dt / {}) * v)".format(number_R_steps * 2))
             self.addComputePerDof("x1", "x")  # save pre-constraint positions in x1
             self.addConstrainPositions()  # x is now constrained
-            self.addComputePerDof("v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2))
+            self.addComputePerDof(
+                "v", "v + ((x - x1) / (dt / {}))".format(number_R_steps * 2)
+            )
             self.addConstrainVelocities()
 
         # V step
@@ -160,7 +168,7 @@ class GBAOABIntegrator(ThermostatedIntegrator):
         This is a shortcut to resetting the accumulation of protocol work.
         """
         self.setGlobalVariableByName("first_step", 0)
-        self.setGlobalVariableByName('protocol_work', 0)
+        self.setGlobalVariableByName("protocol_work", 0)
 
 
 class GHMCIntegrator(mm.CustomIntegrator):
@@ -173,8 +181,13 @@ class GHMCIntegrator(mm.CustomIntegrator):
     Authors: John Chodera and Gregory Ross
     """
 
-    def __init__(self, temperature=298.0 * simtk.unit.kelvin, collision_rate=91.0 / simtk.unit.picoseconds,
-                 timestep=1.0 * simtk.unit.femtoseconds, nsteps=1):
+    def __init__(
+        self,
+        temperature=298.0 * simtk.unit.kelvin,
+        collision_rate=91.0 / simtk.unit.picoseconds,
+        timestep=1.0 * simtk.unit.femtoseconds,
+        nsteps=1,
+    ):
         """
         Create a generalized hybrid Monte Carlo (GHMC) integrator.
 
@@ -223,7 +236,9 @@ class GHMCIntegrator(mm.CustomIntegrator):
         # Integrator initialization.
         #
         self.addGlobalVariable("kT", kT)  # thermal energy
-        self.addGlobalVariable("b", numpy.exp(-gamma * timestep))  # velocity mixing parameter
+        self.addGlobalVariable(
+            "b", numpy.exp(-gamma * timestep)
+        )  # velocity mixing parameter
         self.addPerDofVariable("sigma", 0)  # velocity standard deviation
         self.addGlobalVariable("ke", 0)  # kinetic energy
         self.addPerDofVariable("vold", 0)  # old velocities
@@ -238,9 +253,15 @@ class GHMCIntegrator(mm.CustomIntegrator):
         self.addGlobalVariable("naccept", 0)  # number accepted
         self.addGlobalVariable("ntrials", 0)  # number of Metropolization trials
         self.addPerDofVariable("x1", 0)  # position before application of constraints
-        self.addGlobalVariable("step", 0)  # variable to keep track of number of propagation steps
-        self.addGlobalVariable("nsteps", nsteps)  # The number of iterations per integrator.step(1).
-        self.addGlobalVariable("first_step", 0) # keeps track of whether this is the first step of an NCMC protocol
+        self.addGlobalVariable(
+            "step", 0
+        )  # variable to keep track of number of propagation steps
+        self.addGlobalVariable(
+            "nsteps", nsteps
+        )  # The number of iterations per integrator.step(1).
+        self.addGlobalVariable(
+            "first_step", 0
+        )  # keeps track of whether this is the first step of an NCMC protocol
         #
         # Initialization.
         #
@@ -265,7 +286,9 @@ class GHMCIntegrator(mm.CustomIntegrator):
 
         self.addComputeGlobal("potential_initial", "energy")
         self.addComputeGlobal("step", "0")
-        self.addComputeGlobal("protocol_work", "protocol_work + (potential_initial - potential_new)")
+        self.addComputeGlobal(
+            "protocol_work", "protocol_work + (potential_initial - potential_new)"
+        )
         if True:
             self.beginWhileBlock("step < nsteps")
             #

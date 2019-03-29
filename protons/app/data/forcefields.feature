@@ -49,3 +49,13 @@ Feature: Building the forcefield files
     Then a temporary file named "ions_tip3p-tmp.xml" should exist
     Then a temporary file named "ions_tip4pew-tmp.xml" should exist
 
+
+  Scenario: Compiling OBC2 implicit solvent parameter files
+    Given I use the current directory as working directory
+    And a file named "amber10-constph.xml" exists
+    And a file named "gaff.xml" exists
+    And a file named "gaff2.xml" exists
+    When I successfully run "python Amber_input_files/5-create_implicit_solvent_files.py"
+    Then a temporary file named "amber10-constph-obc2-tmp.xml" should exist
+    Then a temporary file named "gaff-obc2-tmp.xml" should exist
+    Then a temporary file named "gaff2-obc2-tmp.xml" should exist

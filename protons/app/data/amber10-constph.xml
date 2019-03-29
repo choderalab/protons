@@ -1,6 +1,6 @@
 <ForceField>
   <Info>
-    <DateGenerated>2017-06-28</DateGenerated>
+    <DateGenerated>2018-10-24</DateGenerated>
   </Info>
   <AtomTypes>
     <Type name="C" class="C" element="C" mass="12.01"/>
@@ -3761,35 +3761,6 @@
       <ExternalBond atomName="N"/>
       <ExternalBond atomName="C"/>
     </Residue>
-    <Residue name="ASH">
-      <Atom name="N" type="N" charge="-0.4157"/>
-      <Atom name="H" type="H" charge="0.2719"/>
-      <Atom name="CA" type="CX" charge="0.0341"/>
-      <Atom name="HA" type="H1" charge="0.0864"/>
-      <Atom name="CB" type="CT" charge="-0.0316"/>
-      <Atom name="HB2" type="HC" charge="0.0488"/>
-      <Atom name="HB3" type="HC" charge="0.0488"/>
-      <Atom name="CG" type="C" charge="0.6462"/>
-      <Atom name="OD1" type="O" charge="-0.5554"/>
-      <Atom name="OD2" type="OH" charge="-0.6376"/>
-      <Atom name="HD2" type="HO" charge="0.4747"/>
-      <Atom name="C" type="C" charge="0.5973"/>
-      <Atom name="O" type="O" charge="-0.5679"/>
-      <Bond atomName1="N" atomName2="H"/>
-      <Bond atomName1="N" atomName2="CA"/>
-      <Bond atomName1="CA" atomName2="HA"/>
-      <Bond atomName1="CA" atomName2="CB"/>
-      <Bond atomName1="CA" atomName2="C"/>
-      <Bond atomName1="CB" atomName2="HB2"/>
-      <Bond atomName1="CB" atomName2="HB3"/>
-      <Bond atomName1="CB" atomName2="CG"/>
-      <Bond atomName1="CG" atomName2="OD1"/>
-      <Bond atomName1="CG" atomName2="OD2"/>
-      <Bond atomName1="OD2" atomName2="HD2"/>
-      <Bond atomName1="C" atomName2="O"/>
-      <ExternalBond atomName="N"/>
-      <ExternalBond atomName="C"/>
-    </Residue>
     <Residue name="ASN">
       <Atom name="N" type="N" charge="-0.4157"/>
       <Atom name="H" type="H" charge="0.2719"/>
@@ -3947,41 +3918,6 @@
       <ExternalBond atomName="N"/>
       <ExternalBond atomName="C"/>
       <ExternalBond atomName="SG"/>
-    </Residue>
-    <Residue name="GLH">
-      <Atom name="N" type="N" charge="-0.4157"/>
-      <Atom name="H" type="H" charge="0.2719"/>
-      <Atom name="CA" type="CX" charge="0.0145"/>
-      <Atom name="HA" type="H1" charge="0.0779"/>
-      <Atom name="CB" type="CT" charge="-0.0071"/>
-      <Atom name="HB2" type="HC" charge="0.0256"/>
-      <Atom name="HB3" type="HC" charge="0.0256"/>
-      <Atom name="CG" type="CT" charge="-0.0174"/>
-      <Atom name="HG2" type="HC" charge="0.043"/>
-      <Atom name="HG3" type="HC" charge="0.043"/>
-      <Atom name="CD" type="C" charge="0.6801"/>
-      <Atom name="OE1" type="O" charge="-0.5838"/>
-      <Atom name="OE2" type="OH" charge="-0.6511"/>
-      <Atom name="HE2" type="HO" charge="0.4641"/>
-      <Atom name="C" type="C" charge="0.5973"/>
-      <Atom name="O" type="O" charge="-0.5679"/>
-      <Bond atomName1="N" atomName2="H"/>
-      <Bond atomName1="N" atomName2="CA"/>
-      <Bond atomName1="CA" atomName2="HA"/>
-      <Bond atomName1="CA" atomName2="CB"/>
-      <Bond atomName1="CA" atomName2="C"/>
-      <Bond atomName1="CB" atomName2="HB2"/>
-      <Bond atomName1="CB" atomName2="HB3"/>
-      <Bond atomName1="CB" atomName2="CG"/>
-      <Bond atomName1="CG" atomName2="HG2"/>
-      <Bond atomName1="CG" atomName2="HG3"/>
-      <Bond atomName1="CG" atomName2="CD"/>
-      <Bond atomName1="CD" atomName2="OE1"/>
-      <Bond atomName1="CD" atomName2="OE2"/>
-      <Bond atomName1="OE2" atomName2="HE2"/>
-      <Bond atomName1="C" atomName2="O"/>
-      <ExternalBond atomName="N"/>
-      <ExternalBond atomName="C"/>
     </Residue>
     <Residue name="GLN">
       <Atom name="N" type="N" charge="-0.4157"/>
@@ -9502,6 +9438,142 @@
       <Bond atomName1="H1" atomName2="O"/>
       <Bond atomName1="H1" atomName2="H2"/>
       <Bond atomName1="H2" atomName2="O"/>
+    </Residue>
+    <Residue name="GLH">
+      <Atom name="N" type="N" charge="-0.4157"/>
+      <Atom name="H" type="H" charge="0.2719"/>
+      <Atom name="CA" type="CX" charge="0.0145"/>
+      <Atom name="HA" type="H1" charge="0.0779"/>
+      <Atom name="CB" type="CT" charge="-0.0398"/>
+      <Atom name="HB2" type="HC" charge="-0.0173"/>
+      <Atom name="HB3" type="HC" charge="-0.0173"/>
+      <Atom name="CG" type="CT" charge="0.0136"/>
+      <Atom name="HG2" type="HC" charge="-0.0425"/>
+      <Atom name="HG3" type="HC" charge="-0.0425"/>
+      <Atom name="CD" type="C" charge="0.8054"/>
+      <Atom name="OE1" type="OH" charge="-0.8188"/>
+      <Atom name="OE2" type="OH" charge="-0.8188"/>
+      <Atom name="HE2" type="HO" charge="0.0"/>
+      <Atom name="C" type="C" charge="0.5973"/>
+      <Atom name="O" type="O" charge="-0.5679"/>
+      <Bond atomName1="N" atomName2="H"/>
+      <Bond atomName1="N" atomName2="CA"/>
+      <Bond atomName1="CA" atomName2="HA"/>
+      <Bond atomName1="CA" atomName2="CB"/>
+      <Bond atomName1="CA" atomName2="C"/>
+      <Bond atomName1="CB" atomName2="HB2"/>
+      <Bond atomName1="CB" atomName2="HB3"/>
+      <Bond atomName1="CB" atomName2="CG"/>
+      <Bond atomName1="CG" atomName2="HG2"/>
+      <Bond atomName1="CG" atomName2="HG3"/>
+      <Bond atomName1="CG" atomName2="CD"/>
+      <Bond atomName1="CD" atomName2="OE1"/>
+      <Bond atomName1="CD" atomName2="OE2"/>
+      <Bond atomName1="OE2" atomName2="HE2"/>
+      <Bond atomName1="C" atomName2="O"/>
+      <ExternalBond atomName="N"/>
+      <ExternalBond atomName="C"/>
+      <Protons number_of_states="2">
+        <State index="0" g_k="0.0" proton_count="0">
+          <COOH HO="HE2" OH="OE2" CO="CD" OC="OE1" R="CG"/>
+          <Atom name="N" type="N" charge="-0.4157"/>
+          <Atom name="H" type="H" charge="0.2719"/>
+          <Atom name="CA" type="CX" charge="0.0145"/>
+          <Atom name="HA" type="H1" charge="0.0779"/>
+          <Atom name="CB" type="CT" charge="-0.0398"/>
+          <Atom name="HB2" type="HC" charge="-0.0173"/>
+          <Atom name="HB3" type="HC" charge="-0.0173"/>
+          <Atom name="CG" type="CT" charge="0.0136"/>
+          <Atom name="HG2" type="HC" charge="-0.0425"/>
+          <Atom name="HG3" type="HC" charge="-0.0425"/>
+          <Atom name="CD" type="C" charge="0.8054"/>
+          <Atom name="OE1" type="OH" charge="-0.8188"/>
+          <Atom name="OE2" type="OH" charge="-0.8188"/>
+          <Atom name="HE2" type="HO" charge="0.0"/>
+          <Atom name="C" type="C" charge="0.5973"/>
+          <Atom name="O" type="O" charge="-0.5679"/>
+        </State>
+        <State index="1" g_k="0.0" proton_count="1">
+          <Atom name="N" type="N" charge="-0.4157"/>
+          <Atom name="H" type="H" charge="0.2719"/>
+          <Atom name="CA" type="CX" charge="0.0145"/>
+          <Atom name="HA" type="H1" charge="0.0779"/>
+          <Atom name="CB" type="CT" charge="-0.0071"/>
+          <Atom name="HB2" type="HC" charge="0.0256"/>
+          <Atom name="HB3" type="HC" charge="0.0256"/>
+          <Atom name="CG" type="CT" charge="-0.0174"/>
+          <Atom name="HG2" type="HC" charge="0.043"/>
+          <Atom name="HG3" type="HC" charge="0.043"/>
+          <Atom name="CD" type="C" charge="0.6801"/>
+          <Atom name="OE1" type="OH" charge="-0.5838"/>
+          <Atom name="OE2" type="OH" charge="-0.6511"/>
+          <Atom name="HE2" type="HO" charge="0.4641"/>
+          <Atom name="C" type="C" charge="0.5973"/>
+          <Atom name="O" type="O" charge="-0.5679"/>
+        </State>
+      </Protons>
+    </Residue>
+    <Residue name="ASH">
+      <Atom name="N" type="N" charge="-0.4157"/>
+      <Atom name="H" type="H" charge="0.2719"/>
+      <Atom name="CA" type="CX" charge="0.0341"/>
+      <Atom name="HA" type="H1" charge="0.0864"/>
+      <Atom name="CB" type="CT" charge="-0.1783"/>
+      <Atom name="HB2" type="HC" charge="-0.0122"/>
+      <Atom name="HB3" type="HC" charge="-0.0122"/>
+      <Atom name="CG" type="C" charge="0.7994"/>
+      <Atom name="OD1" type="OH" charge="-0.8014"/>
+      <Atom name="OD2" type="OH" charge="-0.8014"/>
+      <Atom name="HD2" type="HO" charge="0.0"/>
+      <Atom name="C" type="C" charge="0.5973"/>
+      <Atom name="O" type="O" charge="-0.5679"/>
+      <Bond atomName1="C" atomName2="O"/>
+      <Bond atomName1="OD2" atomName2="HD2"/>
+      <Bond atomName1="CG" atomName2="OD1"/>
+      <Bond atomName1="CG" atomName2="OD2"/>
+      <Bond atomName1="CB" atomName2="HB2"/>
+      <Bond atomName1="CB" atomName2="HB3"/>
+      <Bond atomName1="CB" atomName2="CG"/>
+      <Bond atomName1="CA" atomName2="HA"/>
+      <Bond atomName1="CA" atomName2="CB"/>
+      <Bond atomName1="CA" atomName2="C"/>
+      <Bond atomName1="N" atomName2="H"/>
+      <Bond atomName1="N" atomName2="CA"/>
+      <ExternalBond atomName="N"/>
+      <ExternalBond atomName="C"/>
+      <Protons number_of_states="2">
+        <State index="0" g_k="0.0" proton_count="0">
+          <COOH HO="HD2" OH="OD2" CO="CG" OC="OD1" R="CB"/>
+          <Atom name="N" type="N" charge="-0.4157"/>
+          <Atom name="H" type="H" charge="0.2719"/>
+          <Atom name="CA" type="CX" charge="0.0341"/>
+          <Atom name="HA" type="H1" charge="0.0864"/>
+          <Atom name="CB" type="CT" charge="-0.1783"/>
+          <Atom name="HB2" type="HC" charge="-0.0122"/>
+          <Atom name="HB3" type="HC" charge="-0.0122"/>
+          <Atom name="CG" type="C" charge="0.7994"/>
+          <Atom name="OD1" type="OH" charge="-0.8014"/>
+          <Atom name="OD2" type="OH" charge="-0.8014"/>
+          <Atom name="HD2" type="HO" charge="0.0"/>
+          <Atom name="C" type="C" charge="0.5973"/>
+          <Atom name="O" type="O" charge="-0.5679"/>
+        </State>
+        <State index="1" g_k="0.0" proton_count="1">
+          <Atom name="N" type="N" charge="-0.4157"/>
+          <Atom name="H" type="H" charge="0.2719"/>
+          <Atom name="CA" type="CX" charge="0.0341"/>
+          <Atom name="HA" type="H1" charge="0.0864"/>
+          <Atom name="CB" type="CT" charge="-0.0316"/>
+          <Atom name="HB2" type="HC" charge="0.0488"/>
+          <Atom name="HB3" type="HC" charge="0.0488"/>
+          <Atom name="CG" type="C" charge="0.6462"/>
+          <Atom name="OD1" type="OH" charge="-0.5554"/>
+          <Atom name="OD2" type="OH" charge="-0.6376"/>
+          <Atom name="HD2" type="HO" charge="0.4747"/>
+          <Atom name="C" type="C" charge="0.5973"/>
+          <Atom name="O" type="O" charge="-0.5679"/>
+        </State>
+      </Protons>
     </Residue>
   </Residues>
   <HarmonicBondForce>

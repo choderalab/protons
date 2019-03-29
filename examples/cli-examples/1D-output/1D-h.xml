@@ -1,0 +1,33 @@
+<Residues>
+  <Residue name="FD3">
+    <H name="H1" parent="C66"/>
+    <H name="H2" parent="C64"/>
+    <H name="H3" parent="C63"/>
+    <H name="H4" parent="C62"/>
+    <H name="H5" parent="N43"/>
+    <H name="H6" parent="N43"/>
+    <H name="H8" parent="N54"/>
+    <H name="H9" parent="C34"/>
+    <H name="H10" parent="C34"/>
+    <H name="H11" parent="C31"/>
+    <H name="H13" parent="C71"/>
+    <H name="H12" parent="C71"/>
+    <H name="H15" parent="C72"/>
+    <H name="H14" parent="C72"/>
+    <H name="H17" parent="C74"/>
+    <H name="H16" parent="C74"/>
+    <H name="H18" parent="C75"/>
+    <H name="H19" parent="C75"/>
+    <H name="H20" parent="N40"/>
+    <H name="H22" parent="N29"/>
+    <H name="H23" parent="C3"/>
+    <H name="H24" parent="C4"/>
+    <H name="H25" parent="C1"/>
+    <H name="H26" parent="C5"/>
+    <H name="H27" parent="C6"/>
+    <H name="H28" parent="C7"/>
+    <H name="H29" parent="C8"/>
+    <H name="H7" parent="N54"/>
+    <H name="H21" parent="N40"/>
+  </Residue>
+</Residues>

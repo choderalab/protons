@@ -1,0 +1,65 @@
+<ForceField>
+    <GBSAOBCForce>
+        <UseAttributeFromResidue name="charge"/>
+        <Atom type="C" radius="0.170000" scale="0.720000"/>
+        <Atom type="CA" radius="0.170000" scale="0.720000"/>
+        <Atom type="CB" radius="0.170000" scale="0.720000"/>
+        <Atom type="CC" radius="0.170000" scale="0.720000"/>
+        <Atom type="CD" radius="0.170000" scale="0.720000"/>
+        <Atom type="CI" radius="0.170000" scale="0.720000"/>
+        <Atom type="CK" radius="0.170000" scale="0.720000"/>
+        <Atom type="CP" radius="0.170000" scale="0.720000"/>
+        <Atom type="CM" radius="0.170000" scale="0.720000"/>
+        <Atom type="CS" radius="0.170000" scale="0.720000"/>
+        <Atom type="CN" radius="0.170000" scale="0.720000"/>
+        <Atom type="CQ" radius="0.170000" scale="0.720000"/>
+        <Atom type="CR" radius="0.170000" scale="0.720000"/>
+        <Atom type="CT" radius="0.170000" scale="0.720000"/>
+        <Atom type="CV" radius="0.170000" scale="0.720000"/>
+        <Atom type="CW" radius="0.170000" scale="0.720000"/>
+        <Atom type="C*" radius="0.170000" scale="0.720000"/>
+        <Atom type="CX" radius="0.170000" scale="0.720000"/>
+        <Atom type="CY" radius="0.170000" scale="0.720000"/>
+        <Atom type="CZ" radius="0.170000" scale="0.720000"/>
+        <Atom type="C5" radius="0.170000" scale="0.720000"/>
+        <Atom type="C4" radius="0.170000" scale="0.720000"/>
+        <Atom type="H" radius="0.120000" scale="0.850000"/>
+        <Atom type="HC" radius="0.120000" scale="0.850000"/>
+        <Atom type="H1" radius="0.120000" scale="0.850000"/>
+        <Atom type="H2" radius="0.120000" scale="0.850000"/>
+        <Atom type="H3" radius="0.120000" scale="0.850000"/>
+        <Atom type="HA" radius="0.120000" scale="0.850000"/>
+        <Atom type="H4" radius="0.120000" scale="0.850000"/>
+        <Atom type="H5" radius="0.120000" scale="0.850000"/>
+        <Atom type="HO" radius="0.120000" scale="0.850000"/>
+        <Atom type="HS" radius="0.120000" scale="0.850000"/>
+        <Atom type="HW" radius="0.120000" scale="0.850000"/>
+        <Atom type="HP" radius="0.120000" scale="0.850000"/>
+        <Atom type="HZ" radius="0.120000" scale="0.850000"/>
+        <Atom type="F" radius="0.150000" scale="0.880000"/>
+        <Atom type="Cl" radius="0.170000" scale="0.800000"/>
+        <Atom type="Br" radius="0.150000" scale="0.800000"/>
+        <Atom type="I" radius="0.150000" scale="0.800000"/>
+        <Atom type="N" radius="0.155000" scale="0.790000"/>
+        <Atom type="NA" radius="0.155000" scale="0.790000"/>
+        <Atom type="NB" radius="0.155000" scale="0.790000"/>
+        <Atom type="NC" radius="0.155000" scale="0.790000"/>
+        <Atom type="N2" radius="0.155000" scale="0.790000"/>
+        <Atom type="N3" radius="0.155000" scale="0.790000"/>
+        <Atom type="NT" radius="0.155000" scale="0.790000"/>
+        <Atom type="N*" radius="0.155000" scale="0.790000"/>
+        <Atom type="NY" radius="0.155000" scale="0.790000"/>
+        <Atom type="O" radius="0.150000" scale="0.850000"/>
+        <Atom type="O2" radius="0.150000" scale="0.850000"/>
+        <Atom type="OW" radius="0.150000" scale="0.850000"/>
+        <Atom type="OH" radius="0.150000" scale="0.850000"/>
+        <Atom type="OS" radius="0.150000" scale="0.850000"/>
+        <Atom type="OP" radius="0.150000" scale="0.850000"/>
+        <Atom type="P" radius="0.185000" scale="0.860000"/>
+        <Atom type="S" radius="0.180000" scale="0.960000"/>
+        <Atom type="SH" radius="0.180000" scale="0.960000"/>
+        <Atom type="NX" radius="0.155000" scale="0.790000"/>
+        <Atom type="OX" radius="0.150000" scale="0.850000"/>
+        <Atom type="HD" radius="0.120000" scale="0.850000"/>
+    </GBSAOBCForce>
+</ForceField>
