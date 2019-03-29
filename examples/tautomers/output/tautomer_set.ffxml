@@ -59,28 +59,28 @@
     </Residue>
   </Residues>
   <AtomTypes>
-    <Type name="dH9oh" class="dH9oh" element="H" mass="1.008"/>
-    <Type name="dH5ca" class="dH5ca" element="H" mass="1.008"/>
     <Type name="dH6ca" class="dH6ca" element="H" mass="1.008"/>
     <Type name="dH7ca" class="dH7ca" element="H" mass="1.008"/>
+    <Type name="dH9oh" class="dH9oh" element="H" mass="1.008"/>
+    <Type name="dH5ca" class="dH5ca" element="H" mass="1.008"/>
   </AtomTypes>
   <HarmonicBondForce>
-    <Bond type1="ce" type2="dH5ca" length="0.10860000000000002" k="289365.43999999994"/>
-    <Bond type1="o" type2="dH9oh" length="0.0973" k="310787.5199999999"/>
-    <Bond type1="c2" type2="dH6ca" length="0.10860000000000002" k="289365.43999999994"/>
     <Bond type1="c3" type2="dH7ca" length="0.10860000000000002" k="289365.43999999994"/>
+    <Bond type1="c2" type2="dH6ca" length="0.10860000000000002" k="289365.43999999994"/>
+    <Bond type1="o" type2="dH9oh" length="0.0973" k="310787.5199999999"/>
+    <Bond type1="ce" type2="dH5ca" length="0.10860000000000002" k="289365.43999999994"/>
   </HarmonicBondForce>
   <HarmonicAngleForce>
-    <Angle type1="c" type2="c3" type3="dH7ca" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="ca" type2="ce" type3="dH5ca" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="dH6ca" type2="c2" type3="ce" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="dH6ca" type2="c2" type3="c3" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="c2" type2="ce" type3="dH5ca" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="dH9oh" type2="o" type3="c" angle="1.895078501815443" k="410.03200000000004"/>
-    <Angle type1="dH7ca" type2="c3" type3="c2" angle="2.092300707290802" k="403.33760000000007"/>
-    <Angle type1="ha" type2="ce" type3="dH5ca" angle="0.0" k="0.0"/>
-    <Angle type1="dH6ca" type2="c2" type3="ha" angle="0.0" k="0.0"/>
     <Angle type1="hc" type2="c3" type3="dH7ca" angle="0.0" k="0.0"/>
+    <Angle type1="ca" type2="ce" type3="dH5ca" angle="2.092300707290802" k="403.33760000000007"/>
+    <Angle type1="dH6ca" type2="c2" type3="ha" angle="0.0" k="0.0"/>
+    <Angle type1="dH6ca" type2="c2" type3="c3" angle="2.092300707290802" k="403.33760000000007"/>
+    <Angle type1="c" type2="o" type3="dH9oh" angle="1.895078501815443" k="410.03200000000004"/>
+    <Angle type1="c2" type2="c3" type3="dH7ca" angle="2.092300707290802" k="403.33760000000007"/>
+    <Angle type1="ha" type2="ce" type3="dH5ca" angle="0.0" k="0.0"/>
+    <Angle type1="c" type2="c3" type3="dH7ca" angle="2.092300707290802" k="403.33760000000007"/>
+    <Angle type1="dH6ca" type2="c2" type3="ce" angle="2.092300707290802" k="403.33760000000007"/>
+    <Angle type1="dH5ca" type2="ce" type3="c2" angle="2.092300707290802" k="403.33760000000007"/>
   </HarmonicAngleForce>
   <PeriodicTorsionForce>
     <Improper type1="c" type2="c3" type3="ca" type4="o" periodicity1="2" phase1="3.141592653589793" k1="43.932"/>
@@ -95,9 +95,9 @@
     <Improper type1="ca" type2="ca" type3="ca" type4="ca" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   </PeriodicTorsionForce>
   <NonbondedForce coulomb14scale="0.833333333333" lj14scale="0.5">
-    <Atom type="dH9oh" sigma="0" epsilon="0" charge="0.0"/>
-    <Atom type="dH5ca" sigma="0" epsilon="0" charge="0.0"/>
     <Atom type="dH7ca" sigma="0" epsilon="0" charge="0.0"/>
+    <Atom type="dH5ca" sigma="0" epsilon="0" charge="0.0"/>
     <Atom type="dH6ca" sigma="0" epsilon="0" charge="0.0"/>
+    <Atom type="dH9oh" sigma="0" epsilon="0" charge="0.0"/>
   </NonbondedForce>
 </ForceField>

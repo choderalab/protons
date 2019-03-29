@@ -373,6 +373,8 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
                 a2_atom_name = a2_atom_name + name_type_mapping[heavy_atom_name]
             G.add_edge(a1_atom_name, a2_atom_name)
         
+        # generate hydrogen definitions for each tautomer state
+        # this is used to generate an openMM system of the tautomer
         isomers[isomer_index]['hxml'] = generate_tautomer_hydrogen_definitions(hydrogens, resname, isomer_index)
         isomers[isomer_index]['mol-graph'] = G
         isomers[isomer_index]['atom_name_dict'] = atom_name_to_unique_atom_name
@@ -385,6 +387,20 @@ def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str,
 
 def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index):
     
+    """
+    Creates a hxml file that is used to add hydrogens for a specific tautomer to the heavy-atom skeleton 
+
+    Parameters
+    ----------
+    hydrogens: list of tuple
+        Tuple contains two atom names: (hydrogen-atom-name, heavy-atom-atom-name)
+    residue_name : str
+        name of the residue to fill the Residues entry in the xml tree
+    isomer_index : int
+        
+    """
+
+
     hydrogen_definitions_tree = etree.fromstring('<Residues/>')
     hydrogen_file_residue = etree.fromstring("<Residue/>")
     hydrogen_file_residue.set('name', residue_name)
@@ -399,6 +415,20 @@ def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index
     return hydrogen_definitions_tree
 
 def generate_tautomer_torsion_definitions(isomers : dict, vacuum_file:str, isomer_index:int):
+    """
+    Creates torsion entries (proper and improper) in the isomer dictionary. It does this 
+    by creating an openMM system using the heavy-atom skeleton defined in the pdb file (vacuum_file) and the ffxml file 
+    of the specific isomer. Hydrogens are added using the hxml file of the specific isomer. 
+
+    Parameters
+    ----------
+    isomers: list of dicts
+        One dict is necessary for every isomer. Dict should contain 'ffxml' and 'hxml' 
+    vacumm_file : str
+        location for heavy-atom skeleton pdb file
+    isomer_index : int
+        
+    """
 
     log.info("Generate tautomer torsion definitions ...")
     ffxml = StringIO(etree.tostring(isomers[isomer_index]['ffxml']).decode("utf-8"))
@@ -422,25 +452,38 @@ def generate_tautomer_torsion_definitions(isomers : dict, vacuum_file:str, isome
             for torsion_index in range(force.getNumTorsions()):
                 a1, a2, a3, a4, periodicity, phase, k = force.getTorsionParameters(torsion_index)
                 par = { 'index': torsion_index,
-                        'atom1-idx' : index_to_name[a1],
-                        'atom2-idx' : index_to_name[a2],
-                        'atom3-idx' : index_to_name[a3],
-                        'atom4-idx' : index_to_name[a4],
+                        'atom1-name' : index_to_name[a1],
+                        'atom2-name' : index_to_name[a2],
+                        'atom3-name' : index_to_name[a3],
+                        'atom4-name' : index_to_name[a4],
                         'periodicity' : int(strip_in_unit_system(periodicity)),
                         'phase' : strip_in_unit_system(phase),
                         'k' : strip_in_unit_system(k)}
                 isomers[isomer_index]['torsion-forces'].append(par)
 
+    logging.info('Forces for tautomer: {}'.format(isomer_index))
     _log_forces(system.getForces(), index_to_name)
 
 
-def _log_forces(forces, atom_name_by_atom_index):
+def _log_forces(forces, atom_index_to_atom_name):
 
-    for force_index, force in enumerate(forces):
-        
+    """
+    Helper function that outputs all forces defined in a system and displays
+    atom names using a mapping dictionary.
+
+    Parameters
+    ----------
+    forces: openMM.Force
+        list of forces present in a system 
+    atom_name_by_atom_index : str
+        location for heavy-atom skeleton pdb file
+       
+    """
+
+
+    for force in forces:
         # Get name of force class.
         force_classname = force.__class__.__name__
-        
         logging.info('############################')
         logging.info('{}'.format(force_classname))
         logging.info('############################')
@@ -449,10 +492,9 @@ def _log_forces(forces, atom_name_by_atom_index):
             logging.info('#######################')
             logging.info('NonbondedForce')
             logging.info('#######################')
-            
-            for atom_idx in sorted(atom_name_by_atom_index):
+            for atom_idx in sorted(atom_index_to_atom_name):
                 charge, sigma, eps = map(strip_in_unit_system, force.getParticleParameters(atom_idx))
-                logging.info('IDX:{} NAME: {} CHARGE:{} SIGMA:{} EPSILON:{}'.format(atom_idx, atom_name_by_atom_index[atom_idx], charge, sigma, eps))
+                logging.info('Idx:{} Name: {} Charge:{} Sigma:{} Eps:{}'.format(atom_idx, atom_index_to_atom_name[atom_idx], charge, sigma, eps))
 
         elif force_classname == 'HarmonicBondForce':
             logging.info('#######################')
@@ -460,25 +502,23 @@ def _log_forces(forces, atom_name_by_atom_index):
             logging.info('#######################')
             for bond_idx in range(force.getNumBonds()): 
                 a1, a2, length, k = map(strip_in_unit_system, force.getBondParameters(bond_idx))
-                if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index:
+                if a1 not in atom_index_to_atom_name or a2 not in atom_index_to_atom_name:
                     continue
-                logging.info('IDX:{} ATOM1:{} ATOM2:{} LENGTH:{} K:{}'.format(bond_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], length, k))
+                logging.info('Idx:{} Atom1:{} Atom2:{} l:{} k:{}'.format(bond_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], length, k))
                     
         elif force_classname == 'HarmonicAngleForce':
             for angle_idx in range(force.getNumAngles()):
                 a1, a2, a3, angle, k = map(strip_in_unit_system, force.getAngleParameters(angle_idx))
-                if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index:
+                if a1 not in atom_index_to_atom_name or a2 not in atom_index_to_atom_name or a3 not in atom_index_to_atom_name:
                     continue
-                logging.info('IDX:{} ATOM1:{} ATOM2:{} ATOM3:{} ANGLE:{} K:{}'.format(angle_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], angle, k))
+                logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Angle:{} k:{}'.format(angle_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], angle, k))
                 
-
         elif force_classname == 'PeriodicTorsionForce':
-            
             for torsion_idx in range(force.getNumTorsions()):
                 a1, a2, a3, a4, periodicity, phase, k = map(strip_in_unit_system, force.getTorsionParameters(torsion_idx))
-                if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index or a4 not in atom_name_by_atom_index:
+                if a1 not in atom_index_to_atom_name or a2 not in atom_index_to_atom_name or a3 not in atom_index_to_atom_name or a4 not in atom_index_to_atom_name:
                     continue
-                logging.info('IDX:{} ATOM1:{} ATOM2:{} ATOM3:{} ATOM4:{} PER:{} PHASE:{} K:{}'.format(torsion_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], periodicity, phase, k))
+                logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Atom4:{} Per:{} Phase:{} k:{}'.format(torsion_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], atom_index_to_atom_name[a4], periodicity, phase, k))
 
 
 def create_hydrogen_definitions(inputfile: str, outputfile: str, gaff: str=gaff_default):
@@ -724,8 +764,7 @@ class _TitratableForceFieldCompiler(object):
             e = etree.fromstring(element_string)
             if _unique(e):
                 self._add_to_output(e, "/ForceField/HarmonicBondForce")
-                print(element_string)
-                logging.info(etree.fromstring(element_string))
+                logging.info(element_string)
 
         for element_string in set(self.dummy_angle_strings):
             e = etree.fromstring(element_string)
@@ -858,7 +897,9 @@ class _TitratableForceFieldCompiler(object):
 
     def _initialize_forcefield_template(self):
         """
-        Set up the residue template using the first state of the molecule
+        Set up the residue template using the superset graph.
+        The residue includes all atom names of all the states, only the atoms of 
+        the first state have read atom types.
         """
 
         residue = self.ffxml.xpath('/ForceField/Residues/Residue')[0]
@@ -937,18 +978,18 @@ class _TitratableForceFieldCompiler(object):
                 isomer_xml = etree.fromstring(isomer_str)
 
                 # atom_types_dict for specific isomer
-                isomer_atom_types_dict = self.atom_types_dict[isomer_index]
-                isomer_atom_charges_dict = self.atom_charge_dict[isomer_index]
+                isomer_atom_name_to_atom_type = self.atom_types_dict[isomer_index]
+                isomer_atom_name_to_atom_charge = self.atom_charge_dict[isomer_index]
                 tmp_atom_name_to_atom_type_inclusive_dummy_types = dict()
                 # iterate over all nodes in superset graph
                 for node in self.superset_graph:
                     parm = None
                     e = None
                     # if node is in isomer_atom_types dict it has an assigned atom type in this isomer
-                    if node in isomer_atom_types_dict:
-                        atom_type = isomer_atom_types_dict[node]
+                    if node in isomer_atom_name_to_atom_type:
+                        atom_type = isomer_atom_name_to_atom_type[node]
                         parm = self._retrieve_parameters(atom_type1=atom_type)                       
-                        e = atom_string.format(node1=node, atom_type=atom_type, charge=isomer_atom_charges_dict[node],epsilon=parm['nonbonds'].attrib['epsilon'],sigma=parm['nonbonds'].attrib['sigma'])
+                        e = atom_string.format(node1=node, atom_type=atom_type, charge=isomer_atom_name_to_atom_charge[node],epsilon=parm['nonbonds'].attrib['epsilon'],sigma=parm['nonbonds'].attrib['sigma'])
                     else:
                         atom_type = 'd' + node
                         e = atom_string.format(node1=node, atom_type=atom_type, charge=0.0,epsilon=0,sigma=0)
@@ -976,9 +1017,7 @@ class _TitratableForceFieldCompiler(object):
                     atom_types = []
                     # if node is not in iserom_atom_types_dict it does not have an assigned atom type in this isomer
                     if [node1, node2] in isomer_bond_atom_names or [node2, node1] in isomer_bond_atom_names:
-                        #print('regular in isomer')
-                        atom_types.append(isomer_atom_types_dict[node1])
-                        atom_types.append(isomer_atom_types_dict[node2])
+                        atom_types.extend([isomer_atom_name_to_atom_type[node1], isomer_atom_name_to_atom_type[node2]])
                         parm = self._retrieve_parameters(atom_type1=atom_types[0], atom_type2=atom_types[1])
                         bond_length = parm['bonds'].attrib['length']
                         k = parm['bonds'].attrib['k']
@@ -986,12 +1025,10 @@ class _TitratableForceFieldCompiler(object):
                     else:
                         # search through all atom_types_dict to find real atom type
                         found_parameter = False
-                        #print(node1, node2)
 
-                        for tmp_isomer_index in self.atom_types_dict:
+                        for tmp_isomer_index in range(len(self._state_templates)):
                             if [node1, node2] in self.complete_list_of_bonds[tmp_isomer_index]['bonds_atom_names'] or [node2, node1] in self.complete_list_of_bonds[tmp_isomer_index]['bonds_atom_names']:
-                                atom_types.append(self.atom_types_dict[tmp_isomer_index][node1])
-                                atom_types.append(self.atom_types_dict[tmp_isomer_index][node2])
+                                atom_types.extend([self.atom_types_dict[tmp_isomer_index][node1], self.atom_types_dict[tmp_isomer_index][node2]])
                                 found_parameter = True
                                 # add dummy bond parameters for all superset bonds for starting residue
                                 parm = self._retrieve_parameters(atom_type1=atom_types[0], atom_type2=atom_types[1])
@@ -1000,7 +1037,6 @@ class _TitratableForceFieldCompiler(object):
                                 if int(isomer_index) == 0:
                                     # add dummy bond entries for first isomer
                                     d = dummy_bond_string.format(atomType1=atom_name_to_atom_type_inclusive_dummy_types[0][node1], atomType2=atom_name_to_atom_type_inclusive_dummy_types[0][node2], bond_length=bond_length, k=k)
-                                    #print(d)
                                     self.dummy_bond_strings.append(d)
                                     d = None
                                 break
@@ -1016,27 +1052,24 @@ class _TitratableForceFieldCompiler(object):
                 ##############################################
                 # angle entries
                 ##############################################
-                #print(isomer_index)
                 isomer_angle_atom_names = self.complete_list_of_angles[isomer_index]['angles_atom_names']
                 
                 for nodes in list_of_angles:
                     node1, node2, node3 = nodes
-                    #print(node1, node2, node3)
                     found_parameters = False
                     parm = None
                     # angle between three atoms that are real in this isomer 
                     if [node1, node2, node3] in isomer_angle_atom_names or [node3, node2, node1] in isomer_angle_atom_names:
-                        #print('Found parameters in regular approach.')
-                        parm = self._retrieve_parameters(atom_type1=isomer_atom_types_dict[node1],atom_type2=isomer_atom_types_dict[node2],atom_type3=isomer_atom_types_dict[node3])
+                        atom_type1, atom_type2, atom_type3 = isomer_atom_name_to_atom_type[node1], isomer_atom_name_to_atom_type[node2],isomer_atom_name_to_atom_type[node3]  
+                        parm = self._retrieve_parameters(atom_type1=atom_type1,atom_type2=atom_type2,atom_type3=atom_type3)
                         angle = parm['angle'].attrib['angle']
                         k = parm['angle'].attrib['k']
                         found_parameters = True
                     else:
                         # not real in this isomer - look at other isomers and get parameters from isomer 
                         # in which these 3 atoms form real angle
-                        for tmp_isomer_index in self.atom_types_dict:
+                        for tmp_isomer_index in range(len(self._state_templates)):
                             if [node1, node2, node3] in self.complete_list_of_angles[tmp_isomer_index]['angles_atom_names'] or [node3, node2, node1] in self.complete_list_of_angles[tmp_isomer_index]['angles_atom_names']:
-                                #print('Found parameters in isomer: {}.'.format(tmp_isomer_index))
                                 parm = self._retrieve_parameters(atom_type1=self.atom_types_dict[tmp_isomer_index][node1],atom_type2=self.atom_types_dict[tmp_isomer_index][node2],atom_type3=self.atom_types_dict[tmp_isomer_index][node3])
                                 angle = parm['angle'].attrib['angle']
                                 k = parm['angle'].attrib['k']
@@ -1050,7 +1083,6 @@ class _TitratableForceFieldCompiler(object):
                     
                     # this is not a real angle - there are never only real atoms involved in this angle
                     if not found_parameters:
-                        #print('Found parameter between three atoms that are never real at any one isomer')
                         angle = 0.0
                         k = 0.0
                         e = angle_string.format(node1=node1, node2=node2, node3=node3, angle=angle, k=k)
@@ -1067,7 +1099,7 @@ class _TitratableForceFieldCompiler(object):
                 # torsion entries
                 ##############################################
                 for torsion_force in self._input_state_data[isomer_index]['torsion-forces']:
-                    e = torsion_string.format(node1=torsion_force['atom1-idx'], node2=torsion_force['atom2-idx'], node3=torsion_force['atom3-idx'], node4=torsion_force['atom4-idx'], periodicity=torsion_force['periodicity'], phase=torsion_force['phase'], k=torsion_force['k'])
+                    e = torsion_string.format(node1=torsion_force['atom1-name'], node2=torsion_force['atom2-name'], node3=torsion_force['atom3-name'], node4=torsion_force['atom4-name'], periodicity=torsion_force['periodicity'], phase=torsion_force['phase'], k=torsion_force['k'])
                     isomer_xml.append(etree.fromstring(e))
 
                 protonsdata.append(isomer_xml)
@@ -1203,21 +1235,18 @@ class _TitratableForceFieldCompiler(object):
             for xmltree in self._xml_parameter_trees:
                 # Match the bonds of the atom in the HarmonicBondForce block
                 for bond in xmltree.xpath("/ForceField/HarmonicBondForce/Bond"):
-                    if (kwargs['atom_type1'] == bond.attrib['type1'] and kwargs['atom_type2'] == bond.attrib['type2']) or (kwargs['atom_type2'] == bond.attrib['type1'] and kwargs['atom_type1'] == bond.attrib['type2']):
+                    if sorted([kwargs['atom_type1'], kwargs['atom_type2']]) == sorted([bond.attrib['type1'], bond.attrib['type2']]):
                         params['bonds'] = bond
             return params
                     
 
         elif len(kwargs) == 3:
+            search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3']]
             for xmltree in self._xml_parameter_trees:
                 # Match the angles of the atom in the HarmonicAngleForce block
                 for angle in xmltree.xpath("/ForceField/HarmonicAngleForce/Angle"):
                     angle_atom_types_list = [angle.attrib['type1'], angle.attrib['type2'], angle.attrib['type3']]
-                    search_list = [kwargs['atom_type1'], kwargs['atom_type2'], kwargs['atom_type3']]
-                    if search_list[0] == angle_atom_types_list[0] and search_list[1] == angle_atom_types_list[1] and search_list[2] == angle_atom_types_list[2]:
-                        params['angle'] = angle
-                        return params
-                    elif search_list[2] == angle_atom_types_list[0] and search_list[1] == angle_atom_types_list[1] and search_list[0] == angle_atom_types_list[2]:
+                    if search_list == angle_atom_types_list or search_list == angle_atom_types_list[::-1]:
                         params['angle'] = angle
                         return params
                     else:

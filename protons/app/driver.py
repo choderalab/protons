@@ -421,9 +421,9 @@ class _TitrationState:
         """Instantiate a _TitrationState"""
 
         self.g_k = None  # dimensionless quantity
+        self.charges = list()
         self.proton_count = None
         self._forces = list()
-        self.charges = list()
         self._target_weight = None
         self.lookup_for_parameters = None
 
@@ -1640,14 +1640,21 @@ class NCMCProtonDrive(_BaseDrive):
         return
 
     def _log_forces(self, titration_group_index):
+        """
+        Helper METHOD that outputs all forces defined in a system and displays
+        atom names using a mapping dictionary.
+
+        Parameters
+        ----------
+        titration_group_index: int
+        
+        """
 
         atom_name_by_atom_index = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
-        
-        for force in self.forces_to_update:
-            
+       
+        for force in self.forces_to_update:            
             # Get name of force class.
             force_classname = force.__class__.__name__
-            
             logging.info('############################')
             logging.info('{}'.format(force_classname))
             logging.info('############################')
@@ -1656,10 +1663,9 @@ class NCMCProtonDrive(_BaseDrive):
                 logging.info('#######################')
                 logging.info('NonbondedForce')
                 logging.info('#######################')
-                
                 for atom_idx in sorted(atom_name_by_atom_index):
                     charge, sigma, eps = map(strip_in_unit_system, force.getParticleParameters(atom_idx))
-                    logging.info('IDX:{} NAME: {} CHARGE:{} SIGMA:{} EPSILON:{}'.format(atom_idx, atom_name_by_atom_index[atom_idx], charge, sigma, eps))
+                    logging.info('Idx:{} Name: {} Charge:{} Sigma:{} Eps:{}'.format(atom_idx, atom_index_to_atom_name[atom_idx], charge, sigma, eps))
 
             elif force_classname == 'HarmonicBondForce':
                 logging.info('#######################')
@@ -1669,22 +1675,21 @@ class NCMCProtonDrive(_BaseDrive):
                     a1, a2, length, k = map(strip_in_unit_system, force.getBondParameters(bond_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index:
                         continue
-                    logging.info('IDX:{} ATOM1:{} ATOM2:{} LENGTH:{} K:{}'.format(bond_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], length, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} l:{} k:{}'.format(bond_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], length, k))
                         
             elif force_classname == 'HarmonicAngleForce':
                 for angle_idx in range(force.getNumAngles()):
                     a1, a2, a3, angle, k = map(strip_in_unit_system, force.getAngleParameters(angle_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index:
                         continue
-                    logging.info('IDX:{} ATOM1:{} ATOM2:{} ATOM3:{} ANGLE:{} K:{}'.format(angle_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], angle, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Angle:{} k:{}'.format(angle_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], angle, k))
                     
-
             elif force_classname == 'PeriodicTorsionForce':  
                 for torsion_idx in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = map(strip_in_unit_system, force.getTorsionParameters(torsion_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index or a4 not in atom_name_by_atom_index:
                         continue
-                    logging.info('IDX:{} ATOM1:{} ATOM2:{} ATOM3:{} ATOM4:{} PER:{} PHASE:{} K:{}'.format(torsion_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], periodicity, phase, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Atom4:{} Per:{} Phase:{} k:{}'.format(torsion_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], atom_index_to_atom_name[a4], periodicity, phase, k))
 
     
 
@@ -2874,7 +2879,6 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             
             ################################################
             ################################################
-            # NOTE: mw entry point!
             ################################################
             ################################################
 
@@ -3058,22 +3062,31 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         titration_group = self.titrationGroups[titration_group_index]
         titration_state = self.titrationGroups[titration_group_index][titration_state_index]
 
-        atom_indices = titration_group.atom_indices
-        ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
+
         parameters = titration_state.lookup_for_parameters
 
-        # Store the parameters per individual force
-        f_params = list()
-        atom_name_to_openMM_indice = dict()
-        openMM_indices_to_atom_name = dict()
         
         # genearte atom idx to atom name dictionaries
+        atom_name_to_openMM_indice = dict()
+        openMM_indices_to_atom_name = dict()
+        atom_indices = titration_group.atom_indices
+        # the ffxml indices are sequential - the openMM indices are not. Since 
+        # the openMM indices and their order are known it is possible to  
+        # map the ffxml indices to the openMM indices - atom_indices are generated in 
+        # _add_xml_titration_groups()
+        ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
+
+
         for atom_name in parameters['nonbonded']:
             idx = ffxml_indices_to_openMM_indices[parameters['nonbonded'][atom_name]['ffxml_index']]
             openMM_indices_to_atom_name[idx] = atom_name
             atom_name_to_openMM_indice[atom_name] = idx
 
         titration_group.atom_indices_to_atom_name = openMM_indices_to_atom_name
+
+        # Store the parameters per individual force
+        f_params = list()
+       
 
         for force_index, force in enumerate(self.forces_to_update):
 
@@ -3126,7 +3139,11 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             # set torsion parameters
             elif force_classname == 'PeriodicTorsionForce':
                 f_params.append(dict(torsion=list(), ks=defaultdict()))
-
+                # torsions are initialized differently than the other forces
+                # for each state all its torsions are added with force constant zero
+                # and two lists generated that have 
+                #   -) the index of all torsions that are real for this state and 
+                #   -) the force constants for each torsion  
                 for torsion in parameters['torsion']:
                     idx = force.addTorsion(atom_name_to_openMM_indice[parameters['torsion'][torsion]['name1']],
                                     atom_name_to_openMM_indice[parameters['torsion'][torsion]['name2']],
@@ -3137,7 +3154,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                                     float(0.0))
                     f_params[force_index]['torsion'].append(idx)
                     f_params[force_index]['ks'][idx] = parameters['torsion'][torsion]['k']
-
 
             else:
                 raise Exception("Don't know how to update force type '%s'" % force_classname)
@@ -3252,7 +3268,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         for parameter_name in ['charge']:
                             # if charges are decresed they should decrease faster to avoid unshielded charges
                             scale = fractional_titration_state
-                            if float(atom_final[parameter_name]) < float(atom_initial[parameter_name]):
+                            if float(atom_final['charge']) < float(atom_initial['charge']):
                                 scale = min(scale* 2.0, 1.0)
                             atom[parameter_name] = (1.0 - scale) * atom_initial[parameter_name] + scale * atom_final[parameter_name]
                     else:
@@ -3441,6 +3457,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
         self._add_xml_titration_groups(topology, forcefield, ffxml_residues, selected_residue_indices)
 
         return
+
     def _parse_ffxml_files(self, ffxml_files):
         """
         Read an ffxml file, or a list of ffxml files, and extract the residues that have Protons information.
@@ -3521,7 +3538,6 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
                 raise ValueError("Could not match residue atoms to template.")
 
             atom_indices = [atom.index for atom in residue.atoms()]
-
             # Sort the atom indices in the template in the same order as the topology indices.
             atom_indices = [id for (match, id) in sorted(zip(matches, atom_indices))]
             protons_block = ffxml_residues[residue.name].xpath('Protons')[0]
@@ -3567,8 +3583,6 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             
             ################################################
             ################################################
-            ################################################
-            ################################################
 
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
@@ -3592,12 +3606,22 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
 
 
     def _generating_parameter_lookup_dicts(self, state_block):
+        """
+        Generates the parameter lookup for tautomer state changes
+        ----------
+        state_block - lxml.etree
+        Returns
+        -------
+        dictionary containing 'nonbonded', 'charge_list', 'bonded', 'angle', 'torsion' entries. 
+
+        """
+
+
         bonded_par = dict()
         angle_par = dict()
         torsion_par = dict()
         nonbonded_par = dict()
         charge_list = list()
-
         # Extract charges for this titration state.
         # is defined in elementary_charge units
         logging.info('###############')
