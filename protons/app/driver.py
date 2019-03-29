@@ -1650,7 +1650,7 @@ class NCMCProtonDrive(_BaseDrive):
         
         """
 
-        atom_index_to_atom_name = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
+        atom_name_by_atom_index = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
        
         for force in self.forces_to_update:            
             # Get name of force class.
@@ -1665,7 +1665,7 @@ class NCMCProtonDrive(_BaseDrive):
                 logging.info('#######################')
                 for atom_idx in sorted(atom_name_by_atom_index):
                     charge, sigma, eps = map(strip_in_unit_system, force.getParticleParameters(atom_idx))
-                    logging.info('Idx:{} Name: {} Charge:{} Sigma:{} Eps:{}'.format(atom_idx, atom_index_to_atom_name[atom_idx], charge, sigma, eps))
+                    logging.info('Idx:{} Name: {} Charge:{} Sigma:{} Eps:{}'.format(atom_idx, atom_name_by_atom_index[atom_idx], charge, sigma, eps))
 
             elif force_classname == 'HarmonicBondForce':
                 logging.info('#######################')
@@ -1675,21 +1675,21 @@ class NCMCProtonDrive(_BaseDrive):
                     a1, a2, length, k = map(strip_in_unit_system, force.getBondParameters(bond_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index:
                         continue
-                    logging.info('Idx:{} Atom1:{} Atom2:{} l:{} k:{}'.format(bond_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], length, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} l:{} k:{}'.format(bond_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], length, k))
                         
             elif force_classname == 'HarmonicAngleForce':
                 for angle_idx in range(force.getNumAngles()):
                     a1, a2, a3, angle, k = map(strip_in_unit_system, force.getAngleParameters(angle_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index:
                         continue
-                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Angle:{} k:{}'.format(angle_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], angle, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Angle:{} k:{}'.format(angle_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], angle, k))
                     
             elif force_classname == 'PeriodicTorsionForce':  
                 for torsion_idx in range(force.getNumTorsions()):
                     a1, a2, a3, a4, periodicity, phase, k = map(strip_in_unit_system, force.getTorsionParameters(torsion_idx))
                     if a1 not in atom_name_by_atom_index or a2 not in atom_name_by_atom_index or a3 not in atom_name_by_atom_index or a4 not in atom_name_by_atom_index:
                         continue
-                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Atom4:{} Per:{} Phase:{} k:{}'.format(torsion_idx, atom_index_to_atom_name[a1], atom_index_to_atom_name[a2], atom_index_to_atom_name[a3], atom_index_to_atom_name[a4], periodicity, phase, k))
+                    logging.info('Idx:{} Atom1:{} Atom2:{} Atom3:{} Atom4:{} Per:{} Phase:{} k:{}'.format(torsion_idx, atom_name_by_atom_index[a1], atom_name_by_atom_index[a2], atom_name_by_atom_index[a3], atom_name_by_atom_index[a4], periodicity, phase, k))
 
     
 
