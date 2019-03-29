@@ -3,13 +3,16 @@
 
 from simtk.openmm.app import Simulation
 from simtk import openmm
-from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive
+from .driver import SAMSApproach, Stage, UpdateRule, NCMCProtonDrive, SamplingMethod
 from .calibration import SAMSCalibrationEngine
 from protons.app import proposals
 from protons.app.logger import log
 import sys
 from datetime import datetime
 from typing import Optional, List
+import numpy as np
+import itertools
+import warnings
 
 
 class ConstantPHSimulation(Simulation):
@@ -69,7 +72,7 @@ class ConstantPHSimulation(Simulation):
             state=state,
         )
 
-        self.drive = drive
+        self.drive: NCMCProtonDrive = drive
         self.drive.attach_context(self.context)
 
         if move is None:
@@ -115,7 +118,16 @@ class ConstantPHSimulation(Simulation):
         pool : str
             The identifier for the pool of residues to update.
         """
-        self._update(endUpdate=self.currentUpdate + updates, pool=pool, move=move)
+        if self.drive.sampling_method is SamplingMethod.MCMC:
+            self._update(endUpdate=self.currentUpdate + updates, pool=pool, move=move)
+        elif self.drive.sampling_method is SamplingMethod.IMPORTANCE:
+            if updates != 1:
+                warnings.warn("Only performing one scan to all states.", RuntimeWarning)
+            self._scan()
+        else:
+            raise NotImplementedError(
+                "Unimplemented sampling method:{0}".format(self.drive.sampling_method)
+            )
 
     def _update(self, pool=None, move=None, endUpdate=None, endTime=None):
 
@@ -148,6 +160,40 @@ class ConstantPHSimulation(Simulation):
                 for reporter, nextR in zip(self.update_reporters, nextReport):
                     if nextR[0] == nextUpdates:
                         reporter.report(self)
+
+    def _scan(self, endTime=None):
+        """Systematic scan over all protonation states possible."""
+        numScanStates: int = np.product([len(r) for r in self.drive.titrationGroups])
+        if numScanStates > sys.maxsize:
+            raise ValueError(
+                "Too many possible states for hardware limitations, can not perform systematic scan."
+            )
+        nextReport = [None] * len(self.update_reporters)
+
+        states_per_res = [np.arange(len(res)) for res in self.drive.titrationGroups]
+        for importance_index, state_combination in enumerate(
+            itertools.product(*states_per_res)
+        ):
+            if endTime is not None and datetime.now() > endTime:
+                return
+            else:
+                anyReport = False
+                # Check which update reporters want to be updated in the next step (to exclude e.g. metadata reporter)
+                for i, reporter in enumerate(self.update_reporters):
+                    nextReport[i] = reporter.describeNextReport(self)
+                    if nextReport[i][0] == 1:
+                        nextUpdates = nextReport[i][0]
+                        anyReport = True
+
+                self.drive.calculate_weight_in_state(state_combination)
+
+                self.currentUpdate += 1
+                if anyReport:
+                    for reporter, nextR in zip(self.update_reporters, nextReport):
+                        if nextR[0] == 1:
+                            reporter.report(self)
+
+                print(importance_index)
 
     def adapt(self):
         """

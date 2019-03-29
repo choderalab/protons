@@ -12,6 +12,7 @@ from tqdm import trange
 
 from .. import app
 from ..app import log, NCMCProtonDrive
+from ..app.proposals import UniformSwapProposal
 from ..app.driver import SAMSApproach
 from .utilities import (
     timeout_handler,
@@ -119,12 +120,23 @@ def run_main(jsonfile):
         if driver.calibration_state.approach == SAMSApproach.ONESITE:
             driver.define_pools({"calibration": driver.calibration_state.group_index})
 
-    platform = mm.Platform.getPlatformByName("CUDA")
-    properties = {
-        "CudaPrecision": "mixed",
-        "DeterministicForces": "true",
-        "CudaDeviceIndex": os.environ["CUDA_VISIBLE_DEVICES"],
-    }
+    try:
+        platform = mm.Platform.getPlatformByName("CUDA")
+        properties = {
+            "CudaPrecision": "mixed",
+            "DeterministicForces": "true",
+            "CudaDeviceIndex": os.environ["CUDA_VISIBLE_DEVICES"],
+        }
+    except Exception as e:
+        message = str(e)
+        if message == 'There is no registered Platform called "CUDA"':
+
+            log.error(message)
+            log.warn("Resorting to default OpenMM platform and properties.")
+            platform = None
+            properties = None
+        else:
+            raise
 
     simulation = app.ConstantPHSimulation(
         topology,
@@ -169,6 +181,7 @@ def run_main(jsonfile):
         # Assumes the parameters are already set and the ions are set if needed
         # Don't set the charge rule
         driver.swapper = swapper
+        driver.swap_proposal = UniformSwapProposal(cation_coefficient=0.5)
 
     else:
         salinator = None

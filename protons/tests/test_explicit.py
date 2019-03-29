@@ -586,6 +586,52 @@ class TestAmberPeptide(object):
             np.asarray(old_state) == np.asarray(new_state)
         ), "States have changed."
 
+    def test_peptide_systematic_importance_sampling(self):
+        """
+        Run peptide in explicit solvent with systematic state switches
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        compound_integrator.step(10)  # MD
+        driver.scan_all_states()
+        assert (
+            driver.nattempted == 599
+        ), "The number of attempts should be equal to one minus the number of possible state combinations (600)."
+        assert (
+            driver.nattempted == driver.nrejected
+        ), "There were moves that didn't get rejected."
+
+        return
+
     def test_peptide_import_gk(self):
         """
         Import calibrated values for tyrosine

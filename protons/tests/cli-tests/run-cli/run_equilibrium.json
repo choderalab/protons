@@ -1,13 +1,12 @@
 {
-  "_comment": "This script runs a calibration starting from a checkpoint.",
   "input": {
     "_comment": "Simulation requires a checkpoint xml file. Please specify the input directory under dir.",
-    "dir": "{name}-calibration",
-    "checkpoint": "{name}-checkpoint-{previous_run_idx}.xml"
+    "dir": "./",
+    "checkpoint": "{name}-ais-checkpoint-{previous_run_idx}.xml"
   },
   "output": {
-    "dir": "{name}-calibration",
-    "basename": "{name}"
+    "dir": "output",
+    "basename": "{name}-ais"
   },
   "format_vars": {
     "_comment1": "These variables are filled into file names for input and output when you use {} style syntax.",
@@ -20,7 +19,6 @@
     "total_update_attempts": 3,
     "perturbations_per_ncmc_trial": 3,
     "propagations_per_ncmc_step": 1,
-    "counter-ion": false,
     "timeout_sec": 21599
   },
   "reporters": {
@@ -29,13 +27,10 @@
       "frequency": 1
     },
     "coordinates": {
-      "frequency": 100
-    },
-    "sams": {
       "frequency": 1
     },
     "ncmc": {
-      "frequency" : 1
+      "frequency": 1
     }
   }
 }

@@ -153,6 +153,7 @@ class TestParameterizationScript:
 class TestPreparationScript:
     top_input_dir = get_test_data("prep-cli", "cli-tests")
 
+    remove_tempfiles = False
     # Example template for ligand file names to copy over
     trypsin_example = {
         "water": "1D-water.cif",
@@ -181,7 +182,8 @@ class TestPreparationScript:
             "output/1D-checkpoint-0.xml"
         ), f"No checkpoint file was produced in {tmpdir}"
         os.chdir(olddir)
-        rmtree(tmpdir)
+        if TestPreparationScript.remove_tempfiles:
+            rmtree(tmpdir)
 
     def test_prepare_implicit_solvent(self):
         """Prepare a SAMS/calibration run in implicit solvent."""
@@ -206,7 +208,8 @@ class TestPreparationScript:
             "output/1D-checkpoint-0.xml"
         ), f"No checkpoint file was produced in {tmpdir}"
         os.chdir(olddir)
-        rmtree(tmpdir)
+        if TestPreparationScript.remove_tempfiles:
+            rmtree(tmpdir)
 
     def test_prepare_equil(self):
         tmpdir = files_to_tempdir(
@@ -228,7 +231,8 @@ class TestPreparationScript:
             "output/1D-checkpoint-0.xml"
         ), f"No checkpoint file was produced in {tmpdir}"
         os.chdir(olddir)
-        rmtree(tmpdir)
+        if TestPreparationScript.remove_tempfiles:
+            rmtree(tmpdir)
 
     def test_prepare_ais(self):
         json_input = "prepare_importance_sampling.json"
@@ -252,7 +256,8 @@ class TestPreparationScript:
             "output/1D-checkpoint-0.xml"
         ), f"No checkpoint file was produced in {tmpdir}"
         os.chdir(olddir)
-        rmtree(tmpdir)
+        if TestPreparationScript.remove_tempfiles:
+            rmtree(tmpdir)
 
     @pytest.mark.slowtest
     def test_prepare_ais_systematic(self):
@@ -278,23 +283,111 @@ class TestPreparationScript:
                 f"output/1D-importance-state-{index}-checkpoint-0.xml"
             ), f"No checkpoint file was produced in {tmpdir}"
         os.chdir(olddir)
-        rmtree(tmpdir)
+        if TestPreparationScript.remove_tempfiles:
+            rmtree(tmpdir)
 
 
 class TestRunScript:
-    input_dir = get_test_data("run-cli", "testsystems/cli-tests")
+    input_dir = get_test_data("run-cli", "cli-tests")
+    remove_tempfiles = True
 
-    def test_prepare_sams(self):
-        assert False
+    def test_run_calibration(self):
+        """Running an explicit solvent calibration"""
+        json_input = os.path.join(TestRunScript.input_dir, "run_calibration.json")
+        checkpoint_file = os.path.join(
+            TestRunScript.input_dir, "1D-calibration-checkpoint-0.xml"
+        )
+        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
 
-    def test_prepare_implicit_solvent(self):
-        assert False
+        # Perform preparation in temp dir
+        run_simulation.run_main(json_input)
 
-    def test_prepare_equil(self):
-        assert False
+        # check if output files were produced
+        assert os.path.isfile(
+            f"output/1D-calibration-checkpoint-1.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        assert os.path.isfile(f"output/1D-calibration-1.nc")
+        assert os.path.isfile(f"output/1D-calibration-1.dcd")
 
-    def test_prepare_ais(self):
-        assert False
+        os.chdir(olddir)
+        if TestRunScript.remove_tempfiles:
+            rmtree(tmpdir)
+
+    def test_run_implicit_solvent(self):
+        """Running an implicit solvent calibration"""
+        json_input = os.path.join(
+            TestRunScript.input_dir, "run_calibration_implicit.json"
+        )
+        checkpoint_file = os.path.join(
+            TestRunScript.input_dir, "1D-calibration-implicit-checkpoint-0.xml"
+        )
+        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_simulation.run_main(json_input)
+        # check if output files were produced
+        assert os.path.isfile(
+            f"output/1D-calibration-checkpoint-1.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        assert os.path.isfile(f"output/1D-calibration-1.nc")
+        assert os.path.isfile(f"output/1D-calibration-1.dcd")
+
+        os.chdir(olddir)
+        if TestRunScript.remove_tempfiles:
+            rmtree(tmpdir)
+
+    def test_run_equilibrium(self):
+        """Test running an equilibrium simulation"""
+        """Running an explicit solvent calibration"""
+        json_input = os.path.join(TestRunScript.input_dir, "run_equilibrium.json")
+        checkpoint_file = os.path.join(
+            TestRunScript.input_dir, "1D-equilibrium-checkpoint-0.xml"
+        )
+        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_simulation.run_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            f"output/1D-equilibrium-checkpoint-1.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        assert os.path.isfile(f"output/1D-equilibrium-1.nc")
+        assert os.path.isfile(f"output/1D-equilibrium-1.dcd")
+
+        os.chdir(olddir)
+        if TestRunScript.remove_tempfiles:
+            rmtree(tmpdir)
+
+    def test_run_ais(self):
+        """Running an importance sampling simulation"""
+        json_input = os.path.join(TestRunScript.input_dir, "run_ais.json")
+        checkpoint_file = os.path.join(
+            TestRunScript.input_dir, "1D-ais-state-3-checkpoint-0.xml"
+        )
+        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        olddir = os.getcwd()
+        os.chdir(tmpdir)
+
+        # Perform preparation in temp dir
+        run_simulation.run_main(json_input)
+
+        # check if output files were produced
+        assert os.path.isfile(
+            f"output/1D-ais-state-3-checkpoint-1.xml"
+        ), f"No checkpoint file was produced in {tmpdir}"
+        assert os.path.isfile(f"output/1D-ais-state-3-1.nc")
+        assert os.path.isfile(f"output/1D-ais-state-3-1.dcd")
+
+        os.chdir(olddir)
+        if TestRunScript.remove_tempfiles:
+            rmtree(tmpdir)
 
 
 class TestCLI:
