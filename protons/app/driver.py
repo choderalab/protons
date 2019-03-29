@@ -2031,7 +2031,6 @@ class NCMCProtonDrive(_BaseDrive):
                     f_params[force_index]['exceptions'].append(exc_dict)
 
         self.titrationGroups[titration_group_index][titration_state_index].forces = f_params
-        #self._log_forces(titration_group_index)
 
 
     def _perform_ncmc_protocol(self, titration_group_indices, initial_titration_states, final_titration_states, salt_residue_indices=None, salt_states=None):
@@ -2111,10 +2110,7 @@ class NCMCProtonDrive(_BaseDrive):
         ncmc_integrator.step(self.propagations_per_step)
         logging.info('Initial titration state: {}'.format(initial_titration_states))
         logging.info('Final titration state: {}'.format(final_titration_states))
-        # log forces
-        logging.info('Entry')
-        self._log_forces(titration_group_index)
-
+        
 
         for step in log_progress(range(self.perturbations_per_trial)):
             final = False
@@ -2145,8 +2141,6 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Extract the internally calculated work from the integrator
         work = ncmc_integrator.getGlobalVariableByName('protocol_work') * self.beta_unitless
-        logging.info('Exit')
-        self._log_forces(titration_group_index)
 
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:

@@ -1093,6 +1093,8 @@ class _TitratableForceFieldCompiler(object):
                             d = None
 
                     e = angle_string.format(node1=node1, node2=node2, node3=node3, angle=angle, k=k)
+                    logging.info(e)
+
                     isomer_xml.append(etree.fromstring(e))
 
                 ##############################################
@@ -1101,6 +1103,7 @@ class _TitratableForceFieldCompiler(object):
                 for torsion_force in self._input_state_data[isomer_index]['torsion-forces']:
                     e = torsion_string.format(node1=torsion_force['atom1-name'], node2=torsion_force['atom2-name'], node3=torsion_force['atom3-name'], node4=torsion_force['atom4-name'], periodicity=torsion_force['periodicity'], phase=torsion_force['phase'], k=torsion_force['k'])
                     isomer_xml.append(etree.fromstring(e))
+                    logging.info(e)
 
                 protonsdata.append(isomer_xml)
             residue.append(protonsdata)
