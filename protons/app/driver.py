@@ -1650,7 +1650,7 @@ class NCMCProtonDrive(_BaseDrive):
         
         """
 
-        atom_name_by_atom_index = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
+        atom_index_to_atom_name = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
        
         for force in self.forces_to_update:            
             # Get name of force class.
