@@ -337,10 +337,28 @@ class TestConstantPHSimulation(object):
         assert np.all(
             np.unique(first_run) == np.sort(first_run)
         ), "No work values should be duplicated."
+
+        # Since instanteneous switching is used, this should be true
         for x in range(1, niters):
             assert np.all(
                 np.isclose(work_values[x], first_run)
             ), "Work should be equal for all states."
+
+        # Switch state
+        driver.set_titration_state(0, 3, updateContextParameters=True, updateIons=True)
+        driver.set_titration_state(1, 1, updateContextParameters=True, updateIons=True)
+        simulation.update(1)
+
+        assert (
+            ncfile["Protons/NCMC/initial_state"][-n_total_states, 0] == 3
+        ), "Initial state was not changed correctly."
+        assert (
+            ncfile["Protons/NCMC/initial_state"][-n_total_states, 1] == 1
+        ), "Initial state was not changed correctly."
+        work_values = np.split(ncfile["Protons/NCMC/total_work"][:], niters + 1)
+        assert not np.all(
+            np.isclose(work_values[0], work_values[-1])
+        ), "Work values starting from different state should differ."
 
         return
 
