@@ -1549,10 +1549,10 @@ class NCMCProtonDrive(_BaseDrive):
 
     def __init__(
         self,
-        temperature,
-        topology,
-        system,
-        pressure=None,
+        temperature: unit.Quantity,
+        topology: app.Topology,
+        system: mm.System,
+        pressure: Optional[unit.Quantity] = None,
         perturbations_per_trial: int = 0,
         propagations_per_step: int = 1,
         sampling_method: SamplingMethod = SamplingMethod.MCMC,
@@ -1591,9 +1591,9 @@ class NCMCProtonDrive(_BaseDrive):
         self.ncmc_stats_per_step = [None] * perturbations_per_trial
         self.propagations_per_step = propagations_per_step
         self._last_attempt_data = _TitrationAttemptData()
-        self.nattempted = 0
-        self.naccepted = 0
-        self.nrejected = 0
+        self.nattempted: int = 0
+        self.naccepted: int = 0
+        self.nrejected: int = 0
         self.topology = topology
         self.sampling_method = sampling_method
 
@@ -3398,7 +3398,7 @@ class NCMCProtonDrive(_BaseDrive):
         """Ensure the correct state after accepting a move."""
 
         # Update internal statistics counter
-        if initial_titration_states != final_titration_states:
+        if np.any(initial_titration_states != final_titration_states):
             self.naccepted += 1
 
         # Update titration states.

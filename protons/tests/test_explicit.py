@@ -11,6 +11,7 @@ from numpy.random import choice
 from saltswap.swapper import Swapper
 from saltswap.wrappers import Salinator
 from simtk import unit, openmm
+import itertools
 
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
@@ -586,9 +587,9 @@ class TestAmberPeptide(object):
             np.asarray(old_state) == np.asarray(new_state)
         ), "States have changed."
 
-    def test_peptide_systematic_importance_sampling(self):
+    def test_peptide_deterministic_importance_sample(self):
         """
-        Run peptide in explicit solvent with systematic state switches
+        Run peptide in explicit solvent with deterministic state choice to every possible state in the system.
         """
         testsystem = self.setup_edchky_explicit()
         compound_integrator = create_compound_gbaoab_integrator(testsystem)
@@ -622,7 +623,13 @@ class TestAmberPeptide(object):
         )
 
         compound_integrator.step(10)  # MD
-        driver.scan_all_states()
+
+        states_per_res = [np.arange(len(res)) for res in driver.titrationGroups]
+        for importance_index, state_combination in enumerate(
+            itertools.product(*states_per_res)
+        ):
+            driver.calculate_weight_in_state(state_combination)
+
         assert (
             driver.nattempted == 599
         ), "The number of attempts should be equal to one minus the number of possible state combinations (600)."

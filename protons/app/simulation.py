@@ -182,7 +182,6 @@ class ConstantPHSimulation(Simulation):
                 for i, reporter in enumerate(self.update_reporters):
                     nextReport[i] = reporter.describeNextReport(self)
                     if nextReport[i][0] == 1:
-                        nextUpdates = nextReport[i][0]
                         anyReport = True
 
                 self.drive.calculate_weight_in_state(state_combination)
@@ -192,8 +191,6 @@ class ConstantPHSimulation(Simulation):
                     for reporter, nextR in zip(self.update_reporters, nextReport):
                         if nextR[0] == 1:
                             reporter.report(self)
-
-                print(importance_index)
 
     def adapt(self):
         """

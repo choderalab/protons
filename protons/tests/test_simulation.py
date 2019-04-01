@@ -236,6 +236,13 @@ class TestConstantPHSimulation(object):
         # Update the titration states using the uniform proposal
         simulation.update(1)
 
+        # Total states is 15 but proposing the same state as current does not get added to statistics.
+        assert simulation.drive.nattempted == 14, "Not enough switch were attempted."
+        assert simulation.drive.naccepted == 0, "No acceptance should have occurred."
+        assert (
+            simulation.drive.nattempted == simulation.drive.nrejected
+        ), "The rejection count should match the number of attempts"
+
         print("Done!")
 
     def test_create_importance_sampling_reporters(self):
@@ -314,14 +321,26 @@ class TestConstantPHSimulation(object):
         # Regular MD step
         simulation.step(1)
         # Update the titration states using the uniform proposal
-        niters = 10
+        niters = 3
         for x in range(niters):
             simulation.update(1)
 
+        n_total_states = np.product([len(group) for group in driver.titrationGroups])
         assert (
-            len(ncfile["Protons/Titration/update"][:])
-            == np.product([len(group) for group in driver.titrationGroups]) * niters
+            len(ncfile["Protons/Titration/update"][:]) == n_total_states * niters
         ), "The wrong number of updates were recorded"
+
+        work_values = np.split(ncfile["Protons/NCMC/total_work"][:], niters)
+        init_states = ncfile["Protons/NCMC/initial_state"][:, :]
+        assert np.all(init_states == 0), "States should all be zero at the start."
+        first_run = work_values[0]
+        assert np.all(
+            np.unique(first_run) == np.sort(first_run)
+        ), "No work values should be duplicated."
+        for x in range(1, niters):
+            assert np.all(
+                np.isclose(work_values[x], first_run)
+            ), "Work should be equal for all states."
 
         return
 

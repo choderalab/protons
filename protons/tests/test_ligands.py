@@ -89,18 +89,6 @@ class TestTrypsinLigandParameterization:
         epik_data = retrieve_epik_info(unique_filename)
         assert len(epik_data) > 0, "No Epik data was extracted."
 
-    def test_reading_validated_xml_file_using_forcefield(self):
-        """
-        Read the xmlfile using app.ForceField
-
-        Notes
-        -----
-        Using a pregenerated, manually validated xml file.
-        This can detect failure because of changes to OpenMM ForceField.
-        """
-        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
-        forcefield = app.ForceField(xmlfile)
-
 
 class TestLigandParameterizationExplicit(object):
     """Test the epik and antechamber parametrization procedure, and ffxml files that are generated"""
