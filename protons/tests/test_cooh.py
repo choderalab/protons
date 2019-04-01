@@ -581,7 +581,7 @@ class TestCarboxylicAcid:
             glh.simulation.reporters.append(
                 app.DCDReporter(
                     "cooh-glh-{}.dcd".format(str(uuid.uuid4())),
-                    md_steps_between_mc // 100,
+                    md_steps_between_mc // 5,
                     enforcePeriodicBox=True,
                 )
             )

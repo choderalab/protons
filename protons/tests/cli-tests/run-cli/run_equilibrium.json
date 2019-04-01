@@ -2,11 +2,11 @@
   "input": {
     "_comment": "Simulation requires a checkpoint xml file. Please specify the input directory under dir.",
     "dir": "./",
-    "checkpoint": "{name}-ais-checkpoint-{previous_run_idx}.xml"
+    "checkpoint": "{name}-equilibrium-checkpoint-{previous_run_idx}.xml"
   },
   "output": {
     "dir": "output",
-    "basename": "{name}-ais"
+    "basename": "{name}-equilibrium"
   },
   "format_vars": {
     "_comment1": "These variables are filled into file names for input and output when you use {} style syntax.",
