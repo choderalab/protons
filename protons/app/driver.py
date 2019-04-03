@@ -4159,13 +4159,34 @@ def strip_in_unit_system(quant, unit_system=unit.md_unit_system, compatible_with
 class TautomerNCMCProtonDrive(NCMCProtonDrive):
     def __init__(
         self,
-        temperature,
-        topology,
-        system,
-        pressure=None,
-        perturbations_per_trial=0,
-        propagations_per_step=1,
+        temperature: unit.Quantity,
+        topology: app.Topology,
+        system: mm.System,
+        pressure: Optional[unit.Quantity] = None,
+        perturbations_per_trial: int = 0,
+        propagations_per_step: int = 1,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC,
     ):
+        """
+        Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
+
+        Parameters
+        ----------
+        temperature : simtk.unit.Quantity compatible with kelvin
+            Temperature at which the system is to be simulated.
+        topology : protons.app.Topology
+            OpenMM object containing the topology of system
+        system : simtk.openmm.System
+            System to be titrated, containing all possible protonation sites.
+        pressure : simtk.unit.Quantity compatible with atmospheres, optional
+            For explicit solvent simulations, the pressure.
+        perturbations_per_trial : int, optional, default=0
+            Number of perturbation steps per NCMC switching trial, or 0 if instantaneous Monte Carlo is to be used.
+        propagations_per_step : int, optional, default=1
+            Number of propagation steps in between perturbation steps.
+        sampling_method : The method of sampling that is used.
+            See the SamplingMethod enum for the set of supported options (including MCMC and importance sampling).
+        """
 
         super().__init__(
             temperature,
@@ -4174,6 +4195,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             pressure=pressure,
             perturbations_per_trial=perturbations_per_trial,
             propagations_per_step=propagations_per_step,
+            sampling_method=sampling_method,
         )
         # Store force object pointers.
         force_classes_to_update = [
@@ -4688,6 +4710,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
         propagations_per_step=1,
         residues_by_name=None,
         residues_by_index=None,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC,
     ):
 
         """
@@ -4741,6 +4764,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             pressure,
             perturbations_per_trial=perturbations_per_trial,
             propagations_per_step=propagations_per_step,
+            sampling_method=sampling_method,
         )
 
         ffxml_residues = self._parse_ffxml_files(ffxml_files)
