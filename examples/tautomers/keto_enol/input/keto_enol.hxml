@@ -1,0 +1,16 @@
+<Residues>
+  <Residue name="UNL">
+    <H name="H1ca" parent="C4"/>
+    <H name="H2ca" parent="C5"/>
+    <H name="H3ca" parent="C6"/>
+    <H name="H4ca" parent="C7"/>
+    <H name="H5ce" parent="C9"/>
+    <H name="H6c2" parent="C10"/>
+    <H name="H7c3" parent="C11"/>
+    <H name="H8c3" parent="C11"/>
+    <H name="H5ca" parent="C9"/>
+    <H name="H6ca" parent="C10"/>
+    <H name="H9oh" parent="O1"/>
+    <H name="H7ca" parent="C11"/>
+  </Residue>
+</Residues>
