@@ -1,7 +1,7 @@
-import json
 import logging
 import os
 import signal
+import yaml
 from typing import Dict
 import sys
 import netCDF4
@@ -12,6 +12,7 @@ from tqdm import trange
 
 from .. import app
 from ..app import log, NCMCProtonDrive
+from ..app.proposals import UniformSwapProposal
 from ..app.driver import SAMSApproach
 from .utilities import (
     timeout_handler,
@@ -26,8 +27,8 @@ from .utilities import (
 def run_main(jsonfile):
     """Main simulation loop."""
 
-    # TODO Validate json input with json schema?
-    settings = json.load(open(jsonfile))
+    # TODO Validate yaml/json input with json schema?
+    settings = yaml.load(open(jsonfile, "r"))
 
     try:
         format_vars: Dict[str, str] = settings["format_vars"]
@@ -119,12 +120,23 @@ def run_main(jsonfile):
         if driver.calibration_state.approach == SAMSApproach.ONESITE:
             driver.define_pools({"calibration": driver.calibration_state.group_index})
 
-    platform = mm.Platform.getPlatformByName("CUDA")
-    properties = {
-        "CudaPrecision": "mixed",
-        "DeterministicForces": "true",
-        "CudaDeviceIndex": os.environ["CUDA_VISIBLE_DEVICES"],
-    }
+    try:
+        platform = mm.Platform.getPlatformByName("CUDA")
+        properties = {
+            "CudaPrecision": "mixed",
+            "DeterministicForces": "true",
+            "CudaDeviceIndex": os.environ["CUDA_VISIBLE_DEVICES"],
+        }
+    except Exception as e:
+        message = str(e)
+        if message == 'There is no registered Platform called "CUDA"':
+
+            log.error(message)
+            log.warn("Resorting to default OpenMM platform and properties.")
+            platform = None
+            properties = None
+        else:
+            raise
 
     simulation = app.ConstantPHSimulation(
         topology,
@@ -150,6 +162,7 @@ def run_main(jsonfile):
 
     saltswap_element = checkpoint_tree.xpath("Saltswap")
     if saltswap_element:
+        # Deserialiation workaround
         saltswap_element = saltswap_element[0]
         salt_concentration = (
             float(saltswap_element.get("salt_concentration_molar")) * unit.molar
@@ -165,9 +178,10 @@ def run_main(jsonfile):
         )
         swapper = salinator.swapper
         deserialize_state_vector(saltswap_element, swapper)
-        # If counterion is false, openmm automatically uses a neutralizing background charge
-        if run["counter-ion"]:
-            driver.attach_swapper(swapper)
+        # Assumes the parameters are already set and the ions are set if needed
+        # Don't set the charge rule
+        driver.swapper = swapper
+        driver.swap_proposal = UniformSwapProposal(cation_coefficient=0.5)
 
     else:
         salinator = None

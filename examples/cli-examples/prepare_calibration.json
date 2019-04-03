@@ -30,11 +30,12 @@
     "_comment2": "If PME left out, nocutoff is used.",
     "PME": {
       "_comment": "Ewald + periodic system settings",
-      "ewald_error_tolerance": 1.0e-5,
+      "ewald_error_tolerance": 1.0e-4,
       "switching_distance_nm": 0.85,
       "nonbonded_cutoff_nm": 1.0,
       "barostat_interval": 25,
-      "pressure_atm": 1.0
+      "pressure_atm": 1.0,
+      "dispersion_correction": true
     },
     "temperature_k": 300.0,
     "salt_concentration_molar": 0.150
