@@ -34,8 +34,7 @@
       "switching_distance_nm": 0.85,
       "nonbonded_cutoff_nm": 1.0,
       "barostat_interval": 25,
-      "pressure_atm": 1.0,
-      "dispersion_correction": true
+      "pressure_atm": 1.0
     },
     "temperature_k": 300.0,
     "salt_concentration_molar": 0.150
@@ -46,9 +45,13 @@
     "collision_rate_per_ps": 1.0
   },
   "preprocessing": {
-    "minimization_tolerance_kjmol": 1e-5,
+    "minimization_tolerance_kjmol": 1.0e-5,
     "minimization_max_iterations": 30,
     "num_thermalization_steps": 10
+  },
+  "importance": {
+    "_comment": "Add this block if you wish to use importance sampling. Specify the fixed state as a list of integers for each titratable residue.",
+    "systematic": true
   },
   "reference_free_energies": {
     "_comment": "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state.",

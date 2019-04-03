@@ -1,13 +1,12 @@
 {
-  "_comment": "This script runs an equilibrium constant-pH simulation starting from a checkpoint.",
   "input": {
     "_comment": "Simulation requires a checkpoint xml file. Please specify the input directory under dir.",
-    "dir": "{name}-simulation",
-    "checkpoint": "{name}-checkpoint-{previous_run_idx}.xml"
+    "dir": "./",
+    "checkpoint": "{name}-equilibrium-checkpoint-{previous_run_idx}.xml"
   },
   "output": {
-    "dir": "{name}-simulation",
-    "basename": "{name}"
+    "dir": "output",
+    "basename": "{name}-equilibrium"
   },
   "format_vars": {
     "_comment1": "These variables are filled into file names for input and output when you use {} style syntax.",
@@ -28,10 +27,10 @@
       "frequency": 1
     },
     "coordinates": {
-      "frequency": 100
-    },    
+      "frequency": 1
+    },
     "ncmc": {
-      "frequency" : 1
+      "frequency": 1
     }
   }
 }

@@ -4,9 +4,8 @@ import pytest
 from lxml import etree
 from uuid import uuid4
 from protons import app as protons_app
-from openmoltools import forcefield_generators as omtff
-from openmoltools.schrodinger import is_schrodinger_suite_installed
-from openmoltools.amber import find_gaff_dat
+from protons.app.schrodinger import is_schrodinger_suite_installed
+from protons.app.amber import find_gaff_dat
 from simtk import unit
 from simtk.openmm import app, Vec3
 from os import path, remove
@@ -85,22 +84,10 @@ class TestTrypsinLigandParameterization:
         )
 
         assert path.isfile(unique_filename), "No Epik output file was produced"
-        remove(unique_filename)  # clean up after ourselves
-        remove(log_name)
         epik_data = retrieve_epik_info(unique_filename)
         assert len(epik_data) > 0, "No Epik data was extracted."
-
-    def test_reading_validated_xml_file_using_forcefield(self):
-        """
-        Read the xmlfile using app.ForceField
-
-        Notes
-        -----
-        Using a pregenerated, manually validated xml file.
-        This can detect failure because of changes to OpenMM ForceField.
-        """
-        xmlfile = get_test_data("imidazole.xml", "testsystems/imidazole_implicit")
-        forcefield = app.ForceField(xmlfile)
+        remove(unique_filename)  # clean up after ourselves
+        remove(log_name)
 
 
 class TestLigandParameterizationExplicit(object):
@@ -209,12 +196,12 @@ class TestLigandParameterizationExplicit(object):
         input_xml = get_test_data(
             "protons-imidazole-ph-feature.xml", "testsystems/imidazole_explicit"
         )
-        system_file = "{}.cif".format(str(uuid4()))
+        output_basename = str(uuid4())
         hxml = "{}-h.xml".format(str(uuid4()))
         protons_app.ligands.create_hydrogen_definitions(input_xml, hxml)
-        protons_app.ligands.prepare_calibration_system(
+        protons_app.ligands.prepare_calibration_systems(
             vacuum_file,
-            system_file,
+            output_basename,
             ffxml=input_xml,
             hxml=hxml,
             delete_old_H=True,
@@ -232,12 +219,12 @@ class TestLigandParameterizationExplicit(object):
         input_xml = get_test_data(
             "protons-imidazole-ph-feature.xml", "testsystems/imidazole_explicit"
         )
-        system_file = "{}.cif".format(str(uuid4()))
+        output_basename = str(uuid4())
         hxml = "{}-h.xml".format(str(uuid4()))
         protons_app.ligands.create_hydrogen_definitions(input_xml, hxml)
-        protons_app.ligands.prepare_calibration_system(
+        protons_app.ligands.prepare_calibration_systems(
             vacuum_file,
-            system_file,
+            output_basename,
             ffxml=input_xml,
             hxml=hxml,
             delete_old_H=True,

@@ -109,7 +109,7 @@ def run_parametrize_main(inputfile):
 
     if not run_epik:
         # Previously generated mae file with the output from epik
-        oepik = epik["input"]["epik"].format(**format_vars)
+        oepik = os.path.abspath(inp["epik"].format(**format_vars))
     else:
         if "smiles" in epik["input"]:
             # Converts smiles to maestro file and uses that maestro file as input
@@ -188,11 +188,12 @@ def run_parametrize_main(inputfile):
         # prepare solvated system
         prepare_calibration_systems(oextres, obase, offxml, ohxml)
 
-        os.chdir(lastdir)
     else:
         log.info("🚱 Solvated system generation skipped.")
 
     log.info(f"🖖 Script finished. Find your results in {odir}")
+
+    os.chdir(lastdir)
 
 
 if __name__ == "__main__":

@@ -11,13 +11,16 @@ from numpy.random import choice
 from saltswap.swapper import Swapper
 from saltswap.wrappers import Salinator
 from simtk import unit, openmm
+import itertools
 
 from protons import app
 from protons.app import AmberProtonDrive, ForceFieldProtonDrive, NCMCProtonDrive
+from protons.app.driver import SamplingMethod
 from protons.app import ForceField
 from protons.app import SAMSCalibrationEngine
 from protons.app import UniformProposal
-from protons.app.proposals import OneDirectionChargeProposal
+from protons.app.proposals import UniformSwapProposal
+from protons.app import ions
 from . import get_test_data
 from .utilities import SystemSetup, create_compound_gbaoab_integrator, hasCUDA
 
@@ -502,6 +505,140 @@ class TestAmberPeptide(object):
             UniformProposal(), residue_pool="group2", nattempts=10
         )  # protonation
 
+    def test_peptide_instantaneous_importance_sampling(self):
+        """
+        Run peptide in explicit solvent with an instanteneous state switch
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), residue_pool="group2", nattempts=10)
+
+    def test_peptide_instantaneous_importance_sampling_states(self):
+        """
+        Run peptide in explicit solvent with importance sampling and check if states change.
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        # hack to always accept.
+        driver._accept_reject = lambda self, logp: True
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        old_state = deepcopy(driver.titrationStates)
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+        new_state = deepcopy(driver.titrationStates)
+        assert np.all(
+            np.asarray(old_state) == np.asarray(new_state)
+        ), "States have changed."
+
+    def test_peptide_deterministic_importance_sample(self):
+        """
+        Run peptide in explicit solvent with deterministic state choice to every possible state in the system.
+        """
+        testsystem = self.setup_edchky_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+
+        driver.attach_context(context)
+        driver.define_pools(
+            {
+                "group1": [0, 2, 4],
+                "group2": [1, 3, 5],
+                "GLU": [0],
+                "ASP": [1],
+                "CYS": [2],
+                "HIS": [3],
+                "LYS": [4],
+                "TYR": [5],
+            }
+        )
+
+        compound_integrator.step(10)  # MD
+
+        states_per_res = [np.arange(len(res)) for res in driver.titrationGroups]
+        for importance_index, state_combination in enumerate(
+            itertools.product(*states_per_res)
+        ):
+            driver.calculate_weight_in_state(state_combination)
+
+        assert (
+            driver.nattempted == 599
+        ), "The number of attempts should be equal to one minus the number of possible state combinations (600)."
+        assert (
+            driver.nattempted == driver.nrejected
+        ), "There were moves that didn't get rejected."
+
+        return
+
     def test_peptide_import_gk(self):
         """
         Import calibrated values for tyrosine
@@ -582,6 +719,71 @@ class TestAmberPeptide(object):
 
         compound_integrator.step(10)  # MD
         driver.update(UniformProposal(), nattempts=10)  # protonation
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(
+        os.environ.get("TRAVIS", None) == "true", reason="Skip slow test on travis."
+    )
+    def test_peptide_ais(self):
+        """
+        Run peptide in explicit solvent with annealed importance sampling
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=2,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+
+    @pytest.mark.slowtest
+    @pytest.mark.skipif(
+        os.environ.get("TRAVIS", None) == "true", reason="Skip slow test on travis."
+    )
+    def test_peptide_ais_ensure_reject(self):
+        """
+        Run peptide in explicit solvent with annealed importance sampling and ensure state does not change
+        """
+        testsystem = self.setup_edchky_explicit()
+
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = AmberProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.cpin_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=2,
+            sampling_method=SamplingMethod.IMPORTANCE,
+        )
+
+        driver._accept_reject = lambda self, logp: True
+
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+        old_state = deepcopy(driver.titrationStates)
+        compound_integrator.step(10)  # MD
+        driver.update(UniformProposal(), nattempts=10)  # protonation
+        new_state = deepcopy(driver.titrationStates)
+        assert np.all(
+            np.asarray(old_state) == np.asarray(new_state)
+        ), "States have changed."
 
     def test_peptide_serialization(self):
         """
@@ -885,7 +1087,166 @@ class TestForceFieldImidazoleSaltswap:
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_noions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.NO_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 0
+        ), "No anions should be added/removed"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == 0
+        ), "No cations should be added/removed."
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_counterions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.COUNTER_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 1
+        ), "One anion should be added as counter charge"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == 0
+        ), "No cations should be added/removed."
+
+        driver.adjust_to_ph(7.4)
+        compound_integrator.step(1)
+        driver.update(UniformProposal())
+
+    def test_saltswap_incorporation_replacementions(self):
+        """Test if the attachment of a swapper works."""
+        testsystem = self.setup_imidazole_explicit()
+        compound_integrator = create_compound_gbaoab_integrator(testsystem)
+        driver = ForceFieldProtonDrive(
+            testsystem.temperature,
+            testsystem.topology,
+            testsystem.system,
+            testsystem.forcefield,
+            testsystem.ffxml_filename,
+            pressure=testsystem.pressure,
+            perturbations_per_trial=0,
+        )
+        platform = openmm.Platform.getPlatformByName(self.default_platform)
+        context = openmm.Context(testsystem.system, compound_integrator, platform)
+        context.setPositions(testsystem.positions)  # set to minimized positions
+        context.setVelocitiesToTemperature(testsystem.temperature)
+        driver.attach_context(context)
+
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=context,
+            system=testsystem.system,
+            topology=testsystem.topology,
+            ncmc_integrator=compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=testsystem.pressure,
+            temperature=testsystem.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        driver.enable_neutralizing_ions(
+            swapper, neutral_charge_rule=ions.NeutralChargeRule.REPLACEMENT_IONS
+        )
+
+        assert (
+            driver.titrationGroups[0].titration_states[0].anion_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[0].cation_count == 0
+        ), "Reference state ions should be 0"
+        assert (
+            driver.titrationGroups[0].titration_states[1].anion_count == 0
+        ), "No anions should be added as counter charge"
+        assert (
+            driver.titrationGroups[0].titration_states[1].cation_count == -1
+        ), "One cations should be removed."
 
         driver.adjust_to_ph(7.4)
         compound_integrator.step(1)
@@ -924,29 +1285,30 @@ class TestForceFieldImidazoleSaltswap:
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
-        driver.attach_swapper(swapper)
+        driver.enable_neutralizing_ions(swapper)
 
         driver.adjust_to_ph(7.4)
-        swap_proposal = OneDirectionChargeProposal()
+        swap_proposal = UniformSwapProposal()
         old_charge = self.calculate_explicit_solvent_system_charge(driver.system)
         # The initial state is neutral, the new state is +1
         # Pick swaps using the proposal method explicitly.
         saltswap_residue_indices, saltswap_state_pairs, log_ratio = swap_proposal.propose_swaps(
-            driver, 0, 1
+            swapper, -1, 0
         )
+
+        new_state_vector = deepcopy(swapper.stateVector)
+        # The saltswap indices are updated to indicate the change of species
+        for saltswap_residue, (from_ion_state, to_ion_state) in zip(
+            saltswap_residue_indices, saltswap_state_pairs
+        ):
+            new_state_vector[saltswap_residue] = to_ion_state
         # First residue is updates from state 0, to state 1, and the previously selected salt swap is added to the protocol
         driver._perform_ncmc_protocol(
-            [0],
-            np.asarray([0]),
-            np.asarray([1]),
-            salt_residue_indices=saltswap_residue_indices,
-            salt_states=saltswap_state_pairs,
+            [0], np.asarray([0]), np.asarray([1]), final_salt_vector=new_state_vector
         )
 
         # This should be the same as the old charge
         new_charge = self.calculate_explicit_solvent_system_charge(driver.system)
-        # Bookkeeping
-        driver.excess_ions -= 1
 
         # The saltswap indices are updated to indicate the change of species
         for saltswap_residue, (from_ion_state, to_ion_state) in zip(
@@ -973,134 +1335,3 @@ class TestForceFieldImidazoleSaltswap:
             tot_charge += np.float64(q)
 
         return tot_charge
-
-
-class TestIonSwapping:
-    """This class contains some simulation-independent testing features of schemes for selecting what ions need to be
-    added/removed from a simulation to facilitate charge changes."""
-
-    histidine = np.asarray(
-        [0, 0, +1], dtype=int
-    )  # Has two neutral states, and one positive state
-    aspartate = np.asarray(
-        [-1, 0, 0, 0, 0], dtype=int
-    )  # Has 4 neutral syn/anti hydrogen positions, also covers glutamate
-    lysine = np.asarray([0, +1], dtype=int)
-    tyrosine = np.asarray([0, -1], dtype=int)
-
-    diprotic_acid = np.asarray([-2, -1, -1, 0], dtype=int)
-    diprotic_base = np.asarray([0, 1, 1, 2], dtype=int)
-    zwitter_one = np.asarray([1, 0, 0, -1], dtype=int)
-    zwitter_two = np.asarray(
-        [-2, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2], dtype=int
-    )
-
-    residues = {
-        "His": histidine,
-        "Asp": aspartate,
-        "Glu": deepcopy(aspartate),
-        "Cys": deepcopy(tyrosine),
-        "Tyr": tyrosine,
-        "Lys": lysine,
-        "Diprotic acid": diprotic_acid,
-        "Diprotic base": diprotic_base,
-        "Zwitter ion": zwitter_one,
-        "Double zwitter ion": zwitter_two,
-    }
-
-    def test_accumulation_chen_roux_swap_proposals(self):
-        """
-        Select ion swaps for a hypothetical chain of protonation state changes.
-        """
-
-        n_samples = 1000
-        for resname, residue in TestIonSwapping.residues.items():
-            max_anions, max_cations, min_anions, min_cations, span_q = self.sample_residue_trajectory_chenroux(
-                n_samples, residue
-            )
-
-            self._check_for_accumulation_depletion(
-                max_anions, max_cations, min_anions, min_cations, resname, span_q
-            )
-
-    @staticmethod
-    def sample_residue_trajectory_chenroux(n_samples: int, residue: np.ndarray):
-        """
-        For a given residue, randomly sample a trajectory of states from it.
-        """
-        # initial charge, and initial counterions
-        res_charge = [residue[0]]
-        # If residue is negative, add cations
-        ncat = [-res_charge[0]] if res_charge[0] < 0 else [0]
-        # If residue is positive, add anions
-        nani = [-res_charge[0]] if res_charge[0] > 0 else [0]
-        for x in range(n_samples):
-            initial_charge = res_charge[x]
-            final_charge = choice(residue)
-            swaps = OneDirectionChargeProposal._select_swaps_chenroux(
-                initial_charge, final_charge
-            )
-            cat = 0
-            cat += swaps["water_to_cation"]
-            cat -= swaps["cation_to_water"]
-            ani = 0
-            ani += swaps["water_to_anion"]
-            ani -= swaps["anion_to_water"]
-
-            ncat.append(ncat[x] + cat)
-            nani.append(nani[x] + ani)
-            res_charge.append(final_charge)
-
-        deltaq = [0]  # first delta is 0
-        deltaq.extend(list(res_charge[x + 1] - res_charge[x] for x in range(n_samples)))
-        delta_cat = [0]
-        delta_cat.extend(list(ncat[x + 1] - ncat[x] for x in range(n_samples)))
-        delta_ani = [0]
-        delta_ani.extend(list(nani[x + 1] - nani[x] for x in range(n_samples)))
-
-        max_q = np.max(res_charge)
-        min_q = np.min(res_charge)
-        span_q = max_q - min_q
-        max_anions = np.max(nani)
-        min_anions = np.min(nani)
-        max_cations = np.max(ncat)
-        min_cations = np.min(ncat)
-        return max_anions, max_cations, min_anions, min_cations, span_q
-
-    @staticmethod
-    def _check_for_accumulation_depletion(
-        max_anions: int,
-        max_cations: int,
-        min_anions: int,
-        min_cations: int,
-        resname: str,
-        span_q: int,
-    ):
-        """
-        Given some properties of the residue, and the ion depletion, assert whether accumulation or depletion of ions is occuring
-        """
-
-        assert span_q >= max_anions, (
-            "The number of anions for residue {} is too large, could indicate "
-            "accumulation of ions. Largest q_span: {} anions: {}".format(
-                resname, span_q, max_anions
-            )
-        )
-        assert span_q >= max_cations, (
-            "The number of cations for residue {} is too large, could indicate "
-            "accumulation of ions. Largest_q_span q: {} cations: {}".format(
-                resname, span_q, max_cations
-            )
-        )
-        assert span_q >= abs(min_anions), (
-            "The number of anions for residue {} is too small, could indicate "
-            "depletion of ions. Largest q_span: {} anions: {}".format(
-                resname, span_q, min_anions
-            )
-        )
-        assert span_q >= abs(min_cations), (
-            "The number of cations for residue {} is too small, could indicate "
-            "depletion of ions. Largest_q_span q: {} cations: {}".format(
-                resname, span_q, max_cations
-            )
-        )

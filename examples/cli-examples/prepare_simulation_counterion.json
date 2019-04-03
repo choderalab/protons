@@ -34,11 +34,11 @@
       "switching_distance_nm": 0.85,
       "nonbonded_cutoff_nm": 1.0,
       "barostat_interval": 25,
-      "pressure_atm": 1.0,
-      "dispersion_correction": true
+      "pressure_atm": 1.0
     },
     "temperature_k": 300.0,
-    "salt_concentration_molar": 0.150
+    "salt_concentration_molar": 0.150,
+    "neutral_charge_rule": 2
   },
   "integrator": {
     "timestep_fs": 2.0,

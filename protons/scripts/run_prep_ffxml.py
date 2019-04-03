@@ -10,7 +10,7 @@ from protons import app
 from .. import ForceFieldProtonDrive
 
 from ..app.logger import log, logging
-
+from itertools import product
 from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
@@ -22,7 +22,13 @@ from .utilities import (
     create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
-from ..app.driver import SAMSApproach, Stage, UpdateRule
+from ..app.driver import (
+    SAMSApproach,
+    Stage,
+    UpdateRule,
+    SamplingMethod,
+    NeutralChargeRule,
+)
 
 log.setLevel(logging.INFO)
 
@@ -88,6 +94,8 @@ def run_prep_ffxml_main(jsonfile):
 
     # Atoms , connectivity, residues
     topology = pdb_object.topology
+    # Store topology for serialization
+    topology_file_content = open(input_pdbx_file, "r").read()
 
     # XYZ positions for every atom
     positions = pdb_object.positions
@@ -135,6 +143,8 @@ def run_prep_ffxml_main(jsonfile):
         salt_concentration: unit.Quantity = float(
             sysprops["salt_concentration_molar"]
         ) * unit.molar
+    elif "PME" in sysprops:
+        salt_concentration = 0.0 * unit.molar
     else:
         salt_concentration = None
 
@@ -149,6 +159,7 @@ def run_prep_ffxml_main(jsonfile):
         switching_distance = float(pmeprops["switching_distance_nm"]) * unit.nanometers
         nonbondedCutoff = float(pmeprops["nonbonded_cutoff_nm"]) * unit.nanometers
         pressure = float(pmeprops["pressure_atm"]) * unit.atmosphere
+        disp_corr = bool(pmeprops["dispersion_correction"])
 
         system = forcefield.createSystem(
             topology,
@@ -161,10 +172,9 @@ def run_prep_ffxml_main(jsonfile):
         for force in system.getForces():
             if isinstance(force, mm.NonbondedForce):
                 force.setUseSwitchingFunction(True)
-
                 force.setSwitchingDistance(switching_distance)
+                force.setUseDispersionCorrection(disp_corr)
 
-        # TODO disable in implicit solvent
         # NPT simulation
         system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
     else:
@@ -206,9 +216,10 @@ def run_prep_ffxml_main(jsonfile):
 
     # Script specific settings
 
-    # Register the timeout handling
-    signal.signal(signal.SIGABRT, timeout_handler)
-    script_timeout = 3600  # 1 h
+    if "importance" in settings:
+        sampling_method = SamplingMethod.IMPORTANCE
+    else:
+        sampling_method = SamplingMethod.MCMC
 
     driver = ForceFieldProtonDrive(
         temperature,
@@ -217,7 +228,7 @@ def run_prep_ffxml_main(jsonfile):
         forcefield,
         user_ff_paths + ["amber10-constph.xml"],
         pressure=pressure,
-        perturbations_per_trial=10000,
+        perturbations_per_trial=100_000,
         propagations_per_step=1,
     )
 
@@ -252,7 +263,10 @@ def run_prep_ffxml_main(jsonfile):
     # Set up calibration mode
     # SAMS settings
 
-    if "SAMS" in settings:
+    if "SAMS" in settings and "importance" in settings:
+        raise NotImplementedError("Cannot combine SAMS and importance sampling.")
+
+    elif "SAMS" in settings:
         sams = settings["SAMS"]
 
         beta_burnin = float(sams["beta"])
@@ -313,7 +327,7 @@ def run_prep_ffxml_main(jsonfile):
     simulation.context.setPositions(positions)
 
     # After the simulation system has been defined, we can add salt to the system using saltswap.
-    if salt_concentration is not None and "PME" in sysprops:
+    if salt_concentration is not None:
         salinator = Salinator(
             context=simulation.context,
             system=system,
@@ -325,30 +339,115 @@ def run_prep_ffxml_main(jsonfile):
         )
         salinator.neutralize()
         salinator.initialize_concentration()
+        if "neutral_charge_rule" not in sysprops:
+            raise KeyError(
+                "Specification of neutral_charge_rule for explicit solvent required in system."
+            )
+
+        charge_rule = NeutralChargeRule(sysprops["neutral_charge_rule"])
+        driver.enable_neutralizing_ions(
+            salinator.swapper, neutral_charge_rule=charge_rule
+        )
     else:
+        # Implicit solvent
         salinator = None
 
-    # Minimize the initial configuration to remove bad contacts
-    if "preprocessing" in settings:
-        simulation.minimizeEnergy(
-            tolerance=pre_run_minimization_tolerance,
-            maxIterations=minimization_max_iterations,
+    # Set the fixed titration state in case of importance sampling
+    if sampling_method is SamplingMethod.IMPORTANCE:
+        if "titration_states" in settings["importance"]:
+            fixed_states = settings["importance"]["titration_states"]
+
+            if len(fixed_states) != len(driver.titrationStates):
+                raise IndexError(
+                    "The number of residues specified for importance sampling does not match the number of titratable residues."
+                )
+
+            else:
+                for group_id, state_id in enumerate(fixed_states):
+                    driver.set_titration_state(
+                        group_id,
+                        state_id,
+                        updateContextParameters=True,
+                        updateIons=True,
+                    )
+
+                # Minimize the initial configuration to remove bad contacts
+                if "preprocessing" in settings:
+                    simulation.minimizeEnergy(
+                        tolerance=pre_run_minimization_tolerance,
+                        maxIterations=minimization_max_iterations,
+                    )
+                    # Slightly equilibrate the system, detect early issues.
+                    simulation.step(num_thermalization_steps)
+
+                # export the context
+                create_protons_checkpoint_file(
+                    output_checkpoint_file,
+                    driver,
+                    simulation.context,
+                    simulation.system,
+                    simulation.integrator,
+                    topology_file_content,
+                    salinator=salinator,
+                )
+
+        elif "systematic" in settings["importance"]:
+            if settings["importance"]["systematic"]:
+
+                # Make checkpoint files for the combinatorial space of residue states.
+                for importance_index, state_combination in enumerate(
+                    product(*[np.arange(len(res)) for res in driver.titrationGroups])
+                ):
+                    for res_id, state_id in enumerate(state_combination):
+                        driver.set_titration_state(
+                            res_id,
+                            state_id,
+                            updateContextParameters=True,
+                            updateIons=True,
+                        )
+
+                    # Minimize the initial configuration to remove bad contacts
+                    if "preprocessing" in settings:
+                        simulation.minimizeEnergy(
+                            tolerance=pre_run_minimization_tolerance,
+                            maxIterations=minimization_max_iterations,
+                        )
+                        # Slightly equilibrate the system, detect early issues.
+                        simulation.step(num_thermalization_steps)
+
+                    # export the context
+                    create_protons_checkpoint_file(
+                        f"{obasename}-importance-state-{importance_index}-checkpoint-0.xml",
+                        driver,
+                        simulation.context,
+                        simulation.system,
+                        simulation.integrator,
+                        topology_file_content,
+                        salinator=salinator,
+                    )
+            os.chdir(lastdir)
+
+    else:
+
+        # Minimize the initial configuration to remove bad contacts
+        if "preprocessing" in settings:
+            simulation.minimizeEnergy(
+                tolerance=pre_run_minimization_tolerance,
+                maxIterations=minimization_max_iterations,
+            )
+            # Slightly equilibrate the system, detect early issues.
+            simulation.step(num_thermalization_steps)
+
+        # export the context
+        create_protons_checkpoint_file(
+            output_checkpoint_file,
+            driver,
+            simulation.context,
+            simulation.system,
+            simulation.integrator,
+            topology_file_content,
+            salinator=salinator,
         )
-        # Slightly equilibrate the system, detect early issues.
-        simulation.step(num_thermalization_steps)
-
-    topology_file_content = open(input_pdbx_file, "r").read()
-
-    # export the context
-    create_protons_checkpoint_file(
-        output_checkpoint_file,
-        driver,
-        simulation.context,
-        simulation.system,
-        simulation.integrator,
-        topology_file_content,
-        salinator=salinator,
-    )
 
     os.chdir(lastdir)
 
