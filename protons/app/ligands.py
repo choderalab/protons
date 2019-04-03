@@ -2048,7 +2048,7 @@ def prepare_calibration_systems(
     output_basename: str,
     ffxml: str = None,
     hxml: str = None,
-    delete_old_H: bool = True,
+    delete_old_H: bool = False,
     minimize: bool = True,
     box_size: app.modeller.Vec3 = None,
 ):
@@ -2076,11 +2076,8 @@ def prepare_calibration_systems(
         app.Modeller.loadHydrogenDefinitions(hxml)
     if ffxml is not None:
         forcefield = app.ForceField(
-            "amber10.xml", "gaff.xml", ffxml, "tip3p.xml", "ions_tip3p.xml"
+            "amber10-constph.xml", "gaff.xml", ffxml, "tip3p.xml", "ions_tip3p.xml"
         )
-        # forcefield = app.ForceField(
-        #    "amber10-constph.xml", "gaff.xml", ffxml, "tip3p.xml", "ions_tip3p.xml"
-        # )
     else:
         forcefield = app.ForceField(
             "amber10-constph.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"
@@ -2099,11 +2096,11 @@ def prepare_calibration_systems(
 
     # The system will likely have different hydrogen names.
     # In this case its easiest to just delete and re-add with the right names based on hydrogen files
-    # if delete_old_H:
-    #    to_delete = [
-    #        atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"]
-    #    ]
-    #    modeller.delete(to_delete)
+    if delete_old_H:
+        to_delete = [
+            atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"]
+        ]
+        modeller.delete(to_delete)
 
     modeller.addHydrogens(forcefield=forcefield)
 
