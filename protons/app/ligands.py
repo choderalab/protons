@@ -7,7 +7,6 @@ from __future__ import print_function
 
 import os
 import re
-import shutil
 import tempfile
 import mdtraj
 import uuid
@@ -1399,7 +1398,6 @@ def epik_results_to_mol2(
 
         sd_bonds = get_sd_bonds(tmpsd)
         fixed_mol2_contents = replace_mol2_bonds_and_atom_types(tmpmol2, sd_bonds)
-
         with open(bondfixmol2, "w") as bondfixedfile:
             bondfixedfile.write(fixed_mol2_contents)
 
@@ -1973,12 +1971,15 @@ def create_hydrogen_definitions(
     xmltree = etree.parse(
         inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True)
     )
+    
     # Output tree
     hydrogen_definitions_tree = etree.fromstring("<Residues/>")
+    
     if tautomers is not True:
         hydrogen_types = _find_hydrogen_types(gafftree)
     else:
         hydrogen_types = _find_hydrogen_types_for_tautomers(gafftree, xmltree)
+    
     for residue in xmltree.xpath("Residues/Residue"):
         hydrogen_file_residue = etree.fromstring("<Residue/>")
         hydrogen_file_residue.set("name", residue.get("name"))
@@ -2835,7 +2836,6 @@ def prepare_mol2_for_parametrization(
 
         sd_bonds = get_sd_bonds(input_sdf)
         fixed_mol2_contents = replace_mol2_bonds_and_atom_types(input_mol2, sd_bonds)
-        print(fixed_mol2_contents)
 
         bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
 

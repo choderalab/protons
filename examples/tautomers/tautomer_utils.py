@@ -82,7 +82,7 @@ def setting_up_tautomer(settings, isomer_dictionary):
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
 
     # prepare solvated system
-    prepare_calibration_systems(icalib, ofolder + '/' + resname, offxml, hydrogen_def)
+    prepare_calibration_systems(icalib, ofolder + '/' + settings['name'], offxml, hydrogen_def)
 
 def generate_simulation_and_driver(settings):
 
