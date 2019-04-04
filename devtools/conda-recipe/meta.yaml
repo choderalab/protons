@@ -23,6 +23,7 @@ requirements:
     - parmed <=2.7.3
     - joblib
     - lxml
+    - openeye-toolkits
     - pymbar
     - seaborn
     - matplotlib
@@ -45,6 +46,7 @@ requirements:
     - ambermini >=15.0.4
     - parmed <=2.7.3
     - joblib
+    - openeye-toolkits
     - lxml
     - pymbar
     - seaborn
