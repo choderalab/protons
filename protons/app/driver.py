@@ -1287,12 +1287,82 @@ class _TitrationAttemptData(object):
         self._initial_charge = None
         self._initial_states = None
         self._initial_ion_states = None
+        self._initial_positions = None
+        self._initial_velocities = None
+        self._initial_box_vectors = None
 
         self._proposed_charge = None
         self._proposed_states = None
         self._proposed_ion_states = None
+        self._proposed_positions = None
+        self._proposed_velocities = None
+        self._proposed_box_vectors = None
 
         return
+
+    @property
+    def initial_positions(self) -> np.ndarray:
+        """
+        The positions at the start of the attempt.
+        """
+        return self._initial_positions
+
+    @initial_positions.setter
+    def initial_positions(self, positions: unit.Quantity):
+        """Store positions in nanometers as array."""
+        self._initial_positions = strip_in_unit_system(positions)
+
+    @property
+    def proposed_positions(self) -> np.ndarray:
+        """
+        The positions at the start of the attempt.
+        """
+        return self._proposed_positions
+
+    @proposed_positions.setter
+    def proposed_positions(self, positions: unit.Quantity):
+        """Store positions in nanometers as array."""
+        self._proposed_positions = strip_in_unit_system(positions)
+
+    @property
+    def initial_velocities(self) -> np.ndarray:
+        """The velocities at the start of the attempt."""
+        return np.asarray(self._initial_velocities)
+
+    @initial_velocities.setter
+    def initial_velocities(self, velocities: unit.Quantity):
+        """Set the initial velocities as a numpy array."""
+        self._initial_velocities = strip_in_unit_system(velocities)
+
+    @property
+    def proposed_velocities(self) -> np.ndarray:
+        """The velocities at the end of the attempt."""
+        return np.asarray(self._proposed_velocities)
+
+    @proposed_velocities.setter
+    def proposed_velocities(self, velocities: unit.Quantity):
+        """Set the proposed velocities as a numpy array."""
+        self._proposed_velocities = strip_in_unit_system(velocities)
+
+    @property
+    def initial_box_vectors(self) -> np.ndarray:
+        """The box vectors at the start of the attempt."""
+        return self._initial_box_vectors
+
+    @initial_box_vectors.setter
+    def initial_box_vectors(self, box_vectors: unit.Quantity):
+        """The box vectors at the start of the attempt."""
+        self._initial_box_vectors = strip_in_unit_system(box_vectors)
+
+    @property
+    def proposed_box_vectors(self) -> np.ndarray:
+        """The box vectors at the end of the attempt."""
+        return self._proposed_box_vectors
+
+    @proposed_box_vectors.setter
+    def proposed_box_vectors(self, box_vectors: unit.Quantity):
+        """The box vectors at the end of the attempt."""
+        self._proposed_box_vectors = strip_in_unit_system(box_vectors)
 
     @property
     def changing_groups(self) -> List[int]:
@@ -2594,8 +2664,8 @@ class NCMCProtonDrive(_BaseDrive):
         updateIons : update the ions/waters using saltswap alongside the titration state.
         """
 
-        initial_titration_states = copy.deepcopy(self.titrationStates)
-        final_titration_states = copy.deepcopy(self.titrationStates)
+        initial_titration_states = np.asarray(copy.deepcopy(self.titrationStates))
+        final_titration_states = np.asarray(copy.deepcopy(self.titrationStates))
         final_titration_states[titration_group_index] = titration_state_index
 
         if np.all(initial_titration_states == final_titration_states):
@@ -3077,9 +3147,13 @@ class NCMCProtonDrive(_BaseDrive):
             initial_openmm_state = self.context.getState(
                 getPositions=True, getVelocities=True
             )
-            initial_positions = initial_openmm_state.getPositions(asNumpy=True)
-            initial_velocities = initial_openmm_state.getVelocities(asNumpy=True)
-            initial_box_vectors = initial_openmm_state.getPeriodicBoxVectors(
+            attempt_data.initial_positions = initial_openmm_state.getPositions(
+                asNumpy=True
+            )
+            attempt_data.initial_velocities = initial_openmm_state.getVelocities(
+                asNumpy=True
+            )
+            attempt_data.initial_box_vectors = initial_openmm_state.getPeriodicBoxVectors(
                 asNumpy=True
             )
 
@@ -3151,6 +3225,20 @@ class NCMCProtonDrive(_BaseDrive):
             if np.any(attempt_data.initial_states != attempt_data.proposed_states):
                 self.nattempted += 1
 
+            if self.perturbations_per_trial > 0:
+                proposed_openmm_State = self.context.getState(
+                    getPositions=True, getVelocities=True
+                )
+                attempt_data.proposed_positions = proposed_openmm_State.getPositions(
+                    asNumpy=True
+                )
+                attempt_data.proposed_velocities = proposed_openmm_State.getVelocities(
+                    asNumpy=True
+                )
+                attempt_data.proposed_box_vectors = proposed_openmm_State.getPeriodicBoxVectors(
+                    asNumpy=True
+                )
+
             # Accept or reject with Metropolis criteria.
             attempt_data.logp_accept = log_P_accept
             log.debug("Acceptance probability: %f", log_P_accept)
@@ -3159,51 +3247,23 @@ class NCMCProtonDrive(_BaseDrive):
                 attempt_data.accepted = accept_move
 
                 if accept_move:
-                    self._set_state_accept_attempt(
-                        attempt_data.initial_states,
-                        attempt_data.proposed_states,
-                        attempt_data.changing_groups,
-                        attempt_data.proposed_ion_states,
-                    )
-
+                    self._set_state_accept_attempt(attempt_data)
                 else:
-                    self._set_state_reject_attempt(
-                        attempt_data.initial_states,
-                        attempt_data.proposed_states,
-                        attempt_data.changing_groups,
-                        initial_box_vectors,
-                        initial_positions,
-                        initial_velocities,
-                        attempt_data.initial_ion_states,
-                    )
+                    self._set_state_reject_attempt(attempt_data)
 
             elif self.sampling_method is SamplingMethod.IMPORTANCE:
-                self._set_state_reject_attempt(
-                    attempt_data.initial_states,
-                    attempt_data.proposed_states,
-                    attempt_data.changing_groups,
-                    initial_box_vectors,
-                    initial_positions,
-                    initial_velocities,
-                    attempt_data.initial_ion_states,
-                )
+                self._set_state_reject_attempt(attempt_data)
 
         except Exception as err:
             if str(err) == "Particle coordinate is nan" and reject_on_nan:
                 log.warning("NaN during NCMC move, rejecting")
-                self._set_state_reject_attempt(
-                    attempt_data.initial_states,
-                    attempt_data.final_states,
-                    attempt_data.changing_groups,
-                    initial_box_vectors,
-                    initial_positions,
-                    initial_velocities,
-                    attempt_data.initial_ion_states,
-                )
+                self._set_state_reject_attempt(attempt_data)
             else:
                 raise
         finally:
             # Restore user integrator
+            # If using NCMC, store initial positions.
+
             self._last_attempt_data = attempt_data
             self.compound_integrator.setCurrentIntegrator(0)
 
@@ -3346,67 +3406,55 @@ class NCMCProtonDrive(_BaseDrive):
             saltswap_states,
         )
 
-    def _set_state_reject_attempt(
-        self,
-        initial_titration_states: List[int],
-        final_titration_states: List[int],
-        titration_group_indices: List[int],
-        initial_box_vectors,
-        initial_positions: np.ndarray,
-        initial_velocities: np.ndarray,
-        initial_ion_states: Optional[np.ndarray],
-    ):
+    def _set_state_reject_attempt(self, attempt_data: _TitrationAttemptData):
         """Restore the state of the drive after rejecting a move."""
 
         # Update internal statistics counter
-        if np.any(initial_titration_states != final_titration_states):
+        if np.any(attempt_data.initial_states != attempt_data.proposed_states):
             self.nrejected += 1
         # Restore titration states.
-        for titration_group_index in titration_group_indices:
+        for titration_group_index in attempt_data.changing_groups:
             self.set_titration_state(
                 titration_group_index,
-                initial_titration_states[titration_group_index],
+                attempt_data.initial_states[titration_group_index],
                 updateContextParameters=False,
                 updateIons=False,
             )
         # If maintaining charge neutrality using saltswap
         if self.swapper is not None:
 
-            if initial_ion_states is None:
+            if attempt_data.initial_ion_states is None:
                 raise UnboundLocalError(
                     "Saltswap was enabled but initial_ions_states is None."
                 )
             # Restore the salt species parameters
             update_fractional_stateVector(
-                self.swapper, initial_ion_states, fraction=1.0, set_vector_indices=True
+                self.swapper,
+                attempt_data.initial_ion_states,
+                fraction=1.0,
+                set_vector_indices=True,
             )
 
         for force_index, force in enumerate(self.forces_to_update):
             force.updateParametersInContext(self.context)
         # If using NCMC, restore coordinates and velocities.
         if self.perturbations_per_trial > 0:
-            self.context.setPositions(initial_positions)
-            self.context.setVelocities(initial_velocities)
-            self.context.setPeriodicBoxVectors(*initial_box_vectors)
+            self.context.setPositions(attempt_data.initial_positions)
+            self.context.setVelocities(attempt_data.initial_velocities)
+            self.context.setPeriodicBoxVectors(*attempt_data.initial_box_vectors)
 
-    def _set_state_accept_attempt(
-        self,
-        initial_titration_states,
-        final_titration_states,
-        titration_group_indices,
-        proposed_ion_states: Optional[np.ndarray],
-    ):
+    def _set_state_accept_attempt(self, attempt_data: _TitrationAttemptData):
         """Ensure the correct state after accepting a move."""
 
         # Update internal statistics counter
-        if np.any(initial_titration_states != final_titration_states):
+        if np.any(attempt_data.initial_states != attempt_data.proposed_states):
             self.naccepted += 1
 
         # Update titration states.
-        for titration_group_index in titration_group_indices:
+        for titration_group_index in attempt_data.changing_groups:
             self.set_titration_state(
                 titration_group_index,
-                final_titration_states[titration_group_index],
+                attempt_data.proposed_states[titration_group_index],
                 updateContextParameters=False,
                 updateIons=False,  # Don't update since the ions to change were already chosen.
             )
@@ -3414,12 +3462,15 @@ class NCMCProtonDrive(_BaseDrive):
         # If maintaining charge neutrality using saltswap
         if self.swapper is not None:
             # Ensure that the ion state vector is correct.
-            if proposed_ion_states is None:
+            if attempt_data.proposed_ion_states is None:
                 raise UnboundLocalError(
                     "Saltswap was enabled but proposed_ions_states is None."
                 )
             update_fractional_stateVector(
-                self.swapper, proposed_ion_states, fraction=1.0, set_vector_indices=True
+                self.swapper,
+                attempt_data.proposed_ion_states,
+                fraction=1.0,
+                set_vector_indices=True,
             )
 
         # If using NCMC, flip velocities upon accepting to satisfy super-detailed balance.
