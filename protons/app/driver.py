@@ -4997,7 +4997,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
-            self._set_titration_state(group_index, 0)
+            self.set_titration_state(group_index, 0)
 
     def _add_titration_state(
         self,

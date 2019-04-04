@@ -58,14 +58,14 @@ def setting_up_tautomer(settings, isomer_dictionary):
     #retrieve input files
     icalib = settings['input']['dir'] + '/' + settings['name'] + '.pdb'
     input_mol2 = settings['input']['dir'] + '/' + settings['name'] + '_tautomer_set.mol2'
+    input_sdf = settings['input']['dir'] + '/' + settings['name'] + '_tautomer_set.sdf'
     
     #define location of set up files
     hydrogen_def = settings['input']['dir'] + '/' + settings['name'] + '.hxml'
     offxml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
-    ocalib = settings['input']['dir'] + '/' + settings['name'] + '.cif'
 
     # Debugging/intermediate files
-    dhydrogen_fix = settings['input']['dir'] + '/' + settings['name'] + '_hydrogen_fixed1.mol2'  
+    dhydrogen_fix = settings['input']['dir'] + '/' + settings['name'] + '_hydrogen_fixed.mol2'  
     
     ofolder = settings['output']['dir']
     
@@ -75,7 +75,7 @@ def setting_up_tautomer(settings, isomer_dictionary):
     # Begin processing
 
     # process into mol2
-    prepare_mol2_for_parametrization(input_mol2, dhydrogen_fix, patch_bonds=True, keep_intermediate=True)
+    prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, patch_bonds=True, keep_intermediate=True)
 
     # parametrize
     generate_protons_ffxml(dhydrogen_fix, isomer_dictionary, offxml, pH, resname=resname, tautomers=True, pdb_file_path=icalib)
@@ -83,12 +83,12 @@ def setting_up_tautomer(settings, isomer_dictionary):
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
 
     # prepare solvated system
-    prepare_calibration_systems(icalib, ofolder, offxml, hydrogen_def)
+    prepare_calibration_systems(icalib, ofolder + '/' + resname, offxml, hydrogen_def)
 
 def generate_simulation_and_driver(settings):
 
     ofolder = settings['output']['dir']
-    input_pdbx_file = settings['input']['dir'] + '/' + settings['name'] +  '.cif'
+    input_pdbx_file = settings['output']['dir'] + '/' + settings['name'] +  '-water.cif'
     custom_xml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
     forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', custom_xml, 'tip3p.xml', 'ions_tip3p.xml')
 
@@ -344,5 +344,4 @@ def generate_simulation_and_driver(settings):
         # Slightly equilibrate the system, detect early issues.
         simulation.step(num_thermalization_steps)
 
-    topology_file_content = open(input_pdbx_file, "r").read()
     return simulation, driver, pdb_object

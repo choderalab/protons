@@ -1101,7 +1101,7 @@ def get_sd_bonds(sdfilename: str) -> List[Dict[Tuple[int, int], int]]:
     return bond_data
 
 
-def replace_mol2_bonds(
+def replace_mol2_bonds_and_atom_types(
     mol2filename: str, bond_data: List[Dict[Tuple[int, int], int]]
 ) -> str:
     """Replace the bonds in a mol2 file based on SD bond data.
@@ -1132,18 +1132,21 @@ def replace_mol2_bonds(
     nbonds = 0
     old_block_specs = []
     molnum = 0
+    atoms_entry_starts = []
+    nr_of_atoms = []
     for line_no, line in enumerate(lines):
         if "@<TRIPOS>MOLECULE" in line:
             specs = [int(c) for c in lines[line_no + 2].split()]
-            natoms = specs[0]
+            nr_of_atoms.append(specs[0])
             nbonds = specs[1]
             if nbonds != len(bond_data[molnum]):
-                print(nbonds)
-                print(len(bond_data[molnum]))
                 raise ValueError(
                     f"Number of bonds does not match between SD and mol2 for entry {molnum+1}."
                 )
             molnum += 1
+        elif "@<TRIPOS>ATOM" in line:
+            # Line of first bond in the block. Will be overwritten
+            atoms_entry_starts.append(line_no + 1)
 
         elif "@<TRIPOS>BOND" in line:
             # Line of first bond in the block. Will be overwritten
@@ -1154,6 +1157,18 @@ def replace_mol2_bonds(
         for bondix, ((fromatom, toatom), atomtype) in enumerate(block_data.items()):
             newline = f"{bondix+1:5d}{fromatom:5d}{toatom:5d} {atomtype}\n"
             lines[block_start + bondix] = newline
+
+    # substitut atom type in mol2 file with element
+    for start, nr_of_atoms in zip(atoms_entry_starts, nr_of_atoms):
+        for line_idx in range(start, start + nr_of_atoms):
+            old = lines[line_idx].split()[5]
+            new =  lines[line_idx].split()[5].split('.')[0]
+            if old == new:
+                continue
+            else:
+                for _ in range((len(old) - len(new))):
+                    new += ' '
+            lines[line_idx] = str(lines[line_idx]).replace(old, new)
 
     return "".join(lines)
 
@@ -1383,7 +1398,7 @@ def epik_results_to_mol2(
         bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
 
         sd_bonds = get_sd_bonds(tmpsd)
-        fixed_mol2_contents = replace_mol2_bonds(tmpmol2, sd_bonds)
+        fixed_mol2_contents = replace_mol2_bonds_and_atom_types(tmpmol2, sd_bonds)
 
         with open(bondfixmol2, "w") as bondfixedfile:
             bondfixedfile.write(fixed_mol2_contents)
@@ -2792,6 +2807,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
 
 def prepare_mol2_for_parametrization(
     input_mol2: str,
+    input_sdf: str,
     output_mol2: str,
     patch_bonds: bool = True,
     keep_intermediate: bool = False,
@@ -2816,26 +2832,16 @@ def prepare_mol2_for_parametrization(
     tmpfiles: List[str] = []
 
     if patch_bonds:
-        tmpsd = "{}.sdf".format(unique_filename)
-        tmpfiles.append(tmpsd)
-        ifs = oechem.oemolistream()
-        ofs = oechem.oemolostream()
-        if ifs.open(input_mol2):
-            ofs.open(tmpsd)
-            for mol in ifs.GetOEGraphMols():
-                oechem.OEWriteMolecule(ofs, mol)
-        else:
-            oechem.OEThrow.Fatal("Unable to read mol.")
+
+        sd_bonds = get_sd_bonds(input_sdf)
+        fixed_mol2_contents = replace_mol2_bonds_and_atom_types(input_mol2, sd_bonds)
+        print(fixed_mol2_contents)
 
         bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
-        sd_bonds = get_sd_bonds(tmpsd)
-        fixed_mol2_contents = replace_mol2_bonds(input_mol2, sd_bonds)
 
         with open(bondfixmol2, "w") as bondfixedfile:
             bondfixedfile.write(fixed_mol2_contents)
-
         tmpfiles.append(bondfixmol2)
-
         # File to be used for unifying atom names between states.
         intermediate_mol2 = bondfixmol2
     else:
