@@ -14,7 +14,6 @@ import os
 def run_main(simulation, driver, pdb_object, settings):
     """Main simulation loop."""
 
-
     # Add reporters
     ncfile = netCDF4.Dataset(settings['simulation']['netCDF4'], "w")
     dcd_output_name = settings['simulation']['dcd_filename']
@@ -33,7 +32,7 @@ def run_main(simulation, driver, pdb_object, settings):
     for i in trange(total_iterations, desc="NCMC attempts"):
         if i == 50:
             log.info("Simulation seems to be working. Suppressing debugging info.")
-            log.setLevel(log.INFO)
+            #log.setLevel(log.INFO)
         simulation.step(md_steps_between_updates)
         # Perform a few COOH updates in between
         driver.update("COOH", nattempts=3)
