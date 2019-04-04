@@ -252,10 +252,12 @@ def generate_simulation_and_driver(settings):
 
     # TODO allow platform specification for setup
 
-    #platform = mm.Platform.getPlatformByName("CUDA")
-#    properties = {"Precision": "double"}
-    platform = mm.Platform.getPlatformByName("CPU")
-
+    if settings['platform'] == 'CUDA':
+        platform = mm.Platform.getPlatformByName("CUDA")
+        properties = {"Precision": "double"}
+    else:
+        platform = mm.Platform.getPlatformByName("CPU")
+        properties = {}
     # Set up calibration mode
     # SAMS settings
 
