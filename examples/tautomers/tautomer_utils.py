@@ -23,7 +23,7 @@ def run_main(simulation, driver, pdb_object, settings):
     simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
     simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
     simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
-    total_iterations = 1000
+    total_iterations = 500
     md_steps_between_updates = 1000
 
     # MAIN SIMULATION LOOP STARTS HERE

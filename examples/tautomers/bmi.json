@@ -55,8 +55,8 @@
     "min_fast": 200
   },
   "simulation" : {
-      "dcd_filename" : "{name}.dcd" ,
-      "netCDF4" : "{name}.nc"
+      "dcd_filename" : "bmi.dcd" ,
+      "netCDF4" : "bmi.nc"
   }
 
 }
