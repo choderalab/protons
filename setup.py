@@ -75,6 +75,4 @@ setup(
         "console_scripts": ["protons=protons.scripts.cli:cli"],
     },
     ext_modules=extensions,
-    setup_requires=["pytest-runner"],
-    tests_require=["pytest"],
 )
