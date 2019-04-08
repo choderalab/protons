@@ -230,6 +230,7 @@ def run_prep_ffxml_main(jsonfile):
         pressure=pressure,
         perturbations_per_trial=100_000,
         propagations_per_step=1,
+        sampling_method=sampling_method,
     )
 
     if "reference_free_energies" in settings:
