@@ -1,0 +1,21 @@
+[parameters]
+_comment = "Any settings for the methods, and the formatting variable names for filenames should be entered here."
+pdb_resname = "FD3"
+pH = 7.8
+
+  [parameters.format_vars]
+  name = "1D"
+
+[input]
+_comment = [
+  "A pdb file as source for the calibration structure.",
+  "an epik output file",
+  "a mol2 file with molecule states where atom names (including hydrogens) are unique and match exactly between states."
+]
+dir = "./"
+structure = "{name}-source.pdb"
+epik = "{name}-epik-out.mae"
+
+[output]
+dir = "./output"
+basename = "{name}"

@@ -8,7 +8,7 @@ from ..app.ligands import *
 from ..app import logger
 from ..app.template_patches import patch_cooh
 from ..app.logger import log
-import yaml
+import toml
 import sys
 import os
 from warnings import warn
@@ -26,7 +26,7 @@ def run_parametrize_main(inputfile):
     """
 
     with open(inputfile.strip(), "r") as settingsfile:
-        settings = yaml.load(settingsfile)
+        settings = toml.load(settingsfile)
 
     # Check all available fields.
     # TODO use json schema for this
