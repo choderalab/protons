@@ -4,7 +4,7 @@ import os
 import signal
 import sys
 import numpy as np
-import yaml
+import toml
 
 from protons import app
 from .. import ForceFieldProtonDrive
@@ -16,6 +16,7 @@ from simtk import openmm as mm
 from simtk import unit
 from typing import List, Dict, Tuple, Callable, Any, AnyStr
 from warnings import warn
+from tqdm import tqdm
 from .utilities import (
     TimeOutError,
     timeout_handler,
@@ -36,13 +37,11 @@ log.setLevel(logging.INFO)
 # Define a main function that can read in a json file with simulation settings, sets up, and runs the simulation.
 
 
-def run_prep_ffxml_main(jsonfile):
+def run_prep_ffxml_main(tomlfile):
     """Main simulation loop."""
 
-    log.info(f"Preparing a run from '{jsonfile}'")
-
-    # TODO Validate json input with json schema?
-    settings = yaml.load(open(jsonfile, "r"))
+    log.info(f"Preparing a run from '{tomlfile}'")
+    settings = toml.load(open(tomlfile, "r"))
 
     log.debug(f"Loaded these settings. {settings}")
 
@@ -161,6 +160,7 @@ def run_prep_ffxml_main(jsonfile):
         pressure = float(pmeprops["pressure_atm"]) * unit.atmosphere
         disp_corr = bool(pmeprops["dispersion_correction"])
 
+        log.info("🏗 Creating PME system from forcefield.")
         system = forcefield.createSystem(
             topology,
             nonbondedMethod=nonbondedMethod,
@@ -179,6 +179,7 @@ def run_prep_ffxml_main(jsonfile):
         system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
     else:
         pressure = None
+        log.info("🏗 Creating non-periodic system from forcefield.")
         system = forcefield.createSystem(
             topology,
             nonbondedMethod=app.NoCutoff,
@@ -218,8 +219,10 @@ def run_prep_ffxml_main(jsonfile):
 
     if "importance" in settings:
         sampling_method = SamplingMethod.IMPORTANCE
+        log.info("🚛 Setting up ProtonDrive for importance sampling.")
     else:
         sampling_method = SamplingMethod.MCMC
+        log.info("🚛 Setting up ProtonDrive for MCMC sampling.")
 
     driver = ForceFieldProtonDrive(
         temperature,
@@ -235,6 +238,7 @@ def run_prep_ffxml_main(jsonfile):
 
     if "reference_free_energies" in settings:
         # calibrated free energy values can be provided here
+        log.info("📚 Loading reference free energies")
         gk_dict = settings["reference_free_energies"]
 
         # Clean comments inside dictionary
@@ -268,6 +272,7 @@ def run_prep_ffxml_main(jsonfile):
         raise NotImplementedError("Cannot combine SAMS and importance sampling.")
 
     elif "SAMS" in settings:
+        log.info("📊 Enabling calibration mode.")
         sams = settings["SAMS"]
 
         beta_burnin = float(sams["beta"])
@@ -277,8 +282,10 @@ def run_prep_ffxml_main(jsonfile):
 
         flatness_criterion = float(sams["flatness_criterion"])
         if sams["update_rule"] == "binary":
+            log.info("🤖 Using binary update rule")
             update_rule = UpdateRule.BINARY
         elif sams["update_rule"] == "global":
+            log.info("🌎 Using global update rule")
             update_rule = UpdateRule.GLOBAL
         else:
             update_rule = UpdateRule.BINARY
@@ -317,6 +324,7 @@ def run_prep_ffxml_main(jsonfile):
 
     # Create simulation object
     # If calibration is required, this class will automatically deal with it.
+    log.info("🎢 Preparing for simulation.")
     simulation = app.ConstantPHSimulation(
         topology,
         system,
@@ -329,6 +337,7 @@ def run_prep_ffxml_main(jsonfile):
 
     # After the simulation system has been defined, we can add salt to the system using saltswap.
     if salt_concentration is not None:
+        log.info("👅 Adding salt")
         salinator = Salinator(
             context=simulation.context,
             system=system,
@@ -346,6 +355,12 @@ def run_prep_ffxml_main(jsonfile):
             )
 
         charge_rule = NeutralChargeRule(sysprops["neutral_charge_rule"])
+        if charge_rule is NeutralChargeRule.NO_IONS:
+            log.info("⚡ Using neutralizing background charge")
+        elif charge_rule is NeutralChargeRule.COUNTER_IONS:
+            log.info("➕↔➖ Using counter-ions for charge neutralization")
+        elif charge_rule is NeutralChargeRule.REPLACEMENT_IONS:
+            log.info("➕🔄➕ Using replacement ions for charge neutralization")
         driver.enable_neutralizing_ions(
             salinator.swapper, neutral_charge_rule=charge_rule
         )
@@ -374,6 +389,7 @@ def run_prep_ffxml_main(jsonfile):
 
                 # Minimize the initial configuration to remove bad contacts
                 if "preprocessing" in settings:
+                    log.info("📉 Minimizing energy")
                     simulation.minimizeEnergy(
                         tolerance=pre_run_minimization_tolerance,
                         maxIterations=minimization_max_iterations,
@@ -382,6 +398,8 @@ def run_prep_ffxml_main(jsonfile):
                     simulation.step(num_thermalization_steps)
 
                 # export the context
+                log.info("🛂 Creating checkpoint file for starting simulations.")
+
                 create_protons_checkpoint_file(
                     output_checkpoint_file,
                     driver,
@@ -397,7 +415,13 @@ def run_prep_ffxml_main(jsonfile):
 
                 # Make checkpoint files for the combinatorial space of residue states.
                 for importance_index, state_combination in enumerate(
-                    product(*[np.arange(len(res)) for res in driver.titrationGroups])
+                    tqdm(
+                        product(
+                            *[np.arange(len(res)) for res in driver.titrationGroups]
+                        ),
+                        desc="States",
+                        unit="st",
+                    )
                 ):
                     for res_id, state_id in enumerate(state_combination):
                         driver.set_titration_state(
@@ -432,6 +456,7 @@ def run_prep_ffxml_main(jsonfile):
 
         # Minimize the initial configuration to remove bad contacts
         if "preprocessing" in settings:
+            log.info("📉 Minimizing energy")
             simulation.minimizeEnergy(
                 tolerance=pre_run_minimization_tolerance,
                 maxIterations=minimization_max_iterations,
@@ -440,6 +465,7 @@ def run_prep_ffxml_main(jsonfile):
             simulation.step(num_thermalization_steps)
 
         # export the context
+        log.info("🛂 Creating checkpoint file for starting simulations.")
         create_protons_checkpoint_file(
             output_checkpoint_file,
             driver,
@@ -451,6 +477,7 @@ def run_prep_ffxml_main(jsonfile):
         )
 
     os.chdir(lastdir)
+    log.info("🏁 Preparation finished.")
 
 
 # Actual cmdline interface

@@ -1,0 +1,43 @@
+[input]
+dir = "./"
+structure = "{name}-vacuum.cif"
+
+[output]
+dir = "./output"
+basename = "{name}"
+
+[forcefield]
+default = [
+  "amber10-constph.xml",
+  "gaff.xml",
+  "amber10-constph-obc2.xml",
+  "gaff-obc2.xml"
+]
+user = [
+  "{name}.xml"
+]
+
+[format_vars]
+name = "1D"
+
+[system]
+temperature_k = 300.0
+
+[integrator]
+timestep_fs = 2.0
+constraint_tolerance = 1e-7
+collision_rate_per_ps = 1.0
+
+[preprocessing]
+minimization_tolerance_kjmol = 0.00001
+minimization_max_iterations = 100.0
+num_thermalization_steps = 10.0
+
+[SAMS]
+beta = 0.5
+flatness_criterion = 0.15
+sites = "multi"
+update_rule = "binary"
+min_burn = 200.0
+min_slow = 200.0
+min_fast = 200.0

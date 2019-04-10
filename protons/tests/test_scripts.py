@@ -36,13 +36,13 @@ class TestParameterizationScript:
                 for filename in TestParameterizationScript.trypsin_example.values()
             ]
         )
-        json_input = "ligand-setup-with-epik.json"
-        copy(os.path.join(TestParameterizationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "ligand-setup-with-epik.toml"
+        copy(os.path.join(TestParameterizationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform parametrization in the temp directory
-        run_parametrize_ligand.run_parametrize_main(json_input)
+        run_parametrize_ligand.run_parametrize_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -67,15 +67,15 @@ class TestParameterizationScript:
     def test_from_smiles_with_epik(self):
         """Test parametrizing a molecule specified by smiles."""
 
-        # Has no input files beside the json
+        # Has no input files beside the toml
         tmpdir = files_to_tempdir([])
-        json_input = "ligand-setup-from-smiles.json"
-        copy(os.path.join(TestParameterizationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "ligand-setup-from-smiles.toml"
+        copy(os.path.join(TestParameterizationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform parametrization in the temp directory
-        run_parametrize_ligand.run_parametrize_main(json_input)
+        run_parametrize_ligand.run_parametrize_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -98,13 +98,13 @@ class TestParameterizationScript:
                 for filename in TestParameterizationScript.trypsin_example.values()
             ]
         )
-        json_input = "ligand-setup-without-epik.json"
-        copy(os.path.join(TestParameterizationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "ligand-setup-without-epik.toml"
+        copy(os.path.join(TestParameterizationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform parametrization in the temp directory
-        run_parametrize_ligand.run_parametrize_main(json_input)
+        run_parametrize_ligand.run_parametrize_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile("output/1D.xml"), "No forcefield file was produced"
@@ -125,15 +125,15 @@ class TestParameterizationScript:
     )
     def test_dense_omega(self):
         """Test dense conformer script."""
-        # Has no input files beside the json
+        # Has no input files beside the toml
         tmpdir = files_to_tempdir([])
-        json_input = "ligand-setup-from-smiles-dense.json"
-        copy(os.path.join(TestParameterizationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "ligand-setup-from-smiles-dense.toml"
+        copy(os.path.join(TestParameterizationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform parametrization in the temp directory
-        run_parametrize_ligand.run_parametrize_main(json_input)
+        run_parametrize_ligand.run_parametrize_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -169,13 +169,13 @@ class TestPreparationScript:
                 for filename in TestPreparationScript.trypsin_example.values()
             ]
         )
-        json_input = "prepare_calibration.json"
-        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "prepare_calibration.toml"
+        copy(os.path.join(TestPreparationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_prep_ffxml.run_prep_ffxml_main(json_input)
+        run_prep_ffxml.run_prep_ffxml_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -187,7 +187,7 @@ class TestPreparationScript:
 
     def test_prepare_implicit_solvent(self):
         """Prepare a SAMS/calibration run in implicit solvent."""
-        json_input = "prepare_calibration_implicit.yaml"
+        toml_input = "prepare_calibration_implicit.toml"
         example = TestPreparationScript.trypsin_example
         tmpdir = files_to_tempdir(
             [
@@ -196,12 +196,12 @@ class TestPreparationScript:
             ]
         )
 
-        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        copy(os.path.join(TestPreparationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_prep_ffxml.run_prep_ffxml_main(json_input)
+        run_prep_ffxml.run_prep_ffxml_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -218,13 +218,13 @@ class TestPreparationScript:
                 for filename in TestPreparationScript.trypsin_example.values()
             ]
         )
-        json_input = "prepare_simulation.json"
-        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        toml_input = "prepare_simulation.toml"
+        copy(os.path.join(TestPreparationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_prep_ffxml.run_prep_ffxml_main(json_input)
+        run_prep_ffxml.run_prep_ffxml_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -235,7 +235,7 @@ class TestPreparationScript:
             rmtree(tmpdir)
 
     def test_prepare_ais(self):
-        json_input = "prepare_importance_sampling.json"
+        toml_input = "prepare_importance_sampling.toml"
         example = TestPreparationScript.trypsin_example
         tmpdir = files_to_tempdir(
             [
@@ -244,12 +244,12 @@ class TestPreparationScript:
             ]
         )
 
-        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        copy(os.path.join(TestPreparationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_prep_ffxml.run_prep_ffxml_main(json_input)
+        run_prep_ffxml.run_prep_ffxml_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -261,7 +261,7 @@ class TestPreparationScript:
 
     @pytest.mark.slowtest
     def test_prepare_ais_systematic(self):
-        json_input = "prepare_systematic_importance_sampling.json"
+        toml_input = "prepare_systematic_importance_sampling.toml"
         example = TestPreparationScript.trypsin_example
         tmpdir = files_to_tempdir(
             [
@@ -270,12 +270,12 @@ class TestPreparationScript:
             ]
         )
 
-        copy(os.path.join(TestPreparationScript.top_input_dir, json_input), tmpdir)
+        copy(os.path.join(TestPreparationScript.top_input_dir, toml_input), tmpdir)
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_prep_ffxml.run_prep_ffxml_main(json_input)
+        run_prep_ffxml.run_prep_ffxml_main(toml_input)
 
         # check if output files were produced
         for index in range(8):
@@ -293,16 +293,16 @@ class TestRunScript:
 
     def test_run_calibration(self):
         """Running an explicit solvent calibration"""
-        json_input = os.path.join(TestRunScript.input_dir, "run_calibration.json")
+        toml_input = os.path.join(TestRunScript.input_dir, "run_calibration.toml")
         checkpoint_file = os.path.join(
             TestRunScript.input_dir, "1D-calibration-checkpoint-0.xml"
         )
-        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        tmpdir = files_to_tempdir([checkpoint_file, toml_input])
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_simulation.run_main(json_input)
+        run_simulation.run_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -317,18 +317,18 @@ class TestRunScript:
 
     def test_run_implicit_solvent(self):
         """Running an implicit solvent calibration"""
-        json_input = os.path.join(
-            TestRunScript.input_dir, "run_calibration_implicit.json"
+        toml_input = os.path.join(
+            TestRunScript.input_dir, "run_calibration_implicit.toml"
         )
         checkpoint_file = os.path.join(
             TestRunScript.input_dir, "1D-calibration-implicit-checkpoint-0.xml"
         )
-        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        tmpdir = files_to_tempdir([checkpoint_file, toml_input])
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_simulation.run_main(json_input)
+        run_simulation.run_main(toml_input)
         # check if output files were produced
         assert os.path.isfile(
             f"output/1D-calibration-checkpoint-1.xml"
@@ -343,16 +343,16 @@ class TestRunScript:
     def test_run_equilibrium(self):
         """Test running an equilibrium simulation"""
         """Running an explicit solvent calibration"""
-        json_input = os.path.join(TestRunScript.input_dir, "run_equilibrium.json")
+        toml_input = os.path.join(TestRunScript.input_dir, "run_equilibrium.toml")
         checkpoint_file = os.path.join(
             TestRunScript.input_dir, "1D-equilibrium-checkpoint-0.xml"
         )
-        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        tmpdir = files_to_tempdir([checkpoint_file, toml_input])
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_simulation.run_main(json_input)
+        run_simulation.run_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
@@ -367,16 +367,16 @@ class TestRunScript:
 
     def test_run_ais(self):
         """Running an importance sampling simulation"""
-        json_input = os.path.join(TestRunScript.input_dir, "run_ais.json")
+        toml_input = os.path.join(TestRunScript.input_dir, "run_ais.toml")
         checkpoint_file = os.path.join(
             TestRunScript.input_dir, "1D-ais-state-3-checkpoint-0.xml"
         )
-        tmpdir = files_to_tempdir([checkpoint_file, json_input])
+        tmpdir = files_to_tempdir([checkpoint_file, toml_input])
         olddir = os.getcwd()
         os.chdir(tmpdir)
 
         # Perform preparation in temp dir
-        run_simulation.run_main(json_input)
+        run_simulation.run_main(toml_input)
 
         # check if output files were produced
         assert os.path.isfile(
