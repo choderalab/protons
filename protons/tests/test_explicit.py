@@ -1335,3 +1335,104 @@ class TestForceFieldImidazoleSaltswap:
             tot_charge += np.float64(q)
 
         return tot_charge
+
+
+class TestSaltswapMolecule(object):
+    """Tests for a saltswap style water molecule in explict solvent (TIP3P)"""
+
+    default_platform = "CPU"
+    default_properties = None
+
+    @staticmethod
+    def setup_waterbox():
+        """
+        Set up a saltswap water molecule in solvent.
+        """
+        water_system = SystemSetup()
+        water_system.temperature = 300.0 * unit.kelvin
+        water_system.pressure = 1.0 * unit.atmospheres
+        water_system.timestep = 1.0 * unit.femtoseconds
+        water_system.collision_rate = 1.0 / unit.picoseconds
+        water_system.constraint_tolerance = 1.0e-5
+        water_system.compound_integrator = create_compound_gbaoab_integrator(
+            water_system
+        )
+        testsystems = get_test_data("water-ion-test", "testsystems")
+        water_system.pdbfile = app.PDBFile(os.path.join(testsystems, "waterbox.pdb"))
+        water_system.ffxml_filename = os.path.join(testsystems, "water-with-states.xml")
+        water_system.topology = water_system.pdbfile.topology
+        water_system.positions = water_system.pdbfile.positions
+        water_system.forcefield = ForceField(water_system.ffxml_filename)
+
+        water_system.system = water_system.forcefield.createSystem(
+            water_system.topology, nonbondedMethod=app.PME
+        )
+        water_system.system.addForce(
+            openmm.MonteCarloBarostat(
+                water_system.pressure, water_system.temperature, 25
+            )
+        )
+
+        # Only treat the first molecule as titratable.
+        water_system.drive = ForceFieldProtonDrive(
+            water_system.temperature,
+            water_system.topology,
+            water_system.system,
+            water_system.forcefield,
+            water_system.ffxml_filename,
+            pressure=water_system.pressure,
+            perturbations_per_trial=0,
+            residues_by_index=[0],
+        )
+        platform = openmm.Platform.getPlatformByName(
+            TestSaltswapMolecule.default_platform
+        )
+
+        water_system.simulation = app.ConstantPHSimulation(
+            water_system.topology,
+            water_system.system,
+            water_system.compound_integrator,
+            water_system.drive,
+            platform=platform,
+            platformProperties=None,
+            state=None,
+        )
+
+        water_system.simulation.context.setPositions(
+            water_system.positions
+        )  # set to minimized positions
+        water_system.simulation.context.setVelocitiesToTemperature(
+            water_system.temperature
+        )
+        # Rename the first molecule so saltswap won't pick it up
+        list(water_system.topology.residues())[0].name = "NOTHOH"
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=water_system.simulation.context,
+            system=water_system.system,
+            topology=water_system.topology,
+            ncmc_integrator=water_system.compound_integrator.getIntegrator(1),
+            salt_concentration=0.2 * unit.molar,
+            pressure=water_system.pressure,
+            temperature=water_system.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        water_system.drive.enable_neutralizing_ions(swapper)
+        # patch the LJ parameters into the residue so that there is no difference with saltswap parameters
+        for state in [1, 2]:
+            for param in ["sigma", "epsilon"]:
+                water_system.drive.titrationGroups[0].titration_states[state].forces[0][
+                    "atoms"
+                ][0][param] = water_system.drive._ion_parameters[state][0][param]
+
+        return water_system
+
+    def test_creating_saltswap_system(self):
+        """Set up a simple test system with a water molecule."""
+        testsystem = self.setup_waterbox()
+
+
+if __name__ == "__main__":
+    pytest.main()
