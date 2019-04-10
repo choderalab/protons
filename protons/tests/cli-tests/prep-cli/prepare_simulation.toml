@@ -30,14 +30,14 @@ _comment1 = "Systemwide settings, such as temperature, and long range method"
 _comment2 = "If PME left out, nocutoff is used."
 temperature_k = 300.0
 salt_concentration_molar = 0.15
-neutral_charge_rule = 1.0
+neutral_charge_rule = 1
 
   [system.PME]
   _comment = "Ewald + periodic system settings"
   ewald_error_tolerance = 0.00001
   switching_distance_nm = 0.85
   nonbonded_cutoff_nm = 1.0
-  barostat_interval = 25.0
+  barostat_interval = 25
   pressure_atm = 1.0
   dispersion_correction = true
 
