@@ -331,7 +331,7 @@ def test_create_peptide_calibration_with_residue_pools_using_protons_xml():
     pools = {"glu": [0], "his": [1], "glu-his": [0, 1]}
 
     driver.define_pools(pools)
-    driver.enable_calibration(SAMSApproach.ONESITE, group_index=1)
+    driver.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=1)
     sams_sampler = SAMSCalibrationEngine(driver)  # SAMS on HIS
     simulation = app.Simulation(topology, system, integrator, platform)
     simulation.context.setPositions(positions)

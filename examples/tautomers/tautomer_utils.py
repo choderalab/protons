@@ -1,4 +1,9 @@
-from protons.app.ligands import prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
+from protons.app.ligands import (
+    prepare_calibration_systems,
+    create_hydrogen_definitions,
+    generate_protons_ffxml,
+    prepare_mol2_for_parametrization,
+)
 from protons.scripts.utilities import *
 from protons.app import TautomerForceFieldProtonDrive, TautomerNCMCProtonDrive
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
@@ -14,12 +19,13 @@ import os
 def run_main(simulation, driver, pdb_object, settings):
     """Main simulation loop."""
 
-
     # Add reporters
-    ncfile = netCDF4.Dataset(settings['simulation']['netCDF4'], "w")
-    dcd_output_name = settings['simulation']['dcd_filename']
+    ncfile = netCDF4.Dataset(settings["simulation"]["netCDF4"], "w")
+    dcd_output_name = settings["simulation"]["dcd_filename"]
     simulation.update_reporters.append(app.MetadataReporter(ncfile))
-    simulation.reporters.append(app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True))
+    simulation.reporters.append(
+        app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True)
+    )
     simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
     simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
     simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
@@ -27,8 +33,12 @@ def run_main(simulation, driver, pdb_object, settings):
     md_steps_between_updates = 1000
 
     # MAIN SIMULATION LOOP STARTS HERE
-    pos = simulation.context.getState(getPositions=True).getPositions() 
-    mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/start.pdb', 'w'))
+    pos = simulation.context.getState(getPositions=True).getPositions()
+    mm.app.PDBFile.writeFile(
+        pdb_object.topology,
+        pos,
+        open(settings["output"]["dir"] + "/tmp/start.pdb", "w"),
+    )
 
     for i in trange(total_iterations, desc="NCMC attempts"):
         if i == 50:
@@ -37,11 +47,15 @@ def run_main(simulation, driver, pdb_object, settings):
         simulation.step(md_steps_between_updates)
         # Perform a few COOH updates in between
         driver.update("COOH", nattempts=3)
-        pos = simulation.context.getState(getPositions=True).getPositions() 
-        mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
-        
+        pos = simulation.context.getState(getPositions=True).getPositions()
+        mm.app.PDBFile.writeFile(
+            pdb_object.topology,
+            pos,
+            open(settings["output"]["dir"] + "/tmp/mcmc_" + str(i) + ".pdb", "w"),
+        )
+
         if driver.calibration_state is not None:
-            if driver.calibration_state.approach is SAMSApproach.ONESITE:
+            if driver.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
                 simulation.update(1, pool="calibration")
             else:
                 simulation.update(1)
@@ -52,45 +66,62 @@ def run_main(simulation, driver, pdb_object, settings):
 
 def setting_up_tautomer(settings, isomer_dictionary):
 
-    pH = settings['pH']
-    resname = settings['resname']
+    pH = settings["pH"]
+    resname = settings["resname"]
 
-    #retrieve input files
-    icalib = settings['input']['dir'] + '/' + settings['name'] + '.pdb'
-    input_mol2 = settings['input']['dir'] + '/' + settings['name'] + '_tautomer_set.mol2'
-    
-    #define location of set up files
-    hydrogen_def = settings['input']['dir'] + '/' + settings['name'] + '.hxml'
-    offxml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
-    ocalib = settings['input']['dir'] + '/' + settings['name'] + '.cif'
+    # retrieve input files
+    icalib = settings["input"]["dir"] + "/" + settings["name"] + ".pdb"
+    input_mol2 = (
+        settings["input"]["dir"] + "/" + settings["name"] + "_tautomer_set.mol2"
+    )
+
+    # define location of set up files
+    hydrogen_def = settings["input"]["dir"] + "/" + settings["name"] + ".hxml"
+    offxml = settings["input"]["dir"] + "/" + settings["name"] + ".ffxml"
+    ocalib = settings["input"]["dir"] + "/" + settings["name"] + ".cif"
 
     # Debugging/intermediate files
-    dhydrogen_fix = settings['input']['dir'] + '/' + settings['name'] + '_hydrogen_fixed1.mol2'  
-    
-    ofolder = settings['output']['dir']
-    
+    dhydrogen_fix = (
+        settings["input"]["dir"] + "/" + settings["name"] + "_hydrogen_fixed1.mol2"
+    )
+
+    ofolder = settings["output"]["dir"]
+
     if not os.path.isdir(ofolder):
         os.makedirs(ofolder)
 
     # Begin processing
 
     # process into mol2
-    prepare_mol2_for_parametrization(input_mol2, dhydrogen_fix, patch_bonds=True, keep_intermediate=True)
+    prepare_mol2_for_parametrization(
+        input_mol2, dhydrogen_fix, patch_bonds=True, keep_intermediate=True
+    )
 
     # parametrize
-    generate_protons_ffxml(dhydrogen_fix, isomer_dictionary, offxml, pH, resname=resname, tautomers=True, pdb_file_path=icalib)
+    generate_protons_ffxml(
+        dhydrogen_fix,
+        isomer_dictionary,
+        offxml,
+        pH,
+        resname=resname,
+        tautomers=True,
+        pdb_file_path=icalib,
+    )
     # create hydrogens
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
 
     # prepare solvated system
     prepare_calibration_systems(icalib, ofolder, offxml, hydrogen_def)
 
+
 def generate_simulation_and_driver(settings):
 
-    ofolder = settings['output']['dir']
-    input_pdbx_file = settings['input']['dir'] + '/' + settings['name'] +  '.cif'
-    custom_xml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
-    forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', custom_xml, 'tip3p.xml', 'ions_tip3p.xml')
+    ofolder = settings["output"]["dir"]
+    input_pdbx_file = settings["input"]["dir"] + "/" + settings["name"] + ".cif"
+    custom_xml = settings["input"]["dir"] + "/" + settings["name"] + ".ffxml"
+    forcefield = app.ForceField(
+        "amber10-constph.xml", "gaff.xml", custom_xml, "tip3p.xml", "ions_tip3p.xml"
+    )
 
     # Load structure
     # The input should be an mmcif/pdbx file'
@@ -122,9 +153,8 @@ def generate_simulation_and_driver(settings):
     # Naming the output files
     os.chdir(ofolder)
 
-    if not os.path.isdir('tmp'):
-        os.makedirs('tmp')
-
+    if not os.path.isdir("tmp"):
+        os.makedirs("tmp")
 
     # Structure preprocessing settings
     if "preprocessing" in settings:
@@ -252,8 +282,8 @@ def generate_simulation_and_driver(settings):
 
     # TODO allow platform specification for setup
 
-    #platform = mm.Platform.getPlatformByName("CUDA")
-#    properties = {"Precision": "double"}
+    # platform = mm.Platform.getPlatformByName("CUDA")
+    #    properties = {"Precision": "double"}
     platform = mm.Platform.getPlatformByName("CPU")
 
     # Set up calibration mode
@@ -279,7 +309,7 @@ def generate_simulation_and_driver(settings):
 
         if sams["sites"] == "multi":
             driver.enable_calibration(
-                approach=SAMSApproach.MULTISITE,
+                approach=SAMSApproach.MULTI_RESIDUE,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,
                 min_burn=min_burnin,
@@ -294,7 +324,7 @@ def generate_simulation_and_driver(settings):
                 calibration_titration_group_index = len(driver.titrationGroups) - 1
 
             driver.enable_calibration(
-                approach=SAMSApproach.ONESITE,
+                approach=SAMSApproach.ONE_RESIDUE,
                 group_index=calibration_titration_group_index,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,

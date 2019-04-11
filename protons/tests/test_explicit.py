@@ -142,7 +142,7 @@ class TestAmberTyrosineExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -168,7 +168,7 @@ class TestAmberTyrosineExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -393,7 +393,7 @@ class TestForceFieldImidazoleExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -421,7 +421,7 @@ class TestForceFieldImidazoleExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -668,7 +668,7 @@ class TestAmberPeptide(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=4)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=4)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)

@@ -52,10 +52,10 @@ def calibration_dataset_to_arrays(dataset: netCDF4.Dataset):
 
     group = sams["group_index"][0]
     # This if statement checks if the group index is an integer, or undefined/masked (multisite calibration)
-    if approach is SAMSApproach.ONESITE:
+    if approach is SAMSApproach.ONE_RESIDUE:
         initial_states = ncmc["initial_state"][:, group]
         proposed_states = ncmc["proposed_state"][:, group]
-    elif approach is SAMSApproach.MULTISITE:
+    elif approach is SAMSApproach.MULTI_RESIDUE:
         initial_states = ncmc["initial_state"][:, :]
         proposed_states = ncmc["proposed_state"][:, :]
     else:
@@ -170,9 +170,9 @@ def bar_all_states(
 
             # SAMS bias estimate has the opposite sign of the free energy difference
 
-            if approach is SAMSApproach.ONESITE:
+            if approach is SAMSApproach.ONE_RESIDUE:
                 sams_estimate = -gk[group, to_state] + gk[group, from_state]
-            elif approach is SAMSApproach.MULTISITE:
+            elif approach is SAMSApproach.MULTI_RESIDUE:
                 sams_estimate = -gk[to_state] + gk[from_state]
             else:
                 raise NotImplementedError(

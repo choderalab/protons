@@ -294,7 +294,7 @@ def run_prep_ffxml_main(tomlfile):
 
         if sams["sites"] == "multi":
             driver.enable_calibration(
-                approach=SAMSApproach.MULTISITE,
+                approach=SAMSApproach.MULTI_RESIDUE,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,
                 min_burn=min_burnin,
@@ -309,7 +309,7 @@ def run_prep_ffxml_main(tomlfile):
                 calibration_titration_group_index = len(driver.titrationGroups) - 1
 
             driver.enable_calibration(
-                approach=SAMSApproach.ONESITE,
+                approach=SAMSApproach.ONE_RESIDUE,
                 group_index=calibration_titration_group_index,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,

@@ -82,7 +82,7 @@ class TestSAMSReporter(object):
 
         # prep the driver for calibration
         driver.enable_calibration(
-            SAMSApproach.ONESITE, group_index=1, update_rule=UpdateRule.BINARY
+            SAMSApproach.ONE_RESIDUE, group_index=1, update_rule=UpdateRule.BINARY
         )
 
         calibration = app.ConstantPHSimulation(
@@ -171,7 +171,9 @@ class TestSAMSReporter(object):
         )
 
         # prep the driver for calibration
-        driver.enable_calibration(SAMSApproach.MULTISITE, update_rule=UpdateRule.BINARY)
+        driver.enable_calibration(
+            SAMSApproach.MULTI_RESIDUE, update_rule=UpdateRule.BINARY
+        )
 
         calibration = app.ConstantPHSimulation(
             pdb.topology,
@@ -260,7 +262,9 @@ class TestSAMSReporter(object):
             pressure=pressure,
             perturbations_per_trial=3,
         )
-        driver.enable_calibration(SAMSApproach.MULTISITE, update_rule=UpdateRule.BINARY)
+        driver.enable_calibration(
+            SAMSApproach.MULTI_RESIDUE, update_rule=UpdateRule.BINARY
+        )
 
         calibration = app.ConstantPHSimulation(
             pdb.topology,

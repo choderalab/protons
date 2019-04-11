@@ -117,7 +117,7 @@ def run_main(jsonfile):
     driver.state_from_xml_tree(drive_element)
 
     if driver.calibration_state is not None:
-        if driver.calibration_state.approach == SAMSApproach.ONESITE:
+        if driver.calibration_state.approach == SAMSApproach.ONE_RESIDUE:
             driver.define_pools({"calibration": driver.calibration_state.group_index})
 
     try:
@@ -231,7 +231,7 @@ def run_main(jsonfile):
             # Perform a few COOH updates in between
             driver.update("COOH", nattempts=3)
             if driver.calibration_state is not None:
-                if driver.calibration_state.approach is SAMSApproach.ONESITE:
+                if driver.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
                     simulation.update(1, pool="calibration")
                 else:
                     simulation.update(1)

@@ -124,7 +124,7 @@ class SAMSReporter:
         """
         system = simulation.context.getSystem()
         drive = simulation.drive
-        if drive.calibration_state.approach is SAMSApproach.ONESITE:
+        if drive.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
             group_index = drive.calibration_state.group_index
         else:
             group_index = np.nan
@@ -212,7 +212,7 @@ class SAMSReporter:
 
         grp["approach"][0] = calibration.drive.calibration_state.approach.value
         # only set group index when onesite is used
-        if calibration.drive.calibration_state.approach is SAMSApproach.ONESITE:
+        if calibration.drive.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
             grp["group_index"][0] = calibration.drive.calibration_state.group_index
 
         grp["update_rule"][0] = calibration.drive.calibration_state._update_rule.value
