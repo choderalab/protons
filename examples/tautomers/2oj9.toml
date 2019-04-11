@@ -62,7 +62,7 @@ propagations_per_ncmc_step = 1
 timeout_sec = 21599
 
 [reporters]
-metadata = true
+metadata = 1
 [reporters.titration]
 frequency = 1
 [reporters.coordinates]
