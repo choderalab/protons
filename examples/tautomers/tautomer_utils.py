@@ -1,5 +1,6 @@
 from protons.app.ligands import prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
 from protons.scripts.utilities import *
+from protons.app.protein import prepare_protein
 from protons.app import TautomerForceFieldProtonDrive, TautomerNCMCProtonDrive
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
 from simtk import unit, openmm as mm
@@ -11,19 +12,25 @@ import shutil
 import os
 
 
-def run_main(simulation, driver, pdb_object, settings):
+def run_simulation(simulation, driver, pdb_object, settings):
     """Main simulation loop."""
 
     # Add reporters
     ncfile = netCDF4.Dataset(settings['simulation']['netCDF4'], "w")
-    dcd_output_name = settings['simulation']['dcd_filename']
-    simulation.update_reporters.append(app.MetadataReporter(ncfile))
-    simulation.reporters.append(app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True))
-    simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
-    simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
-    simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
-    total_iterations = 500
-    md_steps_between_updates = 1000
+    if settings['simulation']['dcd_filename']:
+        dcd_output_name = settings['simulation']['dcd_filename']
+        simulation.reporters.append(app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True))
+
+    if int(settings['reporters']['metadata']) == 1:    
+        simulation.update_reporters.append(app.MetadataReporter(ncfile))
+    if settings['reporters']['titration']:
+        simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
+    if settings['reporters']['sams']:
+        simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
+    if settings['reporters']['ncmc']:
+        simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
+    total_iterations = int(settings['simulation']["total_update_attempts"])
+    md_steps_between_updates = int(settings['simulation']["md_steps_between_updates"])
 
     # MAIN SIMULATION LOOP STARTS HERE
     pos = simulation.context.getState(getPositions=True).getPositions() 
@@ -52,44 +59,59 @@ def run_main(simulation, driver, pdb_object, settings):
 def setting_up_tautomer(settings, isomer_dictionary):
 
     pH = settings['pH']
-    resname = settings['resname']
+    resname = settings['ligand-resname']
+
+    ofolder = settings['output']['dir']
+    if os.path.isdir(ofolder):
+        shutil.rmtree(ofolder)
+        os.makedirs(ofolder)
+
+
 
     #retrieve input files
-    icalib = settings['input']['dir'] + '/' + settings['name'] + '.pdb'
-    input_mol2 = settings['input']['dir'] + '/' + settings['name'] + '_tautomer_set.mol2'
-    input_sdf = settings['input']['dir'] + '/' + settings['name'] + '_tautomer_set.sdf'
+    if 'protein-name' in settings:
+        system_heavy_atoms = settings['input']['dir'] + '/' + settings['protein-name'] + '_pdbfixer.pdb'
+        prepare_protein(settings['input']['dir'] + '/' + settings['protein-name'] + '.pdb', system_heavy_atoms)
+        tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
+    else:
+        system_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
+        tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
+
+    input_mol2 = settings['input']['dir'] + '/' + resname + '_tautomer_set.mol2'
+    input_sdf = settings['input']['dir'] + '/' + resname + '_tautomer_set.sdf'
     
     #define location of set up files
-    hydrogen_def = settings['input']['dir'] + '/' + settings['name'] + '.hxml'
-    offxml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
+    hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
+    offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
 
     # Debugging/intermediate files
-    dhydrogen_fix = settings['input']['dir'] + '/' + settings['name'] + '_hydrogen_fixed.mol2'  
+    dhydrogen_fix = settings['input']['dir'] + '/' + resname + '_hydrogen_fixed.mol2'  
     
     ofolder = settings['output']['dir']
     
-    if not os.path.isdir(ofolder):
-        os.makedirs(ofolder)
-
     # Begin processing
-
     # process into mol2
-    prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, patch_bonds=True, keep_intermediate=True)
+    prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, patch_bonds=True, keep_intermediate=False)
 
     # parametrize
-    generate_protons_ffxml(dhydrogen_fix, isomer_dictionary, offxml, pH, resname=resname, tautomers=True, pdb_file_path=icalib)
+    generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, outputffxml=offxml, pH=pH, resname=resname.upper(), tautomers=True, pdb_file_path=tautomer_heavy_atoms)
     # create hydrogens
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
 
     # prepare solvated system
-    prepare_calibration_systems(icalib, ofolder + '/' + settings['name'], offxml, hydrogen_def)
+    prepare_calibration_systems(system_heavy_atoms, settings['output']['dir'] + '/' + resname, offxml, hydrogen_def)
 
 def generate_simulation_and_driver(settings):
 
+    #change to output file
     ofolder = settings['output']['dir']
-    input_pdbx_file = settings['output']['dir'] + '/' + settings['name'] +  '-water.cif'
-    custom_xml = settings['input']['dir'] + '/' + settings['name'] + '.ffxml'
-    forcefield = app.ForceField('amber10-constph.xml', 'gaff.xml', custom_xml, 'tip3p.xml', 'ions_tip3p.xml')
+    os.chdir(ofolder)
+
+    # Naming the output files
+
+    input_pdbx_file = settings['input']['structure']
+    custom_xml = settings['forcefield']['user-xml']
+    forcefield = app.ForceField(*settings['forcefield']['default'] + custom_xml)
 
     # Load structure
     # The input should be an mmcif/pdbx file'
@@ -114,16 +136,8 @@ def generate_simulation_and_driver(settings):
         elif residue.name == "GLU":
             residue.name = "GLH"
 
-    if os.path.isdir(ofolder):
-        shutil.rmtree(ofolder)
-        os.makedirs(ofolder)
-
-    # Naming the output files
-    os.chdir(ofolder)
-
     if not os.path.isdir('tmp'):
         os.makedirs('tmp')
-
 
     # Structure preprocessing settings
     if "preprocessing" in settings:
@@ -220,7 +234,7 @@ def generate_simulation_and_driver(settings):
         topology,
         system,
         forcefield,
-        [custom_xml] + ["amber10-constph.xml"],
+        ffxml_files=custom_xml,
         pressure=pressure,
         perturbations_per_trial=10000,
         propagations_per_step=1,
@@ -251,9 +265,9 @@ def generate_simulation_and_driver(settings):
 
     # TODO allow platform specification for setup
 
-    if settings['platform'] == 'CUDA':
+    if settings['platform']['driver'] == 'CUDA':
         platform = mm.Platform.getPlatformByName("CUDA")
-        properties = {"Precision": "double"}
+        properties = {"Precision": "mixed"}
     else:
         platform = mm.Platform.getPlatformByName("CPU")
         properties = {}

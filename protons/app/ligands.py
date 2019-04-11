@@ -1565,7 +1565,7 @@ def generate_protons_ffxml(
     resname: str = "LIG",
     omega_max_confs: int = 200,
     tautomers: bool = False,
-    pdb_file_path: str = "input.pdb",
+    pdb_file_path: str = None,
 ):
     """
     Compile a protons ffxml file from a preprocessed mol2 file, and a dictionary of states and charges.
@@ -1754,7 +1754,7 @@ def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index
         h_xml.set("parent", parent)
         hydrogen_file_residue.append(h_xml)
     hydrogen_definitions_tree.append(hydrogen_file_residue)
-
+    log.debug(hydrogen_definitions_tree)
     return hydrogen_definitions_tree
 
 

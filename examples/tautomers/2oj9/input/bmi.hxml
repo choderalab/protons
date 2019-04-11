@@ -1,0 +1,24 @@
+<Residues>
+  <Residue name="BMI">
+    <H name="H1nh" parent="N1"/>
+    <H name="H2n" parent="N2"/>
+    <H name="H3cc" parent="C3"/>
+    <H name="H4cd" parent="C4"/>
+    <H name="H5c3" parent="C5"/>
+    <H name="H6c3" parent="C5"/>
+    <H name="H7ca" parent="C6"/>
+    <H name="H8ca" parent="C7"/>
+    <H name="H9ca" parent="C8"/>
+    <H name="H10ca" parent="C10"/>
+    <H name="H11cc" parent="C12"/>
+    <H name="H12ca" parent="C14"/>
+    <H name="H13cc" parent="C15"/>
+    <H name="H14cd" parent="C16"/>
+    <H name="H15na" parent="N6"/>
+    <H name="H16ca" parent="C21"/>
+    <H name="H17c3" parent="C22"/>
+    <H name="H18c3" parent="C22"/>
+    <H name="H19c3" parent="C22"/>
+    <H name="H20na" parent="N7"/>
+  </Residue>
+</Residues>
