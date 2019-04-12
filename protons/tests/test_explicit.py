@@ -1344,7 +1344,12 @@ class TestSaltswapMolecule(object):
     default_properties = None
 
     @staticmethod
-    def setup_waterbox():
+    def setup_waterbox(
+        pert_per_trial=10000,
+        sampling_method=SamplingMethod.IMPORTANCE,
+        initial_state=0,
+        salt_conc=0.2 * unit.molar,
+    ):
         """
         Set up a saltswap water molecule in solvent.
         """
@@ -1397,7 +1402,7 @@ class TestSaltswapMolecule(object):
             platformProperties=None,
             state=None,
         )
-
+        water_system.salt_concentration = salt_conc
         water_system.simulation.context.setPositions(
             water_system.positions
         )  # set to minimized positions
@@ -1412,7 +1417,7 @@ class TestSaltswapMolecule(object):
             system=water_system.system,
             topology=water_system.topology,
             ncmc_integrator=water_system.compound_integrator.getIntegrator(1),
-            salt_concentration=0.2 * unit.molar,
+            salt_concentration=water_system.salt_concentration,
             pressure=water_system.pressure,
             temperature=water_system.temperature,
         )
@@ -1426,6 +1431,10 @@ class TestSaltswapMolecule(object):
                 water_system.drive.titrationGroups[0].titration_states[state].forces[0][
                     "atoms"
                 ][0][param] = water_system.drive._ion_parameters[state][0][param]
+
+        water_system.drive.set_titration_state(
+            0, initial_state, updateContextParameters=True, updateIons=True
+        )
 
         return water_system
 
