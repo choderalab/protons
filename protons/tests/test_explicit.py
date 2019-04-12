@@ -1386,8 +1386,9 @@ class TestSaltswapMolecule(object):
             water_system.forcefield,
             water_system.ffxml_filename,
             pressure=water_system.pressure,
-            perturbations_per_trial=0,
+            perturbations_per_trial=pert_per_trial,
             residues_by_index=[0],
+            sampling_method=sampling_method,
         )
         platform = openmm.Platform.getPlatformByName(
             TestSaltswapMolecule.default_platform
