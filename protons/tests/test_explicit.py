@@ -1425,6 +1425,7 @@ class TestSaltswapMolecule(object):
         salinator.neutralize()
         salinator.initialize_concentration()
         swapper = salinator.swapper
+        water_system.salinator = salinator
         water_system.drive.enable_neutralizing_ions(swapper)
         # patch the LJ parameters into the residue so that there is no difference with saltswap parameters
         for state in [1, 2]:
