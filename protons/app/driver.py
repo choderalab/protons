@@ -3109,6 +3109,9 @@ class NCMCProtonDrive(_BaseDrive):
                 titration_group_index
             ]
 
+        # Setting the saltswap state to the final state so that the bookkeeping is correct
+        if update_salt:
+            self.swapper.stateVector = final_salt_vector
         # Extracting the final state's weight.
         g_final = self.calculate_gk()
         # Extract the internally calculated work from the integrator
