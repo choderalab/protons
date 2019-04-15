@@ -1440,9 +1440,45 @@ class TestSaltswapMolecule(object):
 
         return water_system
 
+    @staticmethod
+    def compare_nonbonded_parameters(sysxml1, sysxml2):
+
+        tree1 = etree.fromstring(sysxml1)
+        tree2 = etree.fromstring(sysxml2)
+
+        f1 = tree1.xpath("//System/Forces/Force[@type='NonbondedForce']")[0]
+        f2 = tree2.xpath("//System/Forces/Force[@type='NonbondedForce']")[0]
+        found_diff = False
+
+        diff_txt = ""
+        for p, (part1, part2) in enumerate(
+            zip(f1.xpath("//Particle"), f2.xpath("//Particle"))
+        ):
+            if part1.attrib != part2.attrib:
+                found_diff = True
+                diff_txt += f"{p}, {part1.attrib}, {part2.attrib}\n"
+
+        return found_diff, diff_txt
+
     def test_creating_saltswap_system(self):
         """Set up a simple test system with a water molecule."""
-        testsystem = self.setup_waterbox()
+        testsystem = self.setup_waterbox(
+            pert_per_trial=3,
+            sampling_method=SamplingMethod.IMPORTANCE,
+            initial_state=0,
+            salt_conc=0.2 * unit.molar,
+        )
+
+        sys1 = openmm.XmlSerializer.serialize(testsystem.system)
+        statevec1 = deepcopy(testsystem.drive.swapper.stateVector)
+        testsystem.simulation.step(1)
+        testsystem.simulation.update(1)
+
+        sys2 = openmm.XmlSerializer.serialize(testsystem.system)
+        statevec2 = deepcopy(testsystem.drive.swapper.stateVector)
+        are_different, differences = self.compare_nonbonded_parameters(sys1, sys2)
+        assert are_different is False, differences
+        assert np.all(statevec1 == statevec2), "Saltswap state vector changed."
 
 
 if __name__ == "__main__":
