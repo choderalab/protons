@@ -8,15 +8,15 @@ from ..app.ligands import *
 from ..app import logger
 from ..app.template_patches import patch_cooh
 from ..app.logger import log
-import toml
 import sys
 import os
 from warnings import warn
+from .utilities import load_config_by_ext
 
 log.setLevel(logger.logging.INFO)
 
 
-def run_parametrize_main(inputfile):
+def run_parametrize_main(settings_file):
     """
     Run the program
     Parameters
@@ -25,8 +25,7 @@ def run_parametrize_main(inputfile):
 
     """
 
-    with open(inputfile.strip(), "r") as settingsfile:
-        settings = toml.load(settingsfile)
+    settings = load_config_by_ext(settings_file)
 
     # Check all available fields.
     # TODO use json schema for this

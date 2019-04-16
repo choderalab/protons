@@ -5,10 +5,27 @@ from protons import app
 from protons.app import log
 import numpy as np
 from io import StringIO
-from typing import Union
+from typing import Union, Dict
+import yaml
+import toml
+import os
 
 xmls = mm.XmlSerializer
 import datetime
+
+
+def load_config_by_ext(filename: str) -> Dict:
+    """Load yaml, json or toml files correctly depending on file extension."""
+    root, ext = os.path.splitext(filename)
+    if str.lower(ext) in [".yaml", ".yml", ".json"]:
+        obj = yaml.safe_load(open(filename, "r"))
+    elif str.lower(ext) == ".toml":
+        obj = toml.load(open(filename, "r"))
+    else:
+        raise ValueError(
+            f"File {filename} has unsupported extension, {ext}. Use JSON, YAML or TOML."
+        )
+    return dict(obj)
 
 
 class TimeOutError(RuntimeError):
