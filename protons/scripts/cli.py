@@ -79,7 +79,7 @@ def validate(args: List[str]) -> str:
             return f"Unknown command: {arg}. \n" + usage
 
     elif cmd in ["param", "prep", "run"]:
-        if os.path.splitext(arg)[1].lower() not in [".toml", ".yaml", ".yml", "json"]:
+        if os.path.splitext(arg)[1].lower() not in [".toml", ".yaml", ".yml", ".json"]:
             return "Please provide a '.json, .yaml or .toml' file as input."
         else:
             return ""
