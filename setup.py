@@ -66,7 +66,7 @@ setup(
     package_data={
         "protons": find_package_data("protons/examples", "protons")
         + find_package_data("protons/tests/testsystems", "protons")
-        + find_package_data("protons/calibration-systems", "protons")
+        + find_package_data("protons/tests/cli-tests", "protons")
         + find_package_data("protons/app/data", "protons")
     },
     zip_safe=False,
@@ -75,6 +75,4 @@ setup(
         "console_scripts": ["protons=protons.scripts.cli:cli"],
     },
     ext_modules=extensions,
-    setup_requires=["pytest-runner"],
-    tests_require=["pytest"],
 )

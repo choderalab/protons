@@ -11,6 +11,7 @@ from scipy.misc import comb
 from scipy.special import logsumexp
 from typing import Dict, Tuple, Callable, List, Optional
 from lxml import etree
+from saltswap.wrappers import Swapper
 
 
 class _StateProposal(metaclass=ABCMeta):
@@ -173,71 +174,34 @@ class CategoricalProposal(_StateProposal):
         return final_titration_states, titration_group_indices, 0.0
 
 
-class SaltSwapProposal:
-    """This class is a baseclass for selecting water molecules or ions to maintain charge neutrality."""
+class SaltSwapProposal(metaclass=ABCMeta):
+    """Base class defining interface for proposing ion swaps."""
 
-    def propose_swaps(self, drive, initial_charge: int, final_charge: int):
-        """Select a series of water molecules/ions to swap.
+    @abstractmethod
+    def propose_swaps(
+        self, swapper: Swapper, delta_cations: int, delta_anions: int
+    ) -> Tuple[List[int], List[Tuple[int, int]], float]:
+        """Abstract method,
 
         Parameters
         ----------
+        swapper - saltswap swapper object associated with the simulations
+        delta_cations - number of cations to add/remove
+        delta_anions - number of anions to add/remove
 
-        drive - a ProtonDrive object with a swapper attached.
-        initial_charge - the total charge of the changing residue before the state change
-        total_charge - the total charge of the changing residue after the state change
-
-        Please note
-        -----------
-        The net charge difference will have the opposite charge of the ions that will be added to the system,
-        such that the resulting total charge change will be 0.
 
         Returns
         -------
-        list(int) - indices of water molecule in saltswap that are swapped
-        list(tuple(int,int),) -  list of tuples with (initial, final) states of the water molecule/ion as int, one tuple for each requested swap
-            By saltswap convention
-             - 0 is water
-             - 1 is cation
-             - 2 is anion
-        float - log (probability of reverse proposal)/(probability of forward proposal)
-        """
-
-        return list(), list(), float()
-
-    @staticmethod
-    def _validate_swaps(swaps):
-        """Perform sanity checks. Swaps should only add charge in one direction.
-
-        Raises
-        ------
-        RuntimeError - in case conflicting swaps occur at the same time.
-            The error message will detail what the conflict is.
-        """
-
-        if swaps["water_to_cation"] != 0 and swaps["water_to_anion"] != 0:
-            raise RuntimeError(
-                "Opposing charge ions are added. This is a bug in the code."
-            )
-        elif swaps["cation_to_water"] != 0 and swaps["anion_to_water"] != 0:
-            raise RuntimeError(
-                "Opposing charge ions are removed. This is a bug in the code."
-            )
-        elif swaps["cation_to_water"] != 0 and swaps["water_to_cation"] != 0:
-            raise RuntimeError(
-                "Cations are being added and removed at the same time. This is a bug in the code."
-            )
-        elif swaps["anion_to_water"] != 0 and swaps["water_to_anion"] != 0:
-            raise RuntimeError(
-                "Anions are being added and removed at the same time. This is a bug in the code."
-            )
+        list of state vector elements being updated
+        List of the corresponding state updates (from state, to state), 0 for water 1 for cation 2 for anion.
+        The log_probability of the update."""
+        return list(), list(), 0.0
 
 
-class OneDirectionChargeProposal(SaltSwapProposal):
-    """Swaps ions in a way that does not create opposite charges during the alchemical protocol.
-    This is an implementation of the method outlined in Chen and Roux 2015
-    """
+class UniformSwapProposal(SaltSwapProposal):
+    """This class can select ions based on specification and returns the probability of swapping."""
 
-    def __init__(self, cation_coefficient: float = 0.5, err_on_depletion: bool = True):
+    def __init__(self, cation_coefficient: float = 0.5):
         """Instantiate a UniformSwapProposal.
 
         Parameters
@@ -245,191 +209,43 @@ class OneDirectionChargeProposal(SaltSwapProposal):
         cation_coefficient - optional. Must be between 0 and 1, default 0.5.
             The fraction of the chemical potential of a water pair -> salt pair transformation that is attributed to the
             cation -> water transformation.
-        err_on_depletion - optional.
-            If ions get depleted, raise an error. If false, add opposite charge ion to fix.
-
-
         """
+
         if not 0.0 <= cation_coefficient <= 1.0:
             raise ValueError("The cation coefficient should be between 0 and 1.")
 
         self._cation_weight = cation_coefficient
         self._anion_weight = 1.0 - cation_coefficient
 
-        self._err_on_depletion = err_on_depletion
-
-    def select_ions(
-        self,
-        chem_potential: float,
-        drive,
-        log_ratio: float,
-        saltswap_residue_indices: list,
-        saltswap_state_pairs: list,
-        swaps: dict,
-    ):
-        """
+    def propose_swaps(
+        self, swapper: Swapper, delta_cations: int, delta_anions: int
+    ) -> Tuple[List[int], List[Tuple[int, int]], float]:
+        """Propose ions/waters to swap.
 
         Parameters
         ----------
-        chem_potential - used to calculate the probability of the swap
-        drive - ProtonDrive object that has a swapper attached
-        log_ratio - starting log_ratio estimate
-        saltswap_residue_indices - list to append residue indices to
-        saltswap_state_pairs - list to append initial and final states of residues to
-        swaps - dict of the type of swaps to perform
+        swapper - saltswap swapper object associated with the simulations
+        delta_cations - number of cations to add/remove
+        delta_anions - number of anions to add/remove
+
 
         Returns
         -------
-
+        list of state vector elements being updated
+        List of the corresponding state updates (from state, to state), 0 for water 1 for cation 2 for anion.
+        The log_probability of the update.
         """
-        all_waters = np.where(drive.swapper.stateVector == 0)[0]
-        all_cations = np.where(drive.swapper.stateVector == 1)[0]
-        all_anions = np.where(drive.swapper.stateVector == 2)[0]
-        # This code should only perform water_to_cation OR water_to_anion, not both.
-        # The sanity check should prevent the same waters/ions from being selected twice.
-        # individual types of swaps should be completely independent for the purpose of calculating
-        # the proposal probabilities.
-        if swaps["water_to_cation"] > 0:
-            for water_index in np.random.choice(
-                a=all_waters, size=swaps["water_to_cation"], replace=False
-            ):
-                saltswap_residue_indices.append(water_index)
-                saltswap_state_pairs.append(tuple([0, 1]))
+        all_waters = np.where(swapper.stateVector == 0)[0]
+        all_cations = np.where(swapper.stateVector == 1)[0]
+        all_anions = np.where(swapper.stateVector == 2)[0]
 
-            # Forward: choose m water to change into cations, probability of one pick is
-            # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_cation count).
-            log_p_forward = -np.log(
-                comb(all_waters.size, swaps["water_to_cation"], exact=True)
-            )
-            # Reverse: choose m cations to change into water, probability of one pick is
-            # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the water_to_cation count), select m
-            log_p_reverse = -np.log(
-                comb(
-                    all_cations.size + swaps["water_to_cation"],
-                    swaps["water_to_cation"],
-                    exact=True,
-                )
-            )
-            log_ratio += log_p_reverse - log_p_forward
-            # Calculate the work of transforming one water molecule into a cation
-            work = chem_potential * self._cation_weight
-            # Subtract the work from the acceptance probability
-            log_ratio -= work
-        if swaps["water_to_anion"] > 0:
-            for water_index in np.random.choice(
-                a=all_waters, size=swaps["water_to_anion"], replace=False
-            ):
-                saltswap_residue_indices.append(water_index)
-                saltswap_state_pairs.append(tuple([0, 2]))
-
-            # Forward: probability of one pick is
-            # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_anion count).
-            log_p_forward = -np.log(
-                comb(all_waters.size, swaps["water_to_anion"], exact=True)
-            )
-            # Reverse: probability of one pick is
-            # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the water_to_anion count), select m
-            log_p_reverse = -np.log(
-                comb(
-                    all_anions.size + swaps["water_to_anion"],
-                    swaps["water_to_anion"],
-                    exact=True,
-                )
-            )
-            log_ratio += log_p_reverse - log_p_forward
-            # Calculate the work of transforming one water into one anion
-            work = chem_potential * self._anion_weight
-            # Subtract the work from the acceptance probability
-            log_ratio -= work
-        if swaps["cation_to_water"] > 0:
-            for cation_index in np.random.choice(
-                a=all_cations, size=swaps["cation_to_water"], replace=False
-            ):
-                saltswap_residue_indices.append(cation_index)
-                saltswap_state_pairs.append(tuple([1, 0]))
-
-            # Forward: choose m cations to change into water, probability of one pick is
-            # 1.0 / (n_cations choose m); e.g. from all cations select m (the cation_to_water count).
-            log_p_forward = -np.log(
-                comb(all_cations.size, swaps["cation_to_water"], exact=True)
-            )
-            # Reverse: choose m water to change into cations, probability of one pick is
-            # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the anion_to_water count), select m
-            log_p_reverse = -np.log(
-                comb(
-                    all_cations.size + swaps["cation_to_water"],
-                    swaps["cation_to_water"],
-                    exact=True,
-                )
-            )
-            log_ratio += log_p_reverse - log_p_forward
-            # Calculate the work of transforming one cation into one water molecule
-            work = -chem_potential * self._cation_weight
-            # Subtract the work from the acceptance probability
-            log_ratio -= work
-        if swaps["anion_to_water"] > 0:
-            for anion_index in np.random.choice(
-                a=all_anions, size=swaps["anion_to_water"], replace=False
-            ):
-                saltswap_residue_indices.append(anion_index)
-                saltswap_state_pairs.append(tuple([2, 0]))
-
-            # Forward: probability of one pick is
-            # 1.0 / (n_anions choose m); e.g. from all anions select m (the anion_to_water count).
-            log_p_forward = -np.log(
-                comb(all_anions.size, swaps["anion_to_water"], exact=True)
-            )
-            # Reverse: probability of one pick is
-            # 1.0 / (n_water + m choose m); e.g. from water plus m (the anion_to_water count), select m
-            log_p_reverse = -np.log(
-                comb(
-                    all_waters.size + swaps["anion_to_water"],
-                    swaps["anion_to_water"],
-                    exact=True,
-                )
-            )
-            log_ratio += log_p_reverse - log_p_forward
-            # Calculate the work of transforming one anion into water based on the chemical potential
-            work = -chem_potential * self._anion_weight
-            # Subtract the work from the acceptance probability
-            log_ratio -= work
-        return log_ratio
-
-    def propose_swaps(self, drive, initial_charge: int, final_charge: int):
-        """Select a series of water molecules/ions to swap uniformly from all waters/ions.
-
-            Parameters
-            ----------
-
-            drive - a ProtonDrive object with a swapper attached.
-            initial_charge - the total charge of the changing residue before the state change
-            total_charge - the total charge of the changing residue after the state change
-
-            Returns
-            -------
-            list(int) - indices of water molecule in saltswap that are swapped
-            list(tuple(int,int),) -  list of tuples with (initial, final) states of the water molecule/ion as dict, one tuple for each requested swap
-                By saltswap convention:
-                - 0 is water
-                - 1 is cation
-                - 2 is anion
-
-            float - log (probability of reverse proposal)/(probability of forward proposal)
-        """
-        net_charge_difference = final_charge - initial_charge
-        # Defaults. If no swaps are necessary, this will be all that is needed.
-        saltswap_residue_indices = list()
-        saltswap_state_pairs = list()
-        log_ratio = 0.0  # fully symmetrical proposal if no swaps occur.
-
-        # the chemical potential for switching two water molecules into cation + anion
-        chem_potential = drive.swapper.delta_chem
-
-        # If no cost is supplied, use the supplied chemical potential
+        saltswap_residue_indices: List[int] = list()
+        saltswap_state_pairs: List[Tuple[int, int]] = list()
 
         # Check the type of the chemical potential, and reduce units if necessary
+        chem_potential = swapper.delta_chem
         if isinstance(chem_potential, unit.Quantity):
-            chem_potential *= drive.beta
+            chem_potential /= swapper.kT
             if unit.is_quantity(chem_potential):
                 raise ValueError(
                     "The chemical potential has irreducible units ({}).".format(
@@ -437,97 +253,97 @@ class OneDirectionChargeProposal(SaltSwapProposal):
                     )
                 )
 
-        # If swaps are needed
-        if net_charge_difference != 0:
+        log_ratio = 0
 
-            # There is a net charge difference, find which swaps are necessary to compute.
-            swaps = self._select_swaps_chenroux(initial_charge, final_charge)
+        # individual types of swaps should be completely independent for the purpose of calculating
+        # the proposal probabilities.
+        if delta_cations > 0:
+            for water_index in np.random.choice(
+                a=all_waters, size=abs(delta_cations), replace=False
+            ):
+                saltswap_residue_indices.append(water_index)
+                saltswap_state_pairs.append(tuple([0, 1]))
 
-            # Apply sanity checks
-            SaltSwapProposal._validate_swaps(swaps)
-
-            log_ratio = self.select_ions(
-                chem_potential,
-                drive,
-                log_ratio,
-                saltswap_residue_indices,
-                saltswap_state_pairs,
-                swaps,
+            # Forward: choose m water to change into cations, probability of one pick is
+            # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_cation count).
+            log_p_forward = -np.log(comb(all_waters.size, delta_cations, exact=True))
+            # Reverse: choose m cations to change into water, probability of one pick is
+            # 1.0 / (n_cation + m choose m); e.g. from current cations plus m (the water_to_cation count), select m
+            log_p_reverse = -np.log(
+                comb(all_cations.size + delta_cations, delta_cations, exact=True)
             )
+            log_ratio += log_p_reverse - log_p_forward
+            # Calculate the work of transforming one water molecule into a cation
+            work = chem_potential * self._cation_weight
+            # Subtract the work from the acceptance probability
+            log_ratio -= work
+
+        if delta_anions > 0:
+            for water_index in np.random.choice(
+                a=all_waters, size=delta_anions, replace=False
+            ):
+                saltswap_residue_indices.append(water_index)
+                saltswap_state_pairs.append(tuple([0, 2]))
+
+            # Forward: probability of one pick is
+            # 1.0 / (n_water choose m); e.g. from all waters select m (the water_to_anion count).
+            log_p_forward = -np.log(comb(all_waters.size, delta_anions, exact=True))
+            # Reverse: probability of one pick is
+            # 1.0 / (n_anion + m choose m); e.g. from all current anions plus m (the water_to_anion count), select m
+            log_p_reverse = -np.log(
+                comb(all_anions.size + delta_anions, delta_anions, exact=True)
+            )
+            log_ratio += log_p_reverse - log_p_forward
+            # Calculate the work of transforming one water into one anion
+            work = chem_potential * self._anion_weight
+            # Subtract the work from the acceptance probability
+            log_ratio -= work
+
+        if delta_cations < 0:
+            delta_water = abs(delta_cations)
+            for cation_index in np.random.choice(
+                a=all_cations, size=delta_water, replace=False
+            ):
+                saltswap_residue_indices.append(cation_index)
+                saltswap_state_pairs.append(tuple([1, 0]))
+
+            # Forward: choose m cations to change into water, probability of one pick is
+            # 1.0 / (n_cations choose m); e.g. from all cations select m (the cation_to_water count).
+            log_p_forward = -np.log(comb(all_cations.size, delta_water, exact=True))
+            # Reverse: choose m water to change into cations, probability of one pick is
+            # 1.0 / (n_water + m choose m); e.g. from current waters plus m (the anion_to_water count), select m
+            log_p_reverse = -np.log(
+                comb(all_waters.size + delta_water, delta_water, exact=True)
+            )
+            log_ratio += log_p_reverse - log_p_forward
+            # Calculate the work of transforming one cation into one water molecule
+            work = -chem_potential * self._cation_weight
+            # Subtract the work from the acceptance probability
+            log_ratio -= work
+
+        if delta_anions < 0:
+            delta_water = abs(delta_anions)
+            for anion_index in np.random.choice(
+                a=all_anions, size=delta_water, replace=False
+            ):
+                saltswap_residue_indices.append(anion_index)
+                saltswap_state_pairs.append(tuple([2, 0]))
+
+            # Forward: probability of one pick is
+            # 1.0 / (n_anions choose m); e.g. from all anions select m (the anion_to_water count).
+            log_p_forward = -np.log(comb(all_anions.size, delta_water, exact=True))
+            # Reverse: probability of one pick is
+            # 1.0 / (n_water + m choose m); e.g. from water plus m (the anion_to_water count), select m
+            log_p_reverse = -np.log(
+                comb(all_waters.size + delta_water, delta_water, exact=True)
+            )
+            log_ratio += log_p_reverse - log_p_forward
+            # Calculate the work of transforming one anion into water based on the chemical potential
+            work = -chem_potential * self._anion_weight
+            # Subtract the work from the acceptance probability
+            log_ratio -= work
 
         return saltswap_residue_indices, saltswap_state_pairs, log_ratio
-
-    @staticmethod
-    def _select_swaps_chenroux(initial_charge: int, final_charge: int) -> dict:
-        """Select ions or water molecule swap procedure to facilitate maintaining charge neutrality while changing protonation states.
-
-        Notes
-        -----
-        Based on the method from Chen and Roux 2015.
-
-        Parameters
-        ----------
-        initial_charge - the initial charge of the residue
-        final_charge - the state of the residue after changing protonation states
-
-        Returns
-        -------
-        dict(water_to_cation, water_to_anion, cation_to_water, anion_to_water)
-
-        Raises
-        ------
-        RuntimeError - if the swaps cannot be resolved within 1000 iterations
-            Usually this means there is a bug in the algorithm, or charges may
-            have been passed in as float (which was a bug in the past).
-
-        """
-
-        # Note that we don't allow for direct transitions between ions of different charge.
-        swaps = dict(
-            water_to_cation=0, water_to_anion=0, cation_to_water=0, anion_to_water=0
-        )
-        charge_to_counter = final_charge - initial_charge
-
-        counter = 0
-        while abs(charge_to_counter) > 0:
-            # The protonation state change annihilates a positive charge
-            if (initial_charge > 0 >= final_charge) or (
-                0 < final_charge < initial_charge
-            ):
-                swaps["water_to_cation"] += 1
-                charge_to_counter += 1
-                initial_charge -= 1  # One part of the initial charge has been countered
-
-            # The protonation state change annihilates a negative charge
-            elif initial_charge < 0 <= final_charge or (
-                0 > final_charge > initial_charge
-            ):
-                swaps["water_to_anion"] += 1
-                charge_to_counter -= 1
-                initial_charge += 1
-            # The protonation state change adds a negative charge
-            elif initial_charge == 0 > final_charge or (
-                0 > initial_charge > final_charge
-            ):
-                swaps["anion_to_water"] += 1
-                charge_to_counter += 1
-                initial_charge -= 1
-            # The protonation state adds a positive charge
-            elif (initial_charge == 0 < final_charge) or (
-                0 < initial_charge < final_charge
-            ):
-                swaps["cation_to_water"] += 1
-                charge_to_counter -= 1
-                initial_charge += 1
-            else:
-                raise ValueError("Impossible scenario reached.")
-
-            counter += 1
-            if counter > 1000:
-                raise RuntimeError(
-                    "Infinite while loop predicted for salt resolution. Bailing out."
-                )
-        return swaps
 
 
 class COOHDummyMover:

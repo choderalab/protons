@@ -8,15 +8,15 @@ from ..app.ligands import *
 from ..app import logger
 from ..app.template_patches import patch_cooh
 from ..app.logger import log
-import json
+import toml
 import sys
 import os
 from warnings import warn
 
-log.setLevel(logger.logging.DEBUG)
+log.setLevel(logger.logging.INFO)
 
 
-def run_parametrize_main(args):
+def run_parametrize_main(inputfile):
     """
     Run the program
     Parameters
@@ -25,12 +25,8 @@ def run_parametrize_main(args):
 
     """
 
-    if len(args) != 2:
-        print("Please provide a single json input file.")
-        sys.exit(1)
-
-    with open(args[1].strip(), "r") as settingsfile:
-        settings = json.load(settingsfile)
+    with open(inputfile.strip(), "r") as settingsfile:
+        settings = toml.load(settingsfile)
 
     # Check all available fields.
     # TODO use json schema for this
@@ -43,6 +39,7 @@ def run_parametrize_main(args):
             "No parameters were provided. Will proceed, but please make sure your documents are named adequately.",
             UserWarning,
         )
+        prms = dict()
 
     try:
         format_vars = prms["format_vars"]
@@ -78,10 +75,24 @@ def run_parametrize_main(args):
     # 3 letter residue name
     resname = prms["pdb_resname"]
 
+    if "omega_max_confs" in prms:
+        max_confs = int(prms["omega_max_confs"])
+    else:
+        max_confs = 200
+
     # retrieve input fields
     idir = inp["dir"].format(**format_vars)
-    istructure = inp["structure"].format(**format_vars)
-    ical_path = os.path.abspath(os.path.join(idir, istructure))
+    if "structure" in inp:
+        istructure = inp["structure"].format(**format_vars)
+        ical_path = os.path.abspath(os.path.join(idir, istructure))
+        create_systems = True
+        if not os.path.isfile(ical_path):
+            raise FileNotFoundError(f"Could not find the structure file: {ical_path}.")
+    else:
+        log.warn(
+            "Warning 🛂: No calibration systems will be created for this system, since no structure was provided."
+        )
+        create_systems = False
 
     # Hydrogen definitions
     odir = out["dir"].format(**format_vars)
@@ -97,10 +108,24 @@ def run_parametrize_main(args):
     state_mol2 = f"{obase}-states.mol2"
 
     if not run_epik:
-        # mae file with epik results
-        oepik = inp["epik"].format(**format_vars)
+        # Previously generated mae file with the output from epik
+        oepik = os.path.abspath(inp["epik"].format(**format_vars))
     else:
-        oepik = f"{obase}-epik-out.mae"
+        if "smiles" in epik["input"]:
+            # Converts smiles to maestro file and uses that maestro file as input
+            iepik = smiles_to_mae(
+                epik["input"]["smiles"].format(**format_vars),
+                oname=f"{obase}-from-smiles.mae",
+            )
+            try:
+                shutil.copy(iepik, os.path.join(idir, iepik))
+            except shutil.SameFileError:
+                pass
+        elif "mae" in epik["input"]:
+            # Uses the user-specified maestro file
+            iepik = epik["input"]["mae"].format(**format_vars)
+
+        oepik = epik["output"]["mae"].format(**format_vars)
 
     if not os.path.isdir(odir):
         os.makedirs(odir)
@@ -111,10 +136,12 @@ def run_parametrize_main(args):
     # TODO copy files over to output dir?
     # run epik
     if run_epik:
-        iepik = epik["input"].format(**format_vars)
+        log.info("⚗ Running Epik to generate protonation states.")
         iepik_path = os.path.abspath(os.path.join(idir, iepik))
         if not os.path.isfile(iepik_path):
-            raise IOError("Could not find epik input at {}.".format(**locals()))
+            raise FileNotFoundError(
+                "💥: Could not find epik input at {}.".format(**locals())
+            )
 
         max_penalty = float(epik["parameters"]["max_penalty"])
         tautomerize = bool(epik["parameters"]["tautomerize"])
@@ -127,30 +154,51 @@ def run_parametrize_main(args):
             tautomerize=tautomerize,
         )
 
-    shutil.copyfile(oepik, os.path.join(odir, oepik))
-
     os.chdir(odir)
 
     # process into mol2
-    epik_results_to_mol2(oepik, state_mol2)
+    log.info("🛠 Processing epik results.")
+    epik_results_to_mol2(oepik, state_mol2, patch_bonds=True, keep_intermediate=False)
 
     # Retrieve protonation state weights et cetera from epik output file
     isomer_info = retrieve_epik_info(oepik)
 
     # parametrize
-    generate_protons_ffxml(state_mol2, isomer_info, offxml, pH, resname=resname)
+    log.info("🔬 Attempting to parameterize protonation states (takes a while).")
+    if max_confs < 0:
+        log.info(
+            "☢ Warning: Dense conformer selection. Parameterization will take longer than usual."
+        )
+    generate_protons_ffxml(
+        state_mol2, isomer_info, offxml, pH, resname=resname, omega_max_confs=max_confs
+    )
     # create hydrogens
+    log.info("🛠 Creating hydrogen definitions for ligand.")
     create_hydrogen_definitions(offxml, ohxml)
+    log.info("💊 Adding residue patches for carboxylic acid sampling (if applicable).")
     patch_cooh(offxml, resname)
 
     # set up calibration system
-    extract_residue(ical_path, oextres, resname=resname)
+    if create_systems:
+        log.info(
+            "🏊 Creating solvated systems for performing calibration (takes a while)."
+        )
+        extract_residue(ical_path, oextres, resname=resname)
 
-    # prepare solvated system
-    prepare_calibration_systems(oextres, obase, offxml, ohxml)
+        # prepare solvated system
+        prepare_calibration_systems(oextres, obase, offxml, ohxml)
+
+    else:
+        log.info("🚱 Solvated system generation skipped.")
+
+    log.info(f"🖖 Script finished. Find your results in {odir}")
 
     os.chdir(lastdir)
 
 
 if __name__ == "__main__":
-    run_parametrize_main(argv)
+
+    if len(argv) != 2:
+        print("Please provide a single json input file.")
+        sys.exit(1)
+    run_parametrize_main(argv[1])

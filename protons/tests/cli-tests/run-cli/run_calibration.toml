@@ -1,0 +1,38 @@
+_comment = "This script runs a calibration starting from a checkpoint."
+
+[input]
+_comment = "Simulation requires a checkpoint xml file. Please specify the input directory under dir."
+dir = "./"
+checkpoint = "{name}-calibration-checkpoint-{previous_run_idx}.xml"
+
+[output]
+dir = "output"
+basename = "{name}-calibration"
+
+[format_vars]
+_comment1 = "These variables are filled into file names for input and output when you use {} style syntax."
+name = "1D"
+previous_run_idx = 0
+run_idx = 1
+
+[run]
+md_steps_between_updates = 10
+total_update_attempts = 3
+perturbations_per_ncmc_trial = 3
+propagations_per_ncmc_step = 1
+timeout_sec = 21599
+
+[reporters]
+metadata = true
+
+  [reporters.titration]
+  frequency = 1
+
+  [reporters.coordinates]
+  frequency = 1
+
+  [reporters.sams]
+  frequency = 1
+
+  [reporters.ncmc]
+  frequency = 1

@@ -5,13 +5,18 @@ import netCDF4
 import time
 import numpy as np
 from copy import deepcopy
+from protons.app import ConstantPHSimulation
 
 
 class NCMCReporter:
     """NCMCReporter outputs NCMC statistics from a ConstantPHSimulation to a netCDF4 file."""
 
     def __init__(
-        self, netcdffile, reportInterval: int, cumulativeworkInterval: int = 0
+        self,
+        netcdffile,
+        reportInterval: int,
+        cumulativeworkInterval: int = 0,
+        store_coords: bool = False,
     ):
         """Create a TitrationReporter.
 
@@ -24,8 +29,11 @@ class NCMCReporter:
         cumulativeworkInterval : 
             Store cumulative work every m perturbation steps (default 0) in the NCMC protocol.
             Set to 0 for not storing.
+        store_coords:
+            Store the coordinates at the start and end of an NCMC attempt.
         """
-        self._reportInterval = reportInterval
+        self._reportInterval: int = reportInterval
+        self._store_coords: bool = store_coords
         if isinstance(netcdffile, str):
             self._out = netCDF4.Dataset(netcdffile, mode="w")
         elif isinstance(netcdffile, netCDF4.Dataset):
@@ -40,6 +48,7 @@ class NCMCReporter:
         self._hasInitialized = False
         self._update = 0  # Number of updates written to the file.
         self._ngroups = 0  # number of residues
+        self._natoms = 0  # number of atoms in entire system
         self._perturbation_steps = np.empty(
             []
         )  # indices of perturbation steps stored per ncmc trial
@@ -127,6 +136,20 @@ class NCMCReporter:
                 iupdate, :
             ] = drv._last_attempt_data.proposed_ion_states
 
+        if self._store_coords:
+            self._grp["initial_positions"][
+                :, :
+            ] = drv._last_attempt_data.initial_positions[:, :]
+            self._grp["proposed_positions"][
+                :, :
+            ] = drv._last_attempt_data.proposed_positions[:, :]
+            self._grp["initial_box_vectors"][
+                :, :
+            ] = drv._last_attempt_data.initial_box_vectors[:, :]
+            self._grp["proposed_box_vectors"][
+                :, :
+            ] = drv._last_attempt_data.proposed_box_vectors[:, :]
+
         self._grp["logp_accept"][iupdate,] = drv._last_attempt_data.logp_accept
 
         if self._cumulative_work_interval > 0:
@@ -134,7 +157,7 @@ class NCMCReporter:
                 drv.ncmc_stats_per_step
             )[self._perturbation_steps, 0]
 
-    def _initialize_constants(self, simulation):
+    def _initialize_constants(self, simulation: ConstantPHSimulation):
         """Initialize a set of constants required for the reports
 
         Parameters
@@ -143,6 +166,7 @@ class NCMCReporter:
         system = simulation.context.getSystem()
         driver = simulation.drive
         self._ngroups = len(simulation.drive.titrationGroups)
+        self._natoms: int = simulation.topology.getNumAtoms()
         if self._cumulative_work_interval > 0:
             self._perturbation_steps = np.arange(
                 0, driver.perturbations_per_trial, self._cumulative_work_interval
@@ -169,6 +193,24 @@ class NCMCReporter:
         residue_dim = grp.createDimension("residue", self._ngroups)
         if self._has_swapper:
             ion_dim = grp.createDimension("ion_site", self._nsaltsites)
+
+        if self._store_coords:
+            atom_dim = grp.createDimension("atoms", self._natoms)
+            xyz_dim = grp.createDimension("xyz", 3)
+            abc_dim = grp.createDimension("abc", 3)
+
+            init_pos = grp.createVariable("initial_positions", float, ("atoms", "xyz"))
+            init_pos.description = (
+                "The position of every atom at the start of the proposal. [atom, xyz]"
+            )
+            prop_pos = grp.createVariable("proposed_positions", float, ("atoms", "xyz"))
+            prop_pos.description = (
+                "The position of every atom at the end of the proposal. [atom, xyz]"
+            )
+            init_box = grp.createVariable("initial_box_vectors", float, ("abc", "xyz"))
+            init_box.description = "The initial box vectors"
+            prop_box = grp.createVariable("proposed_box_vectors", float, ("abc", "xyz"))
+            prop_box.description = "The proposed box vectors"
 
         # Variables written every update
         update = grp.createVariable("update", int, ("update",))

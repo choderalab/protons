@@ -26,7 +26,7 @@
   "epik": {
     "input": "{name}-input.mae",
     "output": {
-      "output": "1D-7.8-10kT-epik.mae"
+      "mae": "1D-7.8-10kT-epik.mae"
     },
     "parameters": {
       "max_penalty": 10,

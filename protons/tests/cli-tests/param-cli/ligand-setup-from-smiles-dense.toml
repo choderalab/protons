@@ -1,0 +1,28 @@
+[parameters]
+_comment = "Any settings for the methods, or formatting fields for filenames should be entered here."
+pdb_resname = "EBI"
+pH = 7.4
+omega_max_confs = -1
+
+  [parameters.format_vars]
+  name = "crizotinib"
+
+[input]
+_comment = "A pdb file as source for the calibration structure."
+dir = "./"
+
+[epik]
+
+  [epik.input]
+  smiles = "C[C@H](c1c(ccc(c1Cl)F)Cl)Oc2cc(cnc2N)c3cnn(c3)C4CCNCC4"
+
+  [epik.output]
+  mae = "{name}-epik.mae"
+
+  [epik.parameters]
+  max_penalty = 0.0
+  tautomerize = false
+
+[output]
+dir = "./output"
+basename = "{name}"

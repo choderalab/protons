@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "This is to setup crizotinib from smiles",
+    "running through epik",
+    "parametrizing the states",
+    "and then creating a unified template.",
+    "Several output filenames will be completed using",
+    "For convenience, a few formatting strings such as {name}, {pH} are used",
+    "so make sure that those variables are defined in the parameters section of this file.",
+    "It will also create a solvent system that can be used to calibrate the ligand.",
+    "Ion concentrations should be specified later using saltswap, so this does not include any ions."
+  ],
+  "parameters": {
+    "_comment": "Any settings for the methods, or formatting fields for filenames should be entered here.",    
+    "pdb_resname": "EBI",
+    "pH": 7.4,
+    "format_vars" : {
+      "name": "crizotinib"
+    },
+    "omega_max_confs": 100
+  },
+  "input": {
+    "_comment": "A pdb file as source for the calibration structure.",
+    "dir": "./"
+
+  },
+  "epik": {
+    "input": {
+      "smiles": "C[C@H](c1c(ccc(c1Cl)F)Cl)Oc2cc(cnc2N)c3cnn(c3)C4CCNCC4"
+    },
+    "output": {
+      "mae": "{name}-epik.mae"
+    },
+    "parameters": {
+      "max_penalty": 5,
+      "tautomerize": false
+    }
+  },
+  "output": {
+    "dir": "{name}-output-with-epik",
+    "basename" : "{name}"
+  }
+}

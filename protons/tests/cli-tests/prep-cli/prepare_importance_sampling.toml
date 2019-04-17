@@ -1,0 +1,71 @@
+_comment = "This script generates a necessary checkpoint file to start a regular constant-pH simulation."
+
+[input]
+_comment = "Simulation requires an mmCIF file and a ffxml residue. Please specify the input directory under dir."
+dir = "./"
+structure = "{name}-water.cif"
+
+[output]
+dir = "./output"
+basename = "{name}"
+
+[forcefield]
+_comment1 = "Standard, included xml files. Don't forget -obc2 files if using implicit."
+default = [
+  "amber10-constph.xml",
+  "gaff.xml",
+  "tip3p.xml"
+]
+_comment2 = "Custom generated xml file (needs to be in input dir."
+user = [
+  "{name}.xml"
+]
+
+[format_vars]
+_comment1 = "These variables are filled into file names for input and output when you use {} style syntax."
+name = "1D"
+
+[system]
+_comment1 = "Systemwide settings, such as temperature, and long range method"
+_comment2 = "If PME left out, nocutoff is used."
+temperature_k = 300.0
+salt_concentration_molar = 0.15
+neutral_charge_rule = 2.0
+
+  [system.PME]
+  _comment = "Ewald + periodic system settings"
+  ewald_error_tolerance = 0.00001
+  switching_distance_nm = 0.85
+  nonbonded_cutoff_nm = 1.0
+  barostat_interval = 25.0
+  pressure_atm = 1.0
+  dispersion_correction = true
+
+[integrator]
+timestep_fs = 2.0
+constraint_tolerance = 1e-7
+collision_rate_per_ps = 1.0
+
+[preprocessing]
+minimization_tolerance_kjmol = 0.00001
+minimization_max_iterations = 30.0
+num_thermalization_steps = 10.0
+
+[importance]
+_comment = "Add this block if you wish to use importance sampling. Specify the fixed state as a list of integers for each titratable residue."
+titration_states = [
+  4
+]
+
+[reference_free_energies]
+_comment = "This block contains reference free energies obtained by calibration for each residue and each state.  Keys should be residue names, and results a list of free energy values for each state."
+FD3 = [
+  3.0,
+  1.0,
+  4.0,
+  1.0,
+  5.0,
+  9.0,
+  2.0,
+  7.0
+]
