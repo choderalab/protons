@@ -1,4 +1,4 @@
-from protons.app.ligands import prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
+from protons.app.ligands import prepare_protein_simulation_systems, create_bond_definitions, prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
 from protons.scripts.utilities import *
 from protons.app.protein import prepare_protein
 from protons.app import TautomerForceFieldProtonDrive, TautomerNCMCProtonDrive
@@ -66,22 +66,15 @@ def setting_up_tautomer(settings, isomer_dictionary):
         shutil.rmtree(ofolder)
         os.makedirs(ofolder)
 
-
-
     #retrieve input files
-    if 'protein-name' in settings:
-        system_heavy_atoms = settings['input']['dir'] + '/' + settings['protein-name'] + '_pdbfixer.pdb'
-        prepare_protein(settings['input']['dir'] + '/' + settings['protein-name'] + '.pdb', system_heavy_atoms)
-        tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
-    else:
-        system_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
-        tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
+    tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
 
     input_mol2 = settings['input']['dir'] + '/' + resname + '_tautomer_set.mol2'
     input_sdf = settings['input']['dir'] + '/' + resname + '_tautomer_set.sdf'
     
     #define location of set up files
     hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
+    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
     offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
 
     # Debugging/intermediate files
@@ -95,11 +88,40 @@ def setting_up_tautomer(settings, isomer_dictionary):
 
     # parametrize
     generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, outputffxml=offxml, pH=pH, resname=resname.upper(), tautomers=True, pdb_file_path=tautomer_heavy_atoms)
-    # create hydrogens
+    # create hydrogen definitions for the superset of all tautomers
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
+    # create bond definitions for the superset of all tautomers
+    create_bond_definitions(offxml, bond_def)
+    from simtk.openmm.app import Topology
+    Topology.loadBondDefinitions(bond_def)
 
+
+def generate_calibration_system(settings):
+    #define location of set up files
+    resname = settings['ligand-resname']
+    hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
+    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
+    offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
+    tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
     # prepare solvated system
-    prepare_calibration_systems(system_heavy_atoms, settings['output']['dir'] + '/' + resname, offxml, hydrogen_def)
+    prepare_calibration_systems(vacuum_file=tautomer_heavy_atoms, output_basename=settings['output']['dir'] + '/' + resname, ffxml=offxml, hxml=hydrogen_def, bxml=bond_def)
+
+def generate_protein_systems(settings):
+    #define location of set up files
+
+    log.info('Prepare protein ligand simulations system.')
+    resname = settings['ligand-resname']
+    pdb_name = settings['protein-name']
+    hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
+    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
+    offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
+    protein_tautomer_system_raw = settings['input']['dir'] + '/' + pdb_name + '.pdb'
+    protein_tautomer_system = settings['input']['dir'] + '/' + pdb_name + '_prepared.pdb'
+    # prepare solvated system
+    log.info('Preprocess the protein ligand structure.')
+    prepare_protein(protein_tautomer_system_raw, protein_tautomer_system)
+    prepare_protein_simulation_systems(protein_name=pdb_name, protein_ligand=protein_tautomer_system, ligand_resname=resname, output_basename=settings['output']['dir'], ffxml=offxml, hxml=hydrogen_def, bxml=bond_def)
+
 
 def generate_simulation_and_driver(settings):
 
@@ -108,7 +130,7 @@ def generate_simulation_and_driver(settings):
     os.chdir(ofolder)
 
     # Naming the output files
-
+    
     input_pdbx_file = settings['input']['structure']
     custom_xml = settings['forcefield']['user-xml']
     forcefield = app.ForceField(*settings['forcefield']['default'] + custom_xml)
@@ -116,12 +138,13 @@ def generate_simulation_and_driver(settings):
     # Load structure
     # The input should be an mmcif/pdbx file'
     pdb_object = app.PDBxFile(input_pdbx_file)
+    modeller = app.Modeller(pdb_object.topology, pdb_object.positions)
 
     # Atoms , connectivity, residues
-    topology = pdb_object.topology
+    topology = modeller.topology
 
     # XYZ positions for every atom
-    positions = pdb_object.positions
+    positions = modeller.positions
 
     # Quick fix for histidines in topology
     # Openmm relabels them HIS, which leads to them not being detected as
@@ -131,10 +154,10 @@ def generate_simulation_and_driver(settings):
         if residue.name == "HIS":
             residue.name = "HIP"
         # TODO doublecheck if ASH GLH need to be renamed
-        elif residue.name == "ASP":
-            residue.name = "ASH"
-        elif residue.name == "GLU":
-            residue.name = "GLH"
+        #elif residue.name == "ASP":
+        #    residue.name = "ASH"
+        #elif residue.name == "GLU":
+        #    residue.name = "GLH"
 
     if not os.path.isdir('tmp'):
         os.makedirs('tmp')

@@ -39,7 +39,7 @@ class Modeller(modeller.Modeller):
         cls._residueHydrogens = {}
         cls._hasLoadedStandardHydrogens = False
 
-    def addHydrogens(self, forcefield=None, pH=None, variants=None, platform=None):
+    def addConstanPhHydrogens(self, forcefield=None, pH=None, variants=None, platform=None, bxml=None):
         """Add missing hydrogens to the model.
 
         This function automatically changes compatible residues into their constant-pH variant if no variant is specified.:
@@ -112,6 +112,7 @@ class Modeller(modeller.Modeller):
 
         """
         # Check the list of variants.
+
 
         if pH is not None:
             print("Ignored pH argument provided for constant-pH residues.")
@@ -193,10 +194,10 @@ class Modeller(modeller.Modeller):
                                 variant = "CYX"
                         if residue.name == "HIS":
                             variant = "HIP"
-                        if residue.name == "GLU":
-                            variant = "GL4"
-                        if residue.name == "ASP":
-                            variant = "AS4"
+                        #if residue.name == "GLU":
+                        #    variant = "GL4"
+                        #if residue.name == "ASP":
+                        #    variant = "AS4"
                     if variant is not None and variant not in spec.variants:
                         raise ValueError(
                             "Illegal variant for %s residue: %s"
