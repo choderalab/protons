@@ -56,8 +56,8 @@ min_fast = 200
 [simulation]
 dcd_filename = "2oj9.dcd" 
 netCDF4 = "2oj9.nc"
-total_update_attempts = 50000
-md_steps_between_updates = 1000
+total_update_attempts = 10000
+md_steps_between_updates = 100
 perturbations_per_ncmc_trial = 3
 propagations_per_ncmc_step = 1
 timeout_sec = 21599
