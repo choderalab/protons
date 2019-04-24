@@ -45,7 +45,7 @@ def run_simulation(simulation, driver, pdb_object, settings):
         driver.update("COOH", nattempts=3)
         pos = simulation.context.getState(getPositions=True).getPositions() 
         mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
-        
+        log.info(driver.calibration_state.approach)
         if driver.calibration_state is not None:
             if driver.calibration_state.approach is SAMSApproach.ONESITE:
                 simulation.update(1, pool="calibration")
