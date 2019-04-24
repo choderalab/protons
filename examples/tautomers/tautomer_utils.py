@@ -31,6 +31,7 @@ def run_simulation(simulation, driver, pdb_object, settings):
         simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
     total_iterations = int(settings['simulation']["total_update_attempts"])
     md_steps_between_updates = int(settings['simulation']["md_steps_between_updates"])
+    perturbations_per_trial = int(settings['simulation']["perturbations_per_trial"])
 
     # MAIN SIMULATION LOOP STARTS HERE
     pos = simulation.context.getState(getPositions=True).getPositions() 
@@ -259,7 +260,7 @@ def generate_simulation_and_driver(settings):
         forcefield,
         ffxml_files=custom_xml,
         pressure=pressure,
-        perturbations_per_trial=10000,
+        perturbations_per_trial=perturbations_per_trial,
         propagations_per_step=1,
     )
 
