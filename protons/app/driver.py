@@ -2792,7 +2792,7 @@ class NCMCProtonDrive(_BaseDrive):
             charges = titration_state.charges
             atom_indices = titration_group.atom_indices
             charge_by_atom_index = dict(zip(atom_indices, charges))
-
+            log.info(atom_indices)
             # Update charges.
             # TODO: Handle Custom forces, looking for "charge" and "chargeProd".
             for atom_index in atom_indices:
@@ -4217,6 +4217,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
     def _cache_force(self, titration_group_index, titration_state_index):
         """
+        tautomer version of _cache_force
         Cache the force parameters for a single tautomer state.
 
         Parameters
@@ -4299,7 +4300,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     # test if this bond is a ligand bond
                     if not all(x in atom_indices for x in [a1, a2]):
                         continue
-
+                    log.info(bond_index)
                     atom_name1 = openMM_indices_to_atom_name[a1]
                     atom_name2 = openMM_indices_to_atom_name[a2]
 
@@ -4454,6 +4455,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         final=False,
     ):
         """
+        tautomer version of _update_forces()
         Update the force parameters to a new tautomer state by reading them from the cache.
 
         Notes
@@ -4656,7 +4658,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
             elif force_classname == "PeriodicTorsionForce":
 
-                for idx in range(force.getNumTorsions()):
+                for idx in [*cache_initial_forces[force_index]["torsion"] + cache_final_forces[force_index]["torsion"]]:
+                    log.info(idx)
                     a1, a2, a3, a4, periodicity, phase, k = map(
                         strip_in_unit_system, force.getTorsionParameters(idx)
                     )
