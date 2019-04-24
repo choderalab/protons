@@ -1959,6 +1959,7 @@ class NCMCProtonDrive(_BaseDrive):
                 )
             moves = []
             for residue in self.titrationGroups:
+                log.info('Residues that are update: {}'.format(residue))
                 state = residue.state
                 try:
                     moves.extend(state._mc_moves["COOH"])
@@ -2013,7 +2014,9 @@ class NCMCProtonDrive(_BaseDrive):
             # Perform a number of protonation state update trials.
             for attempt in range(nattempts):
                 self._attempt_number = attempt
+                log.info(residue_pool)
                 attempt_data = self._propose_random_change(proposal, residue_pool)
+
                 self._perform_attempt(attempt_data)
 
             return
@@ -3224,9 +3227,9 @@ class NCMCProtonDrive(_BaseDrive):
                 raise KeyError(
                     "The residue pool '{}' does not exist.".format(residue_pool)
                 )
+        
         # Compute initial probability of this protonation state. Used in the acceptance test for instantaneous
         # attempts, and to record potential and kinetic energy.
-
         # Store current titration state indices.
         initial_titration_states = copy.deepcopy(self.titrationStates)
         final_titration_states, titration_group_indices, logp_ratio_residue_proposal = proposal.propose_states(
