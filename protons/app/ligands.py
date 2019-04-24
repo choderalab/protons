@@ -2176,7 +2176,7 @@ def prepare_calibration_systems(
         ]
         modeller.delete(to_delete)
 
-    modeller.addHydrogens(forcefield=forcefield, bxml=bxml)
+    modeller.addHydrogens(forcefield=forcefield)
 
     if box_size == None:
         padding = 1.2 * nanometers
