@@ -4273,6 +4273,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
         # Store the parameters per individual force
         f_params = list()
+        new_torsion_idx = list()
 
         for force_index, force in enumerate(self.forces_to_update):
 
@@ -4285,6 +4286,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
                 for atom_index in atom_indices:
                     atom_name = openMM_indices_to_atom_name[atom_index]
+                    log.info(f"Caching atom parameters for Idx:{atom_index} Name:{atom_name}")
                     current_parameters = {
                         key: value
                         for (key, value) in parameters["nonbonded"][atom_name].items()
@@ -4297,12 +4299,14 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 # only heavy atom - heavy atom bonds are regarded
                 for bond_index in range(force.getNumBonds()):
                     a1, a2, length, k = force.getBondParameters(bond_index)
+
                     # test if this bond is a ligand bond
                     if not all(x in atom_indices for x in [a1, a2]):
                         continue
                     log.info(bond_index)
                     atom_name1 = openMM_indices_to_atom_name[a1]
                     atom_name2 = openMM_indices_to_atom_name[a2]
+                    log.info(f"Caching bond parameters for Idx:{bond_index} Name1:{atom_name1} Name2:{atom_name2}")
 
                     # update current parameters with particular titration state
                     current_parameters = {
@@ -4333,6 +4337,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         openMM_indices_to_atom_name[a2],
                         openMM_indices_to_atom_name[a3],
                     )
+                    log.info(f"Caching angle parameters for Idx:{angle_index} Name1:{atom_name1} Name2:{atom_name2} Name3:{atom_name3}")
+
                     current_parameters = {
                         key: value
                         for (key, value) in parameters["angle"][
@@ -4361,6 +4367,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 #   -) the index of all torsions that are real for this state and
                 #   -) the force constants for each torsion
                 for torsion in parameters["torsion"]:
+
                     idx = force.addTorsion(
                         atom_name_to_openMM_indice[
                             parameters["torsion"][torsion]["name1"]
@@ -4378,7 +4385,11 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         float(parameters["torsion"][torsion]["phase"]),
                         float(0.0),
                     )
+                    log.info("Caching torsion parameters for Idx:{} Name1:{} Name2:{} Name3:{} Name4:{}".format(idx, atom_name_to_openMM_indice[
+                            parameters["torsion"][torsion]["name1"]], parameters["torsion"][torsion]["name2"], parameters["torsion"][torsion]["name3"], parameters["torsion"][torsion]["name4"]))
+
                     f_params[force_index]["torsion"].append(idx)
+                    new_torsion_idx.append(idx)
                     f_params[force_index]["ks"][idx] = parameters["torsion"][torsion][
                         "k"
                     ]
@@ -4446,6 +4457,9 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             titration_state_index
         ].forces = f_params
 
+        # add newly generated torsions to the titration_group object
+        titration_group.torsion_idx = new_torsion_idx
+
     def _update_forces(
         self,
         titration_group_index,
@@ -4502,6 +4516,11 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         atom_name_by_atom_index = self.titrationGroups[
             titration_group_index
         ].atom_indices_to_atom_name
+
+        torsion_idx =self.titrationGroups[
+            titration_group_index
+        ].torsion_idx
+ 
 
         # Modify parameters
         for force_index, force in enumerate(self.forces_to_update):
@@ -4658,8 +4677,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
             elif force_classname == "PeriodicTorsionForce":
 
-                for idx in [*cache_initial_forces[force_index]["torsion"] + cache_final_forces[force_index]["torsion"]]:
-                    log.info(idx)
+                for idx in torsion_idx:
                     a1, a2, a3, a4, periodicity, phase, k = map(
                         strip_in_unit_system, force.getTorsionParameters(idx)
                     )
