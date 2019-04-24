@@ -251,6 +251,7 @@ def generate_simulation_and_driver(settings):
     compound_integrator.setCurrentIntegrator(0)
 
     # Script specific settings
+    perturbations_per_trial = int(settings['simulation']["perturbations_per_trial"])
 
     # Register the timeout handling
     driver = TautomerForceFieldProtonDrive(
