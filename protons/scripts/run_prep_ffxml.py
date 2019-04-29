@@ -89,7 +89,10 @@ def run_prep_ffxml_main(settings_file):
     ifilename = inp["structure"].format(**format_vars)
     joined_path = os.path.join(idir, ifilename)
     input_pdbx_file = os.path.abspath(joined_path)
-    pdb_object = app.PDBxFile(input_pdbx_file)
+    if os.path.splitext(input_pdbx_file)[-1] == ".cif":
+        pdb_object = app.PDBxFile(input_pdbx_file)
+    elif os.path.splitext(input_pdbx_file)[-1] == ".pdb":
+        pdb_object = app.PDBFile(input_pdbx_file)
 
     # Atoms , connectivity, residues
     topology = pdb_object.topology
@@ -292,7 +295,7 @@ def run_prep_ffxml_main(settings_file):
 
         # Assumes calibration residue is always the last titration group if onesite
 
-        if sams["sites"] == "multi":
+        if sams["residues"] == "multi":
             driver.enable_calibration(
                 approach=SAMSApproach.MULTI_RESIDUE,
                 update_rule=update_rule,
@@ -302,7 +305,7 @@ def run_prep_ffxml_main(settings_file):
                 min_fast=min_fast,
                 beta_sams=beta_burnin,
             )
-        elif sams["sites"] == "one":
+        elif sams["residues"] == "one":
             if "group_index" in sams:
                 calibration_titration_group_index = int(sams["group_index"])
             else:
