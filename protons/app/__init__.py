@@ -16,7 +16,7 @@ from .driver import (
 )
 from .proposals import UniformProposal, DoubleProposal, CategoricalProposal
 from .integrators import GBAOABIntegrator
-from .modeller import Modeller
+
 from .logger import log
 from .samsreporter import SAMSReporter
 from .ncmcreporter import NCMCReporter

@@ -18,7 +18,7 @@ def unloadStandardBonds(cls):
 
 
 Topology.unloadStandardBonds = classmethod(unloadStandardBonds)
-Topology.unloadStandardBonds()
-Topology.loadBondDefinitions(
-    os.path.join(PACKAGE_ROOT, "data", "bonds-amber10-constph.xml")
-)
+# Topology.unloadStandardBonds()
+# Topology.loadBondDefinitions(
+#     os.path.join(PACKAGE_ROOT, "data", "bonds-amber10-constph.xml")
+# )
