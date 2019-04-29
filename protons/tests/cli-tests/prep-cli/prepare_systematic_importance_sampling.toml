@@ -38,8 +38,8 @@ collision_rate_per_ps = 1.0
 
 [preprocessing]
 minimization_tolerance_kjmol = 0.00001
-minimization_max_iterations = 30.0
-num_thermalization_steps = 10.0
+minimization_max_iterations = 30
+num_thermalization_steps = 10
 
 [importance]
 _comment = "Add this block if you wish to use importance sampling. Specify the fixed state as a list of integers for each titratable residue."

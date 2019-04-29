@@ -30,14 +30,14 @@ _comment1 = "Systemwide settings, such as temperature, and long range method"
 _comment2 = "If PME left out, nocutoff is used."
 temperature_k = 300.0
 salt_concentration_molar = 0.15
-neutral_charge_rule = 2.0
+neutral_charge_rule = 2
 
   [system.PME]
   _comment = "Ewald + periodic system settings"
   ewald_error_tolerance = 0.00001
   switching_distance_nm = 0.85
   nonbonded_cutoff_nm = 1.0
-  barostat_interval = 25.0
+  barostat_interval = 25
   pressure_atm = 1.0
   dispersion_correction = true
 
@@ -48,14 +48,14 @@ collision_rate_per_ps = 1.0
 
 [preprocessing]
 minimization_tolerance_kjmol = 0.00001
-minimization_max_iterations = 300.0
-num_thermalization_steps = 100.0
+minimization_max_iterations = 300
+num_thermalization_steps = 100
 
 [SAMS]
 beta = 0.6
 flatness_criterion = 0.1
 sites = "multi"
 update_rule = "binary"
-min_burn = 200.0
-min_slow = 200.0
-min_fast = 200.0
+min_burn = 200
+min_slow = 200
+min_fast = 200

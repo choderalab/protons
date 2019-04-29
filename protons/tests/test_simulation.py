@@ -421,7 +421,7 @@ class TestConstantPHFreeEnergyCalculation:
         )
 
         # prep the driver for calibration
-        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+        driver.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=-1)
         simulation = app.ConstantPHSimulation(
             pdb.topology,
             system,
@@ -488,7 +488,7 @@ class TestConstantPHFreeEnergyCalculation:
             pressure=pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+        driver.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=-1)
 
         simulation = app.ConstantPHSimulation(
             pdb.topology,
@@ -616,7 +616,7 @@ class TestConstantPHFreeEnergyCalculation:
         )
 
         # prep the driver for calibration
-        driver.enable_calibration(SAMSApproach.ONESITE, group_index=-1)
+        driver.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=-1)
         simulation = app.ConstantPHSimulation(
             pdb.topology,
             system,

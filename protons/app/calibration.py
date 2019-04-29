@@ -2,7 +2,14 @@
 from __future__ import print_function
 import numpy as np
 
-from .driver import NCMCProtonDrive, _SAMSState, SAMSApproach, Stage, UpdateRule
+from .driver import (
+    NCMCProtonDrive,
+    _SAMSState,
+    SAMSApproach,
+    Stage,
+    UpdateRule,
+    SamplingMethod,
+)
 import simtk.unit as units
 from .logger import log
 from scipy.special import logsumexp
@@ -32,6 +39,8 @@ class SAMSCalibrationEngine:
             )
 
         self.driver = driver
+        if driver.sampling_method is not SamplingMethod.MCMC:
+            raise RuntimeError("SAMS only implemented for MCMC sampling.")
         self.approach: SAMSApproach = driver.calibration_state.approach
         self.group_index = driver.calibration_state.group_index
         self._calibration_state: _SAMSState = driver.calibration_state
@@ -68,7 +77,7 @@ class SAMSCalibrationEngine:
         # zeta^{t-1}
         zeta = self._calibration_state.free_energies
 
-        # Stage dependend prep work
+        # Stage dependent prep work
 
         # Only increase adaptation number if adaptation is expected
         if stage in [Stage.NODECAY, Stage.SLOWDECAY, Stage.FASTDECAY]:
@@ -93,10 +102,6 @@ class SAMSCalibrationEngine:
                 end_of_slowdecay=end_of_slowdecay,
             )
         elif update_rule is UpdateRule.GLOBAL:
-            if self.approach is SAMSApproach.MULTISITE:
-                raise NotImplementedError(
-                    "Global updates only implemented for one site at this time."
-                )
             update = self._global_update(
                 group_index=self.group_index,
                 b=b,
@@ -205,7 +210,12 @@ class SAMSCalibrationEngine:
         pi_j = self._calibration_state.targets
         # [1/pi_1...1/pi_i]
         update = 1.0 / pi_j
-        ub_j = self.driver._get_reduced_potentials(group_index)
+        self.driver.sampling_method = SamplingMethod.IMPORTANCE
+        ub_j = [
+            self.driver.calculate_weight_in_state(state)
+            for state in self.driver.calibration_states
+        ]
+        self.driver.sampling_method = SamplingMethod.MCMC
         # w_j(X;ζ⁽ᵗ⁻¹⁾)
         log_w_j = np.log(pi_j) - zeta - ub_j
         log_w_j -= logsumexp(log_w_j)

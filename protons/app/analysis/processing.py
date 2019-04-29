@@ -91,12 +91,12 @@ def dataset_to_dataframe(
         try:
             approach = SAMSApproach(ds["Protons/SAMS/approach"][0])
             # Redo macrostate labels if one residue was specified
-            if approach is SAMSApproach.ONESITE:
+            if approach is SAMSApproach.ONE_RESIDUE:
                 g_index = ds["Protons/SAMS/group_index"][0]
                 init_macro = init_states[:, g_index]
                 prop_macro = prop_states[:, g_index]
                 final_macro = final_states[:, g_index]
-            elif approach is SAMSApproach.MULTISITE:
+            elif approach is SAMSApproach.MULTI_RESIDUE:
                 # macrostate labels are correct
                 pass
             else:

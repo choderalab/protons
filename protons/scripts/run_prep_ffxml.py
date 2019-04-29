@@ -4,7 +4,6 @@ import os
 import signal
 import sys
 import numpy as np
-import toml
 
 from protons import app
 from .. import ForceFieldProtonDrive
@@ -22,6 +21,7 @@ from .utilities import (
     timeout_handler,
     create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
+    load_config_by_ext,
 )
 from ..app.driver import (
     SAMSApproach,
@@ -37,11 +37,11 @@ log.setLevel(logging.INFO)
 # Define a main function that can read in a json file with simulation settings, sets up, and runs the simulation.
 
 
-def run_prep_ffxml_main(tomlfile):
+def run_prep_ffxml_main(settings_file):
     """Main simulation loop."""
 
-    log.info(f"Preparing a run from '{tomlfile}'")
-    settings = toml.load(open(tomlfile, "r"))
+    log.info(f"Preparing a run from '{settings_file}'")
+    settings = load_config_by_ext(settings_file)
 
     log.debug(f"Loaded these settings. {settings}")
 
@@ -294,7 +294,7 @@ def run_prep_ffxml_main(tomlfile):
 
         if sams["sites"] == "multi":
             driver.enable_calibration(
-                approach=SAMSApproach.MULTISITE,
+                approach=SAMSApproach.MULTI_RESIDUE,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,
                 min_burn=min_burnin,
@@ -309,7 +309,7 @@ def run_prep_ffxml_main(tomlfile):
                 calibration_titration_group_index = len(driver.titrationGroups) - 1
 
             driver.enable_calibration(
-                approach=SAMSApproach.ONESITE,
+                approach=SAMSApproach.ONE_RESIDUE,
                 group_index=calibration_titration_group_index,
                 update_rule=update_rule,
                 flatness_criterion=flatness_criterion,

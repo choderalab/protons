@@ -825,14 +825,14 @@ class SAMSApproach(Enum):
     -----
     This class is defined here for indicating which approach is used to run SAMS
 
-    SAMSApproach.ONESITE - A single residue is sampled using SAMS, while the rest is treated normally.
-    SAMSAproach.MULTISITE - A combination of all residue states is treated as a single state.
+    SAMSApproach.ONE_RESIDUE - A single residue is sampled using SAMS, while the rest is treated normally.
+    SAMSAproach.MULTI_RESIDUE - A combination of all residue states is treated as a single state.
         Example: 2 hydroxy residues have 4 states (OH1 OH2, O-1 OH2, OH1 O-1, O-1 O-2)
 
     """
 
-    ONESITE = 0
-    MULTISITE = 1
+    ONE_RESIDUE = 0
+    MULTI_RESIDUE = 1
 
 
 class Stage(Enum):
@@ -874,7 +874,7 @@ class _SAMSState:
         ----------
         state_counts - list of the number of states that each titratable residue has.
         approach - one of the available ways of running SAMS (see ``SAMSApproach``)
-        group_index - integer, SAMSApproach.ONESITE only, specify the site.
+        group_index - integer, SAMSApproach.ONE_RESIDUE only, specify the site.
         update_rule - The update rule to use
         beta_sams - SAMS two-stage coefficient to determine gain in first stage
         flatness_criterion - how flat the absolute histogram needs to be to switch to slow gain
@@ -910,9 +910,9 @@ class _SAMSState:
             raise TypeError("Please provide a SAMSApproach.")
 
         # Group index is the last residue if not provided
-        if approach is SAMSApproach.ONESITE:
+        if approach is SAMSApproach.ONE_RESIDUE:
             self.group_index = -1 if group_index is None else group_index
-        elif approach is SAMSApproach.MULTISITE:
+        elif approach is SAMSApproach.MULTI_RESIDUE:
             if group_index is not None:
                 raise NotImplementedError(
                     "group_index should not be provided for multi site SAMS."
@@ -921,7 +921,7 @@ class _SAMSState:
 
         self.approach = approach
 
-        if approach is SAMSApproach.ONESITE:
+        if approach is SAMSApproach.ONE_RESIDUE:
             # Every value in the table is the sams free energy/target weight of one independent titration state
             # Note that the weights in one site should only change for one residue at a time.
             # However, calibrated values may be stored, as they are internally used for calculation of relative probabilities.
@@ -941,7 +941,7 @@ class _SAMSState:
             self._index_table = np.asarray(self._index_table)
             self._observed_table = np.asarray(self._observed_table)
 
-        elif approach is SAMSApproach.MULTISITE:
+        elif approach is SAMSApproach.MULTI_RESIDUE:
             # Every value in the table is one joint titration state
 
             # Default value set to 0, but can be tweaked later with initial guesses.
@@ -966,7 +966,7 @@ class _SAMSState:
         """
 
         # In case of the one site sams approach, its only the current state of the residue that is being calibrated.
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             if len(titration_states) != len(self._free_energy_table):
                 raise ValueError(
                     "The number of titration states in the table does not match what was provided."
@@ -975,7 +975,7 @@ class _SAMSState:
             return self._free_energy_table[self.group_index][state]
 
         # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             if len(titration_states) != len(self._free_energy_table.shape):
                 raise ValueError(
                     "The number of titration states provided does not match the dimensionality of the table."
@@ -987,7 +987,7 @@ class _SAMSState:
         # In case of the one site sams approach, the sams weight is the total weight of every titration state
 
         weight = None
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             current_state = titration_states[self.group_index]
             if len(titration_states) != len(self._free_energy_table):
                 raise ValueError(
@@ -996,7 +996,7 @@ class _SAMSState:
             return self._target_table[self.group_index][current_state]
 
         # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             if len(titration_states) != len(self._free_energy_table.shape):
                 raise ValueError(
                     "The number of titration states provided does not match the dimensionality of the table."
@@ -1010,7 +1010,7 @@ class _SAMSState:
         # In case of the one site sams approach, the sams weight is the total weight of every titration state
 
         counts = None
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             current_state = titration_states[self.group_index]
             if len(titration_states) != len(self._observed_table):
                 raise ValueError(
@@ -1019,7 +1019,7 @@ class _SAMSState:
             return self._observed_table[self.group_index][current_state]
 
         # In case of the multisite sams approach, the sams weight is the one value in the table matching the joint state
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             if len(titration_states) != len(self._observed_table.shape):
                 raise ValueError(
                     "The number of titration states provided does not match the dimensionality of the table."
@@ -1031,17 +1031,17 @@ class _SAMSState:
     @property
     def targets(self) -> np.ndarray:
         """Return entire row of targets."""
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             return self._target_table[self.group_index]
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             return self._target_table.flatten()
 
     @property
     def observed_counts(self) -> np.ndarray:
         """Return entire row of histogram counts."""
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             return self._observed_table[self.group_index]
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             return self._observed_table.flatten()
 
     @property
@@ -1059,9 +1059,9 @@ class _SAMSState:
     @property
     def free_energies(self) -> np.ndarray:
         """Return entire row of sams free energies."""
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             return self._free_energy_table[self.group_index]
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             return self._free_energy_table.flatten()
 
     @free_energies.setter
@@ -1070,9 +1070,9 @@ class _SAMSState:
         if not free_energies.ndim == 1:
             raise ValueError("Free energy input needs to be one dimensional.")
 
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             self._free_energy_table[self.group_index] = free_energies
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             self._free_energy_table = free_energies.reshape(
                 self._free_energy_table.shape
             )
@@ -1083,9 +1083,9 @@ class _SAMSState:
         if not targets.ndim == 1:
             raise ValueError("Target input needs to be one dimensional.")
 
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             self._target_table[self.group_index] = targets
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             self._target_table = targets.reshape(self._target_table.shape)
 
     @observed_counts.setter
@@ -1094,9 +1094,9 @@ class _SAMSState:
         if not counts.ndim == 1:
             raise ValueError("Target input needs to be one dimensional.")
 
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             self._observed_table[self.group_index] = counts
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             self._observed_table = counts.reshape(self._observed_table.shape)
 
     def reset_observed_counts(self):
@@ -1107,7 +1107,7 @@ class _SAMSState:
 
     def state_index(self, titration_states) -> int:
         """Find the index of the current titration state in the flattened arrays."""
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             if len(titration_states) != len(self._index_table):
                 raise ValueError(
                     "The number of titration states in the table does not match what was provided."
@@ -1115,17 +1115,17 @@ class _SAMSState:
             state = titration_states[self.group_index]
             return self._index_table[self.group_index][state]
 
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             return self._index_table[tuple(titration_states)]
 
     def __len__(self) -> int:
         """Returns the number of free energy values present inside this table."""
         size = 0
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             for row in self._free_energy_table:
                 size += row.size
 
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             size = self._free_energy_table.size
 
         return size
@@ -1137,7 +1137,7 @@ class _SAMSState:
         root.set("approach", str(self.approach.value))
 
         # Group index is the last residue if not provided
-        if self.approach is SAMSApproach.ONESITE:
+        if self.approach is SAMSApproach.ONE_RESIDUE:
             root.set("group_index", str(self.group_index))
 
             # Every value in the table is the sams free energy/target weight of one independent titration state
@@ -1157,7 +1157,7 @@ class _SAMSState:
                     res.append(state)
                 root.append(res)
 
-        elif self.approach is SAMSApproach.MULTISITE:
+        elif self.approach is SAMSApproach.MULTI_RESIDUE:
             for d, dimension in enumerate(self._free_energy_table.shape):
                 dim_elem = etree.Element("Dimension")
                 dim_elem.set("idx", str(d))
@@ -1203,7 +1203,7 @@ class _SAMSState:
 
         instance = None
 
-        if approach is SAMSApproach.ONESITE:
+        if approach is SAMSApproach.ONE_RESIDUE:
             residues = root.xpath("./Residue")
             state_counts: List[int] = [0] * len(residues)
             for residue in residues:
@@ -1230,7 +1230,7 @@ class _SAMSState:
             instance.targets = targets
             instance.observed_counts = counts
 
-        elif approach is SAMSApproach.MULTISITE:
+        elif approach is SAMSApproach.MULTI_RESIDUE:
             dims = root.xpath("./Dimension")
             state_counts: List[int] = [0] * len(dims)
             for dim in dims:
@@ -1785,6 +1785,30 @@ class NCMCProtonDrive(_BaseDrive):
     def titrationStates(self):
         return [group.state_index for group in self.titrationGroups]
 
+    @property
+    def calibration_states(self) -> List[Tuple[int, ...]]:
+        """The titration states in the context of SAMS calibration"""
+        if self.calibration_state is None:
+            raise RuntimeError(
+                "This property is not available when not running a calibration."
+            )
+
+        elif self.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
+            index = self.calibration_state.group_index
+
+            calibration_state_list = []
+            for state in range(len(self.titrationGroups[index])):
+                states = copy.deepcopy(self.titrationStates)
+                states[index] = state
+                calibration_state_list.append(tuple(states))
+            return calibration_state_list
+
+        elif self.calibration_state.approach is SAMSApproach.MULTI_RESIDUE:
+            states_per_res = states_per_res = [
+                np.arange(len(res)) for res in self.titrationGroups
+            ]
+            return list(itertools.product(*states_per_res))
+
     def attach_context(self, context):
         """Attaches a context to the Drive. The Drive requires a context with an NCMC integrator to be attached before it is functional.
 
@@ -1900,9 +1924,9 @@ class NCMCProtonDrive(_BaseDrive):
         Parameters
         ----------
         approach - One of the two ways of running SAMS, see ``SAMSApproach``.
-            SAMSApproach.ONESITE will run SAMS on a single residue
-            SAMSApproach.MULTISITE will run SAMS to exhaustively sample the entire state space
-        group_index - For ONESITE, the titrationGroup index of the residue to run SAMS on.
+            SAMSApproach.ONE_RESIDUE will run SAMS on a single residue
+            SAMSApproach.MULTI_RESIDUE will run SAMS to exhaustively sample the entire state space
+        group_index - For ONE_RESIDUE, the titrationGroup index of the residue to run SAMS on.
             If not provided, it will be assumed to be minus one
         update_rule - The update rule to use
         beta_sams - SAMS two-stage coefficient to determine gain in first stage
@@ -1936,7 +1960,7 @@ class NCMCProtonDrive(_BaseDrive):
             min_fast=min_fast,
         )
 
-        if approach is SAMSApproach.ONESITE:
+        if approach is SAMSApproach.ONE_RESIDUE:
             residue = (
                 self.titrationGroups[group_index]
                 if group_index is not None
@@ -1944,7 +1968,7 @@ class NCMCProtonDrive(_BaseDrive):
             )
             self.calibration_state.free_energies = np.asarray(residue.g_k_values)
             self.calibration_state.targets = np.asarray(residue.target_weights)
-        elif approach is SAMSApproach.MULTISITE:
+        elif approach is SAMSApproach.MULTI_RESIDUE:
             free_energies = self.calibration_state.free_energies
             for index in self.calibration_state._index_table.flatten():
                 free_energy = 0
@@ -2094,19 +2118,16 @@ class NCMCProtonDrive(_BaseDrive):
 
             return
 
-    def calculate_weight_in_state(self, state_combination: List[int]):
-
-        """Perform a mpve to a specified staet."""
+    def calculate_weight_in_state(self, state_combination: List[int]) -> float:
 
         if not self.sampling_method == SamplingMethod.IMPORTANCE:
             raise NotImplementedError(
                 "This method is only intended for us with systematic importance sampling."
             )
-
         attempt_data = self._propose_given_change(state_combination)
         self._perform_attempt(attempt_data)
 
-        return
+        return attempt_data.work
 
     def import_gk_values(self, gk_dict: Dict[str, np.ndarray], strict=False):
         """Import precalibrated gk values. Only use this if your simulation settings are exactly the same.
@@ -3094,6 +3115,9 @@ class NCMCProtonDrive(_BaseDrive):
                 titration_group_index
             ]
 
+        # Setting the saltswap state to the final state so that the bookkeeping is correct
+        if update_salt:
+            self.swapper.stateVector = final_salt_vector
         # Extracting the final state's weight.
         g_final = self.calculate_gk()
         # Extract the internally calculated work from the integrator
@@ -3108,9 +3132,9 @@ class NCMCProtonDrive(_BaseDrive):
     def calculate_gk(self) -> float:
         """Retrieve the value of g_k for the current titration state."""
         if self.calibration_state is not None:
-            if self.calibration_state.approach is SAMSApproach.MULTISITE:
+            if self.calibration_state.approach is SAMSApproach.MULTI_RESIDUE:
                 return self.calibration_state.free_energy(self.titrationStates)
-            elif self.calibration_state.approach is SAMSApproach.ONESITE:
+            elif self.calibration_state.approach is SAMSApproach.ONE_RESIDUE:
                 # override internal g_k and then calculate totals
                 free_energies = self.calibration_state.free_energies.tolist()
                 self.titrationGroups[
@@ -3550,44 +3574,6 @@ class NCMCProtonDrive(_BaseDrive):
 
         # Return the log probability.
         return log_P, pot_energy, kin_energy
-
-    def _get_reduced_potentials(self, group_index=0):
-        """Retrieve the reduced potentials for all states of the system given a context.
-
-        Parameters
-        ----------
-        group_index : int, optional
-            Index of the group that needs updating, defaults to 0.
-
-        """
-        # beta * U(x)_j
-
-        ub_j = np.empty(len(self.titrationGroups[group_index]))
-        for j in range(ub_j.size):
-            ub_j[j] = self._reduced_potential(j, group_index=group_index)
-
-        # Reset to current state
-        return ub_j
-
-    def _reduced_potential(self, state_index, group_index=0):
-        """Retrieve the reduced potential for a given state (specified by index) in the given context.
-
-        Parameters
-        ----------
-        state_index : int
-            Index of the state for which the reduced potential needs to be calculated.
-
-        """
-        potential_energy = self._get_potential_energy(
-            state_index, group_index=group_index
-        )
-        red_pot = self.beta * potential_energy
-
-        if self.pressure is not None:
-            volume = self.context.getState().getPeriodicBoxVolume()
-            red_pot -= self.beta * self.pressure * volume * unit.AVOGADRO_CONSTANT_NA
-
-        return red_pot
 
     def _get_potential_energy(self, state_index, group_index=0):
         """ Retrieve the potential energy for a given state (specified by index) in the given context.

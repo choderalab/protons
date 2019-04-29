@@ -142,7 +142,7 @@ class TestAmberTyrosineExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -168,7 +168,7 @@ class TestAmberTyrosineExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -393,7 +393,7 @@ class TestForceFieldImidazoleExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -421,7 +421,7 @@ class TestForceFieldImidazoleExplicit(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=0)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=0)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -668,7 +668,7 @@ class TestAmberPeptide(object):
             pressure=testsystem.pressure,
             perturbations_per_trial=0,
         )
-        driver.enable_calibration(app.driver.SAMSApproach.ONESITE, group_index=4)
+        driver.enable_calibration(app.driver.SAMSApproach.ONE_RESIDUE, group_index=4)
         sams_sampler = SAMSCalibrationEngine(driver)
         platform = openmm.Platform.getPlatformByName(self.default_platform)
         context = openmm.Context(testsystem.system, compound_integrator, platform)
@@ -1335,3 +1335,151 @@ class TestForceFieldImidazoleSaltswap:
             tot_charge += np.float64(q)
 
         return tot_charge
+
+
+class TestSaltswapMolecule(object):
+    """Tests for a saltswap style water molecule in explict solvent (TIP3P)"""
+
+    default_platform = "CPU"
+    default_properties = None
+
+    @staticmethod
+    def setup_waterbox(
+        pert_per_trial=10000,
+        sampling_method=SamplingMethod.IMPORTANCE,
+        initial_state=0,
+        salt_conc=0.2 * unit.molar,
+    ):
+        """
+        Set up a saltswap water molecule in solvent.
+        """
+        water_system = SystemSetup()
+        water_system.temperature = 300.0 * unit.kelvin
+        water_system.pressure = 1.0 * unit.atmospheres
+        water_system.timestep = 1.0 * unit.femtoseconds
+        water_system.collision_rate = 1.0 / unit.picoseconds
+        water_system.constraint_tolerance = 1.0e-5
+        water_system.compound_integrator = create_compound_gbaoab_integrator(
+            water_system
+        )
+        testsystems = get_test_data("water-ion-test", "testsystems")
+        water_system.pdbfile = app.PDBFile(os.path.join(testsystems, "waterbox.pdb"))
+        water_system.ffxml_filename = os.path.join(testsystems, "water-with-states.xml")
+        water_system.topology = water_system.pdbfile.topology
+        water_system.positions = water_system.pdbfile.positions
+        water_system.forcefield = ForceField(water_system.ffxml_filename)
+
+        water_system.system = water_system.forcefield.createSystem(
+            water_system.topology, nonbondedMethod=app.PME
+        )
+        water_system.system.addForce(
+            openmm.MonteCarloBarostat(
+                water_system.pressure, water_system.temperature, 25
+            )
+        )
+
+        # Only treat the first molecule as titratable.
+        water_system.drive = ForceFieldProtonDrive(
+            water_system.temperature,
+            water_system.topology,
+            water_system.system,
+            water_system.forcefield,
+            water_system.ffxml_filename,
+            pressure=water_system.pressure,
+            perturbations_per_trial=pert_per_trial,
+            residues_by_index=[0],
+            sampling_method=sampling_method,
+        )
+        platform = openmm.Platform.getPlatformByName(
+            TestSaltswapMolecule.default_platform
+        )
+
+        water_system.simulation = app.ConstantPHSimulation(
+            water_system.topology,
+            water_system.system,
+            water_system.compound_integrator,
+            water_system.drive,
+            platform=platform,
+            platformProperties=None,
+            state=None,
+        )
+        water_system.salt_concentration = salt_conc
+        water_system.simulation.context.setPositions(
+            water_system.positions
+        )  # set to minimized positions
+        water_system.simulation.context.setVelocitiesToTemperature(
+            water_system.temperature
+        )
+        # Rename the first molecule so saltswap won't pick it up
+        list(water_system.topology.residues())[0].name = "NOTHOH"
+        # The salinator initializes the system salts
+        salinator = Salinator(
+            context=water_system.simulation.context,
+            system=water_system.system,
+            topology=water_system.topology,
+            ncmc_integrator=water_system.compound_integrator.getIntegrator(1),
+            salt_concentration=water_system.salt_concentration,
+            pressure=water_system.pressure,
+            temperature=water_system.temperature,
+        )
+        salinator.neutralize()
+        salinator.initialize_concentration()
+        swapper = salinator.swapper
+        water_system.salinator = salinator
+        water_system.drive.enable_neutralizing_ions(swapper)
+        # patch the LJ parameters into the residue so that there is no difference with saltswap parameters
+        for state in [1, 2]:
+            for param in ["sigma", "epsilon"]:
+                water_system.drive.titrationGroups[0].titration_states[state].forces[0][
+                    "atoms"
+                ][0][param] = water_system.drive._ion_parameters[state][0][param]
+
+        water_system.drive.set_titration_state(
+            0, initial_state, updateContextParameters=True, updateIons=True
+        )
+
+        return water_system
+
+    @staticmethod
+    def compare_nonbonded_parameters(sysxml1, sysxml2):
+
+        tree1 = etree.fromstring(sysxml1)
+        tree2 = etree.fromstring(sysxml2)
+
+        f1 = tree1.xpath("//System/Forces/Force[@type='NonbondedForce']")[0]
+        f2 = tree2.xpath("//System/Forces/Force[@type='NonbondedForce']")[0]
+        found_diff = False
+
+        diff_txt = ""
+        for p, (part1, part2) in enumerate(
+            zip(f1.xpath("//Particle"), f2.xpath("//Particle"))
+        ):
+            if part1.attrib != part2.attrib:
+                found_diff = True
+                diff_txt += f"{p}, {part1.attrib}, {part2.attrib}\n"
+
+        return found_diff, diff_txt
+
+    def test_creating_saltswap_system(self):
+        """Set up a simple test system with a water molecule."""
+        testsystem = self.setup_waterbox(
+            pert_per_trial=3,
+            sampling_method=SamplingMethod.IMPORTANCE,
+            initial_state=0,
+            salt_conc=0.2 * unit.molar,
+        )
+
+        sys1 = openmm.XmlSerializer.serialize(testsystem.system)
+        statevec1 = deepcopy(testsystem.drive.swapper.stateVector)
+        testsystem.simulation.step(1)
+        testsystem.simulation.update(1)
+
+        sys2 = openmm.XmlSerializer.serialize(testsystem.system)
+        statevec2 = deepcopy(testsystem.drive.swapper.stateVector)
+        are_different, differences = self.compare_nonbonded_parameters(sys1, sys2)
+        assert are_different is False, differences
+        assert np.all(statevec1 == statevec2), "Saltswap state vector changed."
+
+
+if __name__ == "__main__":
+    pytest.main()

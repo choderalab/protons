@@ -55,7 +55,7 @@ class TestSAMS:
         peptide.timestep = 2.0 * unit.femtoseconds
         peptide.collision_rate = 1.0 / unit.picoseconds
         peptide.pH = 7.0
-        peptide.perturbations_per_trial = 0  # instantaneous monte carlo
+        peptide.perturbations_per_trial = 1  # instantaneous monte carlo
         peptide.propagations_per_step = 1
 
         testsystems = get_test_data("{}_implicit".format(name), "testsystems")
@@ -114,7 +114,9 @@ class TestSAMS:
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.adjust_to_ph(7.4)  # ensure nonequal target weights
         for group_index in range(len(pep.drive.titrationGroups)):
-            pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
+            pep.drive.enable_calibration(
+                SAMSApproach.ONE_RESIDUE, group_index=group_index
+            )
             table = pep.drive.calibration_state
 
             # The one site table should have exactly one entry for
@@ -134,7 +136,7 @@ class TestSAMS:
 
         # Test that using None treats the last residue.
         group_index = None
-        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=group_index)
+        pep.drive.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=group_index)
         table = pep.drive.calibration_state
 
         assert (
@@ -164,7 +166,7 @@ class TestSAMS:
         pep = self.setup_peptide_implicit("yeah")
         pep.drive.adjust_to_ph(7.4)  # ensure nonequal target weights for tests
 
-        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
+        pep.drive.enable_calibration(SAMSApproach.MULTI_RESIDUE)
         table = pep.drive.calibration_state
         # The multi site table should have exactly one entry for
         assert (
@@ -191,7 +193,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
+        pep.drive.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=1)
         sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
@@ -208,7 +210,7 @@ class TestSAMS:
         old_log_level = log.getEffectiveLevel()
 
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.enable_calibration(SAMSApproach.ONESITE, group_index=1)
+        pep.drive.enable_calibration(SAMSApproach.ONE_RESIDUE, group_index=1)
         sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
@@ -219,11 +221,11 @@ class TestSAMS:
             sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.NODECAY)
         log.setLevel(old_log_level)
 
-    def test_multisite_sams_sampling(self):
-        """Test the multisite SAMS sampling approach."""
+    def test_multisite_sams_sampling_binary(self):
+        """Test the multisite SAMS sampling approach with binary update."""
         old_log_level = log.getEffectiveLevel()
         pep = self.setup_peptide_implicit("yeah")
-        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
+        pep.drive.enable_calibration(SAMSApproach.MULTI_RESIDUE)
         sampler = SAMSCalibrationEngine(pep.drive)
         total_iterations = 1500
         for x in range(total_iterations):
@@ -235,13 +237,29 @@ class TestSAMS:
         log.setLevel(old_log_level)
         return
 
+    def test_multisite_sams_sampling_global(self):
+        """Test the multisite SAMS sampling approach with global update."""
+        old_log_level = log.getEffectiveLevel()
+        pep = self.setup_peptide_implicit("yeah")
+        pep.drive.enable_calibration(SAMSApproach.MULTI_RESIDUE)
+        sampler = SAMSCalibrationEngine(pep.drive)
+        total_iterations = 1500
+        for x in range(total_iterations):
+            if x == total_iterations - 1:
+                log.setLevel(logging.DEBUG)
+            pep.simulation.step(1)
+            pep.simulation.update(1)
+            sampler.adapt_zetas(UpdateRule.GLOBAL, b=0.51, stage=Stage.NODECAY)
+        log.setLevel(old_log_level)
+        return
+
     def test_calibration_class_multisite(self):
         """Test the multisite SAMS sampling approach."""
         old_log_level = log.getEffectiveLevel()
         pep = self.setup_peptide_implicit("yeah", createsim=True)
-        pep.drive.enable_calibration(SAMSApproach.MULTISITE)
+        pep.drive.enable_calibration(SAMSApproach.MULTI_RESIDUE, min_burn=10)
         sampler = SAMSCalibrationEngine(pep.drive)
-        total_iterations = 1500
+        total_iterations = 50
         for x in range(total_iterations):
             if x == total_iterations - 1:
                 log.setLevel(logging.DEBUG)
@@ -257,7 +275,7 @@ class TestSAMS:
         log.setLevel(logging.INFO)
         pep = self.setup_peptide_implicit("yeah", createsim=False)
         pep.drive.enable_calibration(
-            SAMSApproach.ONESITE,
+            SAMSApproach.ONE_RESIDUE,
             group_index=0,
             min_burn=200,
             min_fast=100,
@@ -297,7 +315,7 @@ class TestSAMS:
         log.setLevel(logging.INFO)
         pep = self.setup_peptide_implicit("yeah", createsim=False)
         pep.drive.enable_calibration(
-            SAMSApproach.ONESITE,
+            SAMSApproach.ONE_RESIDUE,
             group_index=0,
             min_burn=200,
             min_fast=200,

@@ -30,14 +30,14 @@ collision_rate_per_ps = 1.0
 
 [preprocessing]
 minimization_tolerance_kjmol = 0.00001
-minimization_max_iterations = 100.0
-num_thermalization_steps = 10.0
+minimization_max_iterations = 100
+num_thermalization_steps = 10
 
 [SAMS]
-beta = 0.5
+beta = 0.6
 flatness_criterion = 0.15
 sites = "multi"
 update_rule = "binary"
-min_burn = 200.0
-min_slow = 200.0
-min_fast = 200.0
+min_burn = 200
+min_slow = 200
+min_fast = 200
