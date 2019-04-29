@@ -1283,6 +1283,7 @@ class _TitrationAttemptData(object):
         self._logp_accept = None
         self._work = None
         self._changing_groups = None
+        self._log_metropolis_acceptance_ratio = None
 
         self._initial_charge = None
         self._initial_states = None
@@ -1323,6 +1324,11 @@ class _TitrationAttemptData(object):
     def proposed_positions(self, positions: unit.Quantity):
         """Store positions in nanometers as array."""
         self._proposed_positions = strip_in_unit_system(positions)
+
+    @property
+    def log_metropolis_acceptance_ratio(self) -> float:
+        """The log of the Metropolis acceptance ratio min(1, Prev/Pfwd)."""
+        return float(min(0.0, self._logp_accept))
 
     @property
     def initial_velocities(self) -> np.ndarray:

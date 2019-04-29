@@ -161,7 +161,7 @@ class SAMSReporter:
 
         approach = grp.createVariable("approach", int)
         approach.description = (
-            "The approach used with sams, one-site (0) or multi-site (1)"
+            "The approach used with sams, one-residue (0) or multi-residue (1)"
         )
 
         # Metadata
