@@ -54,7 +54,7 @@ num_thermalization_steps = 100
 [SAMS]
 beta = 0.6
 flatness_criterion = 0.1
-sites = "multi"
+residues = "multi"
 update_rule = "binary"
 min_burn = 200
 min_slow = 200

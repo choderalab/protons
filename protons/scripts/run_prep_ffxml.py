@@ -88,16 +88,18 @@ def run_prep_ffxml_main(settings_file):
     # The input should be an mmcif/pdbx file'
     ifilename = inp["structure"].format(**format_vars)
     joined_path = os.path.join(idir, ifilename)
-    input_pdbx_file = os.path.abspath(joined_path)
-    if os.path.splitext(input_pdbx_file)[-1] == ".cif":
-        pdb_object = app.PDBxFile(input_pdbx_file)
-    elif os.path.splitext(input_pdbx_file)[-1] == ".pdb":
-        pdb_object = app.PDBFile(input_pdbx_file)
+    input_structure_file = os.path.abspath(joined_path)
+    # Get the file extension without the period
+    topology_file_format = os.path.splitext(input_structure_file)[-1][1:]
+    if topology_file_format in ["cif", "pdbx", "mmcif"]:
+        pdb_object = app.PDBxFile(input_structure_file)
+    elif topology_file_format == "pdb":
+        pdb_object = app.PDBFile(input_structure_file)
 
     # Atoms , connectivity, residues
     topology = pdb_object.topology
     # Store topology for serialization
-    topology_file_content = open(input_pdbx_file, "r").read()
+    topology_file_content = open(input_structure_file, "r").read()
 
     # XYZ positions for every atom
     positions = pdb_object.positions
@@ -410,6 +412,7 @@ def run_prep_ffxml_main(settings_file):
                     simulation.system,
                     simulation.integrator,
                     topology_file_content,
+                    topology_file_format,
                     salinator=salinator,
                 )
 
@@ -451,6 +454,7 @@ def run_prep_ffxml_main(settings_file):
                         simulation.system,
                         simulation.integrator,
                         topology_file_content,
+                        topology_file_format,
                         salinator=salinator,
                     )
             os.chdir(lastdir)
@@ -476,6 +480,7 @@ def run_prep_ffxml_main(settings_file):
             simulation.system,
             simulation.integrator,
             topology_file_content,
+            topology_file_format,
             salinator=salinator,
         )
 

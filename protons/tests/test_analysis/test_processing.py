@@ -7,7 +7,14 @@ from uuid import uuid4
 test_root = path.abspath(path.dirname(__file__))
 
 
-class TestProcessingSAMSData:
+class TestProcessing:
+
+    one_residue_calibration_data = []
+    multi_residue_calibration_data = []
+    one_residue_ais_data = []
+    multi_residue_ais_data = []
+    ncmc_benchmark_data = []
+
     def test_single_dataset(self):
         df = dataset_to_dataframe([path.join(test_root, "viologen-b1.nc")])
         assert len(df) == 1, "The result should be a list with one dataframe."

@@ -106,7 +106,7 @@ def xml_to_topology(topology_elem: etree.Element) -> app.Topology:
     fileio = StringIO(text)
 
     topo_format = topology_elem.attrib["format"].lower()
-    if topo_format == "pdbx":
+    if topo_format in ["pdbx", "cif", "mmcif"]:
         loaded = app.PDBxFile(fileio)
     elif topo_format == "pdb":
         loaded = app.PDBFile(fileio)
@@ -123,6 +123,7 @@ def create_protons_checkpoint_file(
     system: mm.System,
     integrator: mm.CustomIntegrator,
     topology_string: str,
+    topology_format: str,
     salinator=None,
 ) -> None:
     """Write out a checkpoint file for calibration-v1 example scripts."""
@@ -134,7 +135,7 @@ def create_protons_checkpoint_file(
     integratorxml = serialize_integrator(integrator)
     systemxml = serialize_system(system)
     state_xml = serialize_state(context)
-    topology_xml = store_topology(topology_string)
+    topology_xml = store_topology(topology_string, topology_format)
 
     tree = etree.fromstring(
         f"""<Checkpoint runtype="{runtype}" date="{date}"></Checkpoint>"""

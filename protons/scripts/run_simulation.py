@@ -60,6 +60,7 @@ def run_main(settings_file):
 
     topology_element = checkpoint_tree.xpath("TopologyFile")[0]
     topology: app.Topology = xml_to_topology(topology_element)
+    topology_file_format = topology_element.get("format")
 
     # Quick fix for histidines in topology
     # Openmm relabels them HIS, which leads to them not being detected as
@@ -251,6 +252,7 @@ def run_main(settings_file):
             simulation.system,
             simulation.integrator,
             topology_element.text,
+            topology_file_format,
             salinator=salinator,
         )
         ncfile.close()
