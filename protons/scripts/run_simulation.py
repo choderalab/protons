@@ -119,7 +119,7 @@ def run_main(settings_file):
 
     if driver.calibration_state is not None:
         if driver.calibration_state.approach == SAMSApproach.ONE_RESIDUE:
-            driver.define_pools({"calibration": driver.calibration_state.group_index})
+            driver.define_pools({"calibration": [driver.calibration_state.group_index]})
 
     try:
         platform = mm.Platform.getPlatformByName("CUDA")
