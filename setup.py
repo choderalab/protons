@@ -62,7 +62,13 @@ setup(
     url="https://github.com/choderalab/protons",
     platforms=["any"],
     classifiers=CLASSIFIERS.splitlines(),
-    packages=["protons", "protons.app", "protons.scripts", "protons.tests"],
+    packages=[
+        "protons",
+        "protons.app",
+        "protons.scripts",
+        "protons.tests",
+        "protons.app.analysis",
+    ],
     package_data={
         "protons": find_package_data("protons/examples", "protons")
         + find_package_data("protons/tests/testsystems", "protons")
