@@ -55,7 +55,7 @@ def dataset_to_dataframe(
         data_dict = {
             "update": update,
             "work": work,
-            "source": [ncfile] * work.size,
+            "source": [ncfile] * update.size,
             "logp_accept": logp,
             "p_accept": p_accept,
         }
@@ -115,7 +115,16 @@ def dataset_to_dataframe(
             for i in range(gks.shape[-1]):
                 data_dict[f"bias_state_{i}"] = gks[:, i]
         except KeyError:
-            pass
+            # Set constant g_k bias from metadata
+            gk_per_macrostate = np.zeros(macrostate_labels.size)
+            for m in range(macrostate_labels.size):
+                microstates = np.argwhere(macrostate_labels == m).flatten()
+                for res, state in enumerate(microstates):
+                    gk_per_macrostate[m] += ds["Protons/Metadata/g_k"][res, state]
+
+            for i, gk in enumerate(gk_per_macrostate):
+                data_dict[f"bias_state_{i}"] = [gk] * update.size
+
         # Release file
 
         # After SAMS processing, macrostate labels are final
