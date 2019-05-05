@@ -1,6 +1,6 @@
-from protons.app.ligands import prepare_protein_simulation_systems, create_bond_definitions, prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
+from protons.app.ligands import create_bond_definitions, prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
 from protons.scripts.utilities import *
-from protons.app.protein import prepare_protein
+from protons.app.protein import prepare_protein, prepare_protein_simulation_systems
 from protons.app import TautomerForceFieldProtonDrive, TautomerNCMCProtonDrive
 from protons.app import MetadataReporter, TitrationReporter, NCMCReporter, SAMSReporter
 from simtk import unit, openmm as mm
