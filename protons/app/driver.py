@@ -4312,7 +4312,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     current_parameters = {
                         key: value
                         for (key, value) in parameters["bonded"][
-                            (atom_name1, atom_name2)
+                            tuple(sorted([atom_name1, atom_name2]))
                         ].items()
                     }
                     current_parameters["atom1_idx"], current_parameters["atom2_idx"] = (
@@ -4342,7 +4342,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     current_parameters = {
                         key: value
                         for (key, value) in parameters["angle"][
-                            (atom_name1, atom_name2, atom_name3)
+                            tuple(sorted([atom_name1, atom_name2, atom_name3]))
                         ].items()
                     }
                     current_parameters["atom1_idx"], current_parameters[
@@ -4367,32 +4367,23 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 #   -) the index of all torsions that are real for this state and
                 #   -) the force constants for each torsion
                 for torsion in parameters["torsion"]:
+                    idx1 = atom_name_to_openMM_indice[parameters["torsion"][torsion]["name1"]]
+                    idx2 = atom_name_to_openMM_indice[parameters["torsion"][torsion]["name2"]]
+                    idx3 = atom_name_to_openMM_indice[parameters["torsion"][torsion]["name3"]]
+                    idx4 = atom_name_to_openMM_indice[parameters["torsion"][torsion]["name4"]]
 
-                    idx = force.addTorsion(
-                        atom_name_to_openMM_indice[
-                            parameters["torsion"][torsion]["name1"]
-                        ],
-                        atom_name_to_openMM_indice[
-                            parameters["torsion"][torsion]["name2"]
-                        ],
-                        atom_name_to_openMM_indice[
-                            parameters["torsion"][torsion]["name3"]
-                        ],
-                        atom_name_to_openMM_indice[
-                            parameters["torsion"][torsion]["name4"]
-                        ],
+                    torsion_idx = force.addTorsion(
+                        idx1, idx2, idx3, idx4,                        
                         int(parameters["torsion"][torsion]["periodicity"]),
                         float(parameters["torsion"][torsion]["phase"]),
                         float(0.0),
                     )
-                    log.info("Caching torsion parameters for Idx:{} Name1:{} Name2:{} Name3:{} Name4:{}".format(idx, atom_name_to_openMM_indice[
-                            parameters["torsion"][torsion]["name1"]], parameters["torsion"][torsion]["name2"], parameters["torsion"][torsion]["name3"], parameters["torsion"][torsion]["name4"]))
+                    log.info("Caching torsion parameters for Idx:{} Name1:{} Name2:{} Name3:{} Name4:{}".format(torsion_idx, 
+                    parameters["torsion"][torsion]["name1"], parameters["torsion"][torsion]["name2"], parameters["torsion"][torsion]["name3"], parameters["torsion"][torsion]["name4"]))
 
                     f_params[force_index]["torsion"].append(idx)
                     new_torsion_idx.append(idx)
-                    f_params[force_index]["ks"][idx] = parameters["torsion"][torsion][
-                        "k"
-                    ]
+                    f_params[force_index]["ks"][idx] = parameters["torsion"][torsion]["k"]
 
             else:
                 raise Exception(
@@ -5117,7 +5108,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
 
         # build bond properties
         for index, bond in enumerate(state_block.xpath("Bond")):
-            key = (bond.get("name1"), bond.get("name2"))
+            key = tuple(sorted([bond.get("name1"), bond.get("name2")]))
             bonded_par[key] = {
                 "length": bond.get("length"),
                 "k": bond.get("k"),
@@ -5126,7 +5117,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
 
         # build angle properties
         for index, angle in enumerate(state_block.xpath("Angle")):
-            key = (angle.get("name1"), angle.get("name2"), angle.get("name3"))
+            key = tuple(sorted([angle.get("name1"), angle.get("name2"), angle.get("name3")]))
             angle_par[key] = {
                 "angle": angle.get("angle"),
                 "k": angle.get("k"),

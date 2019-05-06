@@ -1617,6 +1617,7 @@ def generate_protons_ffxml(
     # Open the Epik output into OEMols
     ifs = oechem.oemolistream()
     ifs.open(inputmol2)
+    log.info('Nr of tautomers for the input ligand: {}'.format(len(isomer_dicts)))
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
@@ -1649,8 +1650,8 @@ def generate_protons_ffxml(
 
 
 def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residue_name):
+    
     ffxml = isomers[isomer_index]["ffxml"]
-
     name_type_mapping = {}
     name_charge_mapping = {}
     atom_index_mapping = {}
@@ -1671,7 +1672,6 @@ def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residu
             atom_charge = name_charge_mapping[atom_name]
             atom_index = atom_index_mapping[atom_name]
             atom_name_to_unique_atom_name[atom_name] = atom_name
-
             if int(atom.GetAtomicNum()) == 1:
                 # found hydrogen
                 heavy_atom_name = None
@@ -1696,36 +1696,27 @@ def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residu
         # set bonds
         for bond in oemolecule.GetBonds():
             a1 = bond.GetBgn()
-            a1_atom_name = a1.GetName()
             a2 = bond.GetEnd()
-            a2_atom_name = a2.GetName()
-            if int(a1.GetAtomicNum()) == 1:
-                # found hydrogen
-                heavy_atom_name = None
-                for atom in a1.GetAtoms():
-                    if int(atom.GetAtomicNum()) != 1:
-                        heavy_atom_name = atom.GetName()
-                        break
-                hydrogens.append(tuple([a1_atom_name, a2_atom_name]))
-                a1_atom_name = a1_atom_name + name_type_mapping[heavy_atom_name]
-            if int(a2.GetAtomicNum()) == 1:
-                # found hydrogen
-                heavy_atom_name = None
-                for atom in a2.GetAtoms():
-                    if int(atom.GetAtomicNum()) != 1:
-                        heavy_atom_name = atom.GetName()
-                        break
-                hydrogens.append(tuple([a2_atom_name, a1_atom_name]))
-                a2_atom_name = a2_atom_name + name_type_mapping[heavy_atom_name]
-            G.add_edge(a1_atom_name, a2_atom_name)
+            if a1.GetAtomicNum() == 1:
+                # hydrogen bonds for this specific tautomer - name is used as is specified in the pdb 
+                hydrogens.append(tuple([a1.GetName(), a2.GetName()]))
+            elif a2.GetAtomicNum() == 1:
+                hydrogens.append(tuple([a2.GetName(), a1.GetName()]))
+
+            # adding bonds to the graph - name of hydrogens is changed so that there are unique names 
+            # depending on the heavy atom binding partner
+            G.add_edge(atom_name_to_unique_atom_name[a1.GetName()], atom_name_to_unique_atom_name[a2.GetName()])
 
         # generate hydrogen definitions for each tautomer state
         # this is used to generate an openMM system of the tautomer
         isomers[isomer_index]["hxml"] = generate_tautomer_hydrogen_definitions(
             hydrogens, residue_name, isomer_index
         )
+
+
         isomers[isomer_index]["mol-graph"] = G
         isomers[isomer_index]["atom_name_dict"] = atom_name_to_unique_atom_name
+        isomers[isomer_index]["bxml"] = create_bond_definitions(StringIO((etree.tostring(ffxml)).decode("utf-8")), pdb_file_path)
         generate_tautomer_torsion_definitions(isomers, pdb_file_path, isomer_index)
 
 
@@ -1754,7 +1745,7 @@ def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index
         h_xml.set("parent", parent)
         hydrogen_file_residue.append(h_xml)
     hydrogen_definitions_tree.append(hydrogen_file_residue)
-    log.debug(hydrogen_definitions_tree)
+    log.info(hydrogen_definitions_tree)
     return hydrogen_definitions_tree
 
 
@@ -1776,20 +1767,53 @@ def generate_tautomer_torsion_definitions(
         
     """
 
+    plt.figure(figsize=(8,8)) 
+    nx.draw(
+        isomers[isomer_index]["mol-graph"],
+        pos=nx.kamada_kawai_layout(isomers[isomer_index]["mol-graph"], scale=4),
+        with_labels=True,
+        font_weight="bold",
+        node_size=1400,
+        alpha=0.5,
+        font_size=12,
+        scale=6
+    )
+
+    plt.show()
+    G = isomers[isomer_index]["mol-graph"]
+    for n in G.nodes():
+        log.info(n)
+
+    for e in G.edges():
+        log.info(e)
+
     log.info("Generate tautomer torsion definitions ...")
     ffxml = StringIO(etree.tostring(isomers[isomer_index]["ffxml"]).decode("utf-8"))
     hxml = StringIO(etree.tostring(isomers[isomer_index]["hxml"]).decode("utf-8"))
+    bxml = StringIO(etree.tostring(isomers[isomer_index]["bxml"]).decode("utf-8"))
+    app.Topology.loadBondDefinitions(bxml)
+
+    #log.debug(etree.tostring(isomers[isomer_index]["ffxml"], pretty_print=True).decode("utf-8"))
+    #log.debug(etree.tostring(isomers[isomer_index]["hxml"], pretty_print=True).decode("utf-8"))
+    #log.debug(etree.tostring(isomers[isomer_index]["bxml"], pretty_print=True).decode("utf-8"))
+
     forcefield = app.ForceField("amber10.xml", "gaff.xml", ffxml, "tip3p.xml")
     pdb = app.PDBFile(vacuum_file)
     app.Modeller.loadHydrogenDefinitions(hxml)
     modeller = app.Modeller(pdb.topology, pdb.positions)
+    to_delete = [
+        atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"]
+    ]
+    modeller.delete(to_delete)
     modeller.addHydrogens()
     index_to_name = dict()
+    
     for a in modeller.topology.atoms():
-        index_to_name[a.index] = isomers[isomer_index]["atom_name_dict"][a.name]
-
+        index_to_name[a.index] = a.name
+    
     system = forcefield.createSystem(modeller.topology)
     isomers[isomer_index]["torsion-forces"] = []
+    atom_name_to_unique_atom_name = isomers[isomer_index]["atom_name_dict"]
 
     for force in system.getForces():
         force_classname = force.__class__.__name__
@@ -1801,10 +1825,10 @@ def generate_tautomer_torsion_definitions(
                 )
                 par = {
                     "index": torsion_index,
-                    "atom1-name": index_to_name[a1],
-                    "atom2-name": index_to_name[a2],
-                    "atom3-name": index_to_name[a3],
-                    "atom4-name": index_to_name[a4],
+                    "atom1-name": atom_name_to_unique_atom_name[index_to_name[a1]],
+                    "atom2-name": atom_name_to_unique_atom_name[index_to_name[a2]],
+                    "atom3-name": atom_name_to_unique_atom_name[index_to_name[a3]],
+                    "atom4-name": atom_name_to_unique_atom_name[index_to_name[a4]],
                     "periodicity": int(strip_in_unit_system(periodicity)),
                     "phase": strip_in_unit_system(phase),
                     "k": strip_in_unit_system(k),
@@ -2024,14 +2048,18 @@ def create_hydrogen_definitions(
 
 
 def create_bond_definitions(
-    inputfile: str, outputfile: str):
+    inputfile: str,
+    pdb_file_path : str
+    ):
     """
-    Generates bond definitions for a small molecule template.
+    Generates bond definitions for a small molecule template to subsequently load 
+    the bond definitions in the topology object. BE CAREFULL: The residue name 
+    of the pdb file must match the residue name in the bxml file.
 
     Parameters
     ----------
     inputfile - a forcefield XML file defined using Gaff atom types
-    outputfile - Name for the XML output file
+    pdb_file_ath - used to extract the residue name
     """
 
     xmltree = etree.parse(
@@ -2040,17 +2068,22 @@ def create_bond_definitions(
     
     # Output tree
     bond_definitions_tree = etree.fromstring("<Residues/>")
-
     bonds = set()
-   
+    pdb = app.PDBFile(pdb_file_path)
+    residue_name = None
+    for r in pdb.topology.residues():
+        residue_name = r.name
+
     for residue in xmltree.xpath("Residues/Residue"):
         # Loop through all bonds
         bond_file_residue = etree.fromstring("<Residue/>")
-        bond_file_residue.set("name", residue.get("name"))
+        bond_file_residue.set("name", residue_name)
 
         for bond in residue.xpath("Bond"):
             atomname1 = bond.get("atomName1")
             atomname2 = bond.get("atomName2")
+            if atomname1.startswith('H') or atomname2.startswith('H'):
+                continue
             bonds.add(tuple([atomname1, atomname2]))
         
         for a1, a2 in bonds:
@@ -2060,16 +2093,7 @@ def create_bond_definitions(
             bond_file_residue.append(b_xml)
         bond_definitions_tree.append(bond_file_residue)
 
-    # Write output
-    xmlstring = etree.tostring(
-        bond_definitions_tree,
-        encoding="utf-8",
-        pretty_print=True,
-        xml_declaration=False,
-    )
-    xmlstring = xmlstring.decode("utf-8")
-    with open(outputfile, "w") as fstream:
-        fstream.write(xmlstring)
+    return bond_definitions_tree
 
 
 def _find_hydrogen_types(gafftree: lxml.etree.ElementTree) -> set:
@@ -2240,6 +2264,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
 
     def _complete_state_registry(self):
         """
+        Tautomer version of _complete_state_registry
         Store all the properties that are specific to each state
         """
         mol_graphs = {}
@@ -2328,6 +2353,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
 
     def _initialize_forcefield_template(self):
         """
+        Tautomer version of _initialize_forcefield_template
         Set up the residue template using the superset graph.
         The residue includes all atom names of all the states, only the atoms of 
         the first state have read atom types.
@@ -2583,11 +2609,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                     found_parameters = False
                     parm = None
                     # angle between three atoms that are real in this isomer
-                    if [node1, node2, node3] in isomer_angle_atom_names or [
-                        node3,
-                        node2,
-                        node1,
-                    ] in isomer_angle_atom_names:
+                    if [node1, node2, node3] in isomer_angle_atom_names or [node3,node2,node1] in isomer_angle_atom_names:
                         atom_type1, atom_type2, atom_type3 = (
                             isomer_atom_name_to_atom_type[node1],
                             isomer_atom_name_to_atom_type[node2],
@@ -2754,9 +2776,12 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                 "bonds_atom_names": list_of_bonds_atom_names,
             }
 
+        log.info('Superset graph')
+        plt.figure(figsize=(8,8)) 
+
         nx.draw(
             superset_graph,
-            pos=nx.kamada_kawai_layout(superset_graph),
+            pos=nx.kamada_kawai_layout(superset_graph, scale=6),
             with_labels=True,
             font_weight="bold",
             node_size=1400,

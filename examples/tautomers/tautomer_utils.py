@@ -10,6 +10,7 @@ from tqdm import trange
 import netCDF4
 import shutil
 import os
+from io import StringIO
 
 
 def run_simulation(simulation, driver, pdb_object, settings):
@@ -75,7 +76,6 @@ def setting_up_tautomer(settings, isomer_dictionary):
     
     #define location of set up files
     hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
-    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
     offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
 
     # Debugging/intermediate files
@@ -92,7 +92,8 @@ def setting_up_tautomer(settings, isomer_dictionary):
     # create hydrogen definitions for the superset of all tautomers
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
     # create bond definitions for the superset of all tautomers
-    create_bond_definitions(offxml, bond_def)
+    bond_def = create_bond_definitions(offxml, tautomer_heavy_atoms)
+    bond_def = StringIO(etree.tostring(bond_def).decode("utf-8"))
     from simtk.openmm.app import Topology
     Topology.loadBondDefinitions(bond_def)
 
