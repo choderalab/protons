@@ -1959,7 +1959,7 @@ class NCMCProtonDrive(_BaseDrive):
                 )
             moves = []
             for residue in self.titrationGroups:
-                log.info('Residues that are update: {}'.format(residue))
+                log.info('Residues that are update: {}'.format(residue.name))
                 state = residue.state
                 try:
                     moves.extend(state._mc_moves["COOH"])

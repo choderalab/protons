@@ -1360,7 +1360,6 @@ def retrieve_epik_info(epik_mae: str) -> list:
 def epik_results_to_mol2(
     epik_mae: str,
     output_mol2: str,
-    patch_bonds: bool = True,
     keep_intermediate: bool = False,
 ):
     """
@@ -1371,7 +1370,6 @@ def epik_results_to_mol2(
     ----------
     epik_mae: location of the maestro file produced by Epik.
     output_mol2: location of the mol2 output file that is to be produced.
-    patch_bonds: Force integer order bond information in the mol2 file, can help with bond perception in OpenEye.
     keep_intermediate: Leave intermediate files after processing.
 
     Notes
@@ -1390,24 +1388,8 @@ def epik_results_to_mol2(
     tmpfiles: List[str] = [tmpmol2]
     schrodinger.run_structconvert(epik_mae, tmpmol2)
 
-    if patch_bonds:
-        tmpsd = "{}.sd".format(unique_filename)
-        tmpfiles.append(tmpsd)
-        schrodinger.run_structconvert(epik_mae, tmpsd)
-        bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
-
-        sd_bonds = get_sd_bonds(tmpsd)
-        fixed_mol2_contents = replace_mol2_bonds_and_atom_types(tmpmol2, sd_bonds)
-        with open(bondfixmol2, "w") as bondfixedfile:
-            bondfixedfile.write(fixed_mol2_contents)
-
-        tmpfiles.append(bondfixmol2)
-
-        # File to be used for unifying atom names between states.
-        intermediate_mol2 = bondfixmol2
-    else:
-        # File to be used for unifying atom names between states.
-        intermediate_mol2 = tmpmol2
+    # File to be used for unifying atom names between states.
+    intermediate_mol2 = tmpmol2
 
     ifs = oechem.oemolistream()
     ifs.open(intermediate_mol2)
@@ -1618,13 +1600,19 @@ def generate_protons_ffxml(
     ifs = oechem.oemolistream()
     ifs.open(inputmol2)
     log.info('Nr of tautomers for the input ligand: {}'.format(len(isomer_dicts)))
+    
+
     for isomer_index, oemolecule in enumerate(ifs.GetOEMols()):
         # generateForceFieldFromMolecules needs a list
         # Make new ffxml for each isomer
+        ofs = oechem.oemolostream(f"I{isomer_index:02d}.mol2")
 
         # Ensure that name is simple and has no space in it
-        oemolecule.SetTitle(f"ISOMER-{isomer_index}")
+        oemolecule.SetTitle(f"I{isomer_index:02d}")
         log.debug("ffxml generation for {}".format(isomer_index))
+        
+        oechem.OEWriteMol2File(ofs, oemolecule)
+
         ffxml = omtff.generateForceFieldFromMolecules(
             [oemolecule], normalize=False, omega_max_confs=omega_max_confs
         )
@@ -1710,17 +1698,17 @@ def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residu
         # generate hydrogen definitions for each tautomer state
         # this is used to generate an openMM system of the tautomer
         isomers[isomer_index]["hxml"] = generate_tautomer_hydrogen_definitions(
-            hydrogens, residue_name, isomer_index
+            hydrogens, isomer_index
         )
-
-
+        print(isomers[isomer_index]["hxml"])
         isomers[isomer_index]["mol-graph"] = G
         isomers[isomer_index]["atom_name_dict"] = atom_name_to_unique_atom_name
-        isomers[isomer_index]["bxml"] = create_bond_definitions(StringIO((etree.tostring(ffxml)).decode("utf-8")), pdb_file_path)
-        generate_tautomer_torsion_definitions(isomers, pdb_file_path, isomer_index)
+        bonds = create_bond_definitions(StringIO((etree.tostring(ffxml)).decode("utf-8")), isomer_index = isomer_index)
+        isomers[isomer_index]["bxml"] = bonds
+        generate_tautomer_torsion_definitions(isomers, pdb_file_path, isomer_index, residue_name)
 
 
-def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index):
+def generate_tautomer_hydrogen_definitions(hydrogens, isomer_index):
 
     """
     Creates a hxml file that is used to add hydrogens for a specific tautomer to the heavy-atom skeleton 
@@ -1729,15 +1717,13 @@ def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index
     ----------
     hydrogens: list of tuple
         Tuple contains two atom names: (hydrogen-atom-name, heavy-atom-atom-name)
-    residue_name : str
-        name of the residue to fill the Residues entry in the xml tree
     isomer_index : int
         
     """
 
     hydrogen_definitions_tree = etree.fromstring("<Residues/>")
     hydrogen_file_residue = etree.fromstring("<Residue/>")
-    hydrogen_file_residue.set("name", residue_name)
+    hydrogen_file_residue.set("name", f"I{isomer_index:02d}")
 
     for name, parent in hydrogens:
         h_xml = etree.fromstring("<H/>")
@@ -1745,12 +1731,11 @@ def generate_tautomer_hydrogen_definitions(hydrogens, residue_name, isomer_index
         h_xml.set("parent", parent)
         hydrogen_file_residue.append(h_xml)
     hydrogen_definitions_tree.append(hydrogen_file_residue)
-    log.info(hydrogen_definitions_tree)
     return hydrogen_definitions_tree
 
 
 def generate_tautomer_torsion_definitions(
-    isomers: dict, vacuum_file: str, isomer_index: int
+    isomers: dict, vacuum_file: str, isomer_index: int, residue_name : str
 ):
     """
     Creates torsion entries (proper and improper) in the isomer dictionary. It does this 
@@ -1782,28 +1767,45 @@ def generate_tautomer_torsion_definitions(
     plt.show()
     G = isomers[isomer_index]["mol-graph"]
     for n in G.nodes():
-        log.info(n)
+        pass
+        #log.info(n)
 
     for e in G.edges():
-        log.info(e)
+        pass
+        #log.info(e)
 
     log.info("Generate tautomer torsion definitions ...")
     ffxml = StringIO(etree.tostring(isomers[isomer_index]["ffxml"]).decode("utf-8"))
     hxml = StringIO(etree.tostring(isomers[isomer_index]["hxml"]).decode("utf-8"))
     bxml = StringIO(etree.tostring(isomers[isomer_index]["bxml"]).decode("utf-8"))
+
     app.Topology.loadBondDefinitions(bxml)
+    app.Modeller.loadHydrogenDefinitions(hxml)
 
     #log.debug(etree.tostring(isomers[isomer_index]["ffxml"], pretty_print=True).decode("utf-8"))
-    #log.debug(etree.tostring(isomers[isomer_index]["hxml"], pretty_print=True).decode("utf-8"))
-    #log.debug(etree.tostring(isomers[isomer_index]["bxml"], pretty_print=True).decode("utf-8"))
+    log.debug(etree.tostring(isomers[isomer_index]["hxml"], pretty_print=True).decode("utf-8"))
+    log.debug(etree.tostring(isomers[isomer_index]["bxml"], pretty_print=True).decode("utf-8"))
 
     forcefield = app.ForceField("amber10.xml", "gaff.xml", ffxml, "tip3p.xml")
-    pdb = app.PDBFile(vacuum_file)
-    app.Modeller.loadHydrogenDefinitions(hxml)
+
+    f = open(vacuum_file, 'r')
+    s = ''
+    log.info(residue_name)
+    for l in f:
+        s += l.replace(residue_name, f"I{isomer_index:02d}")
+
+    log.info(s)
+    pdb = app.PDBFile(StringIO(s))
+    
+    if int(pdb.topology.getNumResidues()) > 1:
+        raise RuntimeError('There are multiple residues defined in the pdb input file. Aborting.')
+
     modeller = app.Modeller(pdb.topology, pdb.positions)
+    
     to_delete = [
         atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"]
     ]
+
     modeller.delete(to_delete)
     modeller.addHydrogens()
     index_to_name = dict()
@@ -2035,6 +2037,7 @@ def create_hydrogen_definitions(
             h_xml.set("parent", parent)
             hydrogen_file_residue.append(h_xml)
         hydrogen_definitions_tree.append(hydrogen_file_residue)
+    
     # Write output
     xmlstring = etree.tostring(
         hydrogen_definitions_tree,
@@ -2042,14 +2045,16 @@ def create_hydrogen_definitions(
         pretty_print=True,
         xml_declaration=False,
     )
+    
     xmlstring = xmlstring.decode("utf-8")
     with open(outputfile, "w") as fstream:
         fstream.write(xmlstring)
-
+    print(xmlstring)
 
 def create_bond_definitions(
     inputfile: str,
-    pdb_file_path : str
+    isomer_index : int = 0,
+    residue_name : str = None
     ):
     """
     Generates bond definitions for a small molecule template to subsequently load 
@@ -2059,26 +2064,22 @@ def create_bond_definitions(
     Parameters
     ----------
     inputfile - a forcefield XML file defined using Gaff atom types
-    pdb_file_ath - used to extract the residue name
     """
 
     xmltree = etree.parse(
         inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True)
     )
-    
     # Output tree
     bond_definitions_tree = etree.fromstring("<Residues/>")
     bonds = set()
-    pdb = app.PDBFile(pdb_file_path)
-    residue_name = None
-    for r in pdb.topology.residues():
-        residue_name = r.name
 
     for residue in xmltree.xpath("Residues/Residue"):
         # Loop through all bonds
         bond_file_residue = etree.fromstring("<Residue/>")
-        bond_file_residue.set("name", residue_name)
-
+        if residue_name == None:
+            bond_file_residue.set("name", f"I{isomer_index:02d}")
+        else:
+            bond_file_residue.set("name", f"{residue_name}")
         for bond in residue.xpath("Bond"):
             atomname1 = bond.get("atomName1")
             atomname2 = bond.get("atomName2")
@@ -2139,7 +2140,6 @@ def prepare_calibration_systems(
     output_basename: str,
     ffxml: str = None,
     hxml: str = None,
-    bxml: str = None,
     delete_old_H: bool = False,
     minimize: bool = True,
     box_size: app.modeller.Vec3 = None,
@@ -2165,7 +2165,6 @@ def prepare_calibration_systems(
 
     # Load relevant template definitions for modeller, forcefield and topology
     log.info(hxml)
-    app.Topology.loadBondDefinitions(bxml)
 
     if hxml is not None:
         app.Modeller.loadHydrogenDefinitions(hxml)
@@ -2187,6 +2186,7 @@ def prepare_calibration_systems(
         raise ValueError(
             f"Unsupported file extension {vacuum_extension} for vacuum file. Currently supported: pdb, cif."
         )
+
     modeller = app.Modeller(pdb.topology, pdb.positions)
 
     # The system will likely have different hydrogen names.
@@ -2197,7 +2197,15 @@ def prepare_calibration_systems(
         ]
         modeller.delete(to_delete)
 
-    modeller.addHydrogens(forcefield=forcefield)
+    for a in modeller.topology.atoms():
+        print(a)
+
+    for b in modeller.topology.bonds():
+        print(b)
+
+
+    modeller.addHydrogens()
+
 
     if box_size == None:
         padding = 1.2 * nanometers
@@ -2393,9 +2401,10 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
 
     def _add_isomers(self):
         """
+        TAUTOMER VERSION OF THE METHOD
         Add all the isomer specific data to the xml template.
         """
-        log.debug("Add tautomer information ...")
+        #log.debug("Add tautomer information ...")
 
         protonsdata = etree.fromstring("<Protons/>")
         protonsdata.attrib["number_of_states"] = str(len(self._state_templates))
@@ -2448,9 +2457,9 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                 ##############################################
                 # atom entries
                 ##############################################
-                log.debug("ISOMER: {}".format(isomer_index))
+                #log.debug("ISOMER: {}".format(isomer_index))
                 isomer_str = str(isomer)
-                log.debug(isomer_str)
+                #log.debug(isomer_str)
                 isomer_xml = etree.fromstring(isomer_str)
 
                 # atom_types_dict for specific isomer
@@ -2497,7 +2506,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
 
                     tmp_atom_name_to_atom_type_inclusive_dummy_types[node] = atom_type
                     isomer_xml.append(etree.fromstring(e))
-                    log.debug(e)
+                    #log.debug(e)
 
                 atom_name_to_atom_type_inclusive_dummy_types[
                     isomer_index
@@ -2589,7 +2598,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                     e = bond_string.format(
                         node1=node1, node2=node2, bond_length=bond_length, k=k
                     )
-                    log.debug(e)
+                    #log.debug(e)
                     isomer_xml.append(etree.fromstring(e))
                     #e = bond_string.format(
                     #    node1=node2, node2=node1, bond_length=bond_length, k=k
@@ -2704,7 +2713,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                     e = angle_string.format(
                         node1=node1, node2=node2, node3=node3, angle=angle, k=k
                     )
-                    log.debug(e)
+                    #log.debug(e)
 
                     isomer_xml.append(etree.fromstring(e))
 
@@ -2724,7 +2733,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                         k=torsion_force["k"],
                     )
                     isomer_xml.append(etree.fromstring(e))
-                    log.debug(e)
+                    #log.debug(e)
 
                 protonsdata.append(isomer_xml)
             residue.append(protonsdata)
@@ -2897,7 +2906,6 @@ def prepare_mol2_for_parametrization(
     input_mol2: str,
     input_sdf: str,
     output_mol2: str,
-    patch_bonds: bool = True,
     keep_intermediate: bool = False,
 ):
     """
@@ -2919,21 +2927,8 @@ def prepare_mol2_for_parametrization(
     unique_filename = str(uuid.uuid4())
     tmpfiles: List[str] = []
 
-    if patch_bonds:
-
-        sd_bonds = get_sd_bonds(input_sdf)
-        fixed_mol2_contents = replace_mol2_bonds_and_atom_types(input_mol2, sd_bonds)
-
-        bondfixmol2 = "{}-bondfix.mol2".format(unique_filename)
-
-        with open(bondfixmol2, "w") as bondfixedfile:
-            bondfixedfile.write(fixed_mol2_contents)
-        tmpfiles.append(bondfixmol2)
-        # File to be used for unifying atom names between states.
-        intermediate_mol2 = bondfixmol2
-    else:
-        # File to be used for unifying atom names between states.
-        intermediate_mol2 = input_mol2
+    # File to be used for unifying atom names between states.
+    intermediate_mol2 = input_mol2
 
     ifs = oechem.oemolistream()
     ifs.open(intermediate_mol2)
@@ -3054,7 +3049,7 @@ def prepare_mol2_for_parametrization(
             raise ValueError("Found 0 hydrogens in graph, is there a bug?")
         h_count += extra_h_count
 
-    _mols_to_file(graphmols, output_mol2)
+    #_mols_to_file(graphmols, output_mol2)
     if not keep_intermediate:
         for fname in tmpfiles:
             os.remove(fname)

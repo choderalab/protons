@@ -1,0 +1,27 @@
+- chain: C
+  glycan_list:
+    C: [362]
+  grs: |
+    1 BGLC_1DET
+  patches:
+    1: {1DET: 1BC8}
+  residue_list: [362]
+  residues:
+    1: {ires: 1, linkage: null, linkage_patch: null, linked_chain: null, linked_ires: null, linked_resid: null, resid: 362, resname: BGLC}
+  root: 362
+  segid: CARA
+  type: glycolipid
+- chain: D
+  glycan_list:
+    D: [363]
+  grs: |
+    1 BGLC_1DET
+  patches:
+    1: {1DET: 1BC8}
+  residue_list: [363]
+  residues:
+    1: {ires: 1, linkage: null, linkage_patch: null, linked_chain: null, linked_ires: null, linked_resid: null, resid: 363, resname: BGLC}
+  root: 363
+  segid: CARB
+  type: glycolipid
+

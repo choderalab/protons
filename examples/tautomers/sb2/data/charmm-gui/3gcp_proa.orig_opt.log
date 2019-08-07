@@ -1,0 +1,43 @@
+Check global input consistency...
+Done.
+- Finished with read_parameters.
+  Reading topology file: /home/charmm-gui/local/GalaxyFill/data/topology_charmm22ph.in
+  Reading topology file: /home/charmm-gui/local/GalaxyFill/data/topology_charmm22ph_nt.in
+  Reading topology file: /home/charmm-gui/local/GalaxyFill/data/topology_charmm22ph_ct.in
+- Finished with read_topology_geo.
+  Reading topology file: /home/charmm-gui/local/GalaxyFill/data/topology_eng_charmm22ph.in
+  Num_ref_res =    77
+- Finished with read_topology_eng.
+- Rotamer setup
+  Reading rotamer library file  /home/charmm-gui/local/GalaxyFill/data/bbdep02.May.sortlib
+  Total number of rotamers in rot lib file      466829
+  Reading infile_chi_def file  /home/charmm-gui/local/GalaxyFill/data/def_chi.in
+  Random seed =     465170
+Task: local_optimize
+ - local_optimize_relax: no
+ - local_optimize_sidechain: no
+============================================================
+  Reading sequence from pdb file: 3gcp_proa.orig_init.pdb
+    There seems to be break in chain.    3 A GLN     4 A GLU  C-N bond length is     2.247
+    There seems to be break in chain.  184 A ALA   185 A THR  C-N bond length is     2.029
+  Reading pdb file: 3gcp_proa.orig_init.pdb
+- Add missing atoms activated.
+  Number of added heavy atoms =     0
+  Total number of added atoms =     0
+  n_unplaced =     0
+- Fix type "all" activated: All atoms except ULR/USC are fixed.
+- Energy: MM energy activated.
+- Add missing atoms activated.
+  Number of added heavy atoms =     0
+  Total number of added atoms =     0
+  n_unplaced =     0
+Before optimization, 3gcp_proa.orig_init.pdb ENERGY.0       5296.680
+Before optimization, 3gcp_proa.orig_init.pdb ENERGY.1       5296.680        0.000        0.000
+Before optimization, 3gcp_proa.orig_init.pdb ENERGY.2.0    495.336    209.101    352.337    150.182   4089.723      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000
+After  optimization, 3gcp_proa.orig_init.pdb ENERGY.0         -2.845
+After  optimization, 3gcp_proa.orig_init.pdb ENERGY.1         -2.845        0.000        0.000
+After  optimization, 3gcp_proa.orig_init.pdb ENERGY.2.0      7.492     41.700     57.306      7.140   -116.483      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000      0.000
+------------------------------------------------------------
+Total User Time =      9.430 sec
+           0 dy  0 hr  0 min  9.430 sec
+------------------------------------------------------------

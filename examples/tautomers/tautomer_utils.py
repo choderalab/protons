@@ -85,14 +85,17 @@ def setting_up_tautomer(settings, isomer_dictionary):
     
     # Begin processing
     # process into mol2
-    prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, patch_bonds=True, keep_intermediate=False)
+    log.info('Starting with mol2 preparation ...')
 
+    prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, keep_intermediate=False)
+    log.info('Finished with mol2 preparation ...')
     # parametrize
     generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, outputffxml=offxml, pH=pH, resname=resname.upper(), tautomers=True, pdb_file_path=tautomer_heavy_atoms)
     # create hydrogen definitions for the superset of all tautomers
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
-    # create bond definitions for the superset of all tautomers
-    bond_def = create_bond_definitions(offxml, tautomer_heavy_atoms)
+    # create heavy atom bond definitions for the superset of all tautomers
+    # -> that means that all isomers are fully defined with a hydrogen definition file (hxml)
+    bond_def = create_bond_definitions(offxml, residue_name = resname.upper())
     bond_def = StringIO(etree.tostring(bond_def).decode("utf-8"))
     from simtk.openmm.app import Topology
     Topology.loadBondDefinitions(bond_def)
@@ -102,11 +105,10 @@ def generate_calibration_system(settings):
     #define location of set up files
     resname = settings['ligand-resname']
     hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
-    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
     offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
     tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
     # prepare solvated system
-    prepare_calibration_systems(vacuum_file=tautomer_heavy_atoms, output_basename=settings['output']['dir'] + '/' + resname, ffxml=offxml, hxml=hydrogen_def, bxml=bond_def)
+    prepare_calibration_systems(vacuum_file=tautomer_heavy_atoms, output_basename=settings['output']['dir'] + '/' + resname, ffxml=offxml, hxml=hydrogen_def)
 
 def generate_protein_systems(settings):
     #define location of set up files

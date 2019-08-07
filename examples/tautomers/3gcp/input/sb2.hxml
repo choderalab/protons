@@ -1,0 +1,21 @@
+<Residues>
+  <Residue name="SB2">
+    <H name="H1c3" parent="C1"/>
+    <H name="H3c3" parent="C1"/>
+    <H name="H2c3" parent="C1"/>
+    <H name="H4ca" parent="C2"/>
+    <H name="H5ca" parent="C3"/>
+    <H name="H6ca" parent="C5"/>
+    <H name="H7ca" parent="C6"/>
+    <H name="H8ca" parent="C8"/>
+    <H name="H9ca" parent="C9"/>
+    <H name="H10ca" parent="C11"/>
+    <H name="H11ca" parent="C12"/>
+    <H name="H12na" parent="N2"/>
+    <H name="H13ca" parent="C16"/>
+    <H name="H14ca" parent="C17"/>
+    <H name="H15ca" parent="C19"/>
+    <H name="H16ca" parent="C20"/>
+    <H name="H17na" parent="N3"/>
+  </Residue>
+</Residues>
