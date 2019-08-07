@@ -56,7 +56,7 @@ min_fast = 200
 [simulation]
 dcd_filename = "sb2.dcd" 
 netCDF4 = "sb2.nc"
-total_update_attempts = 5000
+total_update_attempts = 500
 md_steps_between_updates = 100
 perturbations_per_ncmc_trial = 3
 propagations_per_ncmc_step = 1
@@ -76,4 +76,4 @@ frequency = 1
 
 
 [platform]
-driver='CPU'
+driver='CUDA'
