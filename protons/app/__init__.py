@@ -7,7 +7,6 @@ from simtk.openmm.app import *
 from .topology import Topology
 from .calibration import SAMSCalibrationEngine
 from .simulation import ConstantPHSimulation
-import analysis
 from .driver import (
     ForceFieldProtonDrive,
     AmberProtonDrive,
