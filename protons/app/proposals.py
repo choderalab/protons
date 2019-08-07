@@ -7,7 +7,7 @@ import random
 import numpy as np
 import math
 from simtk import unit, openmm
-from scipy.misc import comb
+from scipy.special import comb
 from scipy.special import logsumexp
 from typing import Dict, Tuple, Callable, List, Optional
 from lxml import etree
