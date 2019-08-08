@@ -90,7 +90,9 @@ def setting_up_tautomer(settings, isomer_dictionary):
     prepare_mol2_for_parametrization(input_mol2, input_sdf, dhydrogen_fix, keep_intermediate=False)
     log.info('Finished with mol2 preparation ...')
     # parametrize
+    log.info('Generate protons ffxml ...')
     generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, outputffxml=offxml, pH=pH, resname=resname.upper(), tautomers=True, pdb_file_path=tautomer_heavy_atoms)
+    log.info('Finished with protons ffxml ...')
     # create hydrogen definitions for the superset of all tautomers
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
     # create heavy atom bond definitions for the superset of all tautomers
