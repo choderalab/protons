@@ -1596,7 +1596,7 @@ def generate_protons_ffxml(
     log.debug("Parametrizing the isomers...")
     xmlparser = etree.XMLParser(remove_blank_text=True, remove_comments=True)
 
-    # Open the Epik output into OEMols
+    # Read the multiple tautomers in the mol2 file
     ifs = oechem.oemolistream()
     ifs.open(inputmol2)
     log.info('Nr of tautomers for the input ligand: {}'.format(len(isomer_dicts)))
@@ -1700,7 +1700,6 @@ def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residu
         isomers[isomer_index]["hxml"] = generate_tautomer_hydrogen_definitions(
             hydrogens, isomer_index
         )
-        print(isomers[isomer_index]["hxml"])
         isomers[isomer_index]["mol-graph"] = G
         isomers[isomer_index]["atom_name_dict"] = atom_name_to_unique_atom_name
         bonds = create_bond_definitions(StringIO((etree.tostring(ffxml)).decode("utf-8")), isomer_index = isomer_index)
@@ -2049,7 +2048,6 @@ def create_hydrogen_definitions(
     xmlstring = xmlstring.decode("utf-8")
     with open(outputfile, "w") as fstream:
         fstream.write(xmlstring)
-    print(xmlstring)
 
 def create_bond_definitions(
     inputfile: str,
@@ -2197,14 +2195,13 @@ def prepare_calibration_systems(
         ]
         modeller.delete(to_delete)
 
+    log.debug('The superstructure of the tautomers ...')
+    modeller.addHydrogens()
     for a in modeller.topology.atoms():
-        print(a)
+        log.debug(a)
 
     for b in modeller.topology.bonds():
-        print(b)
-
-
-    modeller.addHydrogens()
+        log.debug(b)
 
 
     if box_size == None:
@@ -2216,6 +2213,12 @@ def prepare_calibration_systems(
         modeller.topology,
         modeller.positions,
         open(f"{output_basename}-vacuum.cif", "w"),
+    )
+
+    app.PDBFile.writeFile(
+        modeller.topology,
+        modeller.positions,
+        open(f"{output_basename}-vacuum.pdb", "w"),
     )
 
     modeller.addSolvent(
@@ -2590,7 +2593,6 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                                 break
 
                     if found_parameter is False:
-                        print("CAREFUL! parameter not found")
                         raise NotImplementedError("This case is not covered so far.")
 
                     # this seems strange but bonds are added both ways

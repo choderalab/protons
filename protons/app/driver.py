@@ -4170,7 +4170,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         pressure: Optional[unit.Quantity] = None,
         perturbations_per_trial: int = 0,
         propagations_per_step: int = 1,
-        sampling_method: SamplingMethod = SamplingMethod.MCMC,
+        sampling_method: SamplingMethod = SamplingMethod.MCMC
     ):
         """
         Initialize a Monte Carlo titration driver for simulation of protonation states and tautomers.
@@ -4214,6 +4214,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             force = self.system.getForce(force_index)
             if force.__class__.__name__ in force_classes_to_update:
                 self.forces_to_update.append(force)
+        self.initial_printing:int = 0
+        self.update_printing:bool = False
 
     def _cache_force(self, titration_group_index, titration_state_index):
         """
@@ -4258,14 +4260,10 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         # the openMM indices and their order are known it is possible to
         # map the ffxml indices to the openMM indices - atom_indices are generated in
         # _add_xml_titration_groups()
-        ffxml_indices_to_openMM_indices = dict(
-            zip(list(range(len(atom_indices))), atom_indices)
-        )
+        ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
 
         for atom_name in parameters["nonbonded"]:
-            idx = ffxml_indices_to_openMM_indices[
-                parameters["nonbonded"][atom_name]["ffxml_index"]
-            ]
+            idx = ffxml_indices_to_openMM_indices[parameters["nonbonded"][atom_name]["ffxml_index"]]
             openMM_indices_to_atom_name[idx] = atom_name
             atom_name_to_openMM_indice[atom_name] = idx
 
@@ -4286,11 +4284,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
                 for atom_index in atom_indices:
                     atom_name = openMM_indices_to_atom_name[atom_index]
-                    log.info(f"Caching atom parameters for Idx:{atom_index} Name:{atom_name}")
-                    current_parameters = {
-                        key: value
-                        for (key, value) in parameters["nonbonded"][atom_name].items()
-                    }
+                    log.debug(f"Caching atom parameters for Idx:{atom_index} Name:{atom_name}")
+                    current_parameters = {key: value for (key, value) in parameters["nonbonded"][atom_name].items()}
                     current_parameters["name"] = atom_name
                     f_params[force_index]["atoms"][atom_index] = current_parameters
 
@@ -4303,7 +4298,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     # test if this bond is a ligand bond
                     if not all(x in atom_indices for x in [a1, a2]):
                         continue
-                    log.info(bond_index)
                     atom_name1 = openMM_indices_to_atom_name[a1]
                     atom_name2 = openMM_indices_to_atom_name[a2]
                     log.info(f"Caching bond parameters for Idx:{bond_index} Name1:{atom_name1} Name2:{atom_name2}")
@@ -4315,13 +4309,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                             tuple(sorted([atom_name1, atom_name2]))
                         ].items()
                     }
-                    current_parameters["atom1_idx"], current_parameters["atom2_idx"] = (
-                        a1,
-                        a2,
-                    )
-                    current_parameters["atom_name1"], current_parameters[
-                        "atom_name2"
-                    ] = (atom_name1, atom_name2)
+                    current_parameters["atom1_idx"], current_parameters["atom2_idx"] = (a1,a2,)
+                    current_parameters["atom_name1"], current_parameters["atom_name2"] = (atom_name1, atom_name2)
                     f_params[force_index]["bonds"][bond_index] = current_parameters
 
             elif force_classname == "HarmonicAngleForce":
@@ -4345,12 +4334,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                             tuple(sorted([atom_name1, atom_name2, atom_name3]))
                         ].items()
                     }
-                    current_parameters["atom1_idx"], current_parameters[
-                        "atom2_idx"
-                    ], current_parameters["atom3_idx"] = (a1, a2, a3)
-                    current_parameters["atom_name1"], current_parameters[
-                        "atom_name2"
-                    ], current_parameters["atom_name3"] = (
+                    current_parameters["atom1_idx"], current_parameters["atom2_idx"], current_parameters["atom3_idx"] = (a1, a2, a3)
+                    current_parameters["atom_name1"], current_parameters["atom_name2"], current_parameters["atom_name3"] = (
                         atom_name1,
                         atom_name2,
                         atom_name3,
@@ -4381,9 +4366,10 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     log.info("Caching torsion parameters for Idx:{} Name1:{} Name2:{} Name3:{} Name4:{}".format(torsion_idx, 
                     parameters["torsion"][torsion]["name1"], parameters["torsion"][torsion]["name2"], parameters["torsion"][torsion]["name3"], parameters["torsion"][torsion]["name4"]))
 
-                    f_params[force_index]["torsion"].append(idx)
-                    new_torsion_idx.append(idx)
-                    f_params[force_index]["ks"][idx] = parameters["torsion"][torsion]["k"]
+                    # TODO: here is something shady going on
+                    f_params[force_index]["torsion"].append(torsion_idx)
+                    new_torsion_idx.append(torsion_idx)
+                    f_params[force_index]["ks"][torsion_idx] = parameters["torsion"][torsion]["k"]
 
             else:
                 raise Exception(
@@ -4448,8 +4434,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             titration_state_index
         ].forces = f_params
 
-        # add newly generated torsions to the titration_group object
-        titration_group.torsion_idx = new_torsion_idx
 
     def _update_forces(
         self,
@@ -4457,7 +4441,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         final_titration_state_index,
         initial_titration_state_index=None,
         fractional_titration_state=1.0,
-        final=False,
     ):
         """
         tautomer version of _update_forces()
@@ -4497,20 +4480,16 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             initial_titration_state_index = final_titration_state_index
 
         # Retrieve cached force parameters fro this titration state.
-        cache_initial_forces = self.titrationGroups[titration_group_index][
-            initial_titration_state_index
-        ].forces
-        cache_final_forces = self.titrationGroups[titration_group_index][
-            final_titration_state_index
-        ].forces
+        cache_initial_forces = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
+        cache_final_forces = self.titrationGroups[titration_group_index][final_titration_state_index].forces
 
-        atom_name_by_atom_index = self.titrationGroups[
-            titration_group_index
-        ].atom_indices_to_atom_name
+        atom_name_by_atom_index = self.titrationGroups[titration_group_index].atom_indices_to_atom_name
 
-        torsion_idx =self.titrationGroups[
-            titration_group_index
-        ].torsion_idx
+        for force_index, force in enumerate(self.forces_to_update):
+            # Get name of force class.
+            force_classname = force.__class__.__name__
+            if force_classname == "PeriodicTorsionForce":
+                torsion_idx = cache_initial_forces[force_index]["torsion"] + cache_final_forces[force_index]["torsion"] 
  
 
         # Modify parameters
@@ -4531,42 +4510,38 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         or atom_initial["sigma"] != atom_final["sigma"]
                         or atom_initial["epsilon"] != atom_final["epsilon"]
                     ):
+                        if self.initial_printing < 0:
+                            log.debug('??????????????')
+                            log.debug(atom_name_by_atom_index[atom_idx])
+                            log.debug(atom_initial)
+                            log.debug(atom_final)
 
                         # charge is scaled seperat from sigma and epsiolon to enable shielding of charges if charge increases
                         for parameter_name in ["sigma", "epsilon"]:
                             scale = fractional_titration_state
                             # if charges increase epsilon and sigma have to increase faster to shield charges
-                            if float(atom_final["charge"]) > float(
-                                atom_initial["charge"]
-                            ):
+                            if float(atom_final["charge"]) > float(atom_initial["charge"]):
                                 scale = min(scale * 2.0, 1.0)
-                            atom[parameter_name] = (1.0 - scale) * atom_initial[
-                                parameter_name
-                            ] + scale * atom_final[parameter_name]
+                            atom[parameter_name] = (1.0 - scale) * atom_initial[parameter_name] + scale * atom_final[parameter_name]
 
                         for parameter_name in ["charge"]:
                             # if charges are decresed they should decrease faster to avoid unshielded charges
                             scale = fractional_titration_state
-                            if float(atom_final["charge"]) < float(
-                                atom_initial["charge"]
-                            ):
+                            if float(atom_final["charge"]) < float(atom_initial["charge"]):
                                 scale = min(scale * 2.0, 1.0)
-                            atom[parameter_name] = (1.0 - scale) * atom_initial[
-                                parameter_name
-                            ] + scale * atom_final[parameter_name]
+                            atom[parameter_name] = (1.0 - scale) * atom_initial[parameter_name] + scale * atom_final[parameter_name]
                     else:
                         # keep initial parameters since nothing changed
                         for parameter_name in ["sigma", "epsilon", "charge"]:
                             atom[parameter_name] = atom_initial[parameter_name]
+                    
+                    #if self.update_printing:
+                    #    log.debug(atom_name_by_atom_index[atom_idx])
+                    #    log.debug(atom)
+    
+                    force.setParticleParameters(atom_idx, atom["charge"], atom["sigma"], atom["epsilon"])
 
-                    force.setParticleParameters(
-                        atom_idx, atom["charge"], atom["sigma"], atom["epsilon"]
-                    )
-
-                    for (exc_initial, exc_final) in zip(
-                        cache_initial_forces[force_index]["exceptions"],
-                        cache_final_forces[force_index]["exceptions"],
-                    ):
+                    for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]["exceptions"], cache_final_forces[force_index]["exceptions"]):
 
                         exc = {
                             key: exc_initial[key]
@@ -4604,16 +4579,21 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     }
 
                     # update bonds that changed parameters
-                    if (
-                        bond_initial["length"] != bond_final["length"]
-                        or bond_initial["k"] != bond_final["k"]
-                    ):
+                    if (bond_initial["length"] != bond_final["length"]or bond_initial["k"] != bond_final["k"]):
+
+                        if self.initial_printing < 0:
+                            log.debug('############')
+                            log.debug(bond_initial)
+                            log.debug(bond_final)
+
                         scale = fractional_titration_state
                         for parameter_name in ["length", "k"]:
                             # generate new, interpolated parameters
-                            bond[parameter_name] = (1.0 - scale) * float(
-                                bond_initial[parameter_name]
-                            ) + scale * float(bond_final[parameter_name])
+                            bond[parameter_name] = (1.0 - scale) * float(bond_initial[parameter_name]) + scale * float(bond_final[parameter_name])
+                        
+                        #if self.update_printing:
+                        #    log.debug(bond)
+                    
                     else:
                         for parameter_name in ["length", "k"]:
                             # use old parameters
@@ -4667,17 +4647,14 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     )
 
             elif force_classname == "PeriodicTorsionForce":
-
+                if self.initial_printing < 0:
+                    log.debug(torsion_idx)
                 for idx in torsion_idx:
-                    a1, a2, a3, a4, periodicity, phase, k = map(
-                        strip_in_unit_system, force.getTorsionParameters(idx)
-                    )
+                    a1, a2, a3, a4, periodicity, phase, k = map(strip_in_unit_system, force.getTorsionParameters(idx))
                     # test if this torsion is a ligand torsion
-                    if not all(
-                        x in atom_name_by_atom_index.keys() for x in [a1, a2, a3, a4]
-                    ):
+                    if not all(x in atom_name_by_atom_index.keys() for x in [a1, a2, a3, a4]):
                         continue
-
+                    
                     new_k = None
                     # initial state torsions are scaled down
                     if idx in cache_initial_forces[force_index]["torsion"]:
@@ -4685,33 +4662,38 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                             scaling = 1.0 - (2 * fractional_titration_state)
                         else:
                             scaling = 0.0
-                        new_k = scaling * float(
-                            cache_initial_forces[force_index]["ks"][idx]
-                        )
+                        new_k = scaling * float(cache_initial_forces[force_index]["ks"][idx])
 
-                    # final state torsions are scaled up
-                    if idx in cache_final_forces[force_index]["torsion"]:
+                    
+                    elif idx in cache_final_forces[force_index]["torsion"]:
                         if fractional_titration_state <= 0.5:
                             scaling = 0.0
                         else:
                             scaling = 2 * (fractional_titration_state - 0.5)
-                        new_k = scaling * float(
-                            cache_final_forces[force_index]["ks"][idx]
-                        )
+                        new_k = scaling * float(cache_final_forces[force_index]["ks"][idx])
 
                     # other state torsions are kept with k = 0.0
-                    if (
-                        idx not in cache_initial_forces[force_index]["torsion"]
-                        and idx not in cache_final_forces[force_index]["torsion"]
-                    ):
+                    else:
                         new_k = 0.0
-                    force.setTorsionParameters(
-                        idx, a1, a2, a3, a4, periodicity, phase, new_k
-                    )
+
+                    if self.update_printing:
+                        log.debug('@@@@@@@@@@@@@@@@@@@@@@@@@')
+                        log.debug(idx)
+                        log.debug("a1:{} a2:{} a3:{} a4:{} per:{} phase:{} k:{:2.6f}".format(
+                            atom_name_by_atom_index[a1], 
+                            atom_name_by_atom_index[a2], 
+                            atom_name_by_atom_index[a3], 
+                            atom_name_by_atom_index[a4],
+                            periodicity, phase, new_k))
+    
+
+                    force.setTorsionParameters(idx, a1, a2, a3, a4, periodicity, phase, new_k)
             else:
                 raise Exception(
                     "Don't know how to update force type '%s'" % force_classname
                 )
+
+        self.initial_printing += 1
 
 
 class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
