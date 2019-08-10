@@ -3013,7 +3013,7 @@ class NCMCProtonDrive(_BaseDrive):
             ncmc_integrator.getGlobalVariableByName("protocol_work")
             * self.beta_unitless
         )
-
+        log.info('Work: {}'.format(ncmc_integrator.getGlobalVariableByName("protocol_work")))
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:
             self.titrationGroups[titration_group_index].state = final_titration_states[
@@ -4214,8 +4214,14 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             force = self.system.getForce(force_index)
             if force.__class__.__name__ in force_classes_to_update:
                 self.forces_to_update.append(force)
+        
+        
         self.initial_printing:int = 0
         self.update_printing:bool = False
+        self.torsion_printing:bool = False
+        self.atom_printing:bool = False
+        self.bond_printing:bool = False
+        self.angle_printing:bool = False
 
     def _cache_force(self, titration_group_index, titration_state_index):
         """
@@ -4246,9 +4252,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         log.info("#########################")
 
         titration_group = self.titrationGroups[titration_group_index]
-        titration_state = self.titrationGroups[titration_group_index][
-            titration_state_index
-        ]
+        titration_state = self.titrationGroups[titration_group_index][titration_state_index]
 
         parameters = titration_state.lookup_for_parameters
 
@@ -4261,6 +4265,12 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         # map the ffxml indices to the openMM indices - atom_indices are generated in
         # _add_xml_titration_groups()
         ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
+
+        # ?????????????????????
+        #bonds = defaultdict(list)
+        #for state in self.titrationGroups[titration_group_index]:
+        #    bonds[state] = list(self.titrationGroups[titration_group_index][titration_state_index].lookup_for_parameters['bonded'].keys())
+        # ?????????????????????
 
         for atom_name in parameters["nonbonded"]:
             idx = ffxml_indices_to_openMM_indices[parameters["nonbonded"][atom_name]["ffxml_index"]]
@@ -4298,6 +4308,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     # test if this bond is a ligand bond
                     if not all(x in atom_indices for x in [a1, a2]):
                         continue
+
                     atom_name1 = openMM_indices_to_atom_name[a1]
                     atom_name2 = openMM_indices_to_atom_name[a2]
                     log.info(f"Caching bond parameters for Idx:{bond_index} Name1:{atom_name1} Name2:{atom_name2}")
@@ -4489,7 +4500,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             # Get name of force class.
             force_classname = force.__class__.__name__
             if force_classname == "PeriodicTorsionForce":
-                torsion_idx = cache_initial_forces[force_index]["torsion"] + cache_final_forces[force_index]["torsion"] 
+                torsion_idx = sorted(cache_initial_forces[force_index]["torsion"] + cache_final_forces[force_index]["torsion"]) 
  
 
         # Modify parameters
@@ -4535,9 +4546,9 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         for parameter_name in ["sigma", "epsilon", "charge"]:
                             atom[parameter_name] = atom_initial[parameter_name]
                     
-                    #if self.update_printing:
-                    #    log.debug(atom_name_by_atom_index[atom_idx])
-                    #    log.debug(atom)
+                    if self.atom_printing:
+                        log.debug(atom_name_by_atom_index[atom_idx])
+                        log.debug(atom)
     
                     force.setParticleParameters(atom_idx, atom["charge"], atom["sigma"], atom["epsilon"])
 
@@ -4676,7 +4687,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     else:
                         new_k = 0.0
 
-                    if self.update_printing:
+                    if self.torsion_printing:
                         log.debug('@@@@@@@@@@@@@@@@@@@@@@@@@')
                         log.debug(idx)
                         log.debug("a1:{} a2:{} a3:{} a4:{} per:{} phase:{} k:{:2.6f}".format(
@@ -4756,6 +4767,10 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             if not isinstance(residues_by_index, list):
                 raise TypeError("residues_by_index needs to be a list")
 
+
+        ffxml_residues = self._parse_ffxml_files(ffxml_files)
+
+
         super(TautomerForceFieldProtonDrive, self).__init__(
             temperature,
             topology,
@@ -4766,7 +4781,6 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             sampling_method=sampling_method,
         )
 
-        ffxml_residues = self._parse_ffxml_files(ffxml_files)
 
         # Collect all of the residues that need to be treated
         all_residues = list(topology.residues())
@@ -4893,9 +4907,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
 
             template = forcefield._templates[residue.name]
             # Find the system indices of the template atoms for this residue
-            matches = app.forcefield._matchResidue(
-                residue, template, bonded_to_atoms_list
-            )
+            matches = app.forcefield._matchResidue(residue, template, bonded_to_atoms_list)
 
             if matches is None:
                 raise ValueError("Could not match residue atoms to template.")
@@ -4911,10 +4923,7 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
             if residue.name in available_pkas:
                 residue_pka = available_pkas[residue.name]
 
-            if (
-                len(protons_block.findall("State/Condition")) > 0
-                and residue_pka is None
-            ):
+            if (len(protons_block.findall("State/Condition")) > 0 and residue_pka is None):
                 pka_data = DataFrame(
                     columns=[
                         "pH",
@@ -4964,26 +4973,21 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
                 pka_data=pka_data,
             )
 
+
             # Define titration states.
             log.info("- Parameters for the different states as defined in ffxml")
-
             ################################################
             ################################################
-
             for state_block in protons_block.xpath("State"):
                 # Extract charges for this titration state.
                 # is defined in elementary_charge units
                 state_index = int(state_block.get("index"))
 
-                relative_energy = (
-                    float(state_block.get("g_k")) * unit.kilocalories_per_mole
-                )
+                relative_energy = (float(state_block.get("g_k")) * unit.kilocalories_per_mole)
                 # Get proton count.
                 proton_count = int(state_block.get("proton_count"))
                 # Read in parameters for state from ffxl and generate lookup dicts
-                parameters_for_current_state = self._generating_parameter_for_current_state(
-                    state_block
-                )
+                parameters_for_current_state = self._generating_parameter_for_current_state(state_block)
 
                 # Create titration state.
                 self._add_titration_state(
@@ -4992,11 +4996,12 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
                     parameters_for_current_state,
                     proton_count,
                 )
-                # self._look_at_torsions(group_index, state_index)
                 self._cache_force(group_index, state_index)
 
             # Set default state for this group.
             self.set_titration_state(group_index, 0)
+
+
 
     def _add_titration_state(
         self,
@@ -5039,12 +5044,8 @@ class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
         for atom in parameters_for_current_state["nonbonded"]:
             charges.append(parameters_for_current_state["nonbonded"][atom]["charge"])
 
-        if len(charges) != len(
-            self.titrationGroups[titration_group_index].atom_indices
-        ):
-            raise Exception(
-                "The number of charges must match the number (and order) of atoms in the defined titration group."
-            )
+        if len(charges) != len(self.titrationGroups[titration_group_index].atom_indices):
+            raise Exception( "The number of charges must match the number (and order) of atoms in the defined titration group.")
 
         state = _TautomerState.from_lists(
             relative_energy * self.beta,
