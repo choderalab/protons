@@ -4297,6 +4297,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     log.debug(f"Caching atom parameters for Idx:{atom_index} Name:{atom_name}")
                     current_parameters = {key: value for (key, value) in parameters["nonbonded"][atom_name].items()}
                     current_parameters["name"] = atom_name
+                    log.debug(current_parameters)
                     f_params[force_index]["atoms"][atom_index] = current_parameters
 
             elif force_classname == "HarmonicBondForce":
@@ -4322,6 +4323,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     }
                     current_parameters["atom1_idx"], current_parameters["atom2_idx"] = (a1,a2,)
                     current_parameters["atom_name1"], current_parameters["atom_name2"] = (atom_name1, atom_name2)
+                    log.debug(current_parameters)
                     f_params[force_index]["bonds"][bond_index] = current_parameters
 
             elif force_classname == "HarmonicAngleForce":
@@ -4352,6 +4354,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         atom_name3,
                     )
                     # update current parameters with particular titration state
+                    log.debug(current_parameters)
                     f_params[force_index]["angles"][angle_index] = current_parameters
 
             # set torsion parameters
