@@ -2361,7 +2361,7 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
                     # if it is not present in isomer 0 dummy parameters have to be added
                     if isomer_index == 0 and node not in self.atom_types_dict[0]:
                         self.dummy_atom_type_strings.append(dummy_atom_string.format(atom_type=atom_type, element="H", mass=1.008))
-                        self.dummy_atom_nb_strings.append(dummy_nb_string.format(atom_type=atom_type, charge=0.0, epsilon=0, sigma=0))
+                        self.dummy_atom_nb_strings.append(dummy_nb_string.format(atom_type=atom_type, charge=0.1, epsilon=0.1, sigma=0.1))
         
                     atom_name_to_atom_type[node] = atom_type
                     isomer_xml.append(etree.fromstring(e))

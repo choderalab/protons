@@ -2675,12 +2675,8 @@ class NCMCProtonDrive(_BaseDrive):
             initial_titration_state_index = final_titration_state_index
 
         # Retrieve cached force parameters fro this titration state.
-        cache_initial = self.titrationGroups[titration_group_index][
-            initial_titration_state_index
-        ].forces
-        cache_final = self.titrationGroups[titration_group_index][
-            final_titration_state_index
-        ].forces
+        cache_initial = self.titrationGroups[titration_group_index][initial_titration_state_index].forces
+        cache_final = self.titrationGroups[titration_group_index][final_titration_state_index].forces
 
         # Modify charges and exceptions.
         for force_index, force in enumerate(self.forces_to_update):
@@ -2826,9 +2822,7 @@ class NCMCProtonDrive(_BaseDrive):
                     raise Exception(
                         "Don't know how to update force type '%s'" % force_classname
                     )
-                f_params[force_index]["atoms"][-1]["charge"] = charge_by_atom_index[
-                    atom_index
-                ]
+                f_params[force_index]["atoms"][-1]["charge"] = charge_by_atom_index[atom_index]
                 f_params[force_index]["atoms"][-1]["atom_index"] = atom_index
 
             # Update exceptions
@@ -2972,9 +2966,7 @@ class NCMCProtonDrive(_BaseDrive):
                 self._update_forces(
                     titration_group_index,
                     final_titration_states[titration_group_index],
-                    initial_titration_state_index=initial_titration_states[
-                        titration_group_index
-                    ],
+                    initial_titration_state_index=initial_titration_states[titration_group_index],
                     fractional_titration_state=titration_lambda,
                 )
 
@@ -2986,17 +2978,17 @@ class NCMCProtonDrive(_BaseDrive):
                     set_vector_indices=False,
                 )
 
-            for force_index, force in enumerate(self.forces_to_update):
+            for force in self.forces_to_update:
                 force.updateParametersInContext(self.context)
 
             # propagation
             ncmc_integrator.step(self.propagations_per_step)
 
             # logging of statistics
+            #log.debug('NCMC Work: {}'.format(ncmc_integrator.getGlobalVariableByName("protocol_work")))
             if isinstance(ncmc_integrator, GHMCIntegrator):
                 self.ncmc_stats_per_step[step] = (
-                    ncmc_integrator.getGlobalVariableByName("protocol_work")
-                    * self.beta_unitless,
+                    ncmc_integrator.getGlobalVariableByName("protocol_work")* self.beta_unitless,
                     ncmc_integrator.getGlobalVariableByName("naccept"),
                     ncmc_integrator.getGlobalVariableByName("ntrials"),
                 )
@@ -3013,17 +3005,15 @@ class NCMCProtonDrive(_BaseDrive):
             ncmc_integrator.getGlobalVariableByName("protocol_work")
             * self.beta_unitless
         )
-        log.info('Work: {}'.format(ncmc_integrator.getGlobalVariableByName("protocol_work")))
         # Setting the titratable group to the final state so that the appropriate weight can be extracted
         for titration_group_index in titration_group_indices:
-            self.titrationGroups[titration_group_index].state = final_titration_states[
-                titration_group_index
-            ]
+            self.titrationGroups[titration_group_index].state = final_titration_states[titration_group_index]
 
         # Extracting the final state's weight.
         g_final = self.calculate_gk()
         # Extract the internally calculated work from the integrator
         work += g_final - g_initial
+        log.info('Work: {}'.format(work))
 
         # Turn center of mass remover on again
         if self.cm_remover is not None:
@@ -3042,19 +3032,14 @@ class NCMCProtonDrive(_BaseDrive):
             elif self.calibration_state.approach is SAMSApproach.ONESITE:
                 # override internal g_k and then calculate totals
                 free_energies = self.calibration_state.free_energies.tolist()
-                self.titrationGroups[
-                    self.calibration_state.group_index
-                ].g_k_values = free_energies
+                self.titrationGroups[self.calibration_state.group_index].g_k_values = free_energies
 
         return self.sum_of_gk()
 
     def sum_of_gk(self):
         """Calculate the total weight of the current titration state."""
         g_total = 0
-        for (
-            titration_group_index,
-            (titration_group, titration_state_index),
-        ) in enumerate(zip(self.titrationGroups, self.titrationStates)):
+        for (titration_group_index,(titration_group, titration_state_index)) in enumerate(zip(self.titrationGroups, self.titrationStates)):
             titration_state = titration_group[titration_state_index]
             g_total += titration_state.g_k
         return g_total
@@ -3164,6 +3149,7 @@ class NCMCProtonDrive(_BaseDrive):
                 attempt_data.accepted = accept_move
 
                 if accept_move:
+                    log.debug('Move is accepted.')
                     self._set_state_accept_attempt(
                         attempt_data.initial_states,
                         attempt_data.proposed_states,
@@ -3172,6 +3158,7 @@ class NCMCProtonDrive(_BaseDrive):
                     )
 
                 else:
+                    log.debug('Move is NOT accepted.')
                     self._set_state_reject_attempt(
                         attempt_data.initial_states,
                         attempt_data.proposed_states,
@@ -4209,6 +4196,8 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             "HarmonicAngleForce",
             "PeriodicTorsionForce",
         ]
+        force_classes_to_update = ["NonbondedForce"]
+
         self.forces_to_update = list()
         for force_index in range(self.system.getNumForces()):
             force = self.system.getForce(force_index)
@@ -4266,12 +4255,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         # _add_xml_titration_groups()
         ffxml_indices_to_openMM_indices = dict(zip(list(range(len(atom_indices))), atom_indices))
 
-        # ?????????????????????
-        #bonds = defaultdict(list)
-        #for state in self.titrationGroups[titration_group_index]:
-        #    bonds[state] = list(self.titrationGroups[titration_group_index][titration_state_index].lookup_for_parameters['bonded'].keys())
-        # ?????????????????????
-
         for atom_name in parameters["nonbonded"]:
             idx = ffxml_indices_to_openMM_indices[parameters["nonbonded"][atom_name]["ffxml_index"]]
             openMM_indices_to_atom_name[idx] = atom_name
@@ -4290,14 +4273,15 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
 
             # cache atom parameters for current state
             if force_classname == "NonbondedForce":
+                
                 f_params.append(dict(atoms=defaultdict()))
-
                 for atom_index in atom_indices:
                     atom_name = openMM_indices_to_atom_name[atom_index]
                     log.debug(f"Caching atom parameters for Idx:{atom_index} Name:{atom_name}")
                     current_parameters = {key: value for (key, value) in parameters["nonbonded"][atom_name].items()}
                     current_parameters["name"] = atom_name
                     log.debug(current_parameters)
+                    log.debug(force.getParticleParameters(atom_index))
                     f_params[force_index]["atoms"][atom_index] = current_parameters
 
             elif force_classname == "HarmonicBondForce":
@@ -4391,35 +4375,28 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 )
 
             # Update exceptions
-            # TODO: Handle Custom forces.
             if force_classname == "NonbondedForce":
+                log.debug('EXCEPTIONS!!!!')
+
+                log.debug(titration_group.exception_indices)
+
+                log.debug('EXCEPTIONS!!!!')
+
                 f_params[force_index]["exceptions"] = list()
-                for e_ix, exception_index in enumerate(
-                    titration_group.exception_indices
-                ):
+                for e_ix, exception_index in enumerate(titration_group.exception_indices):
                     [particle1, particle2, chargeProd, sigma, epsilon] = map(
                         strip_in_unit_system,
                         force.getExceptionParameters(exception_index),
                     )
 
-                    # NOTE: mw: not sure if this does what it is intendent to do
                     atom_name1 = openMM_indices_to_atom_name[particle1]
                     atom_name2 = openMM_indices_to_atom_name[particle2]
-                    parameters["nonbonded"][atom_name1]["charge"]
+                    log.debug(atom_name1)
+                    log.debug(atom_name2)
 
                     # Deal with exceptions between atoms outside of titratable residue
-                    try:
-                        charge_1 = parameters["nonbonded"][atom_name1]["charge"]
-                    except KeyError:
-                        charge_1 = strip_in_unit_system(
-                            force.getParticleParameters(particle1)[0]
-                        )
-                    try:
-                        charge_2 = parameters["nonbonded"][atom_name2]["charge"]
-                    except KeyError:
-                        charge_2 = strip_in_unit_system(
-                            force.getParticleParameters(particle2)[0]
-                        )
+                    charge_1 = strip_in_unit_system(force.getParticleParameters(particle1)[0])
+                    charge_2 = strip_in_unit_system(force.getParticleParameters(particle2)[0])
 
                     chargeProd = self.coulomb14scale * charge_1 * charge_2
 
@@ -4440,8 +4417,9 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                         "chargeProd",
                         "sigma",
                         "epsilon",
-                    ):
+                            ):
                         exc_dict[i] = locals()[i]
+                    log.debug(exc_dict)
                     f_params[force_index]["exceptions"].append(exc_dict)
 
         self.titrationGroups[titration_group_index][
@@ -4449,6 +4427,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
         ].forces = f_params
 
 
+        
     def _update_forces(
         self,
         titration_group_index,
@@ -4517,64 +4496,64 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                     atom_initial = cache_initial_forces[force_index]["atoms"][atom_idx]
                     atom_final = cache_final_forces[force_index]["atoms"][atom_idx]
                     atom = {}
-
+                    #if atom_name_by_atom_index[atom_idx] == 'H17na':
+                    #    continue
                     # only change parameters if needed, otherwise keep old parameters
                     if (
                         atom_initial["charge"] != atom_final["charge"]
                         or atom_initial["sigma"] != atom_final["sigma"]
                         or atom_initial["epsilon"] != atom_final["epsilon"]
                     ):
-                        if self.initial_printing < 0:
+                        if self.atom_printing:
                             log.debug('??????????????')
                             log.debug(atom_name_by_atom_index[atom_idx])
                             log.debug(atom_initial)
                             log.debug(atom_final)
 
-                        # charge is scaled seperat from sigma and epsiolon to enable shielding of charges if charge increases
-                        for parameter_name in ["sigma", "epsilon"]:
+                        #charge
+                        for parameter_name in ["sigma", "epsilon", "charge"]:
                             scale = fractional_titration_state
-                            # if charges increase epsilon and sigma have to increase faster to shield charges
-                            if float(atom_final["charge"]) > float(atom_initial["charge"]):
-                                scale = min(scale * 2.0, 1.0)
                             atom[parameter_name] = (1.0 - scale) * atom_initial[parameter_name] + scale * atom_final[parameter_name]
 
-                        for parameter_name in ["charge"]:
-                            # if charges are decresed they should decrease faster to avoid unshielded charges
-                            scale = fractional_titration_state
-                            if float(atom_final["charge"]) < float(atom_initial["charge"]):
-                                scale = min(scale * 2.0, 1.0)
-                            atom[parameter_name] = (1.0 - scale) * atom_initial[parameter_name] + scale * atom_final[parameter_name]
+                        if self.atom_printing:
+                            log.debug(atom_name_by_atom_index[atom_idx])
+                            log.debug('Current atom parameters')
+                            log.debug(force.getParticleParameters(atom_idx))
+                            log.debug(atom)
                     else:
                         # keep initial parameters since nothing changed
                         for parameter_name in ["sigma", "epsilon", "charge"]:
                             atom[parameter_name] = atom_initial[parameter_name]
                     
-                    if self.atom_printing:
-                        log.debug(atom_name_by_atom_index[atom_idx])
-                        log.debug(atom)
     
                     force.setParticleParameters(atom_idx, atom["charge"], atom["sigma"], atom["epsilon"])
+                    if self.atom_printing:
+                        if (
+                            atom_initial["charge"] != atom_final["charge"]
+                            or atom_initial["sigma"] != atom_final["sigma"]
+                            or atom_initial["epsilon"] != atom_final["epsilon"]
+                        ):
+    
+                            log.debug('New atom parameters')
+                            log.debug(force.getParticleParameters(atom_idx))
 
-                    for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]["exceptions"], cache_final_forces[force_index]["exceptions"]):
+                for (exc_initial, exc_final) in zip(cache_initial_forces[force_index]["exceptions"], cache_final_forces[force_index]["exceptions"]):
 
-                        exc = {
-                            key: exc_initial[key]
-                            for key in ["exception_index", "particle1", "particle2"]
-                        }
-                        for parameter_name in ["chargeProd", "sigma", "epsilon"]:
-                            exc[parameter_name] = (
-                                (1.0 - fractional_titration_state)
-                                * exc_initial[parameter_name]
-                                + fractional_titration_state * exc_final[parameter_name]
-                            )
-                        force.setExceptionParameters(
-                            exc["exception_index"],
-                            exc["particle1"],
-                            exc["particle2"],
-                            exc["chargeProd"],
-                            exc["sigma"],
-                            exc["epsilon"],
-                        )
+                    exc = {
+                        key: exc_initial[key]
+                        for key in ["exception_index", "particle1", "particle2"]
+                    }
+                    for parameter_name in ["chargeProd", "sigma", "epsilon"]:
+                        exc[parameter_name] = (1.0 - fractional_titration_state) * exc_initial[parameter_name] + fractional_titration_state * exc_final[parameter_name]
+                        
+                    force.setExceptionParameters(
+                        exc["exception_index"],
+                        exc["particle1"],
+                        exc["particle2"],
+                        exc["chargeProd"],
+                        exc["sigma"],
+                        exc["epsilon"],
+                    )
 
             elif force_classname == "HarmonicBondForce":
                 # ensure that there are equal number of chached bonded parameters present
@@ -4663,6 +4642,7 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
             elif force_classname == "PeriodicTorsionForce":
                 if self.initial_printing < 0:
                     log.debug(torsion_idx)
+                
                 for idx in torsion_idx:
                     a1, a2, a3, a4, periodicity, phase, k = map(strip_in_unit_system, force.getTorsionParameters(idx))
                     # test if this torsion is a ligand torsion
@@ -4706,8 +4686,6 @@ class TautomerNCMCProtonDrive(NCMCProtonDrive):
                 raise Exception(
                     "Don't know how to update force type '%s'" % force_classname
                 )
-
-        self.initial_printing += 1
 
 
 class TautomerForceFieldProtonDrive(TautomerNCMCProtonDrive):
