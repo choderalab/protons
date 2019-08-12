@@ -46,7 +46,7 @@ def run_simulation(simulation, driver, pdb_object, settings):
         # Perform a few COOH updates in between
         driver.update("COOH", nattempts=3)
         pos = simulation.context.getState(getPositions=True).getPositions() 
-        mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
+        #mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
         log.info(driver.calibration_state.approach)
         if driver.calibration_state is not None:
             if driver.calibration_state.approach is SAMSApproach.ONESITE:
@@ -212,7 +212,6 @@ def generate_simulation_and_driver(settings):
         for force in system.getForces():
             if isinstance(force, mm.NonbondedForce):
                 force.setUseSwitchingFunction(True)
-
                 force.setSwitchingDistance(switching_distance)
 
         # TODO disable in implicit solvent
@@ -227,6 +226,7 @@ def generate_simulation_and_driver(settings):
             rigidWater=True,
         )
 
+   
     # Integrator options
     integrator_opts = settings["integrator"]
     timestep = integrator_opts["timestep_fs"] * unit.femtosecond
@@ -351,7 +351,8 @@ def generate_simulation_and_driver(settings):
             pools = {"calibration": [calibration_titration_group_index]}
             # TODO the pooling feature could eventually be exposed in the json
             driver.define_pools(pools)
-    properties = None
+    
+            properties = None
     # Create simulation object
     # If calibration is required, this class will automatically deal with it.
     simulation = app.ConstantPHSimulation(
