@@ -6,7 +6,7 @@ ligand-resname = "sb2"
 
 [input]
 _comment = "Simulation requires an mmCIF file and a ffxml residue. Please specify the input directory under dir."
-dir = "/home/mwieder/Work/Projects/protons-dev/protons/examples/tautomers/3gcp/input/"
+dir = "/home/mwieder/Work/Projects/protons-dev/protons/examples/tautomers/sb2/input/"
 structure = "sb2-water.cif"
 
 [output]
@@ -41,8 +41,8 @@ collision_rate_per_ps = 1.0
 
 [preprocessing]
 minimization_tolerance_kjmol = 1.0e-5
-minimization_max_iterations = 300
-num_thermalization_steps = 1000
+minimization_max_iterations = 30
+num_thermalization_steps = 10
 
 [SAMS]
 beta = 0.6
@@ -56,9 +56,9 @@ min_fast = 200
 [simulation]
 dcd_filename = "sb2.dcd" 
 netCDF4 = "sb2.nc"
-total_update_attempts = 500
+total_update_attempts = 50
 md_steps_between_updates = 100
-perturbations_per_ncmc_trial = 3
+perturbations_per_ncmc_trial = 1
 propagations_per_ncmc_step = 1
 timeout_sec = 21599
 perturbations_per_trial = 1000
@@ -68,7 +68,7 @@ metadata = 1
 [reporters.titration]
 frequency = 1
 [reporters.coordinates]
-frequency = 100
+frequency = 1
 [reporters.sams]
 frequency = 1
 [reporters.ncmc]
@@ -76,4 +76,4 @@ frequency = 1
 
 
 [platform]
-driver='CUDA'
+driver='CPU'
