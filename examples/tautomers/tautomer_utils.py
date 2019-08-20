@@ -58,6 +58,47 @@ def run_simulation(simulation, driver, pdb_object, settings):
             simulation.update(1)
 
 
+def run_calibration(simulation, driver, pdb_object, settings):
+    """Main simulation loop."""
+
+    # Add reporters
+    ncfile = netCDF4.Dataset(settings['simulation']['netCDF4'], "w")
+    if settings['simulation']['dcd_filename']:
+        dcd_output_name = settings['simulation']['dcd_filename']
+        simulation.reporters.append(app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True))
+
+    if int(settings['reporters']['metadata']) == 1:    
+        simulation.update_reporters.append(app.MetadataReporter(ncfile))
+    if settings['reporters']['titration']:
+        simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
+    if settings['reporters']['sams']:
+        simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
+    if settings['reporters']['ncmc']:
+        simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
+    total_iterations = int(settings['simulation']["total_update_attempts"])
+    md_steps_between_updates = int(settings['simulation']["md_steps_between_updates"])
+    perturbations_per_trial = int(settings['simulation']["perturbations_per_trial"])
+
+    # MAIN SIMULATION LOOP STARTS HERE
+    pos = simulation.context.getState(getPositions=True).getPositions() 
+    mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/start.pdb', 'w'))
+
+    for i in trange(total_iterations, desc="NCMC attempts"):
+        if i == 50:
+            log.info("Simulation seems to be working. Suppressing debugging info.")
+            #log.setLevel(log.INFO)
+        simulation.step(md_steps_between_updates)
+        # Perform a few COOH updates in between
+        driver.update("COOH", nattempts=3)
+        pos = simulation.context.getState(getPositions=True).getPositions() 
+        #mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
+        log.info(driver.calibration_state.approach)
+        simulation.update(1)
+
+
+
+
+
 def setting_up_tautomer(settings, isomer_dictionary):
 
     pH = settings['pH']
