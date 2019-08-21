@@ -1,4 +1,4 @@
-from protons.app.ligands import create_bond_definitions, prepare_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
+from protons.app.ligands import create_bond_definitions, prepare_and_save_calibration_systems, create_hydrogen_definitions, generate_protons_ffxml, prepare_mol2_for_parametrization
 from protons.scripts.utilities import *
 from protons.app.protein import prepare_protein, prepare_protein_simulation_systems
 from protons.app import TautomerForceFieldProtonDrive, TautomerNCMCProtonDrive
@@ -49,55 +49,14 @@ def run_simulation(simulation, driver, pdb_object, settings):
         #mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
         log.info(driver.calibration_state.approach)
         if driver.calibration_state is not None:
-            if driver.calibration_state.approach is SAMSApproach.ONESITE:
-                simulation.update(1, pool="calibration")
-            else:
-                simulation.update(1)
+            #if driver.calibration_state.approach is SAMSApproach.ONESITE:
+            #    simulation.update(1, pool="calibration")
+            #else:
+            #    simulation.update(1)
+            simulation.update(1)
             simulation.adapt()
         else:
             simulation.update(1)
-
-
-def run_calibration(simulation, driver, pdb_object, settings):
-    """Main simulation loop."""
-
-    # Add reporters
-    ncfile = netCDF4.Dataset(settings['simulation']['netCDF4'], "w")
-    if settings['simulation']['dcd_filename']:
-        dcd_output_name = settings['simulation']['dcd_filename']
-        simulation.reporters.append(app.DCDReporter(dcd_output_name, 100, enforcePeriodicBox=True))
-
-    if int(settings['reporters']['metadata']) == 1:    
-        simulation.update_reporters.append(app.MetadataReporter(ncfile))
-    if settings['reporters']['titration']:
-        simulation.update_reporters.append(app.TitrationReporter(ncfile, 1))
-    if settings['reporters']['sams']:
-        simulation.calibration_reporters.append(app.SAMSReporter(ncfile, 1))
-    if settings['reporters']['ncmc']:
-        simulation.update_reporters.append(app.NCMCReporter(ncfile, 1, 0))
-    total_iterations = int(settings['simulation']["total_update_attempts"])
-    md_steps_between_updates = int(settings['simulation']["md_steps_between_updates"])
-    perturbations_per_trial = int(settings['simulation']["perturbations_per_trial"])
-
-    # MAIN SIMULATION LOOP STARTS HERE
-    pos = simulation.context.getState(getPositions=True).getPositions() 
-    mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/start.pdb', 'w'))
-
-    for i in trange(total_iterations, desc="NCMC attempts"):
-        if i == 50:
-            log.info("Simulation seems to be working. Suppressing debugging info.")
-            #log.setLevel(log.INFO)
-        simulation.step(md_steps_between_updates)
-        # Perform a few COOH updates in between
-        driver.update("COOH", nattempts=3)
-        pos = simulation.context.getState(getPositions=True).getPositions() 
-        #mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
-        log.info(driver.calibration_state.approach)
-        simulation.update(1)
-
-
-
-
 
 def setting_up_tautomer(settings, isomer_dictionary):
 
@@ -151,7 +110,7 @@ def generate_calibration_system(settings):
     offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
     tautomer_heavy_atoms = settings['input']['dir'] + '/' + resname + '.pdb'
     # prepare solvated system
-    prepare_calibration_systems(vacuum_file=tautomer_heavy_atoms, output_basename=settings['output']['dir'] + '/' + resname, ffxml=offxml, hxml=hydrogen_def)
+    prepare_and_save_calibration_systems(vacuum_file=tautomer_heavy_atoms, output_basename=settings['output']['dir'] + '/' + resname, ffxml=offxml, hxml=hydrogen_def)
 
 def generate_protein_systems(settings):
     #define location of set up files
@@ -255,7 +214,6 @@ def generate_simulation_and_driver(settings):
                 force.setUseSwitchingFunction(True)
                 force.setSwitchingDistance(switching_distance)
 
-        # TODO disable in implicit solvent
         # NPT simulation
         system.addForce(mm.MonteCarloBarostat(pressure, temperature, barostatInterval))
     else:
@@ -342,9 +300,9 @@ def generate_simulation_and_driver(settings):
     else:
         platform = mm.Platform.getPlatformByName("CPU")
         properties = {}
+    
     # Set up calibration mode
     # SAMS settings
-
     if "SAMS" in settings:
         sams = settings["SAMS"]
 
@@ -392,8 +350,8 @@ def generate_simulation_and_driver(settings):
             pools = {"calibration": [calibration_titration_group_index]}
             # TODO the pooling feature could eventually be exposed in the json
             driver.define_pools(pools)
-    
             properties = None
+
     # Create simulation object
     # If calibration is required, this class will automatically deal with it.
     simulation = app.ConstantPHSimulation(

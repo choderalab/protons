@@ -2012,7 +2012,7 @@ def extract_residue(inputfile: str, outputfile: str, resname: str):
     input_traj.save(outputfile)
 
 
-def prepare_calibration_systems(
+def prepare_and_save_calibration_systems(
     vacuum_file: str,
     output_basename: str,
     ffxml: str = None,
