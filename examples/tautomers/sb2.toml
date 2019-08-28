@@ -1,8 +1,6 @@
 
 _comment = "This script handles the calibration run for 3gcp."
 ligand-resname = "sb2"
-[reference_free_energies]
-
 
 [input]
 _comment = "Simulation requires an mmCIF file and a ffxml residue. Please specify the input directory under dir."
@@ -47,7 +45,7 @@ num_thermalization_steps = 10
 [SAMS]
 beta = 0.6
 flatness_criterion = 0.1
-sites = "one"
+sites = "multi"
 update_rule = "binary"
 min_burn = 200
 min_slow = 200
