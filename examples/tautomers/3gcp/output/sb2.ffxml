@@ -110,7 +110,7 @@
   </HarmonicBondForce>
   <HarmonicAngleForce>
     <Angle type1="dH17na" type2="nd" type3="cc" angle="2.19038821125" k="391.204"/>
-    <Angle type1="dH17na" type2="nd" type3="cd" angle="2.19038821125" k="391.204"/>
+    <Angle type1="cd" type2="nd" type3="dH17na" angle="2.19038821125" k="391.204"/>
   </HarmonicAngleForce>
   <PeriodicTorsionForce>
     <Proper type1="ca" type2="ca" type3="cc" type4="na" periodicity1="2" phase1="3.141592653589793" k1="2.9288"/>
@@ -136,6 +136,6 @@
     <Improper type1="cc" type2="ca" type3="cd" type4="nc" periodicity1="2" phase1="3.141592653589793" k1="4.6024"/>
   </PeriodicTorsionForce>
   <NonbondedForce coulomb14scale="0.833333333333" lj14scale="0.5">
-    <Atom type="dH17na" sigma="0" epsilon="0" charge="0.0"/>
+    <Atom type="dH17na" sigma="0.0" epsilon="0.0" charge="0.0"/>
   </NonbondedForce>
 </ForceField>

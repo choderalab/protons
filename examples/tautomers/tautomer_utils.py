@@ -49,10 +49,10 @@ def run_simulation(simulation, driver, pdb_object, settings):
         #mm.app.PDBFile.writeFile(pdb_object.topology, pos, open(settings['output']['dir'] + '/tmp/mcmc_'+str(i)+'.pdb', 'w'))
         log.info(driver.calibration_state.approach)
         if driver.calibration_state is not None:
-            #if driver.calibration_state.approach is SAMSApproach.ONESITE:
-            #    simulation.update(1, pool="calibration")
-            #else:
-            #    simulation.update(1)
+            if driver.calibration_state.approach is SAMSApproach.ONESITE:
+               simulation.update(1, pool="calibration")
+            else:
+               simulation.update(1)
             simulation.update(1)
             simulation.adapt()
         else:
@@ -75,8 +75,10 @@ def setting_up_tautomer(settings, isomer_dictionary):
     input_sdf = settings['input']['dir'] + '/' + resname + '_tautomer_set.sdf'
     
     #define location of set up files
-    hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
+    hydrogen_def = settings['output']['dir'] + '/' + resname + '.hxml'
+    bond_def = settings['output']['dir'] + '/' + resname + '.bxml'
     offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
+
 
     # Debugging/intermediate files
     dhydrogen_fix = settings['input']['dir'] + '/' + resname + '_hydrogen_fixed.mol2'  
@@ -91,14 +93,13 @@ def setting_up_tautomer(settings, isomer_dictionary):
     log.info('Finished with mol2 preparation ...')
     # parametrize
     log.info('Generate protons ffxml ...')
-    generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, outputffxml=offxml, pH=pH, resname=resname.upper(), tautomers=True, pdb_file_path=tautomer_heavy_atoms)
+    generate_protons_ffxml(inputmol2=dhydrogen_fix, isomer_dicts=isomer_dictionary, output_dir=ofolder, pH=pH, resname=resname, tautomers=True, pdb_file_path=tautomer_heavy_atoms)
     log.info('Finished with protons ffxml ...')
     # create hydrogen definitions for the superset of all tautomers
     create_hydrogen_definitions(offxml, hydrogen_def, tautomers=True)
     # create heavy atom bond definitions for the superset of all tautomers
     # -> that means that all isomers are fully defined with a hydrogen definition file (hxml)
-    bond_def = create_bond_definitions(offxml, residue_name = resname.upper())
-    bond_def = StringIO(etree.tostring(bond_def).decode("utf-8"))
+    create_bond_definitions(offxml, bond_def, residue_name=resname.upper())
     from simtk.openmm.app import Topology
     Topology.loadBondDefinitions(bond_def)
 
@@ -118,14 +119,15 @@ def generate_protein_systems(settings):
     log.info('Prepare protein ligand simulations system.')
     resname = settings['ligand-resname']
     pdb_name = settings['protein-name']
-    hydrogen_def = settings['input']['dir'] + '/' + resname + '.hxml'
-    bond_def = settings['input']['dir'] + '/' + resname + '.bxml'
-    offxml = settings['output']['dir'] + '/' + resname + '.ffxml'
-    protein_tautomer_system_raw = settings['input']['dir'] + '/' + pdb_name + '.pdb'
-    protein_tautomer_system = settings['input']['dir'] + '/' + pdb_name + '_prepared.pdb'
+    hydrogen_def = settings['output']['dir'] + f"/{resname}.hxml"
+    bond_def = settings['output']['dir'] + f"/{resname}.bxml"
+    offxml = settings['output']['dir'] + f"/{resname}.ffxml"
+    protein_tautomer_system_raw = settings['input']['dir'] + f"/{pdb_name}.pdb"
+    protein_tautomer_system = settings['input']['dir'] + f"/{pdb_name}_prepared.pdb"
     # prepare solvated system
     log.info('Preprocess the protein ligand structure.')
-    prepare_protein(protein_tautomer_system_raw, protein_tautomer_system)
+    #prepare_protein(protein_tautomer_system_raw, protein_tautomer_system)
+    print(hydrogen_def)
     prepare_protein_simulation_systems(protein_name=pdb_name, protein_ligand=protein_tautomer_system, ligand_resname=resname, output_basename=settings['output']['dir'], ffxml=offxml, hxml=hydrogen_def, bxml=bond_def)
 
 

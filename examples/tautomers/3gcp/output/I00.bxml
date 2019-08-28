@@ -1,0 +1,34 @@
+<Residues>
+  <Residue name="I00">
+    <Bond from="C16" to="C17"/>
+    <Bond from="C7" to="C13"/>
+    <Bond from="C16" to="C21"/>
+    <Bond from="C8" to="C9"/>
+    <Bond from="C13" to="N3"/>
+    <Bond from="C20" to="C21"/>
+    <Bond from="C4" to="C5"/>
+    <Bond from="C10" to="C15"/>
+    <Bond from="C14" to="C21"/>
+    <Bond from="C18" to="C19"/>
+    <Bond from="O1" to="S1"/>
+    <Bond from="C10" to="C11"/>
+    <Bond from="N1" to="C8"/>
+    <Bond from="N2" to="C13"/>
+    <Bond from="N2" to="C15"/>
+    <Bond from="C17" to="C18"/>
+    <Bond from="C1" to="S1"/>
+    <Bond from="C18" to="F1"/>
+    <Bond from="C9" to="C10"/>
+    <Bond from="C3" to="C4"/>
+    <Bond from="S1" to="C4"/>
+    <Bond from="C2" to="C7"/>
+    <Bond from="C19" to="C20"/>
+    <Bond from="C14" to="C15"/>
+    <Bond from="C2" to="C3"/>
+    <Bond from="C11" to="C12"/>
+    <Bond from="N3" to="C14"/>
+    <Bond from="N1" to="C12"/>
+    <Bond from="C6" to="C7"/>
+    <Bond from="C5" to="C6"/>
+  </Residue>
+</Residues>
