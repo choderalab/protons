@@ -281,12 +281,12 @@ class _TitratableForceFieldCompiler(object):
 
         # list of all xml files containing relevant parameters that may be used to construct template,
         self._xml_parameter_trees = [
-            etree.parse(
-                gaff_xml, etree.XMLParser(remove_blank_text=True, remove_comments=True)
-            )
-        ]
+            etree.parse(gaff_xml, etree.XMLParser(remove_blank_text=True, remove_comments=True))
+                                    ]
+       
         for state in self._input_state_data:
-            self._xml_parameter_trees.append(state["ffxml"])
+            ffxml = etree.parse(state["ffxml"], etree.XMLParser(remove_blank_text=True, remove_comments=True))
+            self._xml_parameter_trees.append(ffxml)
 
         # Compile all information into the output structure
         self._make_output_tree()
@@ -1543,7 +1543,7 @@ def _visualise_graphs(graph):
 def generate_protons_ffxml(
     inputmol2: str,
     isomer_dicts: list,
-    outputffxml: str,
+    output_dir: str,
     pH: float,
     resname: str = "LIG",
     omega_max_confs: int = 200,
@@ -1567,12 +1567,7 @@ def generate_protons_ffxml(
         The pH that these states are valid for.
     omega_max_confs : the max number of conformers that will be used to generate partial charges
         Hint: set to -1 for dense conformer sampling. Can help with AM1-BCC convergence but is much slower.
-
-    Other Parameters
-    ----------------
-    resname : str, optional (default : "LIG")
-        Residue name in output files.
-    
+   
 
     TODO
     ----
@@ -1617,31 +1612,39 @@ def generate_protons_ffxml(
         ffxml = omtff.generateForceFieldFromMolecules(
             [oemolecule], normalize=False, omega_max_confs=omega_max_confs
         )
-        log.debug(ffxml)
 
-        isomers[isomer_index]["ffxml"] = etree.fromstring(ffxml, parser=xmlparser)
+        log.debug(ffxml)       
+        with open(f"{output_dir}/I{isomer_index:02d}.ffxml", "w") as fstream:
+            fstream.write(ffxml)
+
+        isomers[isomer_index]["ffxml"] = f"{output_dir}/I{isomer_index:02d}.ffxml"
         isomers[isomer_index]["pH"] = pH
         if tautomers:
             # set some additional parameters
-            _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residue_name=resname)
+            _register_tautomers(isomers, output_dir, isomer_index, oemolecule, pdb_file_path, residue_name=resname.upper())
 
     ifs.close()
     if not tautomers:
-        compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname)
+        compiler = _TitratableForceFieldCompiler(isomers, residue_name=resname.upper())
     else:
-        compiler = _TautomerForceFieldCompiler(isomers, residue_name=resname)
+        compiler = _TautomerForceFieldCompiler(isomers, residue_name=resname.upper())
+    outputffxml = f"{output_dir}/{resname}.ffxml" 
     _write_ffxml(compiler, outputffxml)
-    log.debug("Done!  Your result is located here: {}".format(outputffxml))
+    log.debug(f"Done!  Your result is located here: {outputffxml}")
 
     return outputffxml
 
 
-def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residue_name):
+def _register_tautomers(isomers, output_dir, isomer_index, oemolecule, pdb_file_path, residue_name):
     
-    ffxml = isomers[isomer_index]["ffxml"]
+    ffxml = etree.parse(
+        isomers[isomer_index]["ffxml"], etree.XMLParser(remove_blank_text=True, remove_comments=True)
+    )
+
     name_type_mapping = {}
     name_charge_mapping = {}
     atom_index_mapping = {}
+   
     for residue in ffxml.xpath("Residues/Residue"):
         for idx, atom in enumerate(residue.xpath("Atom")):
             name_type_mapping[atom.get("name")] = atom.get("type")
@@ -1696,10 +1699,18 @@ def _register_tautomers(isomers, isomer_index, oemolecule, pdb_file_path, residu
 
         # generate hydrogen definitions for each tautomer state
         # this is used to generate an openMM system of the tautomer
-        isomers[isomer_index]["hxml"] = generate_tautomer_hydrogen_definitions(hydrogens, isomer_index)
+        hxml = etree.tostring(generate_tautomer_hydrogen_definitions(hydrogens, isomer_index)).decode("utf-8")
+        print(hxml)
+        with open(f"{output_dir}/I{isomer_index:02d}.hxml", "w") as fstream:
+            fstream.write(hxml)
+
+        create_bond_definitions(isomers[isomer_index]["ffxml"], f"{output_dir}/I{isomer_index:02d}.bxml")
+
+
+        isomers[isomer_index]["hxml"] = f"{output_dir}/I{isomer_index:02d}.hxml"
         isomers[isomer_index]["mol-graph"] = G
         isomers[isomer_index]["atom_name_dict"] = atom_name_to_unique_atom_name
-        isomers[isomer_index]["bxml"] = create_bond_definitions(StringIO((etree.tostring(ffxml)).decode("utf-8")), isomer_index = isomer_index)
+        isomers[isomer_index]["bxml"] = f"{output_dir}/I{isomer_index:02d}.bxml"
         generate_tautomer_torsion_definitions(isomers, pdb_file_path, isomer_index, residue_name)
 
 
@@ -1762,16 +1773,13 @@ def generate_tautomer_torsion_definitions(
     plt.show()
 
     log.info("Generate tautomer torsion definitions ...")
-    ffxml = StringIO(etree.tostring(isomers[isomer_index]["ffxml"]).decode("utf-8"))
-    hxml = StringIO(etree.tostring(isomers[isomer_index]["hxml"]).decode("utf-8"))
-    bxml = StringIO(etree.tostring(isomers[isomer_index]["bxml"]).decode("utf-8"))
+    ffxml = (isomers[isomer_index]["ffxml"])
+    hxml = (isomers[isomer_index]["hxml"])
+    bxml = (isomers[isomer_index]["bxml"])
+
 
     app.Topology.loadBondDefinitions(bxml)
     app.Modeller.loadHydrogenDefinitions(hxml)
-
-    #log.debug(etree.tostring(isomers[isomer_index]["ffxml"], pretty_print=True).decode("utf-8"))
-    #log.debug(etree.tostring(isomers[isomer_index]["hxml"], pretty_print=True).decode("utf-8"))
-    #log.debug(etree.tostring(isomers[isomer_index]["bxml"], pretty_print=True).decode("utf-8"))
 
     forcefield = app.ForceField("amber10.xml", "gaff.xml", ffxml, "tip3p.xml")
 
@@ -1858,35 +1866,30 @@ def _find_hydrogen_types_for_tautomers(
 
 
 def create_hydrogen_definitions(
-    inputfile: str, outputfile: str, gaff: str = gaff_default, tautomers: bool = False
+    ffxmlfile:str, outputfile:str, gaff:str=gaff_default, tautomers:bool=False
 ):
     """
     Generates hydrogen definitions for a small molecule residue template.
 
     Parameters
     ----------
-    inputfile - a forcefield XML file defined using Gaff atom types
+    ffxml - a forcefield XML file defined using Gaff atom types
     outputfile - Name for the XML output file
     gaff - optional.
         The location of your gaff.xml file. By default uses the one included with protons.
     """
 
-    gafftree = etree.parse(
-        gaff, etree.XMLParser(remove_blank_text=True, remove_comments=True)
-    )
-    xmltree = etree.parse(
-        inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True)
-    )
-    
+    gafftree = etree.parse(gaff, etree.XMLParser(remove_blank_text=True, remove_comments=True))   
+    ffxml = etree.parse(ffxmlfile, etree.XMLParser(remove_blank_text=True, remove_comments=True))
     # Output tree
     hydrogen_definitions_tree = etree.fromstring("<Residues/>")
     
     if tautomers is not True:
         hydrogen_types = _find_hydrogen_types(gafftree)
     else:
-        hydrogen_types = _find_hydrogen_types_for_tautomers(gafftree, xmltree)
+        hydrogen_types = _find_hydrogen_types_for_tautomers(gafftree, ffxml)
     
-    for residue in xmltree.xpath("Residues/Residue"):
+    for residue in ffxml.xpath("Residues/Residue"):
         hydrogen_file_residue = etree.fromstring("<Residue/>")
         hydrogen_file_residue.set("name", residue.get("name"))
         # enumerate hydrogens in this list
@@ -1929,9 +1932,10 @@ def create_hydrogen_definitions(
         fstream.write(xmlstring)
 
 def create_bond_definitions(
-    inputfile: str,
-    isomer_index : int = 0,
-    residue_name : str = None
+    ffxml:str,
+    outputfile:str,
+    isomer_index:int = 0,
+    residue_name:str = None
     ):
     """
     Generates bond definitions for a small molecule template to subsequently load 
@@ -1943,14 +1947,16 @@ def create_bond_definitions(
     inputfile - a forcefield XML file defined using Gaff atom types
     """
 
-    xmltree = etree.parse(
-        inputfile, etree.XMLParser(remove_blank_text=True, remove_comments=True)
-    )
-    # Output tree
+
     bond_definitions_tree = etree.fromstring("<Residues/>")
     bonds = set()
 
-    for residue in xmltree.xpath("Residues/Residue"):
+    ffxml = etree.parse(
+        ffxml, etree.XMLParser(remove_blank_text=True, remove_comments=True)
+    )
+
+
+    for residue in ffxml.xpath("Residues/Residue"):
         # Loop through all bonds
         bond_file_residue = etree.fromstring("<Residue/>")
         if residue_name == None:
@@ -1971,7 +1977,17 @@ def create_bond_definitions(
             bond_file_residue.append(b_xml)
         bond_definitions_tree.append(bond_file_residue)
 
-    return bond_definitions_tree
+    # Write output
+    xmlstring = etree.tostring(
+        bond_definitions_tree,
+        encoding="utf-8",
+        pretty_print=True,
+        xml_declaration=False,
+    )
+    
+    xmlstring = xmlstring.decode("utf-8")
+    with open(outputfile, "w") as fstream:
+        fstream.write(xmlstring)
 
 
 def _find_hydrogen_types(gafftree: lxml.etree.ElementTree) -> set:
@@ -2154,13 +2170,8 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
         Store all contents of a compiled ffxml file of all isomers, and add dummies for all missing hydrogens.
         """
 
-        # Obtain information about all the atoms
-        #self._complete_atom_registry()
-        # Obtain information about all the bonds
-        #self._complete_bond_registry()
         # Register the states
         self._complete_state_registry()
-
         # Set the initial state of the template that is read by OpenMM
         self._initialize_forcefield_template()
         # Add isomer specific information
@@ -2318,7 +2329,6 @@ class _TautomerForceFieldCompiler(_TitratableForceFieldCompiler):
         # also dummy types are generated
 
         
-
         for residue in self.ffxml.xpath("/ForceField/Residues/Residue"):
             for isomer_index, isomer in enumerate(self._state_templates):
                 

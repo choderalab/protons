@@ -33,7 +33,6 @@ def prepare_protein_simulation_systems(
     ffxml: str = None,
     hxml: str = None,
     bxml: str = None,
-    delete_old_H: bool = True,
     minimize: bool = True,
     box_size: app.modeller.Vec3 = None,
 ):
@@ -49,16 +48,14 @@ def prepare_protein_simulation_systems(
         optional for CDEHKY amino acids, required for ligands.
     hxml - the hydrogen definition xml file,
         optional for CDEHKY amino acids, required for ligands.
-    delete_old_H - delete old hydrogen atoms and add in new ones.
-        Typically necessary for ligands, where hydrogen names will have changed during parameterization to match up
-        different protonation states.
     minimize - perform an energy minimization on the system. Recommended.
     box_size - Vec3 of box vectors specified as in ``simtk.openmm.app.modeller.addSolvent``. 
     """
 
     # Load relevant template definitions for modeller, forcefield and topology
-    if hxml is not None:
-        app.Modeller.loadHydrogenDefinitions(hxml)
+    app.Modeller.loadHydrogenDefinitions(hxml)
+    app.Topology.loadBondDefinitions(bxml)
+
     if ffxml is not None:
         forcefield = app.ForceField(
             "amber10-constph.xml", "gaff.xml", ffxml, "tip3p.xml", "ions_tip3p.xml"
@@ -78,19 +75,16 @@ def prepare_protein_simulation_systems(
             f"Unsupported file extension {extension} for vacuum file. Currently supported: pdb, cif."
         )
     modeller = app.Modeller(pdb.topology, pdb.positions)
-
     log.info(pdb.topology)
 
     # The system will likely have different hydrogen names.
     # In this case its easiest to just delete and re-add with the right names based on hydrogen files
-    if delete_old_H:
-        log.info('Deleting hydrogens for ligand.')
-        to_delete = [
-            atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"] and str(atom.residue.name).upper() == str(ligand_resname).upper()
-        ]
-        modeller.delete(to_delete)
+    log.info('Deleting hydrogens for ligand.')
+    to_delete = [
+        atom for atom in modeller.topology.atoms() if atom.element.symbol in ["H"] and str(atom.residue.name).upper() == str(ligand_resname).upper()
+    ]
+    modeller.delete(to_delete)
     log.info(modeller.topology)
-
     modeller.addHydrogens(forcefield=forcefield)
     log.info('New ligand hydrogen names.')
     for atom in modeller.topology.atoms():
