@@ -17,8 +17,6 @@ dir = "/home/mwieder/Work/Projects/protons-dev/protons/examples/tautomers/3gcp/o
 [forcefield]
 _comment1 = "Standard, included xml files. Don't forget -obc2 files if using implicit."
 default = ["amber10-constph.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"]
-#default = ["amber10.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"]
-only-tautomers = ["amber10.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"]
 _comment2 = "Custom generated xml file (needs to be in input dir."
 user-xml = ["sb2.ffxml"]
 
@@ -47,31 +45,31 @@ minimization_tolerance_kjmol = 1.0e-5
 minimization_max_iterations = 300
 num_thermalization_steps = 1000
 
-[SAMS]
-beta = 0.6
-flatness_criterion = 0.1
-sites = "one"
-update_rule = "binary"
-min_burn = 200
-min_slow = 200
-min_fast = 200
+#[SAMS]
+#beta = 0.6
+#flatness_criterion = 0.1
+#sites = "multi"
+#update_rule = "binary"
+#min_burn = 200
+#min_slow = 200
+#min_fast = 200
 
 [simulation]
 dcd_filename = "3gcp.dcd" 
 netCDF4 = "3gcp.nc"
 total_update_attempts = 5000
 md_steps_between_updates = 100
-perturbations_per_ncmc_trial = 3
+perturbations_per_ncmc_trial = 1
 propagations_per_ncmc_step = 1
 timeout_sec = 21599
-perturbations_per_trial = 1000
+perturbations_per_trial = 10000
 
 [reporters]
 metadata = 1
 [reporters.titration]
 frequency = 1
 [reporters.coordinates]
-frequency = 100
+frequency = 10
 [reporters.sams]
 frequency = 1
 [reporters.ncmc]
@@ -79,4 +77,4 @@ frequency = 1
 
 
 [platform]
-driver='CPU'
+driver='CUDA'
