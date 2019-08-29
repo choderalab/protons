@@ -42,16 +42,16 @@ def validate(args: List[str]) -> str:
     Usage
     -----
 
-    protons param <json>
-        Parameterize a ligand based on a user provided json input file.
-    protons prep <json>
-        Produce an input file for a constant-pH simulation or calibration by specifying simulation settings in a json file.
+    protons param <toml>
+        Parameterize a ligand based on a user provided toml input file.
+    protons prep <toml>
+        Produce an input file for a constant-pH simulation or calibration by specifying simulation settings in a toml file.
         Note: Currently only ffxml supported.
-    protons run <json>
-        Run a constant-pH simulation or calibration from a json file.
+    protons run <toml>
+        Run a constant-pH simulation or calibration from a toml file.
     
     protons help <cmd>
-        Provide a longer explanation for a command, including example json files.
+        Provide a longer explanation for a command, including example toml files.
 
     
     Copyright
@@ -80,8 +80,8 @@ def validate(args: List[str]) -> str:
             return f"Unknown command: {arg}. \n" + usage
 
     elif cmd in ["param", "prep", "run"]:
-        if os.path.splitext(arg)[1].lower() != ".json":
-            return "Please provide a '.json' file as input."
+        if os.path.splitext(arg)[1].lower() != ".toml":
+            return "Please provide a '.toml' file as input."
         else:
             return ""
 
