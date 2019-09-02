@@ -2,7 +2,8 @@
 _comment = "This script handles the calibration run for 3gcp."
 protein-name = "3gcp"
 ligand-resname = "sb2"
-[reference_free_energies]
+
+#[reference_free_energies]
 
 
 
@@ -46,15 +47,6 @@ collision_rate_per_ps = 1.0
 minimization_tolerance_kjmol = 1.0e-5
 minimization_max_iterations = 300
 num_thermalization_steps = 1000
-
-[SAMS]
-beta = 0.6
-flatness_criterion = 0.1
-sites = "one"
-update_rule = "binary"
-min_burn = 200
-min_slow = 200
-min_fast = 200
 
 [simulation]
 dcd_filename = "3gcp.dcd" 
