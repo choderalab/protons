@@ -1,0 +1,27 @@
+_comment = "setup from smiles"
+
+[parameters]
+_comment = "Any settings for the methods, or formatting fields for filenames should be entered here."
+pdb_resname = "SB2"
+pH = 7.4
+
+    [parameters.format_vars]
+    name = "sb2"
+    omega_max_confs = 100
+
+[input]
+_comment = "A pdb file as source for the calibration structure."
+dir = "./"
+
+[epik]
+    [epik.input]
+    smiles = "O=[S@@](C)c1ccc(cc1)c1[nH]c(c2ccncc2)c(n1)c1ccc(cc1)F"
+    [epik.output]
+    mae = "{name}-epik.mae"
+    [epik.parameters]
+    max_penalty = 5
+    tautomerize = true
+
+[output]
+dir = "{name}-output-with-epik"
+basename = "{name}"
