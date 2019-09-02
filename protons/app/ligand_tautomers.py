@@ -3,7 +3,6 @@
 Library for parametrizing small molecules for simulation
 """
 from . import schrodinger
-from __future__ import print_function
 from itertools import permutations
 import os, re
 from collections import OrderedDict, Counter
