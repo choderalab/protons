@@ -2,7 +2,7 @@
 """
 Library for parametrizing small molecules for simulation
 """
-
+from . import schrodinger
 from __future__ import print_function
 from itertools import permutations
 import os, re
@@ -102,6 +102,35 @@ class _State(object):
     __repr__ = __str__
 
 
+def epik_results_to_mol2(
+    epik_mae: str,
+    output_mol2: str,
+):
+    """
+    Map the hydrogen atoms between Epik states, and return a mol2 file that
+    should be ready to parametrize.
+
+    Parameters
+    ----------
+    epik_mae: location of the maestro file produced by Epik.
+    output_mol2: location of the mol2 output file that is to be produced.
+
+    Notes
+    -----
+    This renames the hydrogen atoms in your molecule so that
+     no ambiguity can exist between protonation states.
+    """
+    if not output_mol2[-5:] == ".mol2":
+        output_mol2 += ".mol2"
+
+    # Generate a file format that Openeye can read
+    unique_filename = str(uuid.uuid4())
+    tmpmol2 = "{}.mol2".format(unique_filename)
+
+    #  List of files to delete at the end.
+    schrodinger.run_structconvert(epik_mae, tmpmol2)
+
+    return tmpmol2
 
 
 def prepare_mol2_for_parametrization(input_mol2: str, output_mol2: str):
