@@ -303,6 +303,81 @@ def _visualise_graphs(graph):
     plt.show()
 
 
+def generate_epik_states(
+    inputmae: str,
+    outputmae: str,
+    pH: float,
+    max_penalty: float = 10.0,
+    workdir: str = None,
+    tautomerize: bool = False,
+    **kwargs,
+):
+    """Generate protonation states using Epik, with shortcuts to a few useful settings.
+
+    Parameters
+    ----------
+    inputmae - location of a maestro input file for Epik.
+    outputmae - location for the output file containing protonation states
+    pH - the pH value
+    max_penalty - the max energy penalty in kT, default=10.0
+    workdir - Path/directory to place output files, including logs. If `outputmae` is a relative path, it will be placed here.
+    tautomerize = If too, besides protonation states generate tautomers
+
+    Notes
+    -----
+    Epik doesn't retain the input protonation if it's non-relevant.
+
+    """
+    log.debug("Running Epik to detect protomers and tautomers...")
+    inputmae = os.path.abspath(inputmae)
+    oldwd = os.getcwd()
+    try:
+        if workdir is not None:
+            os.chdir(workdir)
+            log.debug("Log files can be found in {}".format(workdir))
+        schrodinger.run_epik(
+            inputmae,
+            outputmae,
+            ph=pH,
+            min_probability=np.exp(-max_penalty),
+            tautomerize=tautomerize,
+            **kwargs,
+        )
+    finally:
+        os.chdir(oldwd)
+
+
+def retrieve_epik_info(epik_mae: str) -> list:
+    """
+    Retrieve the state populations and charges from the Epik output maestro file
+
+    Parameters
+    ----------
+    epik_mae - location of the Epik output (a maestro file)
+
+    Returns
+    -------
+    list of dicts
+        has the keys log_population, net_charge
+    """
+
+    penalty_tag = "r_epik_State_Penalty"
+    net_charge_tag = "i_epik_Tot_Q"
+    props = schrodinger.run_proplister(epik_mae)
+
+    all_info = list()
+
+    for state in props:
+        state_info = dict()
+        epik_penalty = state[penalty_tag]
+        state_info["log_population"] = float(epik_penalty) / (-298.15 * 1.987_203_6e-3)
+        state_info["net_charge"] = int(state[net_charge_tag])
+        all_info.append(state_info)
+
+    return all_info
+
+
+
 def generate_protons_ffxml(inputmol2: str, isomer_dicts: list, outputffxml: str, pH: float, icalib : str, resname: str="LIG"):
     """
     Compile a protons ffxml file from a preprocessed mol2 file, and a dictionary of states and charges.

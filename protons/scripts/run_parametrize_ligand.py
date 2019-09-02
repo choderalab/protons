@@ -4,7 +4,7 @@ This script parametrizes a ligand.
 """
 
 from sys import argv
-from protons.app.ligand_tautomers import smiles_to_mae
+from protons.app.ligand_tautomers import retrieve_epik_info, prepare_mol2_for_parametrization, smiles_to_mae, epik_results_to_mol2, generate_epik_states
 from protons.app import logger
 from protons.app.template_patches import patch_cooh
 from protons.app.logger import log
