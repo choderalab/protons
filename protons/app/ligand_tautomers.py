@@ -145,9 +145,6 @@ def epik_results_to_mol2(
     This renames the hydrogen atoms in your molecule so that
      no ambiguity can exist between protonation states.
     """
-    if not output_mol2[-5:] == ".mol2":
-        output_mol2 += ".mol2"
-
     # Generate a file format that Openeye can read
     unique_filename = str(uuid.uuid4())
     tmpmol2 = "{}.mol2".format(unique_filename)
