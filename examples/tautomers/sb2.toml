@@ -13,7 +13,6 @@ dir = "/home/mwieder/Work/Projects/protons-dev/protons/examples/tautomers/sb2/ou
 [forcefield]
 _comment1 = "Standard, included xml files. Don't forget -obc2 files if using implicit."
 default = ["amber10-constph.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"]
-only-tautomers = ["amber10.xml", "gaff.xml", "tip3p.xml", "ions_tip3p.xml"]
 _comment2 = "Custom generated xml file (needs to be in input dir."
 user-xml = ["sb2.ffxml"]
 
@@ -59,7 +58,7 @@ md_steps_between_updates = 100
 perturbations_per_ncmc_trial = 1
 propagations_per_ncmc_step = 1
 timeout_sec = 21599
-perturbations_per_trial = 1000
+perturbations_per_trial = 10000
 
 [reporters]
 metadata = 1
