@@ -159,8 +159,8 @@ def run_parametrize_main(inputfile):
 
     # process into mol2
     log.info("🛠 Processing epik results.")
-    epik_results_to_mol2(oepik, state_mol2, patch_bonds=True, keep_intermediate=False)
-
+    tmp = epik_results_to_mol2(oepik)
+    prepare_mol2_for_parametrization(tmp, state_mol2)
     # Retrieve protonation state weights et cetera from epik output file
     isomer_info = retrieve_epik_info(oepik)
 

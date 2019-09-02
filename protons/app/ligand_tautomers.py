@@ -104,7 +104,6 @@ class _State(object):
 
 def epik_results_to_mol2(
     epik_mae: str,
-    output_mol2: str,
 ):
     """
     Map the hydrogen atoms between Epik states, and return a mol2 file that
