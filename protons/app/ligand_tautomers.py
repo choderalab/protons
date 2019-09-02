@@ -33,6 +33,30 @@ class Default(dict):
     def __missing__(self, key):
         return 0.0
 
+
+def smiles_to_mae(smiles: str, oname: Optional[str] = None) -> str:
+    """Convert a smiles string to a .mae file using schrodinger."""
+    converter_path = os.path.join(
+        os.environ["SCHRODINGER"], "utilities", "smiles_to_mae"
+    )
+
+    tmpname: str = uuid.uuid4()
+    sminame = os.path.abspath(f"{tmpname}.smi")
+    if oname is not None:
+        maename = oname
+    else:
+        maename = os.path.abspath(f"{tmpname}.mae")
+
+    with open(sminame, "w") as smifile:
+        smifile.write(smiles)
+
+    cmd = [converter_path, sminame, maename]
+    schrodinger.run_and_log_error(cmd)
+    os.remove(sminame)
+
+    return maename
+
+
 def strip_in_unit_system(quant, unit_system=unit.md_unit_system, compatible_with=None):
     """Strips the unit from a simtk.units.Quantity object and returns it's value conforming to a unit system
 
