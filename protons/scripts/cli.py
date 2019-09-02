@@ -7,12 +7,12 @@ This should be more maintainable than having separate python scripts inside the 
 import os
 import sys
 
-from ..app.logger import log, logging
+from protons.app.logger import log, logging
 
 from typing import List
-from .run_simulation import run_main
-from .run_prep_ffxml import run_prep_ffxml_main
-from .run_parametrize_ligand import run_parametrize_main
+from run_simulation import run_main
+from run_prep_ffxml import run_prep_ffxml_main
+from run_parametrize_ligand import run_parametrize_main
 
 log.setLevel(logging.DEBUG)
 
@@ -64,6 +64,7 @@ def validate(args: List[str]) -> str:
     )
 
     if len(args) != 3:
+        print('Ha?')
         return usage
 
     cmd = args[1].lower()

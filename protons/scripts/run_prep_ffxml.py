@@ -7,22 +7,22 @@ import numpy as np
 import yaml
 
 from protons import app
-from .. import ForceFieldProtonDrive
+from protons.app import ForceFieldProtonDrive
 
-from ..app.logger import log, logging
+from protons.app.logger import log, logging
 from itertools import product
 from saltswap.wrappers import Salinator
 from simtk import openmm as mm
 from simtk import unit
 from typing import List, Dict, Tuple, Callable, Any, AnyStr
 from warnings import warn
-from .utilities import (
+from utilities import (
     TimeOutError,
     timeout_handler,
     create_protons_checkpoint_file,
     ExternalGBAOABIntegrator,
 )
-from ..app.driver import (
+from protons.app.driver import (
     SAMSApproach,
     Stage,
     UpdateRule,

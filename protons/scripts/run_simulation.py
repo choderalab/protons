@@ -10,11 +10,11 @@ from saltswap.wrappers import Salinator
 from simtk import openmm as mm, unit
 from tqdm import trange
 
-from .. import app
-from ..app import log, NCMCProtonDrive
-from ..app.proposals import UniformSwapProposal
-from ..app.driver import SAMSApproach
-from .utilities import (
+from protons import app
+from protons.app import log, NCMCProtonDrive
+from protons.app.proposals import UniformSwapProposal
+from protons.app.driver import SAMSApproach
+from utilities import (
     timeout_handler,
     xml_to_topology,
     deserialize_openmm_element,
