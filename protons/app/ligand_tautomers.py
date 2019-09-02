@@ -16,7 +16,6 @@ import networkx as nx
 import lxml
 from .. import app
 from simtk.openmm import openmm
-from simtk.unit import *
 from ..app.integrators import GBAOABIntegrator
 from copy import copy, deepcopy
 import matplotlib.pyplot as plt
@@ -26,6 +25,7 @@ from io import StringIO
 from simtk import unit
 import parmed
 from typing import Optional
+import uuid
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 gaff_default = os.path.join(PACKAGE_ROOT, 'data', 'gaff.xml')
