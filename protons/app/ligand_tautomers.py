@@ -25,6 +25,7 @@ import itertools
 from io import StringIO
 from simtk import unit
 import parmed
+from typing import Optional
 
 PACKAGE_ROOT = os.path.abspath(os.path.dirname(__file__))
 gaff_default = os.path.join(PACKAGE_ROOT, 'data', 'gaff.xml')
