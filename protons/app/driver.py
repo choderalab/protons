@@ -3973,7 +3973,8 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
         -------
 
         """
-
+        print(ffxml_residues)
+        print(selected_residue_indices)
         all_residues = list(topology.residues())
         bonded_to_atoms_list = forcefield._buildBondedToAtomList(topology)
 
@@ -3986,13 +3987,15 @@ class ForceFieldProtonDrive(NCMCProtonDrive):
             residue = all_residues[residue_index]
 
             template = forcefield._templates[residue.name]
+            print(dir(template))
+            print(template.name)
             # Find the system indices of the template atoms for this residue
             matches = app.forcefield._matchResidue(
                 residue, template, bonded_to_atoms_list
             )
 
             if matches is None:
-                raise ValueError("Could not match residue atoms to template.")
+                raise ValueError(f"Could not match residue atoms from {residue} to template.")
 
             atom_indices = [atom.index for atom in residue.atoms()]
             atom_names = [atom.name for atom in template.atoms]

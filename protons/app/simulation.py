@@ -105,7 +105,7 @@ class ConstantPHSimulation(Simulation):
         """Advance the simulation by integrating a specified number of time steps."""
         self._simulate(endStep=self.currentStep + steps)
 
-    def update(self, updates, move=None, pool=None):
+    def update(self, updates:int, move=None, pool=None):
         """Advance the simulation by propagating the protonation states a specified number of times.
 
         Parameters
