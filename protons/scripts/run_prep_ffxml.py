@@ -89,7 +89,15 @@ def run_prep_ffxml_main(tomlfile):
     ifilename = inp["structure"].format(**format_vars)
     joined_path = os.path.join(idir, ifilename)
     input_pdbx_file = os.path.abspath(joined_path)
-    pdb_object = app.PDBxFile(input_pdbx_file)
+    _, file_extension = os.path.splitext(ifilename)
+    if file_extension == ".pdb":
+        pdb_object = app.PDBFile(input_pdbx_file)
+    elif file_extension == ".cif" or file_extension == ".mmcif":
+        pdb_object = app.PDBxFile(input_pdbx_file)
+    else:
+        raise ValueError(
+            f"Unsupported file extension {file_extension} for vacuum file. Currently supported: pdb, cif."
+        )
 
     # Atoms , connectivity, residues
     topology = pdb_object.topology
